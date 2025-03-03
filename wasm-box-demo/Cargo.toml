@@ -1,0 +1,24 @@
+[package]
+name = "wasm-box-demo"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2.87"
+js-sys = "0.3.64"
+
+[dependencies.web-sys]
+version = "0.3.64"
+features = [
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Window",
+    "MouseEvent",
+    "CssStyleDeclaration",
+    "HtmlCollection",
+    "Node",
+] 
