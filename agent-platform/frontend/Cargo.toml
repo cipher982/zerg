@@ -28,4 +28,14 @@ features = [
     "WebSocket",
     "MessageEvent",
     "console",
+    "Request",
+    "RequestInit",
+    "Headers",
+    "RequestMode",
+    "TextMetrics",
+    "Event",
+    "Response",
+    "ResponseInit",
+    "DomStringMap",
+    "HtmlBodyElement"
 ] 
