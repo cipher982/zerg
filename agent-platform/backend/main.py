@@ -3,16 +3,18 @@ from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 from typing import List
 
 # Load environment variables
 load_dotenv()
 
 # Initialize OpenAI client
-openai.api_key = os.getenv("OPENAI_API_KEY")
-if not openai.api_key:
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
     raise ValueError("OPENAI_API_KEY environment variable not set")
+
+client = OpenAI(api_key=api_key)
 
 app = FastAPI(title="Agent Platform Backend")
 
@@ -25,50 +27,65 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Models
 class TextRequest(BaseModel):
     """Request model for text processing."""
+
     text: str
+
 
 class TextResponse(BaseModel):
     """Response model for text processing."""
+
     response: str
+
 
 # Connected WebSocket clients
 connected_clients: List[WebSocket] = []
+
 
 @app.get("/")
 async def read_root():
     """Health check endpoint."""
     return {"status": "alive", "service": "agent-platform-backend"}
 
+
 @app.post("/api/process-text", response_model=TextResponse)
 async def process_text(request: TextRequest):
     """Process text with OpenAI API."""
     try:
-        response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
+        response = client.chat.completions.create(
+            model="gpt-4o",  # DONT CHANGE THIS. ITS A NEW MODEL
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": request.text}
+                {"role": "user", "content": request.text},
             ],
-            max_tokens=150
+            max_tokens=300,
         )
-        
+
         # Extract the response text
         response_text = response.choices[0].message.content
-        
+
+        print(f"Got response: {response_text}")
+
         # Broadcast the response to all connected WebSocket clients
-        for client in connected_clients:
+        for websocket_client in connected_clients:
             try:
-                await client.send_text(response_text)
+                await websocket_client.send_text(response_text)
             except Exception:
                 # Remove clients that have disconnected
-                connected_clients.remove(client)
-        
+                connected_clients.remove(websocket_client)
+
         return TextResponse(response=response_text)
     except Exception as e:
+        import traceback
+
+        error_details = traceback.format_exc()
+        print(f"Error processing request: {str(e)}")
+        print(f"Traceback: {error_details}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -85,6 +102,8 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket in connected_clients:
             connected_clients.remove(websocket)
 
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+
+    uvicorn.run(app, host="0.0.0.0", port=8001)

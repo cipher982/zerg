@@ -1,12 +1,11 @@
 use wasm_bindgen::prelude::*;
 use web_sys::{
-    Document, Element, HtmlCanvasElement, HtmlElement, HtmlInputElement,
+    Document, HtmlCanvasElement, HtmlInputElement,
     MouseEvent, WebSocket, MessageEvent, CanvasRenderingContext2d,
 };
-use js_sys::{Function, Object};
+use js_sys;
 use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::collections::HashMap;
 
 // Define a struct for nodes in our visualization
@@ -66,7 +65,7 @@ impl AppState {
         if let Some(parent) = self.nodes.get(parent_id) {
             let x = parent.x + parent.width + 50.0;
             let y = parent.y;
-            let response_id = self.add_node(response_text, x, y);
+            let _response_id = self.add_node(response_text, x, y);
             
             // In a more complex app, we would store connections between nodes here
         }
@@ -192,7 +191,7 @@ fn setup_canvas(document: &Document) -> Result<(), JsValue> {
 
 fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
     // Mouse down event
-    let canvas_mousedown = canvas.clone();
+    let _canvas_mousedown = canvas.clone();
     let mousedown_handler = Closure::wrap(Box::new(move |event: MouseEvent| {
         let x = event.offset_x() as f64;
         let y = event.offset_y() as f64;
@@ -201,14 +200,22 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             let mut state = state.borrow_mut();
             
             // Check if we clicked on a node
-            for (id, node) in state.nodes.iter() {
+            let mut node_clicked = None;
+            
+            // First find which node was clicked on
+            for (id, node) in &state.nodes {
                 if x >= node.x && x <= node.x + node.width &&
                    y >= node.y && y <= node.y + node.height {
-                    state.dragging = Some(id.clone());
-                    state.drag_offset_x = x - node.x;
-                    state.drag_offset_y = y - node.y;
+                    node_clicked = Some((id.clone(), x - node.x, y - node.y));
                     break;
                 }
+            }
+            
+            // Then update the state with the clicked node
+            if let Some((id, offset_x, offset_y)) = node_clicked {
+                state.dragging = Some(id);
+                state.drag_offset_x = offset_x;
+                state.drag_offset_y = offset_y;
             }
         });
     }) as Box<dyn FnMut(_)>);
@@ -220,7 +227,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     mousedown_handler.forget();
     
     // Mouse move event
-    let canvas_mousemove = canvas.clone();
+    let _canvas_mousemove = canvas.clone();
     let mousemove_handler = Closure::wrap(Box::new(move |event: MouseEvent| {
         let x = event.offset_x() as f64;
         let y = event.offset_y() as f64;
@@ -229,9 +236,13 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             let mut state = state.borrow_mut();
             
             if let Some(id) = &state.dragging {
-                if let Some(node) = state.nodes.get_mut(id) {
-                    node.x = x - state.drag_offset_x;
-                    node.y = y - state.drag_offset_y;
+                let id = id.clone(); // Clone the ID to avoid borrowing conflicts
+                let drag_offset_x = state.drag_offset_x; // Copy these values
+                let drag_offset_y = state.drag_offset_y;
+                
+                if let Some(node) = state.nodes.get_mut(&id) {
+                    node.x = x - drag_offset_x;
+                    node.y = y - drag_offset_y;
                     state.draw_nodes();
                 }
             }
@@ -245,7 +256,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     mousemove_handler.forget();
     
     // Mouse up event
-    let canvas_mouseup = canvas.clone();
+    let _canvas_mouseup = canvas.clone();
     let mouseup_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
@@ -264,7 +275,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
 
 fn setup_websocket() -> Result<(), JsValue> {
     // Create a new WebSocket connection
-    let ws = WebSocket::new("ws://localhost:8000/ws")?;
+    let ws = WebSocket::new("ws://localhost:8001/ws")?;
     
     // Set up message event handler
     let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
@@ -287,7 +298,7 @@ fn setup_websocket() -> Result<(), JsValue> {
     onmessage_callback.forget();
     
     // Set up error handler
-    let onerror_callback = Closure::wrap(Box::new(move |_| {
+    let onerror_callback = Closure::wrap(Box::new(move |_e: web_sys::Event| {
         web_sys::console::log_1(&"WebSocket error occurred".into());
     }) as Box<dyn FnMut(_)>);
     
@@ -305,25 +316,35 @@ fn setup_websocket() -> Result<(), JsValue> {
 fn send_text_to_backend(text: &str) {
     // Use the Fetch API to send data to the backend
     let window = web_sys::window().expect("no global window exists");
-    let request_info = Object::new();
-    let headers = Object::new();
-    let body = Object::new();
     
-    // Set up the fetch options
-    js_sys::Reflect::set(&headers, &"Content-Type".into(), &"application/json".into()).unwrap();
-    js_sys::Reflect::set(&request_info, &"method".into(), &"POST".into()).unwrap();
-    js_sys::Reflect::set(&request_info, &"headers".into(), &headers).unwrap();
+    // Create headers
+    let headers = web_sys::Headers::new().unwrap();
+    headers.append("Content-Type", "application/json").unwrap();
     
-    // Set up the request body
-    js_sys::Reflect::set(&body, &"text".into(), &text.into()).unwrap();
-    let body_string = js_sys::JSON::stringify(&body).unwrap();
-    js_sys::Reflect::set(&request_info, &"body".into(), &body_string).unwrap();
+    // Create request body
+    let body_obj = js_sys::Object::new();
+    js_sys::Reflect::set(&body_obj, &"text".into(), &text.into()).unwrap();
+    let body_string = js_sys::JSON::stringify(&body_obj).unwrap();
     
-    // Make the fetch request
-    let promise = window.fetch_with_str_and_init("http://localhost:8000/api/process-text", &request_info.into());
+    // Create request init object
+    let mut opts = web_sys::RequestInit::new();
+    opts.set_method("POST");
+    opts.set_headers(&headers.into());
+    
+    // Convert body_string to JsValue
+    let body_value: JsValue = body_string.into();
+    opts.set_body(&body_value);
+    
+    // Create request
+    let request = web_sys::Request::new_with_str_and_init(
+        "http://localhost:8001/api/process-text", 
+        &opts
+    ).unwrap();
+    
+    // Send the fetch request
+    let _ = window.fetch_with_request(&request);
     
     // We're not handling the response here since we'll get it via WebSocket
-    let _ = promise;
 }
 
 impl AppState {
@@ -337,16 +358,16 @@ impl AppState {
             
             // Draw all nodes
             for (_, node) in &self.nodes {
-                // Draw node rectangle
-                context.set_fill_style(&JsValue::from_str(&node.color));
+                // Draw node rectangle 
+                context.set_fill_style(&JsValue::from(node.color.clone()));
                 context.fill_rect(node.x, node.y, node.width, node.height);
                 
                 // Draw node border
-                context.set_stroke_style(&JsValue::from_str("#2c3e50"));
+                context.set_stroke_style(&JsValue::from("#2c3e50"));
                 context.stroke_rect(node.x, node.y, node.width, node.height);
                 
                 // Draw node text
-                context.set_fill_style(&JsValue::from_str("#ffffff"));
+                context.set_fill_style(&JsValue::from("#ffffff"));
                 context.set_font("14px Arial");
                 context.set_text_align("center");
                 context.set_text_baseline("middle");
@@ -364,9 +385,10 @@ impl AppState {
                         format!("{} {}", line, word)
                     };
                     
-                    let metrics = context.measure_text(&test_line).unwrap();
+                    // Use a simpler approach to measure text since measure_text is problematic
+                    let estimated_width = test_line.len() as f64 * 7.0; // Rough estimate of width
                     
-                    if metrics.width() > max_width && !line.is_empty() {
+                    if estimated_width > max_width && !line.is_empty() {
                         // Draw the current line and move to the next line
                         context.fill_text(&line, node.x + node.width / 2.0, y).unwrap();
                         line = word.to_string();
