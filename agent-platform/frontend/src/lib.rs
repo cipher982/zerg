@@ -8,6 +8,13 @@ use serde::{Serialize, Deserialize};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+#[derive(Clone, Serialize, Deserialize)]
+enum NodeType {
+    UserInput,
+    AgentResponse,
+    AgentIdentity, // For future use to represent persistent agents
+}
+
 // Define a struct for nodes in our visualization
 #[derive(Clone, Serialize, Deserialize)]
 struct Node {
@@ -18,6 +25,8 @@ struct Node {
     width: f64,
     height: f64,
     color: String,
+    parent_id: Option<String>,
+    node_type: NodeType,
 }
 
 // Store global application state
@@ -46,16 +55,36 @@ impl AppState {
         }
     }
 
-    fn add_node(&mut self, text: String, x: f64, y: f64) -> String {
+    fn add_node(&mut self, text: String, x: f64, y: f64, node_type: NodeType) -> String {
         let id = format!("node_{}", self.nodes.len());
+        
+        // Determine color based on node type
+        let color = match node_type {
+            NodeType::UserInput => "#3498db".to_string(),    // Blue
+            NodeType::AgentResponse => "#9b59b6".to_string(), // Purple
+            NodeType::AgentIdentity => "#2ecc71".to_string(), // Green
+        };
+        
+        // Calculate approximate node size based on text content
+        // This is a simple heuristic - we could do more sophisticated text measurement
+        let words = text.split_whitespace().count();
+        let chars_per_line = 25; // Approximate chars per line
+        let lines = (text.len() as f64 / chars_per_line as f64).ceil() as usize;
+        
+        // Set minimum sizes but allow for growth
+        let width = 200.0.max(chars_per_line as f64 * 8.0); // Estimate width based on chars
+        let height = 80.0.max(lines as f64 * 20.0 + 40.0);  // Base height + lines
+        
         let node = Node {
             id: id.clone(),
             x,
             y,
             text,
-            width: 200.0,
-            height: 100.0,
-            color: "#3498db".to_string(),
+            width,
+            height,
+            color,
+            parent_id: None,
+            node_type,
         };
         self.nodes.insert(id.clone(), node);
         id
@@ -63,11 +92,16 @@ impl AppState {
 
     fn add_response_node(&mut self, parent_id: &str, response_text: String) {
         if let Some(parent) = self.nodes.get(parent_id) {
-            let x = parent.x + parent.width + 50.0;
-            let y = parent.y;
-            let _response_id = self.add_node(response_text, x, y);
+            // Position the response node below the parent with some offset
+            let x = parent.x + 50.0; // Slight offset to the right
+            let y = parent.y + parent.height + 30.0; // Below the parent node
             
-            // In a more complex app, we would store connections between nodes here
+            let response_id = self.add_node(response_text, x, y, NodeType::AgentResponse);
+            
+            // Update the parent_id relationship
+            if let Some(response_node) = self.nodes.get_mut(&response_id) {
+                response_node.parent_id = Some(parent_id.to_string());
+            }
         }
     }
 }
@@ -145,8 +179,18 @@ fn setup_ui(document: &Document) -> Result<(), JsValue> {
             APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.input_text = text.clone();
-                // Position the node in the left side of the canvas
-                state.add_node(text.clone(), 50.0, 200.0);
+                // Position the node in the left side of the canvas at a consistent position
+                // If it's the first node, start higher up
+                let y_position = if state.nodes.is_empty() {
+                    100.0 // Start at the top
+                } else {
+                    // Find the lowest y-position of existing nodes
+                    let lowest_y = state.nodes.values()
+                        .map(|n| n.y + n.height)
+                        .fold(0.0, f64::max);
+                    lowest_y + 50.0 // Position below the lowest node with spacing
+                };
+                state.add_node(text.clone(), 50.0, y_position, NodeType::UserInput);
                 state.draw_nodes();
             });
             
@@ -353,30 +397,77 @@ impl AppState {
             // Clear the canvas
             context.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
             
-            // Draw connections between nodes (if we had stored connections)
-            // This would be the place to draw lines between nodes
+            // Draw connections between nodes
+            for (_, node) in &self.nodes {
+                if let Some(parent_id) = &node.parent_id {
+                    if let Some(parent) = self.nodes.get(parent_id) {
+                        // Draw curved connection
+                        context.begin_path();
+                        
+                        // Start point (bottom of parent node)
+                        let start_x = parent.x + parent.width / 2.0;
+                        let start_y = parent.y + parent.height;
+                        
+                        // End point (top of response node)
+                        let end_x = node.x + node.width / 2.0;
+                        let end_y = node.y;
+                        
+                        // Control points for the bezier curve - creates a nice "S" curve
+                        let midpoint_y = start_y + (end_y - start_y) / 2.0;
+                        let control_x1 = start_x;
+                        let control_y1 = midpoint_y - 10.0;
+                        let control_x2 = end_x;
+                        let control_y2 = midpoint_y + 10.0;
+                        
+                        // Draw the curve
+                        context.move_to(start_x, start_y);
+                        context.bezier_curve_to(
+                            control_x1, control_y1,
+                            control_x2, control_y2,
+                            end_x, end_y
+                        );
+                        
+                        // Style and stroke the path
+                        context.set_stroke_style(&JsValue::from("#95a5a6"));
+                        context.set_line_width(2.0);
+                        context.stroke();
+                        
+                        // Optional: Add an arrow at the end pointing down
+                        self.draw_arrow(context, end_x, end_y, 0.0, -1.0);
+                    }
+                }
+            }
             
             // Draw all nodes
             for (_, node) in &self.nodes {
-                // Draw node rectangle 
-                context.set_fill_style(&JsValue::from(node.color.clone()));
-                context.fill_rect(node.x, node.y, node.width, node.height);
-                
-                // Draw node border
-                context.set_stroke_style(&JsValue::from("#2c3e50"));
-                context.stroke_rect(node.x, node.y, node.width, node.height);
+                // Determine if this is a user input or AI response based on node_type
+                match node.node_type {
+                    NodeType::UserInput => {
+                        // Draw a rounded rectangle for user inputs
+                        self.draw_rounded_rect(context, node);
+                    },
+                    NodeType::AgentResponse => {
+                        // Draw a thought bubble for AI responses
+                        self.draw_thought_bubble(context, node);
+                    },
+                    NodeType::AgentIdentity => {
+                        // For future use - draw a hexagon or other distinctive shape
+                        self.draw_rounded_rect(context, node); // Placeholder for now
+                    },
+                }
                 
                 // Draw node text
                 context.set_fill_style(&JsValue::from("#ffffff"));
-                context.set_font("14px Arial");
-                context.set_text_align("center");
-                context.set_text_baseline("middle");
+                context.set_font("15px Arial");
+                context.set_text_align("left");
+                context.set_text_baseline("top");
                 
-                // Handle text wrapping
-                let max_width = node.width - 20.0;
+                // Handle text wrapping with better spacing
+                let padding = 15.0;
+                let max_width = node.width - padding * 2.0;
                 let words = node.text.split_whitespace().collect::<Vec<&str>>();
                 let mut line = String::new();
-                let mut y = node.y + 30.0;
+                let mut y_offset = node.y + padding;
                 
                 for word in words {
                     let test_line = if line.is_empty() {
@@ -385,14 +476,14 @@ impl AppState {
                         format!("{} {}", line, word)
                     };
                     
-                    // Use a simpler approach to measure text since measure_text is problematic
-                    let estimated_width = test_line.len() as f64 * 7.0; // Rough estimate of width
+                    // Estimate text width
+                    let estimated_width = test_line.len() as f64 * 7.0;
                     
                     if estimated_width > max_width && !line.is_empty() {
-                        // Draw the current line and move to the next line
-                        context.fill_text(&line, node.x + node.width / 2.0, y).unwrap();
+                        // Draw the current line
+                        context.fill_text(&line, node.x + padding, y_offset).unwrap();
                         line = word.to_string();
-                        y += 20.0;
+                        y_offset += 22.0; // Increase line height for better readability
                     } else {
                         line = test_line;
                     }
@@ -400,9 +491,180 @@ impl AppState {
                 
                 // Draw the last line
                 if !line.is_empty() {
-                    context.fill_text(&line, node.x + node.width / 2.0, y).unwrap();
+                    context.fill_text(&line, node.x + padding, y_offset).unwrap();
                 }
             }
+        }
+    }
+
+    // Add a helper method for drawing rounded rectangles
+    fn draw_rounded_rect(&self, context: &CanvasRenderingContext2d, node: &Node) {
+        let radius = 15.0;
+        let x = node.x;
+        let y = node.y;
+        let width = node.width;
+        let height = node.height;
+        
+        // Set fill style
+        context.set_fill_style(&JsValue::from(node.color.clone()));
+        
+        // Draw rounded rectangle
+        context.begin_path();
+        context.move_to(x + radius, y);
+        context.line_to(x + width - radius, y);
+        context.quadratic_curve_to(x + width, y, x + width, y + radius);
+        context.line_to(x + width, y + height - radius);
+        context.quadratic_curve_to(x + width, y + height, x + width - radius, y + height);
+        context.line_to(x + radius, y + height);
+        context.quadratic_curve_to(x, y + height, x, y + height - radius);
+        context.line_to(x, y + radius);
+        context.quadratic_curve_to(x, y, x + radius, y);
+        context.close_path();
+        
+        // Fill and stroke
+        context.fill();
+        context.set_stroke_style(&JsValue::from("#2c3e50"));
+        context.stroke();
+    }
+
+    // Add a helper method for drawing arrows
+    fn draw_arrow(&self, context: &CanvasRenderingContext2d, x: f64, y: f64, dx: f64, dy: f64) {
+        let head_len = 10.0; // length of arrow head
+        let angle = f64::atan2(dy, dx);
+        
+        context.begin_path();
+        context.move_to(x, y);
+        context.line_to(
+            x - head_len * f64::cos(angle - std::f64::consts::PI / 6.0),
+            y - head_len * f64::sin(angle - std::f64::consts::PI / 6.0)
+        );
+        context.move_to(x, y);
+        context.line_to(
+            x - head_len * f64::cos(angle + std::f64::consts::PI / 6.0),
+            y - head_len * f64::sin(angle + std::f64::consts::PI / 6.0)
+        );
+        context.set_stroke_style(&JsValue::from("#95a5a6"));
+        context.set_line_width(2.0);
+        context.stroke();
+    }
+
+    // Add a helper method for drawing thought bubbles
+    fn draw_thought_bubble(&self, context: &CanvasRenderingContext2d, node: &Node) {
+        let x = node.x;
+        let y = node.y;
+        let width = node.width;
+        let height = node.height;
+        
+        // Set fill style
+        context.set_fill_style(&JsValue::from(node.color.clone()));
+        
+        // Draw main bubble
+        context.begin_path();
+        
+        // Draw a cloud-like shape
+        let radius = 30.0;
+        
+        // Top edge with bumps
+        context.move_to(x + radius, y);
+        context.arc(
+            x + radius, 
+            y + radius, 
+            radius, 
+            std::f64::consts::PI * 1.5, 
+            std::f64::consts::PI * 0.0, 
+            false
+        );
+        
+        context.arc(
+            x + width / 2.0, 
+            y, 
+            radius * 0.8, 
+            std::f64::consts::PI, 
+            std::f64::consts::PI * 0.0, 
+            true
+        );
+        
+        context.arc(
+            x + width - radius, 
+            y + radius, 
+            radius, 
+            std::f64::consts::PI * 1.0, 
+            std::f64::consts::PI * 1.5, 
+            false
+        );
+        
+        // Right edge
+        context.arc(
+            x + width, 
+            y + height / 2.0, 
+            radius * 0.8, 
+            std::f64::consts::PI * 1.5, 
+            std::f64::consts::PI * 0.5, 
+            false
+        );
+        
+        // Bottom edge
+        context.arc(
+            x + width - radius, 
+            y + height - radius, 
+            radius, 
+            std::f64::consts::PI * 0.0, 
+            std::f64::consts::PI * 0.5, 
+            false
+        );
+        
+        context.arc(
+            x + width / 2.0, 
+            y + height, 
+            radius * 0.8, 
+            std::f64::consts::PI * 0.0, 
+            std::f64::consts::PI * 1.0, 
+            false
+        );
+        
+        context.arc(
+            x + radius, 
+            y + height - radius, 
+            radius, 
+            std::f64::consts::PI * 0.5, 
+            std::f64::consts::PI * 1.0, 
+            false
+        );
+        
+        // Left edge
+        context.arc(
+            x, 
+            y + height / 2.0, 
+            radius * 0.8, 
+            std::f64::consts::PI * 0.5, 
+            std::f64::consts::PI * 1.5, 
+            false
+        );
+        
+        context.close_path();
+        context.fill();
+        
+        // Draw the border
+        context.set_stroke_style(&JsValue::from("#2c3e50"));
+        context.stroke();
+        
+        // Add small thought bubbles connecting to main bubble
+        let small_bubble_sizes = [8.0, 6.0, 4.0];
+        let mut last_x = x + width / 4.0;
+        let mut last_y = y + height;
+        
+        for size in small_bubble_sizes.iter() {
+            // Position the small bubble below the previous one
+            last_y += *size * 1.5;
+            
+            // Draw small circle
+            context.begin_path();
+            context.arc(last_x, last_y, *size, 0.0, std::f64::consts::PI * 2.0, false);
+            context.fill();
+            context.stroke();
+            
+            // Move x slightly for next bubble
+            last_x -= *size * 0.8;
         }
     }
 } 
