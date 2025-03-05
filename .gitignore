@@ -169,3 +169,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Prerender
+prerender/node_modules/
+prerender/dist/
+prerender/googlebot.html
+prerender/human.html
