@@ -32,9 +32,7 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     // Create canvas
     let canvas = document.create_element("canvas")?;
     canvas.set_id("node-canvas");
-    canvas.set_attribute("width", "800")?;
-    canvas.set_attribute("height", "500")?;
-    canvas.set_attribute("style", "position: absolute; top: 0; left: 0;")?;
+    canvas.set_attribute("style", "position: absolute; top: 0; left: 0; width: 100%; height: 100%;")?;
     
     canvas_container.append_child(&canvas)?;
     
@@ -104,6 +102,9 @@ pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
         .unwrap()
         .dyn_into::<HtmlCanvasElement>()?;
     
+    // Set canvas dimensions to match container
+    resize_canvas(&canvas)?;
+    
     let context = canvas
         .get_context("2d")?
         .unwrap()
@@ -117,6 +118,52 @@ pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
     
     // Set up mouse events for the canvas
     setup_canvas_mouse_events(&canvas)?;
+    
+    // Set up resize handler
+    setup_resize_handler(&canvas)?;
+    
+    Ok(())
+}
+
+fn resize_canvas(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
+    // Get the parent container dimensions
+    let window = web_sys::window().expect("no global window exists");
+    let document = window.document().expect("no document exists");
+    
+    if let Some(container) = document.get_element_by_id("canvas-container") {
+        let container_width = container.client_width();
+        let container_height = container.client_height();
+        
+        // Set canvas width and height attributes to match container dimensions
+        canvas.set_width(container_width as u32);
+        canvas.set_height(container_height as u32);
+        
+        // Redraw nodes if any exist
+        APP_STATE.with(|state| {
+            let state = state.borrow();
+            state.draw_nodes();
+        });
+    }
+    
+    Ok(())
+}
+
+fn setup_resize_handler(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
+    let canvas_clone = canvas.clone();
+    let resize_callback = Closure::wrap(Box::new(move || {
+        let _ = resize_canvas(&canvas_clone);
+    }) as Box<dyn FnMut()>);
+    
+    // Add window resize event listener
+    web_sys::window()
+        .expect("no global window exists")
+        .add_event_listener_with_callback(
+            "resize",
+            resize_callback.as_ref().unchecked_ref(),
+        )?;
+    
+    // Leak the closure to keep it alive for the lifetime of the application
+    resize_callback.forget();
     
     Ok(())
 }
