@@ -8,6 +8,23 @@ pub fn draw_nodes(state: &AppState) {
         // Clear the canvas
         context.clear_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
         
+        // Get the device pixel ratio
+        let window = web_sys::window().expect("no global window exists");
+        let dpr = window.device_pixel_ratio();
+        
+        // Apply transformation for viewport
+        context.save();
+        
+        // Reset any previous transforms
+        let _ = context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        
+        // Scale by device pixel ratio first
+        let _ = context.scale(dpr, dpr);
+        
+        // Apply viewport transform (scale and translate)
+        let _ = context.scale(state.zoom_level, state.zoom_level);
+        let _ = context.translate(-state.viewport_x, -state.viewport_y);
+        
         // Draw connections first (in the background)
         draw_connections(state, &context);
         
@@ -15,6 +32,9 @@ pub fn draw_nodes(state: &AppState) {
         for (_, node) in &state.nodes {
             draw_node(state, node, &context);
         }
+        
+        // Restore original context
+        context.restore();
     }
 }
 
