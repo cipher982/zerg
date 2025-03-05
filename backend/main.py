@@ -35,6 +35,7 @@ class TextRequest(BaseModel):
 
     text: str
     message_id: str = None  # Add message_id field
+    model: str = "gpt-4o"  # Default model
 
 
 class TextResponse(BaseModel):
@@ -42,6 +43,15 @@ class TextResponse(BaseModel):
 
     response: str
     message_id: str = None  # Add message_id field
+
+
+# Available AI models
+AVAILABLE_MODELS = [
+    {"id": "gpt-4o", "name": "GPT-4o"},
+    {"id": "gpt-4o-mini", "name": "GPT-4o Mini"},
+    {"id": "o3-mini", "name": "o3 Mini"},
+    {"id": "gpt-4.5-preview-2025-02-27", "name": "GPT-4.5"},
+]
 
 
 # Connected WebSocket clients
@@ -54,12 +64,18 @@ async def read_root():
     return {"status": "alive", "service": "agent-platform-backend"}
 
 
+@app.get("/api/models")
+async def get_available_models():
+    """Return list of available AI models."""
+    return {"models": AVAILABLE_MODELS}
+
+
 @app.post("/api/process-text", response_model=TextResponse)
 async def process_text(request: TextRequest):
     """Process text with OpenAI API."""
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",  # DONT CHANGE THIS. ITS A NEW MODEL
+            model=request.model,  # Use the model from the request
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": request.text},
