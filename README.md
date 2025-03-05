@@ -1,74 +1,105 @@
-# AI Agent Platform
+# ZERG
 
-A proof-of-concept platform for visualizing and interacting with AI agents using Python/FastAPI and Rust/WebAssembly.
+## Overview
+
+Agent Platform Frontend (ZERG) is a WebAssembly (WASM) project built in Rust that provides an interactive, node-based interface for communicating with an AI backend. Users can enter text, which is rendered as nodes on a canvas, and receive corresponding AI responses in real time. Each node is graphically represented either as a rounded rectangle (for user inputs) or a thought bubble (for AI responses). Nodes are connected by dynamically drawn curved lines with arrowheads.
 
 ## Features
 
-- Text input field to send prompts to an AI model
-- Canvas-based visualization of prompts and responses
-- WebSocket for real-time updates
-- Draggable nodes for organizing your agent interactions
+- **Interactive Canvas UI:**  
+  Displays nodes for user inputs and AI responses. Nodes can be visually connected with animated curves.
 
-## Project Structure
+- **Dynamic Node Creation:**  
+  User-submitted text is automatically added as a node on the canvas. When a response is received from the backend over a WebSocket, a connected response node is generated.
 
-- **Backend**: Python FastAPI server with OpenAI integration
-- **Frontend**: Rust WebAssembly application for interactive visualization
+- **Drag & Drop:**  
+  Nodes on the canvas can be repositioned using mouse drag events for customized layout.
 
-## Prerequisites
+- **Responsive and Adaptive Rendering:**  
+  Automatically handles window resizing and scales correctly on high-DPI displays.
 
-- [Rust](https://www.rust-lang.org/tools/install) and [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
-- Python 3.8+ and [pip](https://pip.pypa.io/en/stable/installation/)
-- An [OpenAI API key](https://platform.openai.com/api-keys)
+- **WebSocket & HTTP Communication:**  
+  Utilizes a WebSocket connection to receive real-time AI responses and the Fetch API for sending user input to the backend.
 
-## Setup and Running
+- **Modular Codebase:**  
+  Designed with clear separation of concerns:
+  - **models.rs:** Data structures for node representation.
+  - **state.rs:** Global application state management.
+  - **canvas/renderer.rs & canvas/shapes.rs:** Drawing logic for nodes and connections.
+  - **ui.rs:** UI element creation and event handling.
+  - **network.rs:** Setup of WebSocket and Fetch communication.
 
-### Backend Setup
+## Directory Structure
 
-1. Create a `.env` file in the `backend` directory by copying the example:
+```
+.
+├── Cargo.toml               # Rust project manifest
+├── build.sh                 # Shell script to build the WASM module using wasm-pack
+├── src
+│   ├── canvas               # Contains canvas drawing modules
+│   │   ├── mod.rs           # Module declaration for canvas
+│   │   ├── renderer.rs      # High-level rendering logic for nodes/connections
+│   │   └── shapes.rs        # Helper functions to draw different shapes
+│   ├── lib.rs               # Main WASM entry point
+│   ├── models.rs            # Data models (Node and NodeType definitions)
+│   ├── network.rs           # Networking code (WebSocket and HTTP requests)
+│   ├── state.rs             # Application state management
+│   └── ui.rs                # Dynamic UI setup and event handlers
+├── target                   # Build output including compiled WASM files
+└── www                      # Directory for generated web assets (HTML, JS, WASM)
+```
+
+## Getting Started
+
+### Prerequisites
+
+- [Rust](https://www.rust-lang.org/tools/install)
+- [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
+- A modern web browser with WebAssembly support.
+
+### Building and Running
+
+1. **Install wasm-pack** (if not already installed):
+
    ```bash
-   cd backend
-   cp .env.example .env
+   cargo install wasm-pack
    ```
 
-2. Edit the `.env` file to add your OpenAI API key
+2. **Build the WASM Module:**
 
-3. Install the Python dependencies:
+   Run the included build script in your terminal:
+
    ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Start the backend server:
-   ```bash
-   python main.py
-   ```
-
-### Frontend Setup
-
-1. Build the WebAssembly module:
-   ```bash
-   cd frontend
    ./build.sh
    ```
 
-2. Start a simple HTTP server to serve the frontend:
-   ```bash
-   cd frontend/www
-   python -m http.server
-   ```
+   This command will compile the project to WebAssembly, output necessary assets in the `www` folder, and launch a simple HTTP server (default on port 8002).
 
-3. Open your browser and navigate to http://localhost:8000
+3. **Open in Browser:**
+
+   Navigate to [http://localhost:8002](http://localhost:8002) in your web browser to access the application.
 
 ## How It Works
 
-1. Type a message in the input field and click "Send to AI"
-2. Your message is displayed as a node on the canvas
-3. The message is sent to the backend, which forwards it to OpenAI
-4. The AI's response is sent back via WebSocket
-5. The response appears as a connected node on the canvas
+- **User Input:**  
+  An input field and a “Send to AI” button allow the user to enter text. When the text is submitted, a new node is created on the canvas.
+  
+- **Drawing Nodes:**  
+  The canvas is used as the visual playground where each node is rendered using custom drawing functions. The drawing logic handles shapes, text wrapping, and connections between nodes.
 
-## Future Enhancements
+- **Networking:**  
+  The project establishes a WebSocket connection to receive responses asynchronously. Additionally, text is sent to the backend via an HTTP POST request.
+  
+- **Interaction:**  
+  Nodes can be repositioned via mouse dragging. The state is updated and the canvas is re-rendered accordingly.
 
-- Save/load agent configurations
-- Multiple agent types with different capabilities
-- Visual flow builder for connecting agents
-- Historical data viewing and analysis 
+## Customization & Future Enhancements
+
+- **Additional Node Types:**  
+  Currently, the app supports UserInput, AgentResponse, and a placeholder for AgentIdentity. Future enhancements could include more distinctive shapes or additional node types.
+  
+- **Improved Responsiveness:**  
+  Enhance text measurement and dynamic sizing for better UI scaling.
+  
+- **Backend Integration:**  
+  This front-end is designed to work with an AI backend service that sends responses via WebSocket and processes input via HTTP requests.
