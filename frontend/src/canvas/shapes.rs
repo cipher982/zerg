@@ -60,79 +60,63 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
     // Set fill style
     context.set_fill_style(&JsValue::from(node.color.clone()));
     
-    // Draw main bubble
+    // Draw main bubble - using a simpler, more modern rounded rectangle
+    let radius = 20.0; // Consistent corner radius for a cleaner look
+    
     context.begin_path();
     
-    // Draw a cloud-like shape
-    let radius = 30.0;
-    
-    // Top edge with bumps
+    // Top-left corner
     context.move_to(x + radius, y);
+    
+    // Top edge and top-right corner
+    context.line_to(x + width - radius, y);
     context.arc(
-        x + radius, 
+        x + width - radius, 
         y + radius, 
         radius, 
         std::f64::consts::PI * 1.5, 
-        std::f64::consts::PI * 0.0
+        std::f64::consts::PI * 0.0,
+        false,
     );
     
-    context.arc(
-        x + width / 2.0, 
-        y, 
-        radius * 0.8, 
-        std::f64::consts::PI, 
-        std::f64::consts::PI * 0.0
-    );
-    
+    // Right edge and bottom-right corner
+    context.line_to(x + width, y + height - radius);
     context.arc(
         x + width - radius, 
+        y + height - radius, 
+        radius, 
+        std::f64::consts::PI * 0.0, 
+        std::f64::consts::PI * 0.5,
+        false,
+    );
+    
+    // Bottom edge, excluding the tail area
+    context.line_to(x + width / 3.0 + radius, y + height);
+    
+    // Small tail pointing down instead of multiple bubbles
+    context.line_to(x + width / 4.0, y + height + 15.0);
+    context.line_to(x + width / 4.0 - 10.0, y + height);
+    
+    // Rest of bottom edge and bottom-left corner
+    context.line_to(x + radius, y + height);
+    context.arc(
+        x + radius, 
+        y + height - radius, 
+        radius, 
+        std::f64::consts::PI * 0.5, 
+        std::f64::consts::PI * 1.0,
+        false,
+    );
+    
+    // Left edge and top-left corner
+    context.line_to(x, y + radius);
+    context.arc(
+        x + radius, 
         y + radius, 
         radius, 
         std::f64::consts::PI * 1.0, 
-        std::f64::consts::PI * 1.5
-    );
-    
-    // Right edge
-    context.arc(
-        x + width, 
-        y + height / 2.0, 
-        radius * 0.8, 
-        std::f64::consts::PI * 1.5, 
-        std::f64::consts::PI * 0.5
-    );
-    
-    // Bottom edge
-    context.arc(
-        x + width - radius, 
-        y + height - radius, 
-        radius, 
-        std::f64::consts::PI * 0.0, 
-        std::f64::consts::PI * 0.5
-    );
-    
-    context.arc(
-        x + width / 2.0, 
-        y + height, 
-        radius * 0.8, 
-        std::f64::consts::PI * 0.0, 
-        std::f64::consts::PI * 1.0
-    );
-    
-    context.arc(
-        x + radius, 
-        y + height - radius, 
-        radius, 
-        std::f64::consts::PI * 0.5, 
-        std::f64::consts::PI * 1.0
-    );
-    
-    // Left edge
-    context.arc(
-        x, 
-        y + height / 2.0, 
-        radius * 0.8, 
-        std::f64::consts::PI * 0.5, 
-        std::f64::consts::PI * 1.5
+        std::f64::consts::PI * 1.5,
+        false,
     );
     
     context.close_path();
@@ -141,25 +125,6 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
     // Draw the border
     context.set_stroke_style(&JsValue::from("#2c3e50"));
     context.stroke();
-    
-    // Add small thought bubbles connecting to main bubble
-    let small_bubble_sizes = [8.0, 6.0, 4.0];
-    let mut last_x = x + width / 4.0;
-    let mut last_y = y + height;
-    
-    for size in small_bubble_sizes.iter() {
-        // Position the small bubble below the previous one
-        last_y += *size * 1.5;
-        
-        // Draw small circle
-        context.begin_path();
-        context.arc(last_x, last_y, *size, 0.0, std::f64::consts::PI * 2.0);
-        context.fill();
-        context.stroke();
-        
-        // Move x slightly for next bubble
-        last_x -= *size * 0.8;
-    }
 }
 
 pub fn draw_node_text(context: &CanvasRenderingContext2d, node: &Node) {
