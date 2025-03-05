@@ -9,16 +9,49 @@ pub fn setup_websocket() -> Result<(), JsValue> {
     // Set up message event handler
     let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
         // Get the message data as string
-        let response = event.data().as_string().unwrap();
+        let response_json = event.data().as_string().unwrap();
+        
+        // Parse the JSON response
+        let response: JsValue = js_sys::JSON::parse(&response_json).unwrap_or_else(|_| {
+            // If parsing fails, create a default object
+            web_sys::console::log_1(&"Failed to parse response JSON".into());
+            return JsValue::NULL;
+        });
         
         // Create a response node
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             
-            // Get the latest node that was added (the user's input)
-            if let Some(first_node_id) = state.nodes.keys().next().cloned() {
-                state.add_response_node(&first_node_id, response);
+            // Extract the response text and message ID
+            let response_text = js_sys::Reflect::get(&response, &"response".into())
+                .unwrap_or_else(|_| "No response text".into())
+                .as_string()
+                .unwrap_or_else(|| "No response text".to_string());
+            
+            let message_id = js_sys::Reflect::get(&response, &"message_id".into())
+                .unwrap_or_else(|_| "".into())
+                .as_string()
+                .unwrap_or_else(|| "".to_string());
+            
+            // Find the corresponding node ID using the message ID
+            if !message_id.is_empty() {
+                if let Some(node_id) = state.get_node_id_for_message(&message_id) {
+                    // Clone the node_id to avoid borrowing state immutably while using it mutably
+                    let node_id_copy = node_id.clone();
+                    state.add_response_node(&node_id_copy, response_text);
+                    state.draw_nodes();
+                    return;
+                }
+            }
+            
+            // Fallback to using the latest user input if we can't find a matching message ID
+            if let Some(latest_input_id) = &state.latest_user_input_id {
+                // Clone the ID to avoid borrowing state immutably while using it mutably
+                let input_id_copy = latest_input_id.clone();
+                state.add_response_node(&input_id_copy, response_text);
                 state.draw_nodes();
+            } else {
+                web_sys::console::log_1(&"No user input node found to attach response".into());
             }
         });
     }) as Box<dyn FnMut(_)>);
@@ -43,6 +76,22 @@ pub fn setup_websocket() -> Result<(), JsValue> {
 }
 
 pub fn send_text_to_backend(text: &str) {
+    // Generate a message ID
+    let message_id = APP_STATE.with(|state| {
+        let state = state.borrow();
+        state.generate_message_id()
+    });
+    
+    // Store the message ID mapping to the latest user input node
+    APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        if let Some(latest_input_id) = &state.latest_user_input_id {
+            // Clone the ID to avoid borrowing state immutably while using it mutably
+            let latest_id_copy = latest_input_id.clone();
+            state.track_message(message_id.clone(), latest_id_copy);
+        }
+    });
+    
     // Use the Fetch API to send data to the backend
     let window = web_sys::window().expect("no global window exists");
     
@@ -50,9 +99,10 @@ pub fn send_text_to_backend(text: &str) {
     let headers = web_sys::Headers::new().unwrap();
     headers.append("Content-Type", "application/json").unwrap();
     
-    // Create request body
+    // Create request body with message ID
     let body_obj = js_sys::Object::new();
     js_sys::Reflect::set(&body_obj, &"text".into(), &text.into()).unwrap();
+    js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into()).unwrap();
     let body_string = js_sys::JSON::stringify(&body_obj).unwrap();
     
     // Create request init object

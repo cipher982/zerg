@@ -69,7 +69,7 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
     
     // Top edge and top-right corner
     context.line_to(x + width - radius, y);
-    context.arc(
+    let _ = context.arc(
         x + width - radius, 
         y + radius, 
         radius, 
@@ -79,7 +79,7 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
     
     // Right edge and bottom-right corner
     context.line_to(x + width, y + height - radius);
-    context.arc(
+    let _ = context.arc(
         x + width - radius, 
         y + height - radius, 
         radius, 
@@ -96,7 +96,7 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
     
     // Rest of bottom edge and bottom-left corner
     context.line_to(x + radius, y + height);
-    context.arc(
+    let _ = context.arc(
         x + radius, 
         y + height - radius, 
         radius, 
@@ -106,7 +106,7 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
     
     // Left edge and top-left corner
     context.line_to(x, y + radius);
-    context.arc(
+    let _ = context.arc(
         x + radius, 
         y + radius, 
         radius, 

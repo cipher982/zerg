@@ -18,11 +18,18 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     button.set_attribute("id", "send-button")?;
     button.set_attribute("style", "padding: 8px 16px; background-color: #2ecc71; color: white; border: none; cursor: pointer;")?;
     
+    // Create auto-fit toggle button
+    let auto_fit_button = document.create_element("button")?;
+    auto_fit_button.set_inner_html("Auto-Fit: ON");
+    auto_fit_button.set_attribute("id", "auto-fit-button")?;
+    auto_fit_button.set_attribute("style", "padding: 8px 16px; background-color: #3498db; color: white; border: none; cursor: pointer; margin-left: 10px;")?;
+    
     // Create input container
     let input_container = document.create_element("div")?;
     input_container.set_attribute("style", "margin-bottom: 20px;")?;
     input_container.append_child(&input)?;
     input_container.append_child(&button)?;
+    input_container.append_child(&auto_fit_button)?;
     
     // Create canvas container
     let canvas_container = document.create_element("div")?;
@@ -44,8 +51,10 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     
     document.body().unwrap().append_child(&app_container)?;
     
-    // Set up event listener for the button
+    // Set up event handlers
     setup_button_click_handler(document)?;
+    setup_input_keypress_handler(document)?;
+    setup_auto_fit_toggle_handler(document)?;
     
     Ok(())
 }
@@ -59,29 +68,7 @@ fn setup_button_click_handler(document: &Document) -> Result<(), JsValue> {
         let text = input.value();
         
         if !text.is_empty() {
-            // Add a node for the user's input
-            APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.input_text = text.clone();
-                
-                // Position the node in the left side of the canvas at a consistent position
-                // If it's the first node, start higher up
-                let y_position = if state.nodes.is_empty() {
-                    100.0 // Start at the top
-                } else {
-                    // Find the lowest y-position of existing nodes
-                    let lowest_y = state.nodes.values()
-                        .map(|n| n.y + n.height)
-                        .fold(0.0, f64::max);
-                    lowest_y + 50.0 // Position below the lowest node with spacing
-                };
-                
-                state.add_node(text.clone(), 50.0, y_position, NodeType::UserInput);
-                state.draw_nodes();
-            });
-            
-            // Send the text to the backend
-            send_text_to_backend(&text);
+            send_user_input(&text);
             
             // Clear the input field
             input.set_value("");
@@ -95,6 +82,59 @@ fn setup_button_click_handler(document: &Document) -> Result<(), JsValue> {
     button_handler.forget();
     
     Ok(())
+}
+
+fn setup_input_keypress_handler(document: &Document) -> Result<(), JsValue> {
+    let input_el = document.get_element_by_id("user-input").unwrap();
+    let input_el_clone = input_el.clone();
+    
+    let keypress_handler = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+        if event.key() == "Enter" {
+            let input = input_el_clone.dyn_ref::<HtmlInputElement>().unwrap();
+            let text = input.value();
+            
+            if !text.is_empty() {
+                send_user_input(&text);
+                
+                // Clear the input field
+                input.set_value("");
+            }
+        }
+    }) as Box<dyn FnMut(_)>);
+    
+    input_el.add_event_listener_with_callback(
+        "keypress",
+        keypress_handler.as_ref().unchecked_ref(),
+    )?;
+    keypress_handler.forget();
+    
+    Ok(())
+}
+
+fn send_user_input(text: &str) {
+    // Add a node for the user's input
+    APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state.input_text = text.to_string();
+        
+        // Position the node in the left side of the canvas at a consistent position
+        // If it's the first node, start higher up
+        let y_position = if state.nodes.is_empty() {
+            100.0 // Start at the top
+        } else {
+            // Find the lowest y-position of existing nodes
+            let lowest_y = state.nodes.values()
+                .map(|n| n.y + n.height)
+                .fold(0.0, f64::max);
+            lowest_y + 50.0 // Position below the lowest node with spacing
+        };
+        
+        state.add_node(text.to_string(), 50.0, y_position, NodeType::UserInput);
+        state.draw_nodes();
+    });
+    
+    // Send the text to the backend
+    send_text_to_backend(text);
 }
 
 pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
@@ -155,15 +195,29 @@ fn resize_canvas(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
         canvas.style().set_property("width", &format!("{}px", container_width))?;
         canvas.style().set_property("height", &format!("{}px", container_height))?;
         
-        // Scale the context to account for the pixel ratio
+        // Update viewport and redraw if necessary
         APP_STATE.with(|state| {
             let state = state.borrow();
+            
             if let Some(context) = &state.context {
                 // Reset transform first to avoid compounding scales
                 let _ = context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+                
                 // Apply the device pixel ratio scaling
                 let _ = context.scale(dpr, dpr);
-                state.draw_nodes();
+                
+                // If auto-fit is enabled, refit the nodes
+                if state.auto_fit && !state.nodes.is_empty() {
+                    // We need to drop the immutable borrow to get a mutable one
+                    drop(state);
+                    
+                    APP_STATE.with(|state| {
+                        let mut state = state.borrow_mut();
+                        state.fit_nodes_to_view();
+                    });
+                } else {
+                    state.draw_nodes();
+                }
             }
         });
     }
@@ -194,7 +248,7 @@ fn setup_resize_handler(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
 fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
     // Get device pixel ratio once for all handlers
     let window = web_sys::window().expect("no global window exists");
-    let dpr = window.device_pixel_ratio();
+    let _dpr = window.device_pixel_ratio();
     
     // Mouse down event
     let mousedown_handler = Closure::wrap(Box::new(move |event: MouseEvent| {
@@ -205,7 +259,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             
-            // Find which node was clicked on
+            // Find which node was clicked on, accounting for viewport transformation
             if let Some((id, offset_x, offset_y)) = state.find_node_at_position(x, y) {
                 state.dragging = Some(id);
                 state.drag_offset_x = offset_x;
@@ -234,7 +288,11 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 let drag_offset_x = state.drag_offset_x;
                 let drag_offset_y = state.drag_offset_y;
                 
-                state.update_node_position(&id, x - drag_offset_x, y - drag_offset_y);
+                // Apply viewport transformation to the mouse coordinates
+                let world_x = x / state.zoom_level + state.viewport_x;
+                let world_y = y / state.zoom_level + state.viewport_y;
+                
+                state.update_node_position(&id, world_x - drag_offset_x, world_y - drag_offset_y);
             }
         });
     }) as Box<dyn FnMut(_)>);
@@ -259,6 +317,107 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         mouseup_handler.as_ref().unchecked_ref(),
     )?;
     mouseup_handler.forget();
+    
+    // Add mouse wheel event for manual zooming when auto-fit is disabled
+    let canvas_wheel = canvas.clone();
+    // Create an additional clone for use inside the closure
+    let canvas_wheel_inside = canvas_wheel.clone();
+    
+    let wheel_handler = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+        let event_obj = event.clone();
+        
+        // Prevent default scrolling behavior
+        event.prevent_default();
+        
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            
+            // Only allow manual zooming when auto-fit is disabled
+            if !state.auto_fit {
+                // Get canvas dimensions to use center as zoom point (simpler approach)
+                let canvas_width = canvas_wheel_inside.width() as f64;
+                let canvas_height = canvas_wheel_inside.height() as f64;
+                let window = web_sys::window().expect("no global window exists");
+                let dpr = window.device_pixel_ratio();
+                
+                // Get center of canvas in screen coordinates
+                let x = canvas_width / (2.0 * dpr);
+                let y = canvas_height / (2.0 * dpr);
+                
+                // Convert to world coordinates
+                let world_x = x / state.zoom_level + state.viewport_x;
+                let world_y = y / state.zoom_level + state.viewport_y;
+                
+                // Get wheel delta using JavaScript property access
+                let delta_y = js_sys::Reflect::get(&event_obj, &"deltaY".into())
+                    .unwrap_or(js_sys::Reflect::get(&event_obj, &"wheelDelta".into()).unwrap_or(0.0.into()))
+                    .as_f64()
+                    .unwrap_or(0.0);
+                
+                // Adjust zoom based on wheel direction
+                let zoom_delta = if delta_y > 0.0 { 0.9 } else { 1.1 };
+                state.zoom_level *= zoom_delta;
+                
+                // Limit zoom to reasonable values
+                state.zoom_level = f64::max(0.1, f64::min(state.zoom_level, 5.0));
+                
+                // Adjust viewport to zoom toward/away from center
+                state.viewport_x = world_x - x / state.zoom_level;
+                state.viewport_y = world_y - y / state.zoom_level;
+                
+                state.draw_nodes();
+            }
+        });
+        
+        // Explicitly prevent default again to be extra safe
+        let _ = js_sys::Reflect::set(
+            &event,
+            &"returnValue".into(),
+            &false.into()
+        );
+    }) as Box<dyn FnMut(_)>);
+    
+    // Use both wheel and mousewheel for cross-browser compatibility
+    canvas_wheel.add_event_listener_with_callback(
+        "wheel",
+        wheel_handler.as_ref().unchecked_ref(),
+    )?;
+    wheel_handler.forget();
+    
+    Ok(())
+}
+
+// Add this new function to handle auto-fit toggle
+fn setup_auto_fit_toggle_handler(document: &Document) -> Result<(), JsValue> {
+    let auto_fit_button = document.get_element_by_id("auto-fit-button").unwrap();
+    
+    let click_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.toggle_auto_fit();
+            
+            // Update button text
+            let window = web_sys::window().expect("no global window exists");
+            let document = window.document().expect("no document exists");
+            if let Some(button) = document.get_element_by_id("auto-fit-button") {
+                let status = if state.auto_fit { "ON" } else { "OFF" };
+                button.set_inner_html(&format!("Auto-Fit: {}", status));
+                
+                // Update button color
+                let color = if state.auto_fit { "#3498db" } else { "#95a5a6" };
+                button.set_attribute("style", &format!(
+                    "padding: 8px 16px; background-color: {}; color: white; border: none; cursor: pointer; margin-left: 10px;",
+                    color
+                )).unwrap();
+            }
+        });
+    }) as Box<dyn FnMut(_)>);
+    
+    auto_fit_button.add_event_listener_with_callback(
+        "click",
+        click_callback.as_ref().unchecked_ref(),
+    )?;
+    click_callback.forget();
     
     Ok(())
 } 

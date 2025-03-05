@@ -1,10 +1,11 @@
 import os
+import json
 from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from openai import OpenAI
-from typing import List
+from typing import List, Dict, Any
 
 # Load environment variables
 load_dotenv()
@@ -33,12 +34,14 @@ class TextRequest(BaseModel):
     """Request model for text processing."""
 
     text: str
+    message_id: str = None  # Add message_id field
 
 
 class TextResponse(BaseModel):
     """Response model for text processing."""
 
     response: str
+    message_id: str = None  # Add message_id field
 
 
 # Connected WebSocket clients
@@ -69,15 +72,21 @@ async def process_text(request: TextRequest):
 
         print(f"Got response: {response_text}")
 
+        # Prepare response with message_id
+        response_data = {
+            "response": response_text,
+            "message_id": request.message_id  # Include the message_id in the response
+        }
+
         # Broadcast the response to all connected WebSocket clients
         for websocket_client in connected_clients:
             try:
-                await websocket_client.send_text(response_text)
+                await websocket_client.send_text(json.dumps(response_data))
             except Exception:
                 # Remove clients that have disconnected
                 connected_clients.remove(websocket_client)
 
-        return TextResponse(response=response_text)
+        return TextResponse(response=response_text, message_id=request.message_id)
     except Exception as e:
         import traceback
 
