@@ -49,7 +49,7 @@ fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
                 );
                 
                 // Style and stroke the path
-                context.set_stroke_style(&wasm_bindgen::JsValue::from("#95a5a6"));
+                context.set_stroke_style_str("#95a5a6");
                 context.set_line_width(2.0);
                 context.stroke();
                 

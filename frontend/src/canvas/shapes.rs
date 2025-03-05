@@ -1,5 +1,4 @@
 use web_sys::CanvasRenderingContext2d;
-use wasm_bindgen::JsValue;
 use crate::models::Node;
 
 pub fn draw_rounded_rect(context: &CanvasRenderingContext2d, node: &Node) {
@@ -10,7 +9,7 @@ pub fn draw_rounded_rect(context: &CanvasRenderingContext2d, node: &Node) {
     let height = node.height;
     
     // Set fill style
-    context.set_fill_style(&JsValue::from(node.color.clone()));
+    context.set_fill_style_str(&node.color.clone());
     
     // Draw rounded rectangle
     context.begin_path();
@@ -27,7 +26,7 @@ pub fn draw_rounded_rect(context: &CanvasRenderingContext2d, node: &Node) {
     
     // Fill and stroke
     context.fill();
-    context.set_stroke_style(&JsValue::from("#2c3e50"));
+    context.set_stroke_style_str("#2c3e50");
     context.stroke();
 }
 
@@ -46,7 +45,7 @@ pub fn draw_arrow(context: &CanvasRenderingContext2d, x: f64, y: f64, dx: f64, d
         x - head_len * f64::cos(angle + std::f64::consts::PI / 6.0),
         y - head_len * f64::sin(angle + std::f64::consts::PI / 6.0)
     );
-    context.set_stroke_style(&JsValue::from("#95a5a6"));
+    context.set_stroke_style_str("#95a5a6");
     context.set_line_width(2.0);
     context.stroke();
 }
@@ -58,7 +57,7 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
     let height = node.height;
     
     // Set fill style
-    context.set_fill_style(&JsValue::from(node.color.clone()));
+    context.set_fill_style_str(&node.color.clone());
     
     // Draw main bubble - using a simpler, more modern rounded rectangle
     let radius = 20.0; // Consistent corner radius for a cleaner look
@@ -75,8 +74,7 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
         y + radius, 
         radius, 
         std::f64::consts::PI * 1.5, 
-        std::f64::consts::PI * 0.0,
-        false,
+        std::f64::consts::PI * 0.0
     );
     
     // Right edge and bottom-right corner
@@ -86,8 +84,7 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
         y + height - radius, 
         radius, 
         std::f64::consts::PI * 0.0, 
-        std::f64::consts::PI * 0.5,
-        false,
+        std::f64::consts::PI * 0.5
     );
     
     // Bottom edge, excluding the tail area
@@ -104,8 +101,7 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
         y + height - radius, 
         radius, 
         std::f64::consts::PI * 0.5, 
-        std::f64::consts::PI * 1.0,
-        false,
+        std::f64::consts::PI * 1.0
     );
     
     // Left edge and top-left corner
@@ -115,21 +111,20 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
         y + radius, 
         radius, 
         std::f64::consts::PI * 1.0, 
-        std::f64::consts::PI * 1.5,
-        false,
+        std::f64::consts::PI * 1.5
     );
     
     context.close_path();
     context.fill();
     
     // Draw the border
-    context.set_stroke_style(&JsValue::from("#2c3e50"));
+    context.set_stroke_style_str("#2c3e50");
     context.stroke();
 }
 
 pub fn draw_node_text(context: &CanvasRenderingContext2d, node: &Node) {
     // Draw node text
-    context.set_fill_style(&JsValue::from("#ffffff"));
+    context.set_fill_style_str("#ffffff");
     context.set_font("15px Arial");
     context.set_text_align("left");
     context.set_text_baseline("top");

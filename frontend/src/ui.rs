@@ -110,6 +110,12 @@ pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
         .unwrap()
         .dyn_into::<web_sys::CanvasRenderingContext2d>()?;
     
+    // Ensure initial context is properly scaled with device pixel ratio
+    let window = web_sys::window().expect("no global window exists");
+    let dpr = window.device_pixel_ratio();
+    let _ = context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+    let _ = context.scale(dpr, dpr);
+    
     APP_STATE.with(|state| {
         let mut state = state.borrow_mut();
         state.canvas = Some(canvas.clone());
@@ -134,14 +140,31 @@ fn resize_canvas(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
         let container_width = container.client_width();
         let container_height = container.client_height();
         
-        // Set canvas width and height attributes to match container dimensions
-        canvas.set_width(container_width as u32);
-        canvas.set_height(container_height as u32);
+        // Get the device pixel ratio for high-DPI displays
+        let dpr = window.device_pixel_ratio();
         
-        // Redraw nodes if any exist
+        // Set the canvas width and height attributes to the container size times the pixel ratio
+        let scaled_width = (container_width as f64 * dpr) as u32;
+        let scaled_height = (container_height as f64 * dpr) as u32;
+        
+        // Set the actual canvas bitmap size
+        canvas.set_width(scaled_width);
+        canvas.set_height(scaled_height);
+        
+        // Set CSS size to maintain visual dimensions
+        canvas.style().set_property("width", &format!("{}px", container_width))?;
+        canvas.style().set_property("height", &format!("{}px", container_height))?;
+        
+        // Scale the context to account for the pixel ratio
         APP_STATE.with(|state| {
             let state = state.borrow();
-            state.draw_nodes();
+            if let Some(context) = &state.context {
+                // Reset transform first to avoid compounding scales
+                let _ = context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+                // Apply the device pixel ratio scaling
+                let _ = context.scale(dpr, dpr);
+                state.draw_nodes();
+            }
         });
     }
     
@@ -169,8 +192,13 @@ fn setup_resize_handler(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
 }
 
 fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
+    // Get device pixel ratio once for all handlers
+    let window = web_sys::window().expect("no global window exists");
+    let dpr = window.device_pixel_ratio();
+    
     // Mouse down event
     let mousedown_handler = Closure::wrap(Box::new(move |event: MouseEvent| {
+        // Get raw coordinates
         let x = event.offset_x() as f64;
         let y = event.offset_y() as f64;
         
