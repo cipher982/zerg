@@ -2,7 +2,8 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Document, HtmlCanvasElement, HtmlInputElement, MouseEvent};
 use crate::state::APP_STATE;
 use crate::models::NodeType;
-use crate::network::send_text_to_backend;
+use crate::network::{send_text_to_backend, fetch_available_models};
+use wasm_bindgen_futures::spawn_local;
 
 pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     // Create input field
@@ -18,6 +19,14 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     button.set_attribute("id", "send-button")?;
     button.set_attribute("style", "padding: 8px 16px; background-color: #2ecc71; color: white; border: none; cursor: pointer;")?;
     
+    // Create model selection dropdown
+    let model_select = document.create_element("select")?;
+    model_select.set_attribute("id", "model-select")?;
+    model_select.set_attribute("style", "padding: 8px; margin-left: 10px;")?;
+    
+    // Initially populate with default models
+    update_model_dropdown(document)?;
+    
     // Create auto-fit toggle button
     let auto_fit_button = document.create_element("button")?;
     auto_fit_button.set_inner_html("Auto-Fit: ON");
@@ -29,6 +38,7 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     input_container.set_attribute("style", "margin-bottom: 20px;")?;
     input_container.append_child(&input)?;
     input_container.append_child(&button)?;
+    input_container.append_child(&model_select)?;
     input_container.append_child(&auto_fit_button)?;
     
     // Create canvas container
@@ -55,6 +65,59 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     setup_button_click_handler(document)?;
     setup_input_keypress_handler(document)?;
     setup_auto_fit_toggle_handler(document)?;
+    setup_model_select_handler(document)?;
+    
+    // Fetch available models from the backend
+    fetch_models_from_backend(document)?;
+    
+    Ok(())
+}
+
+fn update_model_dropdown(document: &Document) -> Result<(), JsValue> {
+    if let Some(select_el) = document.get_element_by_id("model-select") {
+        // Clear existing options
+        select_el.set_inner_html("");
+        
+        // Get available models from state
+        let models = APP_STATE.with(|state| {
+            let state = state.borrow();
+            state.available_models.clone()
+        });
+        
+        // Get selected model
+        let selected_model = APP_STATE.with(|state| {
+            let state = state.borrow();
+            state.selected_model.clone()
+        });
+        
+        // Add options to dropdown
+        for (value, label) in models.iter() {
+            let option = document.create_element("option")?;
+            option.set_attribute("value", value)?;
+            
+            // Set selected if it matches current selection
+            if value == &selected_model {
+                option.set_attribute("selected", "selected")?;
+            }
+            
+            option.set_inner_html(label);
+            select_el.append_child(&option)?;
+        }
+    }
+    
+    Ok(())
+}
+
+fn fetch_models_from_backend(document: &Document) -> Result<(), JsValue> {
+    let document_clone = document.clone();
+    
+    // Fetch models asynchronously
+    spawn_local(async move {
+        if let Ok(()) = fetch_available_models().await {
+            // Update the dropdown with fetched models
+            let _ = update_model_dropdown(&document_clone);
+        }
+    });
     
     Ok(())
 }
@@ -418,6 +481,28 @@ fn setup_auto_fit_toggle_handler(document: &Document) -> Result<(), JsValue> {
         click_callback.as_ref().unchecked_ref(),
     )?;
     click_callback.forget();
+    
+    Ok(())
+}
+
+fn setup_model_select_handler(document: &Document) -> Result<(), JsValue> {
+    let select_el = document.get_element_by_id("model-select").unwrap();
+    
+    let change_handler = Closure::wrap(Box::new(move |event: web_sys::Event| {
+        let select = event.target().unwrap().dyn_into::<web_sys::HtmlSelectElement>().unwrap();
+        let model = select.value();
+        
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.selected_model = model;
+        });
+    }) as Box<dyn FnMut(_)>);
+    
+    select_el.add_event_listener_with_callback(
+        "change",
+        change_handler.as_ref().unchecked_ref(),
+    )?;
+    change_handler.forget();
     
     Ok(())
 } 

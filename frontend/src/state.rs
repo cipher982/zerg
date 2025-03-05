@@ -23,6 +23,10 @@ pub struct AppState {
     pub latest_user_input_id: Option<String>,
     // Track message IDs and their corresponding node IDs
     pub message_id_to_node_id: HashMap<String, String>,
+    // Selected AI model
+    pub selected_model: String,
+    // Available AI models
+    pub available_models: Vec<(String, String)>,
 }
 
 impl AppState {
@@ -42,6 +46,13 @@ impl AppState {
             auto_fit: true, // Enable auto-fit by default
             latest_user_input_id: None,
             message_id_to_node_id: HashMap::new(),
+            selected_model: "gpt-4o".to_string(), // Default model
+            available_models: vec![
+                // Default models until we fetch from the server
+                ("gpt-4o".to_string(), "GPT-4o".to_string()),
+                ("gpt-4-turbo".to_string(), "GPT-4 Turbo".to_string()),
+                ("gpt-3.5-turbo".to_string(), "GPT-3.5 Turbo".to_string()),
+            ],
         }
     }
 

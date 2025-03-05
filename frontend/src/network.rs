@@ -1,6 +1,8 @@
 use wasm_bindgen::prelude::*;
 use web_sys::{WebSocket, MessageEvent};
 use crate::state::APP_STATE;
+use wasm_bindgen_futures::JsFuture;
+use js_sys::Array;
 
 pub fn setup_websocket() -> Result<(), JsValue> {
     // Create a new WebSocket connection
@@ -96,6 +98,12 @@ pub fn send_text_to_backend(text: &str) {
         state.generate_message_id()
     });
     
+    // Get the selected model
+    let selected_model = APP_STATE.with(|state| {
+        let state = state.borrow();
+        state.selected_model.clone()
+    });
+    
     // Store the message ID mapping to the latest user input node
     APP_STATE.with(|state| {
         let mut state = state.borrow_mut();
@@ -113,10 +121,11 @@ pub fn send_text_to_backend(text: &str) {
     let headers = web_sys::Headers::new().unwrap();
     headers.append("Content-Type", "application/json").unwrap();
     
-    // Create request body with message ID
+    // Create request body with message ID and model
     let body_obj = js_sys::Object::new();
     js_sys::Reflect::set(&body_obj, &"text".into(), &text.into()).unwrap();
     js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into()).unwrap();
+    js_sys::Reflect::set(&body_obj, &"model".into(), &selected_model.into()).unwrap();
     let body_string = js_sys::JSON::stringify(&body_obj).unwrap();
     
     // Create request init object
@@ -138,4 +147,56 @@ pub fn send_text_to_backend(text: &str) {
     let _ = window.fetch_with_request(&request);
     
     // We're not handling the response here since we'll get it via WebSocket
+}
+
+pub async fn fetch_available_models() -> Result<(), JsValue> {
+    let window = web_sys::window().expect("no global window exists");
+    
+    // Create request
+    let request = web_sys::Request::new_with_str(
+        "http://localhost:8001/api/models"
+    )?;
+    
+    // Fetch models
+    let response_promise = window.fetch_with_request(&request);
+    let response = JsFuture::from(response_promise).await?;
+    
+    // Convert to Response object
+    let response: web_sys::Response = response.dyn_into()?;
+    
+    // Get JSON
+    let json_promise = response.json()?;
+    let json = JsFuture::from(json_promise).await?;
+    
+    // Parse models from response
+    if let Some(models_value) = js_sys::Reflect::get(&json, &"models".into()).ok() {
+        if let Some(models_array) = models_value.dyn_ref::<Array>() {
+            // Clear existing models
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.available_models.clear();
+                
+                // Add models from the response
+                for i in 0..models_array.length() {
+                    if let Some(model) = models_array.get(i).dyn_ref::<js_sys::Object>() {
+                        let id = js_sys::Reflect::get(&model, &"id".into())
+                            .ok()
+                            .and_then(|v| v.as_string())
+                            .unwrap_or_default();
+                            
+                        let name = js_sys::Reflect::get(&model, &"name".into())
+                            .ok()
+                            .and_then(|v| v.as_string())
+                            .unwrap_or_default();
+                            
+                        if !id.is_empty() && !name.is_empty() {
+                            state.available_models.push((id, name));
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    Ok(())
 } 
