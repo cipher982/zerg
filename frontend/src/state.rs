@@ -42,7 +42,7 @@ impl AppState {
         
         // Calculate approximate node size based on text content
         // This is a simple heuristic - we could do more sophisticated text measurement
-        let words = text.split_whitespace().count();
+        let _words = text.split_whitespace().count();
         let chars_per_line = 25; // Approximate chars per line
         let lines = (text.len() as f64 / chars_per_line as f64).ceil() as usize;
         
