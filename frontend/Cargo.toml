@@ -39,5 +39,6 @@ features = [
     "DomStringMap",
     "HtmlBodyElement",
     "WheelEvent",
-    "DomRect"
+    "DomRect",
+    "CloseEvent"
 ] 

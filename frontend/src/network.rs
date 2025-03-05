@@ -60,12 +60,26 @@ pub fn setup_websocket() -> Result<(), JsValue> {
     onmessage_callback.forget();
     
     // Set up error handler
-    let onerror_callback = Closure::wrap(Box::new(move |_e: web_sys::Event| {
-        web_sys::console::log_1(&"WebSocket error occurred".into());
+    let onerror_callback = Closure::wrap(Box::new(move |e: web_sys::Event| {
+        // Log more details about the error
+        web_sys::console::log_1(&"WebSocket error occurred:".into());
+        web_sys::console::log_1(&e);
+        
+        // Optionally could implement reconnection logic here
+        // For now just log the error
     }) as Box<dyn FnMut(_)>);
     
     ws.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
     onerror_callback.forget();
+    
+    // Set up close handler
+    let onclose_callback = Closure::wrap(Box::new(move |e: web_sys::Event| {
+        web_sys::console::log_1(&"WebSocket connection closed:".into());
+        web_sys::console::log_1(&e);
+    }) as Box<dyn FnMut(_)>);
+    
+    ws.set_onclose(Some(onclose_callback.as_ref().unchecked_ref()));
+    onclose_callback.forget();
     
     APP_STATE.with(|state| {
         let mut state = state.borrow_mut();
