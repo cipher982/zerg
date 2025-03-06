@@ -27,11 +27,49 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     // Initially populate with default models
     update_model_dropdown(document)?;
     
-    // Create auto-fit toggle button
-    let auto_fit_button = document.create_element("button")?;
-    auto_fit_button.set_inner_html("Auto-Fit: ON");
-    auto_fit_button.set_attribute("id", "auto-fit-button")?;
-    auto_fit_button.set_attribute("style", "padding: 8px 16px; background-color: #3498db; color: white; border: none; cursor: pointer; margin-left: 10px;")?;
+    // Create toggle switch container
+    let toggle_container = document.create_element("div")?;
+    toggle_container.set_attribute("style", "display: inline-flex; align-items: center; margin-left: 10px;")?;
+    
+    // Create label for toggle with stacked text
+    let toggle_label = document.create_element("div")?;
+    toggle_label.set_inner_html("Auto Layout");
+    toggle_label.set_attribute("style", "margin-right: 8px; font-size: 0.9em; text-align: center; line-height: 1.2;")?;
+    
+    // Create toggle switch track
+    let toggle_track = document.create_element("label")?;
+    let _ = toggle_track.set_attribute("class", "switch");
+    toggle_track.set_attribute("style", "position: relative; display: inline-block; width: 50px; height: 24px;")?;
+    
+    // Create hidden checkbox that stores the actual state
+    let toggle_checkbox = document.create_element("input")?;
+    toggle_checkbox.set_attribute("type", "checkbox")?;
+    toggle_checkbox.set_attribute("id", "auto-fit-checkbox")?;
+    toggle_checkbox.set_attribute("checked", "")?; // On by default
+    toggle_checkbox.set_attribute("style", "opacity: 0; width: 0; height: 0;")?;
+    
+    // Create the visual slider with faster transition
+    let toggle_slider = document.create_element("span")?;
+    let _ = toggle_slider.set_attribute("class", "slider");
+    toggle_slider.set_attribute("style", "position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #3498db; border-radius: 24px; transition: .2s;")?;
+    
+    // Create the circle that moves with faster transition
+    let toggle_circle = document.create_element("span")?;
+    let _ = toggle_circle.set_attribute("class", "circle");
+    toggle_circle.set_attribute("style", "position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; transform: translateX(26px);")?;
+    
+    // Assemble the toggle
+    toggle_slider.append_child(&toggle_circle)?;
+    toggle_track.append_child(&toggle_checkbox)?;
+    toggle_track.append_child(&toggle_slider)?;
+    toggle_container.append_child(&toggle_label)?;
+    toggle_container.append_child(&toggle_track)?;
+    
+    // Create center view button
+    let center_button = document.create_element("button")?;
+    center_button.set_inner_html("Center View");
+    center_button.set_attribute("id", "center-button")?;
+    center_button.set_attribute("style", "padding: 8px 16px; background-color: #2980b9; color: white; border: none; cursor: pointer; margin-left: 10px; border-radius: 4px;")?;
     
     // Create input container
     let input_container = document.create_element("div")?;
@@ -39,7 +77,8 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     input_container.append_child(&input)?;
     input_container.append_child(&button)?;
     input_container.append_child(&model_select)?;
-    input_container.append_child(&auto_fit_button)?;
+    input_container.append_child(&toggle_container)?;
+    input_container.append_child(&center_button)?;
     
     // Create canvas container
     let canvas_container = document.create_element("div")?;
@@ -65,6 +104,7 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     setup_button_click_handler(document)?;
     setup_input_keypress_handler(document)?;
     setup_auto_fit_toggle_handler(document)?;
+    setup_center_view_handler(document)?;
     setup_model_select_handler(document)?;
     
     // Fetch available models from the backend
@@ -324,9 +364,47 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             
             // Find which node was clicked on, accounting for viewport transformation
             if let Some((id, offset_x, offset_y)) = state.find_node_at_position(x, y) {
+                // Node dragging (existing behavior)
                 state.dragging = Some(id);
                 state.drag_offset_x = offset_x;
                 state.drag_offset_y = offset_y;
+                state.canvas_dragging = false; // Ensure canvas dragging is off
+            } else {
+                // Canvas dragging - clicked on empty area
+                // If in Auto Layout Mode, automatically switch to Manual Layout Mode
+                if state.auto_fit {
+                    state.auto_fit = false;
+                    
+                    // Update the toggle switch to reflect the mode change
+                    let window = web_sys::window().expect("no global window exists");
+                    let document = window.document().expect("no document exists");
+                    
+                    // Update the checkbox state
+                    if let Some(checkbox) = document.get_element_by_id("auto-fit-checkbox") {
+                        if let Some(input) = checkbox.dyn_ref::<web_sys::HtmlInputElement>() {
+                            input.set_checked(false);
+                        }
+                    }
+                    
+                    // Update the visual appearance
+                    if let Some(slider) = document.query_selector(".slider").ok().flatten() {
+                        let _ = slider.set_attribute("style", 
+                            "position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #95a5a6; border-radius: 24px; transition: .2s;"
+                        );
+                    }
+                    
+                    if let Some(circle) = document.query_selector(".circle").ok().flatten() {
+                        let _ = circle.set_attribute("style", 
+                            "position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; transform: translateX(0);"
+                        );
+                    }
+                }
+                
+                // Enable canvas dragging
+                state.dragging = None;
+                state.canvas_dragging = true;
+                state.canvas_drag_start_x = x;
+                state.canvas_drag_start_y = y;
             }
         });
     }) as Box<dyn FnMut(_)>);
@@ -347,6 +425,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             let mut state = state.borrow_mut();
             
             if let Some(id) = &state.dragging {
+                // Node dragging (existing behavior)
                 let id = id.clone();
                 let drag_offset_x = state.drag_offset_x;
                 let drag_offset_y = state.drag_offset_y;
@@ -356,6 +435,25 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 let world_y = y / state.zoom_level + state.viewport_y;
                 
                 state.update_node_position(&id, world_x - drag_offset_x, world_y - drag_offset_y);
+            } else if state.canvas_dragging {
+                // Canvas dragging (new behavior)
+                // Calculate how far the mouse has moved since starting the drag
+                let dx = (state.canvas_drag_start_x - x) / state.zoom_level;
+                let dy = (state.canvas_drag_start_y - y) / state.zoom_level;
+                
+                // Update the viewport (moving it in the direction of the drag)
+                state.viewport_x += dx;
+                state.viewport_y += dy;
+                
+                // Enforce boundaries to prevent panning too far
+                state.enforce_viewport_boundaries();
+                
+                // Update the drag start position for next movement
+                state.canvas_drag_start_x = x;
+                state.canvas_drag_start_y = y;
+                
+                // Redraw with the new viewport
+                state.draw_nodes();
             }
         });
     }) as Box<dyn FnMut(_)>);
@@ -372,6 +470,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             state.dragging = None;
+            state.canvas_dragging = false; // Clear canvas dragging state
         });
     }) as Box<dyn FnMut(_)>);
     
@@ -452,31 +551,61 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
 
 // Add this new function to handle auto-fit toggle
 fn setup_auto_fit_toggle_handler(document: &Document) -> Result<(), JsValue> {
-    let auto_fit_button = document.get_element_by_id("auto-fit-button").unwrap();
+    let toggle_checkbox = document.get_element_by_id("auto-fit-checkbox").unwrap();
     
-    let click_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+    let change_handler = Closure::wrap(Box::new(move |event: web_sys::Event| {
+        let checkbox = event.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap();
+        let checked = checkbox.checked();
+        
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
-            state.toggle_auto_fit();
             
-            // Update button text
+            // Only toggle if the current state is different from what we want
+            if state.auto_fit != checked {
+                state.toggle_auto_fit();
+            }
+            
+            // Get the toggle slider to update its appearance
             let window = web_sys::window().expect("no global window exists");
             let document = window.document().expect("no document exists");
-            if let Some(button) = document.get_element_by_id("auto-fit-button") {
-                let status = if state.auto_fit { "ON" } else { "OFF" };
-                button.set_inner_html(&format!("Auto-Fit: {}", status));
-                
-                // Update button color
-                let color = if state.auto_fit { "#3498db" } else { "#95a5a6" };
-                button.set_attribute("style", &format!(
-                    "padding: 8px 16px; background-color: {}; color: white; border: none; cursor: pointer; margin-left: 10px;",
-                    color
-                )).unwrap();
+            if let Some(slider) = document.query_selector(".slider").ok().flatten() {
+                let bg_color = if checked { "#3498db" } else { "#95a5a6" };
+                let _ = slider.set_attribute("style", &format!(
+                    "position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: {}; border-radius: 24px; transition: .2s;",
+                    bg_color
+                ));
+            }
+            
+            if let Some(circle) = document.query_selector(".circle").ok().flatten() {
+                let transform = if checked { "translateX(26px)" } else { "translateX(0)" };
+                let _ = circle.set_attribute("style", &format!(
+                    "position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; transform: {};",
+                    transform
+                ));
             }
         });
     }) as Box<dyn FnMut(_)>);
     
-    auto_fit_button.add_event_listener_with_callback(
+    toggle_checkbox.add_event_listener_with_callback(
+        "change",
+        change_handler.as_ref().unchecked_ref(),
+    )?;
+    change_handler.forget();
+    
+    Ok(())
+}
+
+fn setup_center_view_handler(document: &Document) -> Result<(), JsValue> {
+    let center_button = document.get_element_by_id("center-button").unwrap();
+    
+    let click_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.center_view();
+        });
+    }) as Box<dyn FnMut(_)>);
+    
+    center_button.add_event_listener_with_callback(
         "click",
         click_callback.as_ref().unchecked_ref(),
     )?;
