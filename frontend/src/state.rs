@@ -3,6 +3,11 @@ use std::cell::RefCell;
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
 use crate::models::{Node, NodeType};
 use crate::canvas::renderer;
+use js_sys::Date;
+use wasm_bindgen::JsValue;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
+use std::rc::Rc;
 
 // Store global application state
 pub struct AppState {
@@ -31,6 +36,8 @@ pub struct AppState {
     pub selected_model: String,
     // Available AI models
     pub available_models: Vec<(String, String)>,
+    // Whether state has been modified since last save
+    pub state_modified: bool,
 }
 
 impl AppState {
@@ -60,6 +67,7 @@ impl AppState {
                 ("gpt-4-turbo".to_string(), "GPT-4 Turbo".to_string()),
                 ("gpt-3.5-turbo".to_string(), "GPT-3.5 Turbo".to_string()),
             ],
+            state_modified: false,
         }
     }
 
@@ -98,6 +106,7 @@ impl AppState {
             node_type: node_type_clone,
         };
         self.nodes.insert(id.clone(), node);
+        self.state_modified = true; // Mark state as modified
         
         // If this is a user input node, update the latest_user_input_id
         if let NodeType::UserInput = node_type {
@@ -125,6 +134,7 @@ impl AppState {
                 response_node.parent_id = Some(parent_id.to_string());
             }
         }
+        self.state_modified = true; // Mark state as modified
     }
     
     pub fn draw_nodes(&self) {
@@ -135,6 +145,7 @@ impl AppState {
         if let Some(node) = self.nodes.get_mut(node_id) {
             node.x = x;
             node.y = y;
+            self.state_modified = true; // Mark state as modified
             
             // Auto-fit all nodes if enabled
             if self.auto_fit {
@@ -192,8 +203,9 @@ impl AppState {
             let canvas_height = canvas_height / dpr;
             
             // Calculate required width and height with padding
-            let required_width = max_x - min_x + 80.0; // Add padding
-            let required_height = max_y - min_y + 80.0;
+            let padding = 80.0;
+            let required_width = max_x - min_x + padding; 
+            let required_height = max_y - min_y + padding;
             
             // Set minimum view area to prevent excessive zooming on small node counts
             // This ensures we don't zoom in too far when there are only a few nodes
@@ -215,9 +227,13 @@ impl AppState {
             let max_zoom = 1.0; // Maximum zoom level (1.0 = 100%)
             let new_zoom = f64::min(new_zoom, max_zoom);
             
-            // Center the content
-            let new_viewport_x = min_x - 40.0; // Add padding
-            let new_viewport_y = min_y - 40.0;
+            // Calculate the center of the nodes
+            let center_x = min_x + (max_x - min_x) / 2.0;
+            let center_y = min_y + (max_y - min_y) / 2.0;
+            
+            // Calculate viewport position to center the content
+            let new_viewport_x = center_x - (canvas_width / (2.0 * new_zoom));
+            let new_viewport_y = center_y - (canvas_height / (2.0 * new_zoom));
             
             // Update state
             self.zoom_level = new_zoom;
@@ -247,16 +263,78 @@ impl AppState {
             self.auto_fit = false;
         }
         
-        // Use existing fit method to center the view
+        // Use existing fit method to center the view - this is known to work well
         self.fit_nodes_to_view();
         
         // Restore original auto-fit setting
         self.auto_fit = original_auto_fit;
     }
+    
+    // Animate viewport transition
+    fn animate_viewport(
+        &mut self,
+        start_x: f64, start_y: f64, start_zoom: f64,
+        target_x: f64, target_y: f64, target_zoom: f64
+    ) {
+        let window = web_sys::window().expect("no global window exists");
+        
+        // Animation parameters
+        let duration = 250.0; // Animation duration in ms (fast but visible)
+        let start_time = js_sys::Date::now();
+        
+        // Define the type for our self-referential closure
+        type AnimationClosure = Closure<dyn FnMut(f64)>;
+        
+        // Need to use this approach for self-referential closure
+        let f = Rc::new(RefCell::new(None::<AnimationClosure>));
+        let g = f.clone();
+        
+        // Clone window for use outside the closure
+        let window_for_start = window.clone();
+        
+        // Create a function to perform the animation
+        *g.borrow_mut() = Some(Closure::new(Box::new(move |time: f64| {
+            // Clone window reference for use in the closure
+            let window_ref = web_sys::window().expect("no global window exists");
+            
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                let elapsed = time - start_time;
+                let progress = (elapsed / duration).min(1.0);
+                
+                // Ease function (smooth start and end)
+                let ease = |t: f64| -> f64 { 
+                    if t < 0.5 {
+                        4.0 * t * t * t
+                    } else {
+                        1.0 - (-2.0 * t + 2.0).powi(3) / 2.0
+                    }
+                };
+                
+                let eased_progress = ease(progress);
+                
+                // Interpolate viewport position and zoom
+                state.viewport_x = start_x + (target_x - start_x) * eased_progress;
+                state.viewport_y = start_y + (target_y - start_y) * eased_progress;
+                state.zoom_level = start_zoom + (target_zoom - start_zoom) * eased_progress;
+                
+                // Redraw with new viewport
+                state.draw_nodes();
+                
+                // Continue animation if not finished
+                if progress < 1.0 {
+                    let _ = window_ref.request_animation_frame(f.borrow().as_ref().unwrap().as_ref().unchecked_ref());
+                }
+            });
+        })));
+        
+        // Start the animation
+        let _ = window_for_start.request_animation_frame(g.borrow().as_ref().unwrap().as_ref().unchecked_ref());
+    }
 
     // Generate a unique message ID
     pub fn generate_message_id(&self) -> String {
-        format!("msg_{}", js_sys::Date::now())
+        format!("msg_{}", Date::now())
     }
     
     // Track a message ID and its corresponding node ID
@@ -288,30 +366,58 @@ impl AppState {
             max_y = f64::max(max_y, node.y + node.height);
         }
         
-        // Add padding around content bounds
-        let padding = 500.0; // Large padding to allow reasonable movement
-        min_x -= padding;
-        min_y -= padding;
-        max_x += padding;
-        max_y += padding;
-        
-        // Calculate viewport constraints
-        // Don't let viewport move too far from content in any direction
+        // Calculate content dimensions
         let content_width = max_x - min_x;
         let content_height = max_y - min_y;
         
-        // Keep the viewport x within bounds
-        if self.viewport_x < min_x {
-            self.viewport_x = min_x;
-        } else if self.viewport_x > max_x - content_width / 4.0 {
-            self.viewport_x = max_x - content_width / 4.0;
-        }
+        // Get canvas dimensions if available
+        let (canvas_width, canvas_height) = if let Some(canvas) = &self.canvas {
+            let window = web_sys::window().expect("no global window exists");
+            let dpr = window.device_pixel_ratio();
+            let canvas_width = canvas.width() as f64 / dpr;
+            let canvas_height = canvas.height() as f64 / dpr;
+            (canvas_width, canvas_height)
+        } else {
+            (800.0, 600.0) // Fallback values if canvas not available
+        };
         
-        // Keep the viewport y within bounds
-        if self.viewport_y < min_y {
-            self.viewport_y = min_y;
-        } else if self.viewport_y > max_y - content_height / 4.0 {
-            self.viewport_y = max_y - content_height / 4.0;
+        // Calculate the viewport's visible width and height in world coordinates
+        let viewport_width = canvas_width / self.zoom_level;
+        let viewport_height = canvas_height / self.zoom_level;
+        
+        // Calculate expanded content bounds with generous padding
+        // Allow the center of content to be positioned anywhere in the viewport
+        let padding = f64::max(content_width, content_height); // Use content size as padding
+        let expanded_min_x = min_x - padding;
+        let expanded_min_y = min_y - padding;
+        let expanded_max_x = max_x + padding;
+        let expanded_max_y = max_y + padding;
+        
+        // Limit viewport to expanded bounds
+        // This ensures nodes can be centered in the viewport and won't disappear
+        self.viewport_x = self.viewport_x.clamp(
+            expanded_min_x, 
+            expanded_max_x - viewport_width / 2.0
+        );
+        
+        self.viewport_y = self.viewport_y.clamp(
+            expanded_min_y, 
+            expanded_max_y - viewport_height / 2.0
+        );
+    }
+
+    // Save state if modified
+    pub fn save_if_modified(&mut self) -> Result<(), JsValue> {
+        if self.state_modified {
+            match crate::storage::save_state(self) {
+                Ok(_) => {
+                    self.state_modified = false;
+                    Ok(())
+                }
+                Err(e) => Err(e)
+            }
+        } else {
+            Ok(())
         }
     }
 }
