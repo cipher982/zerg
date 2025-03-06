@@ -71,6 +71,12 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     center_button.set_attribute("id", "center-button")?;
     center_button.set_attribute("style", "padding: 8px 16px; background-color: #2980b9; color: white; border: none; cursor: pointer; margin-left: 10px; border-radius: 4px;")?;
     
+    // Create clear all button
+    let clear_button = document.create_element("button")?;
+    clear_button.set_inner_html("Clear All");
+    clear_button.set_attribute("id", "clear-button")?;
+    clear_button.set_attribute("style", "padding: 8px 16px; background-color: #e74c3c; color: white; border: none; cursor: pointer; margin-left: 10px; border-radius: 4px;")?;
+    
     // Create input container
     let input_container = document.create_element("div")?;
     input_container.set_attribute("style", "margin-bottom: 20px;")?;
@@ -79,6 +85,7 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     input_container.append_child(&model_select)?;
     input_container.append_child(&toggle_container)?;
     input_container.append_child(&center_button)?;
+    input_container.append_child(&clear_button)?;
     
     // Create canvas container
     let canvas_container = document.create_element("div")?;
@@ -106,6 +113,7 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     setup_auto_fit_toggle_handler(document)?;
     setup_center_view_handler(document)?;
     setup_model_select_handler(document)?;
+    setup_clear_button_handler(document)?;
     
     // Fetch available models from the backend
     fetch_models_from_backend(document)?;
@@ -234,6 +242,11 @@ fn send_user_input(text: &str) {
         
         state.add_node(text.to_string(), 50.0, y_position, NodeType::UserInput);
         state.draw_nodes();
+        
+        // Save state after adding the node
+        if let Err(e) = state.save_if_modified() {
+            web_sys::console::error_1(&format!("Failed to save state: {:?}", e).into());
+        }
     });
     
     // Send the text to the backend
@@ -435,6 +448,9 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 let world_y = y / state.zoom_level + state.viewport_y;
                 
                 state.update_node_position(&id, world_x - drag_offset_x, world_y - drag_offset_y);
+                
+                // After updating the node position, save state
+                let _ = state.save_if_modified();
             } else if state.canvas_dragging {
                 // Canvas dragging (new behavior)
                 // Calculate how far the mouse has moved since starting the drag
@@ -471,6 +487,9 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             let mut state = state.borrow_mut();
             state.dragging = None;
             state.canvas_dragging = false; // Clear canvas dragging state
+            
+            // Save state after completing the drag
+            let _ = state.save_if_modified();
         });
     }) as Box<dyn FnMut(_)>);
     
@@ -624,6 +643,8 @@ fn setup_model_select_handler(document: &Document) -> Result<(), JsValue> {
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             state.selected_model = model;
+            state.state_modified = true; // Mark as modified
+            let _ = state.save_if_modified();
         });
     }) as Box<dyn FnMut(_)>);
     
@@ -632,6 +653,48 @@ fn setup_model_select_handler(document: &Document) -> Result<(), JsValue> {
         change_handler.as_ref().unchecked_ref(),
     )?;
     change_handler.forget();
+    
+    Ok(())
+}
+
+// Add function for clear button handler
+fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
+    let clear_button = document.get_element_by_id("clear-button")
+        .ok_or_else(|| JsValue::from_str("Clear button not found"))?;
+    
+    let click_callback = Closure::wrap(Box::new(move |_e: MouseEvent| {
+        // Show confirmation dialog
+        let window = web_sys::window().expect("no global window exists");
+        let confirm = window.confirm_with_message("Are you sure you want to clear all nodes? This cannot be undone.")
+            .unwrap_or(false);
+        
+        if confirm {
+            // Clear state and storage
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.nodes.clear();
+                state.latest_user_input_id = None;
+                state.message_id_to_node_id.clear();
+                state.viewport_x = 0.0;
+                state.viewport_y = 0.0;
+                state.zoom_level = 1.0;
+                state.auto_fit = true;
+                state.state_modified = true;
+                
+                state.draw_nodes();
+                
+                // Clear storage
+                if let Err(e) = crate::storage::clear_storage() {
+                    web_sys::console::error_1(&format!("Failed to clear storage: {:?}", e).into());
+                }
+                
+                web_sys::console::log_1(&"Canvas cleared and storage reset".into());
+            });
+        }
+    }) as Box<dyn FnMut(_)>);
+    
+    clear_button.add_event_listener_with_callback("click", click_callback.as_ref().unchecked_ref())?;
+    click_callback.forget();
     
     Ok(())
 } 
