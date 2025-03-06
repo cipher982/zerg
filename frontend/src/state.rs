@@ -270,7 +270,7 @@ impl AppState {
         self.auto_fit = original_auto_fit;
     }
     
-    // Animate viewport transition
+    #[allow(dead_code)]
     fn animate_viewport(
         &mut self,
         start_x: f64, start_y: f64, start_zoom: f64,
@@ -396,12 +396,12 @@ impl AppState {
         // Limit viewport to expanded bounds
         // This ensures nodes can be centered in the viewport and won't disappear
         self.viewport_x = self.viewport_x.clamp(
-            expanded_min_x, 
+            expanded_min_x - viewport_width / 2.0, 
             expanded_max_x - viewport_width / 2.0
         );
         
         self.viewport_y = self.viewport_y.clamp(
-            expanded_min_y, 
+            expanded_min_y - viewport_height / 2.0, 
             expanded_max_y - viewport_height / 2.0
         );
     }
