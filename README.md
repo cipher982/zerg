@@ -1,126 +1,118 @@
-# ZERG
+
+# Agent Platform Frontend
+
+A Rust + WebAssembly powered frontend for creating interactive conversation flows with AI responses. Users can add “nodes” (messages), which the AI responds to, creating a visual conversation tree.
+
+## Table of Contents
+1. [Overview](#overview)  
+2. [Key Features](#key-features)  
+3. [Directory Structure](#directory-structure)  
+4. [Dependencies](#dependencies)  
+5. [Building & Running](#building--running)  
+6. [How It Works](#how-it-works)  
+7. [Extending the Project](#extending-the-project)
+
+---
 
 ## Overview
+This frontend application provides a canvas-based UI for interacting with an AI backend. Written in Rust and compiled to WebAssembly, it uses the following libraries:
+• wasm-bindgen, web-sys, and js-sys for DOM and browser APIs.  
+• serde and serde_json for data serialization.  
+• A user interface allowing panning, zooming, auto-fitting, and manually moving “nodes.”
 
-Agent Platform Frontend (ZERG) is a WebAssembly (WASM) project built in Rust that provides an interactive, node-based interface for communicating with an AI backend. Users enter text, which is rendered as nodes on a canvas, and receive corresponding AI responses in real time. Each node is graphically represented – user inputs are shown as rounded rectangles and AI responses as thought bubbles with dynamic, curved connections.
+Local data (nodes, viewport transforms, selected AI model) is stored in localStorage to persist sessions. A WebSocket is used to listen for AI responses, which appear as new nodes attached to the user’s last input.
 
-ZERG combines modern WASM technologies on the frontend and a Python FastAPI backend that leverages the OpenAI API. The result is an engaging, real-time interface where graphical nodes illustrate a conversation between a user and an AI.
+---
 
 ## Key Features
+• Create and manage an interactive conversation tree of user inputs (blue nodes) and AI responses (purple nodes).  
+• Pan and zoom the canvas, or rely on auto-fitting.  
+• Choice of AI models from a dropdown.  
+• Automatic save/loading of the entire graph in localStorage.  
+• Automatic generation of a canvas-based favicon.
 
-- **Interactive Canvas UI:**  
-  Display nodes that represent user input and AI responses. The nodes are drawn on a canvas with rounded shapes and are connected using animated, curved lines with arrowheads.
-
-- **Dynamic Node Creation and Connection:**  
-  When a user submits text, a new node is created on the canvas. Once the backend processes the text and returns an AI response, a connected response node is generated automatically.
-
-- **Real-Time Updates:**  
-  Utilizes both HTTP (Fetch API) and WebSocket communications. The user text is sent over HTTP while the AI responses are pushed in real time via a WebSocket connection.
-
-- **Drag & Drop Support:**  
-  Users can reposition nodes on the canvas using mouse drag events for a customized visual layout.
-
-- **Responsive and Adaptive Rendering:**  
-  The canvas resizes dynamically based on browser window adjustments and high-DPI displays. Auto-fit functionality ensures that all nodes stay visible.
-
-- **Model Selection:**  
-  A dropdown enables choosing among different AI models. The default model is “GPT-4o” but additional models can be fetched from the backend.
-
-- **Modular Code Structure:**  
-  The codebase is clearly divided into backend and frontend:
-  - **Backend (Python with FastAPI):**
-    - Processes incoming text requests.
-    - Uses the OpenAI API to create chat completions.
-    - Maintains WebSocket connections to broadcast AI responses.
-    - Provides endpoints for health checking and model listing.
-  - **Frontend (Rust & WASM):**
-    - **models.rs:** Defines core data structures such as Node and NodeType.
-    - **state.rs:** Maintains application state (nodes, viewport, etc.).
-    - **canvas/renderer.rs & canvas/shapes.rs:** Implements the drawing logic for nodes, curves, and arrows.
-    - **ui.rs:** Sets up HTML elements, event handlers, and interaction logic.
-    - **network.rs:** Manages WebSocket connections and asynchronous HTTP requests.
-    - **favicon.rs:** Dynamically generates a favicon using the canvas.
-    - A helper script (`build.sh`) compiles the Rust code to WASM and launches a local web server.
+---
 
 ## Directory Structure
 
-```
-.
-├── LICENSE
-├── README.md
-├── backend
-│   ├── main.py                 # FastAPI backend using OpenAI API
-│   ├── pyproject.toml
-│   ├── requirements.txt
-│   └── src
-│       └── __init__.py
-└── frontend
-    ├── Cargo.toml              # Rust project manifest for WASM build
-    ├── build.sh                # Build script that uses wasm-pack and launches a server
-    ├── src
-    │   ├── canvas              # Modules for drawing nodes and connections
-    │   │   ├── mod.rs
-    │   │   ├── renderer.rs
-    │   │   └── shapes.rs
-    │   ├── favicon.rs          # Dynamic favicon generation using canvas
-    │   ├── lib.rs              # Entry point for the WASM application
-    │   ├── models.rs           # Data models for node structures
-    │   ├── network.rs          # WebSocket and HTTP networking code
-    │   ├── state.rs            # Global state management for nodes and viewport
-    │   └── ui.rs               # UI setup and event handling for user interactions
-    ├── target                  # Build output including compiled WASM files
-    └── www                     # Generated web assets (HTML, JS, WASM)
-```
+Below is a simplified overview of the top-level files:
 
-## Getting Started
+• Cargo.toml – Rust crate metadata, specifying dependencies for wasm-bindgen, web-sys, etc.  
+• build.sh – Convenience script that builds the WASM binary and serves the finished site locally.  
+• src/ – Primary Rust source code:  
 
-### Prerequisites
+  └── canvas/  
+      • mod.rs        – Module definition for canvas sub-crate.  
+      • renderer.rs   – Drawing logic for nodes and connections.  
+      • shapes.rs     – Helper functions for shapes like bubbles, rounded rectangles, and arrows.  
 
-- [Rust](https://www.rust-lang.org/tools/install)
-- [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/)
-- A modern web browser that supports WebAssembly
-- Python 3.12 or later (for the backend)
+  • favicon.rs       – Generates a dynamic favicon by drawing onto a small canvas.  
+  • lib.rs           – Entry point that configures the runtime, sets up UI, and initializes the app.  
+  • models.rs        – Data models (Node, NodeType) with derived serialization.  
+  • network.rs       – Manages WebSocket and HTTP requests to the AI backend.  
+  • state.rs         – Global AppState tracking all data (nodes, viewport, selected model, etc.).  
+  • storage.rs       – Handles loading/saving state from localStorage.  
+  • ui.rs            – Builds HTML elements, event handlers, and user interaction logic.
 
-### Building and Running the Project
+• target/ – Default Rust build directory with compiled artifacts and the .wasm generated by wasm-pack.  
+• www/ – Output web folder used by build.sh. Contains index.html, the .wasm, and a small JS loader.
 
-1. **Frontend Setup:**
+---
 
-   - Install wasm-pack using:
-     ```bash
-     cargo install wasm-pack
-     ```
-   - Build the WASM module by running the build script:
-     ```bash
-     ./build.sh
-     ```
-   - This script compiles your Rust code to WASM, outputs assets in the `www` directory, and starts a web server (default port 8002).
+## Dependencies
 
-2. **Backend Setup:**
+• Rust (Edition 2021).  
+• wasm-bindgen (0.2.87) – Required to interface between Rust code and JavaScript.  
+• wasm-pack – To package the project for web deployment.  
+• web-sys, js-sys – Wrappers around DOM and JavaScript functionality.  
+• Python – Optional for running "python -m http.server" to serve the site (used in build.sh).  
+• The backend is assumed to run on localhost:8001 for the WebSocket and HTTP routes.
 
-   - Create a `.env` file in the `backend` directory based on the provided `.env.example` and set your OpenAI API key.
-   - Install Python dependencies using:
-     ```bash
-     pip install -r backend/requirements.txt
-     ```
-   - Run the FastAPI backend:
-     ```bash
-     uvicorn backend.main:app --host 0.0.0.0 --port 8001
-     ```
+---
 
-3. **Open in Browser:**
+## Building & Running
 
-   - Open your web browser and navigate to [http://localhost:8002](http://localhost:8002) to interact with the application.
+1. Ensure you have Rust and wasm-pack installed:  
+   » cargo install wasm-pack
+
+2. Clone the repository, then run:  
+   » chmod +x build.sh  
+   » ./build.sh  
+
+3. The build script will:  
+   • Compile the Rust code to WASM via “wasm-pack build --target web --out-dir www”.  
+   • Move the generated JavaScript file in “www/agent_platform_frontend.js” to “www/index.js” for simplicity.  
+   • Start a Python HTTP server on port 8002.
+
+4. Open a browser to:  
+   http://localhost:8002/  
+
+5. Interact with the UI:  
+   • Enter text in the input field, then click “Send to AI.” A blue node appears.  
+   • The AI’s response arrives over the WebSocket and is displayed as a purple node attached under the user input.  
+   • Drag nodes or the background to reposition. Enable or disable auto-fit with the toggle.  
+   • Switch between available AI models in the dropdown.
+
+---
 
 ## How It Works
 
-- **User Input and Node Creation:**  
-  The UI provides an input field and a “Send to AI” button. When text is entered, a user input node is created on the canvas and simultaneously sent to the backend for processing.
+1. The “start()” function in lib.rs runs automatically when the WASM module loads in the browser.  
+2. The interface is created (ui.rs), wires up event handlers (click, keypress, drag, wheel zoom).  
+3. The global state (state.rs) tracks all nodes, their positions, the viewport, etc.  
+4. network.rs sets up a WebSocket to “ws://localhost:8001/ws” and an HTTP POST route “/api/process-text.”  
+5. storage.rs loads/saves the node graph in localStorage, so reloading the page preserves your conversation.  
+6. The canvas is rendered by the functions in canvas/renderer.rs and canvas/shapes.rs.
 
-- **Backend Processing and AI Responses:**  
-  The backend receives the text, processes it using the OpenAI API, and returns a response. The response is broadcast to all connected clients via WebSocket. In the UI, the appropriate response node is created and linked to the initial user node.
+---
 
-- **Canvas Rendering and Interaction:**  
-  Custom drawing functions render nodes as dynamic, interactive elements. Nodes can be dragged to reposition and the canvas viewport auto-adjusts using an auto-fit feature.
+## Extending the Project
 
-- **Networking and Model Selection:**  
-  The application supports dynamic AI model selection via a dropdown that fetches available models from the backend. HTTP requests and WebSocket messages handle data transfer between the frontend and backend seamlessly.
+• Want a new node type or shape? Add an enum variant to NodeType in models.rs, then draw it in shapes.rs.  
+• Adjust auto-fitting, zoom logic, or viewport restrictions in state.rs.  
+• Replace or expand the AI backend URL in network.rs if your server runs elsewhere or supports more endpoints.  
+• Customize the UI by editing ui.rs to create more DOM elements, style them, or add additional controls.
+
+---
+
+Enjoy hacking on your Rust + WebAssembly conversation flow graph!
