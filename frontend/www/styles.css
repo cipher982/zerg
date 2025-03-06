@@ -1,0 +1,193 @@
+/* Reset and base styles */
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #1e1e2e;
+}
+
+/* App structure */
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background-color: #3498db;
+    color: white;
+    padding: 10px 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    z-index: 10;
+}
+
+.header h1 {
+    margin: 0;
+    font-weight: 300;
+}
+
+.status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: #f1f1f1;
+    padding: 5px 15px;
+    font-size: 12px;
+    color: #555;
+    border-top: 1px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+    z-index: 10;
+}
+
+/* Canvas styles */
+#canvas-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+}
+
+/* UI Panel */
+#input-panel {
+    position: fixed;
+    top: 70px;
+    left: 20px;
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Instruction text */
+.instruction-text {
+    position: fixed;
+    top: 140px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    pointer-events: none;
+    z-index: 50;
+}
+
+/* Form controls */
+#user-input {
+    width: 300px;
+    padding: 8px;
+    margin-right: 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+button {
+    padding: 8px 16px;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-left: 10px;
+}
+
+#send-button {
+    background-color: #2ecc71;
+}
+
+#center-button {
+    background-color: #2980b9;
+}
+
+#clear-button {
+    background-color: #e74c3c;
+}
+
+#model-select {
+    padding: 8px;
+    margin-left: 10px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+/* Toggle switch styles */
+.toggle-container {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 10px;
+}
+
+.toggle-label {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-label::before {
+    content: 'Auto-Fit';
+    margin-right: 8px;
+    font-size: 14px;
+    color: #333;
+}
+
+.toggle-checkbox {
+    opacity: 0;
+    width: 0;
+    height: 0;
+    position: absolute;
+}
+
+.toggle-slider {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+    background-color: #ccc;
+    border-radius: 20px;
+    transition: .1s;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    border-radius: 50%;
+    transition: .1s;
+}
+
+.toggle-checkbox:checked + .toggle-slider {
+    background-color: #2ecc71;
+}
+
+.toggle-checkbox:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    #input-panel {
+        width: calc(100% - 40px);
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    #input-panel > * {
+        margin: 5px 0 !important;
+    }
+    
+    #user-input {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+}
