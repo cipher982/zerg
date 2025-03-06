@@ -13,6 +13,10 @@ pub struct AppState {
     pub dragging: Option<String>,
     pub drag_offset_x: f64,
     pub drag_offset_y: f64,
+    // New fields for canvas dragging
+    pub canvas_dragging: bool,
+    pub canvas_drag_start_x: f64,
+    pub canvas_drag_start_y: f64,
     pub websocket: Option<WebSocket>,
     // Viewport tracking for zoom-to-fit functionality
     pub viewport_x: f64,
@@ -39,6 +43,9 @@ impl AppState {
             dragging: None,
             drag_offset_x: 0.0,
             drag_offset_y: 0.0,
+            canvas_dragging: false,
+            canvas_drag_start_x: 0.0,
+            canvas_drag_start_y: 0.0,
             websocket: None,
             viewport_x: 0.0,
             viewport_y: 0.0,
@@ -230,6 +237,23 @@ impl AppState {
         }
     }
 
+    // Center the viewport on all nodes without changing auto-fit setting
+    pub fn center_view(&mut self) {
+        // Store original auto-fit setting
+        let original_auto_fit = self.auto_fit;
+        
+        // Temporarily disable auto-fit if it's on
+        if original_auto_fit {
+            self.auto_fit = false;
+        }
+        
+        // Use existing fit method to center the view
+        self.fit_nodes_to_view();
+        
+        // Restore original auto-fit setting
+        self.auto_fit = original_auto_fit;
+    }
+
     // Generate a unique message ID
     pub fn generate_message_id(&self) -> String {
         format!("msg_{}", js_sys::Date::now())
@@ -243,6 +267,52 @@ impl AppState {
     // Get the node ID for a message ID
     pub fn get_node_id_for_message(&self, message_id: &str) -> Option<String> {
         self.message_id_to_node_id.get(message_id).cloned()
+    }
+    
+    // Enforce viewport boundaries to prevent panning too far from content
+    pub fn enforce_viewport_boundaries(&mut self) {
+        if self.nodes.is_empty() {
+            return;
+        }
+        
+        // Find bounding box of all nodes
+        let mut min_x = f64::MAX;
+        let mut min_y = f64::MAX;
+        let mut max_x = f64::MIN;
+        let mut max_y = f64::MIN;
+        
+        for (_, node) in &self.nodes {
+            min_x = f64::min(min_x, node.x);
+            min_y = f64::min(min_y, node.y);
+            max_x = f64::max(max_x, node.x + node.width);
+            max_y = f64::max(max_y, node.y + node.height);
+        }
+        
+        // Add padding around content bounds
+        let padding = 500.0; // Large padding to allow reasonable movement
+        min_x -= padding;
+        min_y -= padding;
+        max_x += padding;
+        max_y += padding;
+        
+        // Calculate viewport constraints
+        // Don't let viewport move too far from content in any direction
+        let content_width = max_x - min_x;
+        let content_height = max_y - min_y;
+        
+        // Keep the viewport x within bounds
+        if self.viewport_x < min_x {
+            self.viewport_x = min_x;
+        } else if self.viewport_x > max_x - content_width / 4.0 {
+            self.viewport_x = max_x - content_width / 4.0;
+        }
+        
+        // Keep the viewport y within bounds
+        if self.viewport_y < min_y {
+            self.viewport_y = min_y;
+        } else if self.viewport_y > max_y - content_height / 4.0 {
+            self.viewport_y = max_y - content_height / 4.0;
+        }
     }
 }
 
