@@ -6,111 +6,104 @@ use crate::network::{send_text_to_backend, fetch_available_models};
 use wasm_bindgen_futures::spawn_local;
 
 pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
+    // Find the app container
+    let app_container = document
+        .get_element_by_id("app-container")
+        .ok_or(JsValue::from_str("Could not find app-container"))?;
+    
     // Create input field
     let input = document.create_element("input")?;
     input.set_attribute("type", "text")?;
     input.set_attribute("id", "user-input")?;
     input.set_attribute("placeholder", "Enter text here...")?;
-    input.set_attribute("style", "width: 300px; padding: 8px; margin-right: 10px;")?;
     
     // Create send button
     let button = document.create_element("button")?;
     button.set_inner_html("Send to AI");
     button.set_attribute("id", "send-button")?;
-    button.set_attribute("style", "padding: 8px 16px; background-color: #2ecc71; color: white; border: none; cursor: pointer;")?;
     
     // Create model selection dropdown
     let model_select = document.create_element("select")?;
     model_select.set_attribute("id", "model-select")?;
-    model_select.set_attribute("style", "padding: 8px; margin-left: 10px;")?;
     
     // Initially populate with default models
     update_model_dropdown(document)?;
     
-    // Create toggle switch container
-    let toggle_container = document.create_element("div")?;
-    toggle_container.set_attribute("style", "display: inline-flex; align-items: center; margin-left: 10px;")?;
+    // Create auto-fit toggle switch instead of button
+    let auto_fit_container = document.create_element("div")?;
+    auto_fit_container.set_attribute("id", "auto-fit-container")?;
+    auto_fit_container.set_attribute("class", "toggle-container")?;
     
-    // Create label for toggle with stacked text
-    let toggle_label = document.create_element("div")?;
-    toggle_label.set_inner_html("Auto Layout");
-    toggle_label.set_attribute("style", "margin-right: 8px; font-size: 0.9em; text-align: center; line-height: 1.2;")?;
+    let auto_fit_label = document.create_element("label")?;
+    auto_fit_label.set_attribute("for", "auto-fit-toggle")?;
+    auto_fit_label.set_attribute("class", "toggle-label")?;
     
-    // Create toggle switch track
-    let toggle_track = document.create_element("label")?;
-    let _ = toggle_track.set_attribute("class", "switch");
-    toggle_track.set_attribute("style", "position: relative; display: inline-block; width: 50px; height: 24px;")?;
+    let auto_fit_input = document.create_element("input")?;
+    auto_fit_input.set_attribute("type", "checkbox")?;
+    auto_fit_input.set_attribute("id", "auto-fit-toggle")?;
+    auto_fit_input.set_attribute("class", "toggle-checkbox")?;
     
-    // Create hidden checkbox that stores the actual state
-    let toggle_checkbox = document.create_element("input")?;
-    toggle_checkbox.set_attribute("type", "checkbox")?;
-    toggle_checkbox.set_attribute("id", "auto-fit-checkbox")?;
-    toggle_checkbox.set_attribute("checked", "")?; // On by default
-    toggle_checkbox.set_attribute("style", "opacity: 0; width: 0; height: 0;")?;
+    // Check if auto-fit is enabled in current state
+    let auto_fit_enabled = APP_STATE.with(|state| {
+        let state = state.borrow();
+        state.auto_fit
+    });
     
-    // Create the visual slider with faster transition
+    // Set the initial checked state based on the app state
+    if auto_fit_enabled {
+        auto_fit_input.set_attribute("checked", "")?;
+    }
+    
     let toggle_slider = document.create_element("span")?;
-    let _ = toggle_slider.set_attribute("class", "slider");
-    toggle_slider.set_attribute("style", "position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #3498db; border-radius: 24px; transition: .2s;")?;
+    toggle_slider.set_attribute("class", "toggle-slider")?;
     
-    // Create the circle that moves with faster transition
-    let toggle_circle = document.create_element("span")?;
-    let _ = toggle_circle.set_attribute("class", "circle");
-    toggle_circle.set_attribute("style", "position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; transform: translateX(26px);")?;
-    
-    // Assemble the toggle
-    toggle_slider.append_child(&toggle_circle)?;
-    toggle_track.append_child(&toggle_checkbox)?;
-    toggle_track.append_child(&toggle_slider)?;
-    toggle_container.append_child(&toggle_label)?;
-    toggle_container.append_child(&toggle_track)?;
+    auto_fit_label.append_child(&auto_fit_input)?;
+    auto_fit_label.append_child(&toggle_slider)?;
+    auto_fit_container.append_child(&auto_fit_label)?;
     
     // Create center view button
     let center_button = document.create_element("button")?;
     center_button.set_inner_html("Center View");
     center_button.set_attribute("id", "center-button")?;
-    center_button.set_attribute("style", "padding: 8px 16px; background-color: #2980b9; color: white; border: none; cursor: pointer; margin-left: 10px; border-radius: 4px;")?;
     
     // Create clear all button
     let clear_button = document.create_element("button")?;
     clear_button.set_inner_html("Clear All");
     clear_button.set_attribute("id", "clear-button")?;
-    clear_button.set_attribute("style", "padding: 8px 16px; background-color: #e74c3c; color: white; border: none; cursor: pointer; margin-left: 10px; border-radius: 4px;")?;
     
-    // Create input container
-    let input_container = document.create_element("div")?;
-    input_container.set_attribute("style", "margin-bottom: 20px;")?;
-    input_container.append_child(&input)?;
-    input_container.append_child(&button)?;
-    input_container.append_child(&model_select)?;
-    input_container.append_child(&toggle_container)?;
-    input_container.append_child(&center_button)?;
-    input_container.append_child(&clear_button)?;
+    // Create input panel (controls)
+    let input_panel = document.create_element("div")?;
+    input_panel.set_id("input-panel");
+    input_panel.append_child(&input)?;
+    input_panel.append_child(&button)?;
+    input_panel.append_child(&model_select)?;
+    input_panel.append_child(&auto_fit_container)?;
+    input_panel.append_child(&center_button)?;
+    input_panel.append_child(&clear_button)?;
     
     // Create canvas container
     let canvas_container = document.create_element("div")?;
     canvas_container.set_id("canvas-container");
-    canvas_container.set_attribute("style", "border: 1px solid #ddd; width: 100%; height: 500px; position: relative;")?;
     
     // Create canvas
     let canvas = document.create_element("canvas")?;
     canvas.set_id("node-canvas");
-    canvas.set_attribute("style", "position: absolute; top: 0; left: 0; width: 100%; height: 100%;")?;
-    
     canvas_container.append_child(&canvas)?;
     
-    // Add everything to the document body
-    let app_container = document.create_element("div")?;
-    app_container.set_attribute("style", "padding: 20px;")?;
-    app_container.append_child(&input_container)?;
-    app_container.append_child(&canvas_container)?;
+    // Create instruction text
+    let instruction_text = document.create_element("div")?;
+    instruction_text.set_class_name("instruction-text");
+    instruction_text.set_inner_html("Type text in the input box above and send it to the AI. The response will appear as a connected node on the canvas. You can drag nodes around to organize them.");
     
-    document.body().unwrap().append_child(&app_container)?;
+    // Add all components to app container
+    app_container.append_child(&canvas_container)?;
+    app_container.append_child(&input_panel)?;
+    app_container.append_child(&instruction_text)?;
     
     // Set up event handlers
     setup_button_click_handler(document)?;
     setup_input_keypress_handler(document)?;
-    setup_auto_fit_toggle_handler(document)?;
+    setup_auto_fit_button_handler(document)?;
     setup_center_view_handler(document)?;
     setup_model_select_handler(document)?;
     setup_clear_button_handler(document)?;
@@ -388,33 +381,17 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 if state.auto_fit {
                     state.auto_fit = false;
                     
-                    // Update the toggle switch to reflect the mode change
+                    // Update the auto-fit button to reflect the mode change
                     let window = web_sys::window().expect("no global window exists");
                     let document = window.document().expect("no document exists");
                     
-                    // Update the checkbox state
-                    if let Some(checkbox) = document.get_element_by_id("auto-fit-checkbox") {
-                        if let Some(input) = checkbox.dyn_ref::<web_sys::HtmlInputElement>() {
-                            input.set_checked(false);
-                        }
-                    }
-                    
-                    // Update the visual appearance
-                    if let Some(slider) = document.query_selector(".slider").ok().flatten() {
-                        let _ = slider.set_attribute("style", 
-                            "position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #95a5a6; border-radius: 24px; transition: .2s;"
-                        );
-                    }
-                    
-                    if let Some(circle) = document.query_selector(".circle").ok().flatten() {
-                        let _ = circle.set_attribute("style", 
-                            "position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; transform: translateX(0);"
-                        );
+                    // Update the button text
+                    if let Some(button) = document.get_element_by_id("auto-fit-toggle") {
+                        // Handle error directly instead of using ? operator
+                        let _ = button.set_attribute("checked", "false");
                     }
                 }
                 
-                // Enable canvas dragging
-                state.dragging = None;
                 state.canvas_dragging = true;
                 state.canvas_drag_start_x = x;
                 state.canvas_drag_start_y = y;
@@ -569,46 +546,23 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
 }
 
 // Add this new function to handle auto-fit toggle
-fn setup_auto_fit_toggle_handler(document: &Document) -> Result<(), JsValue> {
-    let toggle_checkbox = document.get_element_by_id("auto-fit-checkbox").unwrap();
+fn setup_auto_fit_button_handler(document: &Document) -> Result<(), JsValue> {
+    let auto_fit_toggle = document.get_element_by_id("auto-fit-toggle").unwrap();
     
-    let change_handler = Closure::wrap(Box::new(move |event: web_sys::Event| {
-        let checkbox = event.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap();
-        let checked = checkbox.checked();
-        
+    let change_handler = Closure::wrap(Box::new(move |_event: web_sys::Event| {
+        // Use the toggle_auto_fit method to toggle the auto-fit state
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
-            
-            // Only toggle if the current state is different from what we want
-            if state.auto_fit != checked {
-                state.toggle_auto_fit();
-            }
-            
-            // Get the toggle slider to update its appearance
-            let window = web_sys::window().expect("no global window exists");
-            let document = window.document().expect("no document exists");
-            if let Some(slider) = document.query_selector(".slider").ok().flatten() {
-                let bg_color = if checked { "#3498db" } else { "#95a5a6" };
-                let _ = slider.set_attribute("style", &format!(
-                    "position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: {}; border-radius: 24px; transition: .2s;",
-                    bg_color
-                ));
-            }
-            
-            if let Some(circle) = document.query_selector(".circle").ok().flatten() {
-                let transform = if checked { "translateX(26px)" } else { "translateX(0)" };
-                let _ = circle.set_attribute("style", &format!(
-                    "position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; border-radius: 50%; transition: .2s; transform: {};",
-                    transform
-                ));
-            }
+            state.toggle_auto_fit();
         });
     }) as Box<dyn FnMut(_)>);
     
-    toggle_checkbox.add_event_listener_with_callback(
+    auto_fit_toggle.add_event_listener_with_callback(
         "change",
         change_handler.as_ref().unchecked_ref(),
     )?;
+    
+    // Keep the closure alive
     change_handler.forget();
     
     Ok(())
