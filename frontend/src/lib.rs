@@ -6,9 +6,11 @@ mod models;
 mod state;
 mod canvas;
 mod ui;
+// mod ui_old; // Temporarily commented out to confirm everything is refactored
 mod network;
 mod favicon;
 mod storage;
+mod components;
 
 // Main entry point for the WASM application
 #[wasm_bindgen(start)]
@@ -21,14 +23,14 @@ pub fn start() -> Result<(), JsValue> {
     let document = window.document().expect("should have a document on window");
     
     // Create base UI elements (header and status bar)
-    ui::create_base_ui(&document)?;
+    ui::setup::create_base_ui(&document)?;
     
     // Set up the WebSocket connection
     network::setup_websocket()?;
     
     // Set up the UI components and canvas
-    ui::setup_ui(&document)?;
-    ui::setup_canvas(&document)?;
+    ui::main::setup_ui(&document)?;
+    components::canvas_editor::setup_canvas(&document)?;
     
     // Load state from localStorage
     let loaded_data = state::APP_STATE.with(|state| {

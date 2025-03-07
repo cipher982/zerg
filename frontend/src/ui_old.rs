@@ -245,7 +245,7 @@ pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
     setup_resize_handler(&canvas)?;
     
     // Setup animation loop for refreshing the canvas
-    setup_animation_loop();
+    internal_setup_animation_loop();
     
     Ok(())
 }
@@ -1296,8 +1296,8 @@ fn update_response_node(message_id: &str, response_text: &str) {
     });
 }
 
-// Setup animation loop to refresh the canvas for animations
-fn setup_animation_loop() {
+// Rename setup_animation_loop to internal_setup_animation_loop
+pub fn internal_setup_animation_loop() {
     // Animation disabled to prevent RefCell borrow issues
     // The only thing this powered was the processing status visual effect
 }
