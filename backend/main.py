@@ -40,6 +40,7 @@ class TextRequest(BaseModel):
     text: str
     message_id: str = None  # Add message_id field
     model: str = "gpt-4o"  # Default model
+    system: str = None  # Add system field
 
 
 class TextResponse(BaseModel):
@@ -78,11 +79,16 @@ async def get_available_models():
 async def process_text(request: TextRequest):
     """Process text with OpenAI API."""
     try:
+        # Get system instructions from request if available
+        system_content = "You are a helpful assistant."
+        if hasattr(request, "system") and request.system:
+            system_content = request.system
+
         # Create streaming completion
         response = client.chat.completions.create(
             model=request.model,
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "system", "content": system_content},
                 {"role": "user", "content": request.text},
             ],
             max_tokens=300,

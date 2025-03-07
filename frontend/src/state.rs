@@ -20,9 +20,14 @@ pub struct AppState {
     pub drag_offset_y: f64,
     // New fields for canvas dragging
     pub canvas_dragging: bool,
-    pub canvas_drag_start_x: f64,
-    pub canvas_drag_start_y: f64,
+    pub drag_start_x: f64,
+    pub drag_start_y: f64,
+    pub drag_last_x: f64,
+    pub drag_last_y: f64,
     pub websocket: Option<WebSocket>,
+    // Canvas dimensions
+    pub canvas_width: f64,
+    pub canvas_height: f64,
     // Viewport tracking for zoom-to-fit functionality
     pub viewport_x: f64,
     pub viewport_y: f64,
@@ -38,6 +43,8 @@ pub struct AppState {
     pub available_models: Vec<(String, String)>,
     // Whether state has been modified since last save
     pub state_modified: bool,
+    // Currently selected node ID
+    pub selected_node_id: Option<String>,
 }
 
 impl AppState {
@@ -51,9 +58,13 @@ impl AppState {
             drag_offset_x: 0.0,
             drag_offset_y: 0.0,
             canvas_dragging: false,
-            canvas_drag_start_x: 0.0,
-            canvas_drag_start_y: 0.0,
+            drag_start_x: 0.0,
+            drag_start_y: 0.0,
+            drag_last_x: 0.0,
+            drag_last_y: 0.0,
             websocket: None,
+            canvas_width: 800.0, // Default width
+            canvas_height: 600.0, // Default height
             viewport_x: 0.0,
             viewport_y: 0.0,
             zoom_level: 1.0,
@@ -68,11 +79,13 @@ impl AppState {
                 ("gpt-3.5-turbo".to_string(), "GPT-3.5 Turbo".to_string()),
             ],
             state_modified: false,
+            selected_node_id: None,
         }
     }
 
     pub fn add_node(&mut self, text: String, x: f64, y: f64, node_type: NodeType) -> String {
         let id = format!("node_{}", self.nodes.len());
+        web_sys::console::log_1(&format!("Creating node: id={}, type={:?}, text={}", id, node_type, text).into());
         
         // Determine color based on node type
         let color = match node_type {
@@ -82,8 +95,6 @@ impl AppState {
         };
         
         // Calculate approximate node size based on text content
-        // This is a simple heuristic - we could do more sophisticated text measurement
-        let _words = text.split_whitespace().count();
         let chars_per_line = 25; // Approximate chars per line
         let lines = (text.len() as f64 / chars_per_line as f64).ceil() as usize;
         
@@ -91,8 +102,21 @@ impl AppState {
         let width = f64::max(200.0, chars_per_line as f64 * 8.0); // Estimate width based on chars
         let height = f64::max(80.0, lines as f64 * 20.0 + 40.0);  // Base height + lines
         
-        // Clone node_type before using it in the struct
-        let node_type_clone = node_type.clone();
+        // Initialize system instructions, history, and status based on node type
+        let (system_instructions, history, status) = match node_type {
+            NodeType::AgentIdentity => {
+                web_sys::console::log_1(&JsValue::from_str("Initializing agent node properties"));
+                (Some(String::new()), Some(Vec::new()), Some("idle".to_string()))
+            },
+            NodeType::AgentResponse => {
+                web_sys::console::log_1(&JsValue::from_str("Initializing response node properties"));
+                (None, None, None)
+            },
+            NodeType::UserInput => {
+                web_sys::console::log_1(&JsValue::from_str("Initializing user input node properties"));
+                (None, None, None)
+            },
+        };
         
         let node = Node {
             id: id.clone(),
@@ -102,9 +126,16 @@ impl AppState {
             width,
             height,
             color,
-            parent_id: None,
-            node_type: node_type_clone,
+            parent_id: None, // Parent ID will be set separately if needed
+            node_type,
+            system_instructions,
+            history,
+            status,
         };
+        
+        web_sys::console::log_1(&format!("Node created with dimensions: {}x{} at position ({}, {})", 
+            node.width, node.height, node.x, node.y).into());
+        
         self.nodes.insert(id.clone(), node);
         self.state_modified = true; // Mark state as modified
         
@@ -115,9 +146,11 @@ impl AppState {
         
         // Auto-fit all nodes if enabled
         if self.auto_fit && self.nodes.len() > 1 {
+            web_sys::console::log_1(&JsValue::from_str("Auto-fitting nodes to view"));
             self.fit_nodes_to_view();
         }
         
+        web_sys::console::log_1(&format!("Successfully added node {}", id).into());
         id
     }
 

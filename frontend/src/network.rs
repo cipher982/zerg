@@ -221,10 +221,23 @@ fn handle_websocket_message(event: MessageEvent) {
 pub fn send_text_to_backend(text: &str, message_id: String) {
     flash_activity(); // Flash on send
     
-    // Get the selected model
-    let selected_model = APP_STATE.with(|state| {
+    // Get the selected model and system instructions
+    let (selected_model, system_instructions) = APP_STATE.with(|state| {
         let state = state.borrow();
-        state.selected_model.clone()
+        let model = state.selected_model.clone();
+        
+        // Get system instructions from the selected agent
+        let instructions = if let Some(agent_id) = &state.selected_node_id {
+            if let Some(agent) = state.nodes.get(agent_id) {
+                agent.system_instructions.clone().unwrap_or_default()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+        
+        (model, instructions)
     });
     
     // Use the Fetch API to send data to the backend
@@ -239,6 +252,7 @@ pub fn send_text_to_backend(text: &str, message_id: String) {
     js_sys::Reflect::set(&body_obj, &"text".into(), &text.into()).unwrap();
     js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into()).unwrap();
     js_sys::Reflect::set(&body_obj, &"model".into(), &selected_model.into()).unwrap();
+    js_sys::Reflect::set(&body_obj, &"system".into(), &system_instructions.into()).unwrap();
     let body_string = js_sys::JSON::stringify(&body_obj).unwrap();
     
     // Create request init object

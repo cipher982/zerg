@@ -160,4 +160,26 @@ pub fn draw_node_text(context: &CanvasRenderingContext2d, node: &Node) {
     if !line.is_empty() {
         context.fill_text(&line, node.x + padding, y_offset).unwrap();
     }
+}
+
+// Creates a rounded rectangle path without filling or stroking
+pub fn draw_rounded_rect_path(context: &CanvasRenderingContext2d, node: &Node) {
+    let radius = 15.0;
+    let x = node.x;
+    let y = node.y;
+    let width = node.width;
+    let height = node.height;
+    
+    // Draw rounded rectangle path
+    context.begin_path();
+    context.move_to(x + radius, y);
+    context.line_to(x + width - radius, y);
+    context.quadratic_curve_to(x + width, y, x + width, y + radius);
+    context.line_to(x + width, y + height - radius);
+    context.quadratic_curve_to(x + width, y + height, x + width - radius, y + height);
+    context.line_to(x + radius, y + height);
+    context.quadratic_curve_to(x, y + height, x, y + height - radius);
+    context.line_to(x, y + radius);
+    context.quadratic_curve_to(x, y, x + radius, y);
+    context.close_path();
 } 

@@ -2,6 +2,7 @@ use web_sys::CanvasRenderingContext2d;
 use crate::models::{Node, NodeType};
 use crate::state::AppState;
 use super::shapes;
+use js_sys::Date;
 
 pub fn draw_nodes(state: &AppState) {
     if let (Some(canvas), Some(context)) = (&state.canvas, &state.context) {
@@ -92,8 +93,42 @@ fn draw_node(_state: &AppState, node: &Node, context: &CanvasRenderingContext2d)
             shapes::draw_thought_bubble(context, node);
         },
         NodeType::AgentIdentity => {
-            // For future use - draw a hexagon or other distinctive shape
-            shapes::draw_rounded_rect(context, node); // Placeholder for now
+            // For agent nodes, draw a special rectangle with double border
+            context.save();
+            
+            // Draw outer rectangle
+            context.begin_path();
+            
+            // Set different border styles based on agent status
+            if let Some(status) = &node.status {
+                match status.as_str() {
+                    "processing" => {
+                        // Pulsing animation using time
+                        let timestamp = Date::now() as f64;
+                        let pulse = (timestamp / 500.0).sin() * 0.5 + 0.5; // 0 to 1 pulsing
+                        let pulse_color = format!("rgba(255, 255, 255, {})", 0.5 + pulse * 0.5);
+                        context.set_stroke_style_str(&pulse_color);
+                    },
+                    "error" => {
+                        context.set_stroke_style_str("rgba(255, 0, 0, 0.8)");
+                    },
+                    _ => { // idle or other
+                        context.set_stroke_style_str("white");
+                    }
+                }
+            } else {
+                context.set_stroke_style_str("white");
+            }
+            
+            context.set_line_width(2.0);
+            shapes::draw_rounded_rect_path(context, node);
+            context.stroke();
+            
+            // Fill with semi-transparent background
+            context.set_fill_style_str("rgba(255, 255, 255, 0.1)");
+            context.fill();
+            
+            context.restore();
         },
     }
     
