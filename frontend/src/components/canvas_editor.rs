@@ -202,6 +202,13 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                     modal_title.set_inner_html(&format!("Agent: {}", node_text));
                 }
                 
+                // Set agent name in the input field
+                if let Some(name_elem) = document.get_element_by_id("agent-name") {
+                    if let Some(name_input) = name_elem.dyn_ref::<web_sys::HtmlInputElement>() {
+                        name_input.set_value(&node_text);
+                    }
+                }
+                
                 // Load system instructions
                 if let Some(system_elem) = document.get_element_by_id("system-instructions") {
                     if let Some(system_textarea) = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>() {

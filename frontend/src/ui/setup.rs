@@ -69,64 +69,65 @@ pub fn create_agent_input_modal(document: &Document) -> Result<(), JsValue> {
     modal_header.append_child(&modal_title)?;
     modal_header.append_child(&close_button)?;
     
-    // Create tabs
+    // Create tabs - now just "Main" and "History"
     let tab_container = document.create_element("div")?;
     tab_container.set_class_name("tab-container");
     
-    let system_tab = document.create_element("button")?;
-    system_tab.set_class_name("tab-button active");
-    system_tab.set_id("system-tab");
-    system_tab.set_inner_html("System");
-    
-    let task_tab = document.create_element("button")?;
-    task_tab.set_class_name("tab-button");
-    task_tab.set_id("task-tab");
-    task_tab.set_inner_html("Task");
+    let main_tab = document.create_element("button")?;
+    main_tab.set_class_name("tab-button active");
+    main_tab.set_id("main-tab");
+    main_tab.set_inner_html("Main");
     
     let history_tab = document.create_element("button")?;
     history_tab.set_class_name("tab-button");
     history_tab.set_id("history-tab");
     history_tab.set_inner_html("History");
     
-    tab_container.append_child(&system_tab)?;
-    tab_container.append_child(&task_tab)?;
+    tab_container.append_child(&main_tab)?;
     tab_container.append_child(&history_tab)?;
     
-    // Create system instructions section
-    let system_content = document.create_element("div")?;
-    system_content.set_class_name("tab-content");
-    system_content.set_id("system-content");
+    // Create main content (combining name, system instructions, and task)
+    let main_content = document.create_element("div")?;
+    main_content.set_class_name("tab-content");
+    main_content.set_id("main-content");
     
+    // Add agent name field
+    let name_label = document.create_element("label")?;
+    name_label.set_inner_html("Agent Name:");
+    name_label.set_attribute("for", "agent-name")?;
+    
+    let name_input = document.create_element("input")?;
+    name_input.set_id("agent-name");
+    name_input.set_attribute("type", "text")?;
+    name_input.set_attribute("placeholder", "Enter agent name...")?;
+    
+    // Add system instructions field
     let system_label = document.create_element("label")?;
     system_label.set_inner_html("System Instructions:");
     system_label.set_attribute("for", "system-instructions")?;
     
     let system_textarea = document.create_element("textarea")?;
     system_textarea.set_id("system-instructions");
-    system_textarea.set_attribute("rows", "8")?;
+    system_textarea.set_attribute("rows", "6")?;
     system_textarea.set_attribute("placeholder", "Enter system-level instructions for this agent...")?;
     
-    system_content.append_child(&system_label)?;
-    system_content.append_child(&system_textarea)?;
-    
-    // Create task input section (stub for now)
-    let task_content = document.create_element("div")?;
-    task_content.set_class_name("tab-content");
-    task_content.set_id("task-content");
-    task_content.set_attribute("style", "display: none;")?;
-    
-    // Add task input components
+    // Add task input field
     let task_label = document.create_element("label")?;
     task_label.set_inner_html("Task Input:");
     task_label.set_attribute("for", "task-input")?;
     
     let task_input = document.create_element("textarea")?;
     task_input.set_id("task-input");
-    task_input.set_attribute("rows", "6")?;
+    task_input.set_attribute("rows", "4")?;
     task_input.set_attribute("placeholder", "Enter specific task or question for this agent...")?;
     
-    task_content.append_child(&task_label)?;
-    task_content.append_child(&task_input)?;
+    // Add all fields to main content
+    main_content.append_child(&name_label)?;
+    main_content.append_child(&name_input)?;
+    main_content.append_child(&system_label)?;
+    main_content.append_child(&system_textarea)?;
+    main_content.append_child(&task_label)?;
+    main_content.append_child(&task_input)?;
     
     // Create history section
     let history_content = document.create_element("div")?;
@@ -158,8 +159,7 @@ pub fn create_agent_input_modal(document: &Document) -> Result<(), JsValue> {
     // Add all elements to the document
     modal_content.append_child(&modal_header)?;
     modal_content.append_child(&tab_container)?;
-    modal_content.append_child(&system_content)?;
-    modal_content.append_child(&task_content)?;
+    modal_content.append_child(&main_content)?;
     modal_content.append_child(&history_content)?;
     modal_content.append_child(&button_container)?;
     

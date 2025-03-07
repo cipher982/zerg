@@ -360,7 +360,19 @@ button {
     box-sizing: border-box;
 }
 
-.modal textarea:focus {
+.modal input[type="text"] {
+    width: 100%;
+    padding: 12px;
+    border-radius: 4px;
+    border: 1px solid #444;
+    background-color: #333;
+    color: white;
+    font-family: inherit;
+    margin-bottom: 15px;
+    box-sizing: border-box;
+}
+
+.modal textarea:focus, .modal input[type="text"]:focus {
     outline: none;
     border-color: #3498db;
     box-shadow: 0 0 5px rgba(52, 152, 219, 0.5);
