@@ -1,8 +1,30 @@
-use wasm_bindgen::prelude::*;
-use web_sys::{Document, HtmlCanvasElement, HtmlInputElement, MouseEvent};
+// Remove unused wasm_bindgen prelude since we're not using #[wasm_bindgen] macros directly here
+// use wasm_bindgen::prelude::*;
+use web_sys::{
+    Document, 
+    // Remove unused imports
+    // Element, 
+    // HtmlInputElement, 
+    // Event, 
+    // KeyboardEvent, 
+    HtmlCanvasElement, 
+    // HtmlElement, 
+    // HtmlTextAreaElement, 
+    // HtmlSelectElement,
+    MouseEvent
+};
+use js_sys::{Math, Date};
+use crate::models::{NodeType, Message}; // Remove Node import
 use crate::state::APP_STATE;
-use crate::models::NodeType;
-use crate::network::{send_text_to_backend, fetch_available_models};
+use crate::state::AppState;
+// Remove unused Rc
+// use std::rc::Rc;
+// Remove unused RefCell
+// use std::cell::RefCell;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsValue; // Make sure JsValue is still imported since it's used
+use wasm_bindgen::JsCast;
+use crate::network::fetch_available_models;
 use wasm_bindgen_futures::spawn_local;
 
 pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
@@ -11,16 +33,10 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
         .get_element_by_id("app-container")
         .ok_or(JsValue::from_str("Could not find app-container"))?;
     
-    // Create input field
-    let input = document.create_element("input")?;
-    input.set_attribute("type", "text")?;
-    input.set_attribute("id", "user-input")?;
-    input.set_attribute("placeholder", "Enter text here...")?;
-    
-    // Create send button
-    let button = document.create_element("button")?;
-    button.set_inner_html("Send to AI");
-    button.set_attribute("id", "send-button")?;
+    // Create "Create Agent" button instead of input field
+    let create_agent_button = document.create_element("button")?;
+    create_agent_button.set_inner_html("Create Agent");
+    create_agent_button.set_attribute("id", "create-agent-button")?;
     
     // Create model selection dropdown
     let model_select = document.create_element("select")?;
@@ -74,8 +90,7 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     // Create input panel (controls)
     let input_panel = document.create_element("div")?;
     input_panel.set_id("input-panel");
-    input_panel.append_child(&input)?;
-    input_panel.append_child(&button)?;
+    input_panel.append_child(&create_agent_button)?;
     input_panel.append_child(&model_select)?;
     input_panel.append_child(&auto_fit_container)?;
     input_panel.append_child(&center_button)?;
@@ -101,8 +116,7 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     app_container.append_child(&instruction_text)?;
     
     // Set up event handlers
-    setup_button_click_handler(document)?;
-    setup_input_keypress_handler(document)?;
+    setup_create_agent_button_handler(document)?;
     setup_auto_fit_button_handler(document)?;
     setup_center_view_handler(document)?;
     setup_model_select_handler(document)?;
@@ -110,6 +124,9 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     
     // Fetch available models from the backend
     fetch_models_from_backend(document)?;
+    
+    // Create the agent input modal
+    create_agent_input_modal(document)?;
     
     Ok(())
 }
@@ -163,104 +180,45 @@ fn fetch_models_from_backend(document: &Document) -> Result<(), JsValue> {
     Ok(())
 }
 
-fn setup_button_click_handler(document: &Document) -> Result<(), JsValue> {
-    let button_el = document.get_element_by_id("send-button").unwrap();
-    let input_el = document.get_element_by_id("user-input").unwrap();
+fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsValue> {
+    let create_agent_button = document.get_element_by_id("create-agent-button").unwrap();
     
-    let button_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
-        let input = input_el.dyn_ref::<HtmlInputElement>().unwrap();
-        let text = input.value();
-        
-        if !text.is_empty() {
-            send_user_input(&text);
+    let click_callback = Closure::wrap(Box::new(move |_event: MouseEvent| {
+        // Create a new agent node
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
             
-            // Clear the input field
-            input.set_value("");
-        }
-    }) as Box<dyn FnMut(_)>);
-    
-    button_el.add_event_listener_with_callback(
-        "click",
-        button_handler.as_ref().unchecked_ref(),
-    )?;
-    button_handler.forget();
-    
-    Ok(())
-}
-
-fn setup_input_keypress_handler(document: &Document) -> Result<(), JsValue> {
-    let input_el = document.get_element_by_id("user-input").unwrap();
-    let input_el_clone = input_el.clone();
-    
-    let keypress_handler = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
-        if event.key() == "Enter" {
-            let input = input_el_clone.dyn_ref::<HtmlInputElement>().unwrap();
-            let text = input.value();
+            // Get viewport center coordinates
+            let viewport_width = if state.canvas_width > 0.0 { state.canvas_width } else { 800.0 };
+            let viewport_height = if state.canvas_height > 0.0 { state.canvas_height } else { 600.0 };
             
-            if !text.is_empty() {
-                send_user_input(&text);
-                
-                // Clear the input field
-                input.set_value("");
+            let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 75.0; // Center - half node width
+            let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0; // Center - half node height
+            
+            // Create a new agent node
+            let _node_id = state.add_node(
+                "New Agent".to_string(),
+                x,
+                y,
+                NodeType::AgentIdentity
+            );
+            
+            // Draw the nodes
+            state.draw_nodes();
+            
+            // Save state after adding the node
+            if let Err(e) = state.save_if_modified() {
+                web_sys::console::error_1(&format!("Failed to save state: {:?}", e).into());
             }
-        }
+            
+            web_sys::console::log_1(&"Created new agent node".into());
+        });
     }) as Box<dyn FnMut(_)>);
     
-    input_el.add_event_listener_with_callback(
-        "keypress",
-        keypress_handler.as_ref().unchecked_ref(),
-    )?;
-    keypress_handler.forget();
+    create_agent_button.add_event_listener_with_callback("click", click_callback.as_ref().unchecked_ref())?;
+    click_callback.forget();
     
     Ok(())
-}
-
-fn send_user_input(text: &str) {
-    // Generate a message ID
-    let message_id = APP_STATE.with(|state| {
-        let state = state.borrow();
-        state.generate_message_id()
-    });
-    
-    // Add a node for the user's input and pre-create a response node
-    APP_STATE.with(|state| {
-        let mut state = state.borrow_mut();
-        state.input_text = text.to_string();
-        
-        // Position the node in the left side of the canvas at a consistent position
-        // If it's the first node, start higher up
-        let y_position = if state.nodes.is_empty() {
-            100.0 // Start at the top
-        } else {
-            // Find the lowest y-position of existing nodes
-            let lowest_y = state.nodes.values()
-                .map(|n| n.y + n.height)
-                .fold(0.0, f64::max);
-            lowest_y + 50.0 // Position below the lowest node with spacing
-        };
-        
-        // Create the user input node
-        let input_node_id = state.add_node(text.to_string(), 50.0, y_position, NodeType::UserInput);
-        
-        // Create empty response node with placeholder text and link it to the input node
-        let response_node_id = state.add_response_node(&input_node_id, "...".to_string());
-        
-        // Store a direct mapping from message_id to response node (not input node)
-        state.track_message(message_id.clone(), response_node_id);
-        
-        // Update latest user input ID
-        state.latest_user_input_id = Some(input_node_id);
-        
-        state.draw_nodes();
-        
-        // Save state after adding the node
-        if let Err(e) = state.save_if_modified() {
-            web_sys::console::error_1(&format!("Failed to save state: {:?}", e).into());
-        }
-    });
-    
-    // Send the text to the backend with the message ID
-    send_text_to_backend(text, message_id);
 }
 
 pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
@@ -294,6 +252,9 @@ pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
     // Set up resize handler
     setup_resize_handler(&canvas)?;
     
+    // Setup animation loop for refreshing the canvas
+    setup_animation_loop();
+    
     Ok(())
 }
 
@@ -320,6 +281,13 @@ fn resize_canvas(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
         // Set CSS size to maintain visual dimensions
         canvas.style().set_property("width", &format!("{}px", container_width))?;
         canvas.style().set_property("height", &format!("{}px", container_height))?;
+        
+        // Update AppState with the new dimensions
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.canvas_width = container_width as f64;
+            state.canvas_height = container_height as f64;
+        });
         
         // Update viewport and redraw if necessary
         APP_STATE.with(|state| {
@@ -374,6 +342,7 @@ fn setup_resize_handler(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
 fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
     // Get device pixel ratio once for all handlers
     let window = web_sys::window().expect("no global window exists");
+    let _document = window.document().expect("should have a document");
     let _dpr = window.device_pixel_ratio();
     
     // Mouse down event
@@ -387,31 +356,96 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             
             // Find which node was clicked on, accounting for viewport transformation
             if let Some((id, offset_x, offset_y)) = state.find_node_at_position(x, y) {
-                // Node dragging (existing behavior)
-                state.dragging = Some(id);
-                state.drag_offset_x = offset_x;
-                state.drag_offset_y = offset_y;
-                state.canvas_dragging = false; // Ensure canvas dragging is off
+                // Store the selected node ID
+                state.selected_node_id = Some(id.clone());
+                
+                // Check if it's a right click (context menu)
+                if event.button() == 2 {
+                    // Right click handling (future: show context menu)
+                    return;
+                }
+                
+                // Check if this node is an agent type
+                let is_agent = if let Some(node) = state.nodes.get(&id) {
+                    matches!(node.node_type, NodeType::AgentIdentity)
+                } else {
+                    false
+                };
+                
+                if is_agent {
+                    // Open modal for agent interaction
+                    let window = web_sys::window().expect("no global window exists");
+                    let document = window.document().expect("should have a document");
+                    
+                    // Update modal title and load agent data
+                    if let Some(node) = state.nodes.get(&id) {
+                        // Set modal title
+                        let modal_title = document.get_element_by_id("modal-title").unwrap();
+                        modal_title.set_inner_html(&format!("Agent: {}", node.text));
+                        
+                        // Load system instructions if available
+                        if let Some(system_instructions) = &node.system_instructions {
+                            let system_elem = document.get_element_by_id("system-instructions").unwrap();
+                            let system_textarea = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>().unwrap();
+                            system_textarea.set_value(system_instructions);
+                        }
+                        
+                        // Load conversation history if available
+                        if let Some(history) = &node.history {
+                            let history_container = document.get_element_by_id("history-container").unwrap();
+                            
+                            if history.is_empty() {
+                                history_container.set_inner_html("<p>No history available.</p>");
+                            } else {
+                                // Clear existing history
+                                history_container.set_inner_html("");
+                                
+                                // Add each message to the history container
+                                for message in history {
+                                    let message_elem = document.create_element("div").unwrap();
+                                    message_elem.set_class_name(&format!("history-item {}", message.role));
+                                    
+                                    let content = document.create_element("p").unwrap();
+                                    content.set_inner_html(&message.content);
+                                    
+                                    message_elem.append_child(&content).unwrap();
+                                    history_container.append_child(&message_elem).unwrap();
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Show the modal
+                    let modal = document.get_element_by_id("agent-modal").unwrap();
+                    modal.set_attribute("style", "display: block;").unwrap();
+                } else {
+                    // Regular node dragging (existing behavior)
+                    state.dragging = Some(id);
+                    state.drag_offset_x = offset_x;
+                    state.drag_offset_y = offset_y;
+                    state.canvas_dragging = false; // Ensure canvas dragging is off
+                }
             } else {
                 // Canvas dragging - clicked on empty area
                 // If in Auto Layout Mode, automatically switch to Manual Layout Mode
                 if state.auto_fit {
                     state.auto_fit = false;
                     
-                    // Update the auto-fit button to reflect the mode change
+                    // Also update the toggle in the UI
                     let window = web_sys::window().expect("no global window exists");
-                    let document = window.document().expect("no document exists");
-                    
-                    // Update the button text
-                    if let Some(button) = document.get_element_by_id("auto-fit-toggle") {
-                        // Handle error directly instead of using ? operator
-                        let _ = button.set_attribute("checked", "false");
+                    let document = window.document().expect("should have a document");
+                    if let Some(toggle) = document.get_element_by_id("auto-fit-toggle") {
+                        let checkbox = toggle.dyn_ref::<web_sys::HtmlInputElement>().unwrap();
+                        checkbox.set_checked(false);
                     }
                 }
                 
+                state.dragging = None;
                 state.canvas_dragging = true;
-                state.canvas_drag_start_x = x;
-                state.canvas_drag_start_y = y;
+                state.drag_start_x = x;
+                state.drag_start_y = y;
+                state.drag_last_x = x;
+                state.drag_last_y = y;
             }
         });
     }) as Box<dyn FnMut(_)>);
@@ -448,8 +482,8 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             } else if state.canvas_dragging {
                 // Canvas dragging (new behavior)
                 // Calculate how far the mouse has moved since starting the drag
-                let dx = (state.canvas_drag_start_x - x) / state.zoom_level;
-                let dy = (state.canvas_drag_start_y - y) / state.zoom_level;
+                let dx = (state.drag_start_x - x) / state.zoom_level;
+                let dy = (state.drag_start_y - y) / state.zoom_level;
                 
                 // Update the viewport (moving it in the direction of the drag)
                 state.viewport_x += dx;
@@ -459,8 +493,8 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 state.enforce_viewport_boundaries();
                 
                 // Update the drag start position for next movement
-                state.canvas_drag_start_x = x;
-                state.canvas_drag_start_y = y;
+                state.drag_start_x = x;
+                state.drag_start_y = y;
                 
                 // Redraw with the new viewport
                 state.draw_nodes();
@@ -689,4 +723,551 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
     body.append_child(&status_bar)?;
     
     Ok(())
+}
+
+// Create a modal dialog for agent interaction
+fn create_agent_input_modal(document: &Document) -> Result<(), JsValue> {
+    // Check if modal already exists (avoid duplicates)
+    if document.get_element_by_id("agent-modal").is_some() {
+        return Ok(());
+    }
+    
+    // Create modal container
+    let modal = document.create_element("div")?;
+    modal.set_id("agent-modal");
+    modal.set_class_name("modal");
+    modal.set_attribute("style", "display: none;")?;
+    
+    // Create modal content
+    let modal_content = document.create_element("div")?;
+    modal_content.set_class_name("modal-content");
+    
+    // Create modal header
+    let modal_header = document.create_element("div")?;
+    modal_header.set_class_name("modal-header");
+    
+    let modal_title = document.create_element("h2")?;
+    modal_title.set_id("modal-title");
+    modal_title.set_inner_html("Agent Configuration");
+    
+    let close_button = document.create_element("span")?;
+    close_button.set_class_name("close");
+    close_button.set_inner_html("&times;");
+    close_button.set_id("modal-close");
+    
+    modal_header.append_child(&modal_title)?;
+    modal_header.append_child(&close_button)?;
+    
+    // Create tabs
+    let tab_container = document.create_element("div")?;
+    tab_container.set_class_name("tab-container");
+    
+    let system_tab = document.create_element("button")?;
+    system_tab.set_class_name("tab-button active");
+    system_tab.set_id("system-tab");
+    system_tab.set_inner_html("System");
+    
+    let task_tab = document.create_element("button")?;
+    task_tab.set_class_name("tab-button");
+    task_tab.set_id("task-tab");
+    task_tab.set_inner_html("Task");
+    
+    let history_tab = document.create_element("button")?;
+    history_tab.set_class_name("tab-button");
+    history_tab.set_id("history-tab");
+    history_tab.set_inner_html("History");
+    
+    tab_container.append_child(&system_tab)?;
+    tab_container.append_child(&task_tab)?;
+    tab_container.append_child(&history_tab)?;
+    
+    // Create system instructions section
+    let system_content = document.create_element("div")?;
+    system_content.set_class_name("tab-content");
+    system_content.set_id("system-content");
+    
+    let system_label = document.create_element("label")?;
+    system_label.set_inner_html("System Instructions:");
+    system_label.set_attribute("for", "system-instructions")?;
+    
+    let system_textarea = document.create_element("textarea")?;
+    system_textarea.set_id("system-instructions");
+    system_textarea.set_attribute("rows", "8")?;
+    system_textarea.set_attribute("placeholder", "Enter system-level instructions for this agent...")?;
+    
+    system_content.append_child(&system_label)?;
+    system_content.append_child(&system_textarea)?;
+    
+    // Create task input section
+    let task_content = document.create_element("div")?;
+    task_content.set_class_name("tab-content");
+    task_content.set_id("task-content");
+    task_content.set_attribute("style", "display: none;")?;
+    
+    let task_label = document.create_element("label")?;
+    task_label.set_inner_html("Task Input:");
+    task_label.set_attribute("for", "task-input")?;
+    
+    let task_textarea = document.create_element("textarea")?;
+    task_textarea.set_id("task-input");
+    task_textarea.set_attribute("rows", "6")?;
+    task_textarea.set_attribute("placeholder", "Enter specific task or question for this agent...")?;
+    
+    task_content.append_child(&task_label)?;
+    task_content.append_child(&task_textarea)?;
+    
+    // Create history section
+    let history_content = document.create_element("div")?;
+    history_content.set_class_name("tab-content");
+    history_content.set_id("history-content");
+    history_content.set_attribute("style", "display: none;")?;
+    
+    let history_container = document.create_element("div")?;
+    history_container.set_id("history-container");
+    history_container.set_inner_html("<p>No history available.</p>");
+    
+    history_content.append_child(&history_container)?;
+    
+    // Create buttons
+    let button_container = document.create_element("div")?;
+    button_container.set_class_name("modal-buttons");
+    
+    let save_button = document.create_element("button")?;
+    save_button.set_id("save-agent");
+    save_button.set_inner_html("Save");
+    
+    let send_button = document.create_element("button")?;
+    send_button.set_id("send-to-agent");
+    send_button.set_inner_html("Send");
+    
+    button_container.append_child(&save_button)?;
+    button_container.append_child(&send_button)?;
+    
+    // Assemble modal
+    modal_content.append_child(&modal_header)?;
+    modal_content.append_child(&tab_container)?;
+    modal_content.append_child(&system_content)?;
+    modal_content.append_child(&task_content)?;
+    modal_content.append_child(&history_content)?;
+    modal_content.append_child(&button_container)?;
+    
+    modal.append_child(&modal_content)?;
+    
+    // Add to document
+    let body = document.body().expect("document should have a body");
+    body.append_child(&modal)?;
+    
+    // Set up event handlers for the modal
+    setup_modal_handlers(document)?;
+    
+    Ok(())
+}
+
+// Add event handlers to the modal
+fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
+    // Close button
+    let close_button = document.get_element_by_id("modal-close").unwrap();
+    let close_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("should have a document");
+        let modal = document.get_element_by_id("agent-modal").unwrap();
+        modal.set_attribute("style", "display: none;").unwrap();
+    }) as Box<dyn FnMut(_)>);
+    
+    close_button.add_event_listener_with_callback(
+        "click",
+        close_handler.as_ref().unchecked_ref(),
+    )?;
+    close_handler.forget();
+    
+    // Tab switching
+    let tab_handler = Closure::wrap(Box::new(move |event: MouseEvent| {
+        let target = event.target().unwrap();
+        let button = target.dyn_ref::<web_sys::HtmlElement>().unwrap();
+        let tab_id = button.id();
+        
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("should have a document");
+        
+        // Hide all tab contents
+        let contents = vec!["system-content", "task-content", "history-content"];
+        for content_id in contents.iter() {
+            let content = document.get_element_by_id(content_id).unwrap();
+            content.set_attribute("style", "display: none;").unwrap();
+        }
+        
+        // Deactivate all tabs
+        let tabs = vec!["system-tab", "task-tab", "history-tab"];
+        for tab in tabs.iter() {
+            let tab_el = document.get_element_by_id(tab).unwrap();
+            tab_el.set_class_name("tab-button");
+        }
+        
+        // Activate selected tab
+        button.set_class_name("tab-button active");
+        
+        // Show selected content
+        let content_id = match tab_id.as_str() {
+            "system-tab" => "system-content",
+            "task-tab" => "task-content",
+            "history-tab" => "history-content",
+            _ => "system-content"
+        };
+        
+        let content = document.get_element_by_id(content_id).unwrap();
+        content.set_attribute("style", "display: block;").unwrap();
+    }) as Box<dyn FnMut(_)>);
+    
+    let tabs = vec!["system-tab", "task-tab", "history-tab"];
+    for tab_id in tabs.iter() {
+        let tab = document.get_element_by_id(tab_id).unwrap();
+        tab.add_event_listener_with_callback(
+            "click",
+            tab_handler.as_ref().unchecked_ref(),
+        )?;
+    }
+    
+    tab_handler.forget();
+    
+    // Save button handler
+    let save_button = document.get_element_by_id("save-agent").unwrap();
+    let save_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("should have a document");
+        
+        // Get values from inputs
+        let system_elem = document.get_element_by_id("system-instructions").unwrap();
+        let system_textarea = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>().unwrap();
+        let system_instructions = system_textarea.value();
+        
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            if let Some(node_id) = state.selected_node_id.clone() {
+                if let Some(node) = state.nodes.get_mut(&node_id) {
+                    // Update node properties based on system instructions
+                    node.text = if system_instructions.is_empty() { 
+                        "Agent".to_string() 
+                    } else {
+                        // Use first line or first few characters as name
+                        let name = system_instructions.lines().next()
+                            .unwrap_or("Agent")
+                            .chars()
+                            .take(20)
+                            .collect::<String>();
+                        if name.len() >= 20 { name + "..." } else { name }
+                    };
+                    
+                    // Store system instructions in node metadata
+                    node.system_instructions = Some(system_instructions);
+                    
+                    state.draw_nodes();
+                    state.save_if_modified().unwrap_or_else(|e| {
+                        web_sys::console::error_1(&format!("Failed to save state: {:?}", e).into());
+                    });
+                }
+            }
+        });
+        
+        // Close modal
+        let modal = document.get_element_by_id("agent-modal").unwrap();
+        modal.set_attribute("style", "display: none;").unwrap();
+    }) as Box<dyn FnMut(_)>);
+    
+    save_button.add_event_listener_with_callback(
+        "click",
+        save_handler.as_ref().unchecked_ref(),
+    )?;
+    save_handler.forget();
+    
+    // Send button handler
+    let send_button = document.get_element_by_id("send-to-agent").unwrap();
+    let send_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("should have a document");
+        
+        // Get values from inputs
+        let task_elem = document.get_element_by_id("task-input").unwrap();
+        let task_textarea = task_elem.dyn_ref::<web_sys::HtmlTextAreaElement>().unwrap();
+        let task_input = task_textarea.value();
+        
+        if !task_input.is_empty() {
+            // Send to agent
+            send_task_to_agent(task_input);
+            
+            // Clear task input
+            task_textarea.set_value("");
+        }
+        
+        // Don't close modal after send, allow multiple tasks
+    }) as Box<dyn FnMut(_)>);
+    
+    send_button.add_event_listener_with_callback(
+        "click",
+        send_handler.as_ref().unchecked_ref(),
+    )?;
+    send_handler.forget();
+    
+    Ok(())
+}
+
+// Function to send a task to an agent and handle the response
+fn send_task_to_agent(task: String) {
+    web_sys::console::log_1(&JsValue::from_str("Starting send_task_to_agent"));
+    
+    // Generate a message ID
+    let message_id = Math::random().to_string();
+    web_sys::console::log_1(&format!("Generated message_id: {}", message_id).into());
+    
+    // Get current timestamp
+    let timestamp = Date::now() as u64;
+    
+    // Log before accessing app state
+    web_sys::console::log_1(&JsValue::from_str("About to access APP_STATE"));
+    
+    // Add the task to agent's history and create a response node
+    APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        web_sys::console::log_1(&JsValue::from_str("Got state borrow_mut"));
+        
+        if let Some(agent_id) = state.selected_node_id.clone() {
+            web_sys::console::log_1(&format!("Found selected_node_id: {}", agent_id).into());
+            
+            // Log all nodes in state for debugging
+            web_sys::console::log_1(&JsValue::from_str("Current nodes in state:"));
+            for (id, node) in &state.nodes {
+                web_sys::console::log_1(&format!("Node {}: type={:?}, text='{}', status={:?}", 
+                    id, node.node_type, node.text, node.status).into());
+            }
+            
+            if let Some(agent) = state.nodes.get_mut(&agent_id) {
+                web_sys::console::log_1(&format!("Found agent node with text: '{}', type: {:?}, status: {:?}", 
+                    agent.text, agent.node_type, agent.status).into());
+                
+                // Verify this is actually an agent node
+                if !matches!(agent.node_type, NodeType::AgentIdentity) {
+                    web_sys::console::error_1(&format!("Selected node is not an agent! Type: {:?}", agent.node_type).into());
+                    return;
+                }
+                
+                // Create a new user message
+                let user_message = Message {
+                    role: "user".to_string(),
+                    content: task.clone(),
+                    timestamp,
+                };
+                
+                // Log before updating agent history
+                web_sys::console::log_1(&JsValue::from_str("About to update agent history"));
+                
+                // Update the agent's history
+                if let Some(history) = &mut agent.history {
+                    web_sys::console::log_1(&format!("Current history length: {}", history.len()).into());
+                    history.push(user_message);
+                    web_sys::console::log_1(&format!("New history length: {}", history.len()).into());
+                } else {
+                    web_sys::console::error_1(&JsValue::from_str("History is None! Initializing new history."));
+                    agent.history = Some(vec![user_message]);
+                }
+                
+                // Set agent status to "processing"
+                agent.status = Some("processing".to_string());
+                web_sys::console::log_1(&JsValue::from_str("Set agent status to 'processing'"));
+                
+                // Log before creating response node
+                web_sys::console::log_1(&JsValue::from_str("About to create response node"));
+                
+                // Store agent_id before releasing the borrow
+                let agent_id_clone = agent_id.clone();
+                
+                // End the mutable borrow of agent
+                let _ = agent;
+                
+                // Add a response node connected to the agent
+                let response_node_id = add_response_node_for_agent(&mut state, &agent_id_clone, "...".to_string());
+                
+                // Check if response node creation failed
+                if response_node_id.is_empty() {
+                    web_sys::console::error_1(&JsValue::from_str("Failed to create response node"));
+                    // Reset agent status back to idle since we failed
+                    if let Some(agent) = state.nodes.get_mut(&agent_id) {
+                        agent.status = Some("idle".to_string());
+                    }
+                    state.draw_nodes();
+                    return;
+                }
+                
+                web_sys::console::log_1(&format!("Created response node with ID: {}", response_node_id).into());
+                
+                // Save the message_id -> response_node mapping
+                state.message_id_to_node_id.insert(message_id.clone(), response_node_id);
+                web_sys::console::log_1(&JsValue::from_str("Saved message_id -> response_node mapping"));
+                
+                // Update the display
+                web_sys::console::log_1(&JsValue::from_str("About to draw nodes"));
+                state.draw_nodes();
+                web_sys::console::log_1(&JsValue::from_str("Drew nodes"));
+                
+                // Save state
+                web_sys::console::log_1(&JsValue::from_str("About to save state"));
+                if let Err(e) = state.save_if_modified() {
+                    web_sys::console::error_1(&format!("Failed to save state: {:?}", e).into());
+                } else {
+                    web_sys::console::log_1(&JsValue::from_str("State saved successfully"));
+                }
+            } else {
+                web_sys::console::error_1(&JsValue::from_str("Could not find agent node!"));
+            }
+        } else {
+            web_sys::console::error_1(&JsValue::from_str("No selected_node_id!"));
+        }
+    });
+    
+    // Log before preparing request parameters
+    web_sys::console::log_1(&JsValue::from_str("About to prepare request parameters"));
+    
+    // Prepare request parameters
+    let system_instructions = APP_STATE.with(|state| {
+        let state = state.borrow();
+        if let Some(agent_id) = &state.selected_node_id {
+            if let Some(agent) = state.nodes.get(agent_id) {
+                let instructions = agent.system_instructions.clone().unwrap_or_default();
+                web_sys::console::log_1(&format!("Got system instructions: {}", instructions).into());
+                instructions
+            } else {
+                web_sys::console::error_1(&JsValue::from_str("Could not find agent node for system instructions!"));
+                String::new()
+            }
+        } else {
+            web_sys::console::error_1(&JsValue::from_str("No selected_node_id for system instructions!"));
+            String::new()
+        }
+    });
+    
+    let selected_model = APP_STATE.with(|state| {
+        let state = state.borrow();
+        let model = state.selected_model.clone();
+        web_sys::console::log_1(&format!("Selected model: {}", model).into());
+        model
+    });
+    
+    // Log before sending to backend
+    web_sys::console::log_1(&JsValue::from_str("About to send to backend"));
+    
+    // Send to backend
+    send_to_backend(&task, &system_instructions, &selected_model, message_id);
+    web_sys::console::log_1(&JsValue::from_str("Sent to backend"));
+}
+
+// Helper function to create a response node attached to an agent
+// Takes AppState as a parameter instead of borrowing it internally to prevent double borrow
+fn add_response_node_for_agent(state: &mut AppState, agent_id: &str, initial_text: String) -> String {
+    web_sys::console::log_1(&format!("Starting add_response_node_for_agent for agent: {}", agent_id).into());
+    
+    // Find the agent node's position
+    let (x, y, height) = if let Some(agent) = state.nodes.get(agent_id) {
+        // Verify this is actually an agent node
+        if !matches!(agent.node_type, NodeType::AgentIdentity) {
+            web_sys::console::error_1(&format!("Node {} is not an agent! Type: {:?}", agent_id, agent.node_type).into());
+            state.draw_nodes(); // Ensure we redraw in error state
+            return String::new(); // Return empty string to signal error
+        }
+        
+        web_sys::console::log_1(&format!("Found agent node at position: ({}, {}), height: {}", agent.x, agent.y, agent.height).into());
+        (agent.x, agent.y, agent.height)
+    } else {
+        web_sys::console::error_1(&format!("Agent node not found: {}", agent_id).into());
+        state.draw_nodes(); // Ensure we redraw in error state
+        return String::new(); // Return empty string to signal error
+    };
+    
+    // Calculate position for response node (below the agent)
+    // Add some padding between the agent and response node
+    let response_y = y + height + 50.0;
+    let response_x = x;
+
+    // Create the response node
+    let response_node_id = state.add_node(
+        initial_text,
+        response_x,
+        response_y,
+        NodeType::AgentResponse
+    );
+
+    // Set the parent_id of the response node to link it to the agent
+    if let Some(response_node) = state.nodes.get_mut(&response_node_id) {
+        response_node.parent_id = Some(agent_id.to_string());
+    }
+
+    // Redraw with the new node
+    state.draw_nodes();
+    
+    response_node_id
+}
+
+// Function to send the task to the backend
+fn send_to_backend(task: &str, _system_instructions: &str, _model: &str, message_id: String) {
+    // Use the network module's implementation to send the request
+    crate::network::send_text_to_backend(task, message_id);
+    
+    // Note: system_instructions and model are already set in the APP_STATE and
+    // handled by the network module's implementation
+}
+
+// Update response node with AI's response
+fn update_response_node(message_id: &str, response_text: &str) {
+    APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        
+        // Find the response node ID
+        if let Some(node_id) = state.message_id_to_node_id.get(message_id).cloned() {
+            // Update the response node text
+            if let Some(node) = state.nodes.get_mut(&node_id) {
+                node.text = response_text.to_string();
+                
+                // Resize the node to fit the content
+                state.resize_node_for_content(&node_id);
+            }
+            
+            // Also update the parent agent's history and status
+            // First get the parent ID
+            let parent_id = if let Some(response_node) = state.nodes.get(&node_id) {
+                response_node.parent_id.clone()
+            } else {
+                None
+            };
+            
+            // Then update the parent if we have a valid ID
+            if let Some(parent_id) = parent_id {
+                if let Some(agent) = state.nodes.get_mut(&parent_id) {
+                    // Create an assistant message
+                    let assistant_message = Message {
+                        role: "assistant".to_string(),
+                        content: response_text.to_string(),
+                        timestamp: Date::now() as u64,
+                    };
+                    
+                    // Add to history
+                    if let Some(history) = &mut agent.history {
+                        history.push(assistant_message);
+                    }
+                    
+                    // Set status back to idle
+                    agent.status = Some("idle".to_string());
+                }
+            }
+            
+            // Redraw and save
+            state.draw_nodes();
+            
+            if let Err(e) = state.save_if_modified() {
+                web_sys::console::error_1(&format!("Failed to save state: {:?}", e).into());
+            }
+        }
+    });
+}
+
+// Setup animation loop to refresh the canvas for animations
+fn setup_animation_loop() {
+    // Animation disabled to prevent RefCell borrow issues
+    // The only thing this powered was the processing status visual effect
 } 

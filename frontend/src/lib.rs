@@ -13,6 +13,9 @@ mod storage;
 // Main entry point for the WASM application
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
+    // Initialize better panic messages
+    console_error_panic_hook::set_once();
+
     // Get the document
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
