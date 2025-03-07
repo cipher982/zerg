@@ -1,28 +1,20 @@
-// Remove unused wasm_bindgen prelude since we're not using #[wasm_bindgen] macros directly here
-// use wasm_bindgen::prelude::*;
+use wasm_bindgen::prelude::*;
 use web_sys::{
     Document, 
-    // Remove unused imports
-    // Element, 
-    // HtmlInputElement, 
-    // Event, 
-    // KeyboardEvent, 
+    Event,
+    KeyboardEvent,
     HtmlCanvasElement, 
-    // HtmlElement, 
-    // HtmlTextAreaElement, 
-    // HtmlSelectElement,
-    MouseEvent
+    HtmlTextAreaElement,
+    HtmlSelectElement,
+    MouseEvent,
 };
 use js_sys::{Math, Date};
-use crate::models::{NodeType, Message}; // Remove Node import
-use crate::state::APP_STATE;
-use crate::state::AppState;
-// Remove unused Rc
-// use std::rc::Rc;
-// Remove unused RefCell
-// use std::cell::RefCell;
+use crate::models::{NodeType, Message};
+use crate::state::{APP_STATE, AppState};
+use std::rc::Rc;
+use std::cell::RefCell;
 use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsValue; // Make sure JsValue is still imported since it's used
+use wasm_bindgen::JsValue;
 use wasm_bindgen::JsCast;
 use crate::network::fetch_available_models;
 use wasm_bindgen_futures::spawn_local;
@@ -586,7 +578,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
 fn setup_auto_fit_button_handler(document: &Document) -> Result<(), JsValue> {
     let auto_fit_toggle = document.get_element_by_id("auto-fit-toggle").unwrap();
     
-    let change_handler = Closure::wrap(Box::new(move |_event: web_sys::Event| {
+    let change_handler = Closure::wrap(Box::new(move |_event: Event| {
         // Use the toggle_auto_fit method to toggle the auto-fit state
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
@@ -608,7 +600,7 @@ fn setup_auto_fit_button_handler(document: &Document) -> Result<(), JsValue> {
 fn setup_center_view_handler(document: &Document) -> Result<(), JsValue> {
     let center_button = document.get_element_by_id("center-button").unwrap();
     
-    let click_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+    let click_callback = Closure::wrap(Box::new(move |_event: Event| {
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             state.center_view();
@@ -627,7 +619,7 @@ fn setup_center_view_handler(document: &Document) -> Result<(), JsValue> {
 fn setup_model_select_handler(document: &Document) -> Result<(), JsValue> {
     let select_el = document.get_element_by_id("model-select").unwrap();
     
-    let change_handler = Closure::wrap(Box::new(move |event: web_sys::Event| {
+    let change_handler = Closure::wrap(Box::new(move |event: Event| {
         let select = event.target().unwrap().dyn_into::<web_sys::HtmlSelectElement>().unwrap();
         let model = select.value();
         
@@ -653,7 +645,7 @@ fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
     let clear_button = document.get_element_by_id("clear-button")
         .ok_or_else(|| JsValue::from_str("Clear button not found"))?;
     
-    let click_callback = Closure::wrap(Box::new(move |_e: MouseEvent| {
+    let click_callback = Closure::wrap(Box::new(move |_e: Event| {
         // Show confirmation dialog
         let window = web_sys::window().expect("no global window exists");
         let confirm = window.confirm_with_message("Are you sure you want to clear all nodes? This cannot be undone.")
@@ -867,11 +859,18 @@ fn create_agent_input_modal(document: &Document) -> Result<(), JsValue> {
 fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
     // Close button
     let close_button = document.get_element_by_id("modal-close").unwrap();
-    let close_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
+    let close_handler = Closure::wrap(Box::new(move |_event: Event| {
         let window = web_sys::window().expect("no global window exists");
         let document = window.document().expect("should have a document");
         let modal = document.get_element_by_id("agent-modal").unwrap();
         modal.set_attribute("style", "display: none;").unwrap();
+        
+        // Auto-save any pending changes before closing
+        let system_elem = document.get_element_by_id("system-instructions").unwrap();
+        let system_textarea = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>().unwrap();
+        let system_instructions = system_textarea.value();
+        
+        save_system_instructions(system_instructions);
     }) as Box<dyn FnMut(_)>);
     
     close_button.add_event_listener_with_callback(
@@ -880,8 +879,54 @@ fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
     )?;
     close_handler.forget();
     
+    // Add input listener to system instructions to auto-save after a delay
+    let system_textarea = document.get_element_by_id("system-instructions").unwrap();
+    
+    // Create a new timeout ID reference
+    let timeout_id_ref = Rc::new(RefCell::new(None::<i32>));
+    
+    let input_timeout_id = timeout_id_ref.clone();
+    let input_handler = Closure::wrap(Box::new(move |_event: Event| {
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("should have a document");
+        
+        // Get the current value from the textarea
+        let system_elem = document.get_element_by_id("system-instructions").unwrap();
+        let system_textarea = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>().unwrap();
+        let system_instructions = system_textarea.value();
+        
+        // Clone values for the timeout closure
+        let system_instructions_clone = system_instructions.clone();
+        
+        // Clear previous timeout if it exists
+        if let Some(id) = *input_timeout_id.borrow() {
+            window.clear_timeout_with_handle(id);
+        }
+        
+        // Set new timeout (500ms debounce)
+        let timeout_closure = Closure::once_into_js(move || {
+            save_system_instructions(system_instructions_clone);
+        });
+        
+        let new_timeout_id = window
+            .set_timeout_with_callback_and_timeout_and_arguments(
+                timeout_closure.as_ref().unchecked_ref(),
+                500,  // 500ms debounce
+                &js_sys::Array::new(),
+            )
+            .expect("Failed to set timeout");
+        
+        *input_timeout_id.borrow_mut() = Some(new_timeout_id);
+    }) as Box<dyn FnMut(_)>);
+    
+    system_textarea.add_event_listener_with_callback(
+        "input",
+        input_handler.as_ref().unchecked_ref(),
+    )?;
+    input_handler.forget();
+    
     // Tab switching
-    let tab_handler = Closure::wrap(Box::new(move |event: MouseEvent| {
+    let tab_handler = Closure::wrap(Box::new(move |event: Event| {
         let target = event.target().unwrap();
         let button = target.dyn_ref::<web_sys::HtmlElement>().unwrap();
         let tab_id = button.id();
@@ -931,7 +976,7 @@ fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
     
     // Save button handler
     let save_button = document.get_element_by_id("save-agent").unwrap();
-    let save_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
+    let save_handler = Closure::wrap(Box::new(move |_event: Event| {
         let window = web_sys::window().expect("no global window exists");
         let document = window.document().expect("should have a document");
         
@@ -940,33 +985,8 @@ fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         let system_textarea = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>().unwrap();
         let system_instructions = system_textarea.value();
         
-        APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            if let Some(node_id) = state.selected_node_id.clone() {
-                if let Some(node) = state.nodes.get_mut(&node_id) {
-                    // Update node properties based on system instructions
-                    node.text = if system_instructions.is_empty() { 
-                        "Agent".to_string() 
-                    } else {
-                        // Use first line or first few characters as name
-                        let name = system_instructions.lines().next()
-                            .unwrap_or("Agent")
-                            .chars()
-                            .take(20)
-                            .collect::<String>();
-                        if name.len() >= 20 { name + "..." } else { name }
-                    };
-                    
-                    // Store system instructions in node metadata
-                    node.system_instructions = Some(system_instructions);
-                    
-                    state.draw_nodes();
-                    state.save_if_modified().unwrap_or_else(|e| {
-                        web_sys::console::error_1(&format!("Failed to save state: {:?}", e).into());
-                    });
-                }
-            }
-        });
+        // Save system instructions
+        save_system_instructions(system_instructions);
         
         // Close modal
         let modal = document.get_element_by_id("agent-modal").unwrap();
@@ -981,7 +1001,7 @@ fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
     
     // Send button handler
     let send_button = document.get_element_by_id("send-to-agent").unwrap();
-    let send_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
+    let send_handler = Closure::wrap(Box::new(move |_event: Event| {
         let window = web_sys::window().expect("no global window exists");
         let document = window.document().expect("should have a document");
         
@@ -990,15 +1010,25 @@ fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         let task_textarea = task_elem.dyn_ref::<web_sys::HtmlTextAreaElement>().unwrap();
         let task_input = task_textarea.value();
         
+        // Get current system instructions and save them before sending
+        let system_elem = document.get_element_by_id("system-instructions").unwrap();
+        let system_textarea = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>().unwrap();
+        let system_instructions = system_textarea.value();
+        
+        // Save system instructions first
+        save_system_instructions(system_instructions);
+        
         if !task_input.is_empty() {
             // Send to agent
             send_task_to_agent(task_input);
             
             // Clear task input
             task_textarea.set_value("");
+            
+            // Close modal after send
+            let modal = document.get_element_by_id("agent-modal").unwrap();
+            modal.set_attribute("style", "display: none;").unwrap();
         }
-        
-        // Don't close modal after send, allow multiple tasks
     }) as Box<dyn FnMut(_)>);
     
     send_button.add_event_listener_with_callback(
@@ -1270,4 +1300,35 @@ fn update_response_node(message_id: &str, response_text: &str) {
 fn setup_animation_loop() {
     // Animation disabled to prevent RefCell borrow issues
     // The only thing this powered was the processing status visual effect
+}
+
+// Helper function to save system instructions
+fn save_system_instructions(system_instructions: String) {
+    APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        if let Some(node_id) = state.selected_node_id.clone() {
+            if let Some(node) = state.nodes.get_mut(&node_id) {
+                // Update node text based on system instructions
+                node.text = if system_instructions.is_empty() { 
+                    "Agent".to_string() 
+                } else {
+                    // Use first line or first few characters as name
+                    let name = system_instructions.lines().next()
+                        .unwrap_or("Agent")
+                        .chars()
+                        .take(20)
+                        .collect::<String>();
+                    if name.len() >= 20 { name + "..." } else { name }
+                };
+                
+                // Store system instructions in node metadata
+                node.system_instructions = Some(system_instructions);
+                
+                state.draw_nodes();
+                if let Err(e) = state.save_if_modified() {
+                    web_sys::console::error_1(&format!("Failed to save state: {:?}", e).into());
+                }
+            }
+        }
+    });
 } 
