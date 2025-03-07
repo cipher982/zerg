@@ -121,6 +121,17 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         let modal = document.get_element_by_id("agent-modal").unwrap();
         modal.set_attribute("style", "display: none;").unwrap();
         
+        // Get agent name from input
+        let name_value = if let Some(name_elem) = document.get_element_by_id("agent-name") {
+            if let Some(name_input) = name_elem.dyn_ref::<web_sys::HtmlInputElement>() {
+                name_input.value()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+        
         // Auto-save any pending changes before closing
         let system_elem = document.get_element_by_id("system-instructions").unwrap();
         let system_textarea = system_elem.dyn_ref::<HtmlTextAreaElement>().unwrap();
@@ -132,9 +143,19 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
             if let Some(id) = &state.selected_node_id {
                 let id_clone = id.clone();
                 if let Some(node) = state.nodes.get_mut(&id_clone) {
+                    // Update the node name if provided
+                    if !name_value.trim().is_empty() {
+                        node.text = name_value.clone();
+                    }
+                    
+                    // Update system instructions
                     node.system_instructions = Some(system_instructions.clone());
+                    
                     state.state_modified = true;
                     let _ = state.save_if_modified();
+                    
+                    // Redraw to show updated name
+                    state.draw_nodes();
                 }
             }
         });
@@ -152,48 +173,75 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
             let window = web_sys::window().expect("no global window exists");
             let document = window.document().expect("should have a document");
             
-            if let Some(system_elem) = document.get_element_by_id("system-instructions") {
-                if let Some(system_textarea) = system_elem.dyn_ref::<HtmlTextAreaElement>() {
-                    let system_instructions = system_textarea.value();
-                    
-                    // Save to APP_STATE
-                    APP_STATE.with(|state| {
-                        let mut state = state.borrow_mut();
-                        if let Some(id) = &state.selected_node_id {
-                            let id_clone = id.clone();
-                            if let Some(node) = state.nodes.get_mut(&id_clone) {
-                                node.system_instructions = Some(system_instructions.clone());
-                                state.state_modified = true;
-                                let _ = state.save_if_modified();
-                                
-                                // Show a temporary "Saved!" message
-                                web_sys::console::log_1(&"System instructions saved".into());
-                                
-                                // Update button text temporarily
-                                if let Some(save_btn) = document.get_element_by_id("save-agent") {
-                                    let original_text = save_btn.inner_html();
-                                    save_btn.set_inner_html("Saved!");
-                                    
-                                    // Reset button text after a delay
-                                    let btn_clone = save_btn.clone();
-                                    let text_clone = original_text.clone();
-                                    let reset_btn = Closure::once_into_js(move || {
-                                        btn_clone.set_inner_html(&text_clone);
-                                    });
-                                    
-                                    window
-                                        .set_timeout_with_callback_and_timeout_and_arguments(
-                                            reset_btn.as_ref().unchecked_ref(),
-                                            1500,  // 1.5 second delay
-                                            &js_sys::Array::new(),
-                                        )
-                                        .expect("Failed to set timeout");
-                                }
-                            }
-                        }
-                    });
+            // Get agent name from input
+            let name_value = if let Some(name_elem) = document.get_element_by_id("agent-name") {
+                if let Some(name_input) = name_elem.dyn_ref::<web_sys::HtmlInputElement>() {
+                    name_input.value()
+                } else {
+                    String::new()
                 }
-            }
+            } else {
+                String::new()
+            };
+            
+            // Get system instructions
+            let system_instructions = if let Some(system_elem) = document.get_element_by_id("system-instructions") {
+                if let Some(system_textarea) = system_elem.dyn_ref::<HtmlTextAreaElement>() {
+                    system_textarea.value()
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+            
+            // Save to APP_STATE
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                if let Some(id) = &state.selected_node_id {
+                    let id_clone = id.clone();
+                    if let Some(node) = state.nodes.get_mut(&id_clone) {
+                        // Update the node name if provided
+                        if !name_value.trim().is_empty() {
+                            node.text = name_value.clone();
+                        }
+                        
+                        // Update system instructions
+                        node.system_instructions = Some(system_instructions.clone());
+                        
+                        // Mark state as modified and save
+                        state.state_modified = true;
+                        let _ = state.save_if_modified();
+                        
+                        // Redraw to show updated name
+                        state.draw_nodes();
+                        
+                        // Show a temporary "Saved!" message
+                        web_sys::console::log_1(&"Agent data saved".into());
+                        
+                        // Update button text temporarily
+                        if let Some(save_btn) = document.get_element_by_id("save-agent") {
+                            let original_text = save_btn.inner_html();
+                            save_btn.set_inner_html("Saved!");
+                            
+                            // Reset button text after a delay
+                            let btn_clone = save_btn.clone();
+                            let text_clone = original_text.clone();
+                            let reset_btn = Closure::once_into_js(move || {
+                                btn_clone.set_inner_html(&text_clone);
+                            });
+                            
+                            window
+                                .set_timeout_with_callback_and_timeout_and_arguments(
+                                    reset_btn.as_ref().unchecked_ref(),
+                                    1500,  // 1.5 second delay
+                                    &js_sys::Array::new(),
+                                )
+                                .expect("Failed to set timeout");
+                        }
+                    }
+                }
+            });
         }) as Box<dyn FnMut(_)>);
         
         save_button.add_event_listener_with_callback(
@@ -255,7 +303,7 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
                                 }
                                 
                                 // Add a response node (this creates a visual node for the response)
-                                let response_node_id = state.add_response_node(&agent_id_clone, "Processing...".to_string());
+                                let response_node_id = state.add_response_node(&agent_id_clone, "...".to_string());
                                 
                                 // Track the message ID to node ID mapping
                                 state.track_message(message_id.clone(), response_node_id);
@@ -359,105 +407,71 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
 
 // Set up tab switching for the modal
 fn setup_tab_handlers(document: &Document) -> Result<(), JsValue> {
-    // Get tab buttons
-    let system_tab = document.get_element_by_id("system-tab")
-        .ok_or_else(|| JsValue::from_str("System tab not found"))?;
-    let task_tab = document.get_element_by_id("task-tab")
-        .ok_or_else(|| JsValue::from_str("Task tab not found"))?;
+    // For each tab button, add click handler to show the corresponding content
+    let main_tab = document.get_element_by_id("main-tab")
+        .ok_or_else(|| JsValue::from_str("Main tab button not found"))?;
+    
     let history_tab = document.get_element_by_id("history-tab")
-        .ok_or_else(|| JsValue::from_str("History tab not found"))?;
+        .ok_or_else(|| JsValue::from_str("History tab button not found"))?;
     
-    // System tab click handler
-    let system_click = Closure::wrap(Box::new(move |_event: Event| {
+    // Main tab click handler
+    let main_click = Closure::wrap(Box::new(move |_event: Event| {
         let window = web_sys::window().expect("no global window exists");
         let document = window.document().expect("should have a document");
         
-        // Hide all content
-        if let Some(system_content) = document.get_element_by_id("system-content") {
-            system_content.set_attribute("style", "display: block;").unwrap();
+        // Show main content, hide history content
+        if let Some(main_content) = document.get_element_by_id("main-content") {
+            main_content.set_attribute("style", "display: block;").unwrap();
         }
-        if let Some(task_content) = document.get_element_by_id("task-content") {
-            task_content.set_attribute("style", "display: none;").unwrap();
-        }
+        
         if let Some(history_content) = document.get_element_by_id("history-content") {
             history_content.set_attribute("style", "display: none;").unwrap();
         }
         
-        // Update tab classes
-        if let Some(system_tab) = document.get_element_by_id("system-tab") {
-            system_tab.set_class_name("tab-button active");
+        // Update active tab
+        if let Some(main_tab) = document.get_element_by_id("main-tab") {
+            main_tab.set_class_name("tab-button active");
         }
-        if let Some(task_tab) = document.get_element_by_id("task-tab") {
-            task_tab.set_class_name("tab-button");
-        }
+        
         if let Some(history_tab) = document.get_element_by_id("history-tab") {
             history_tab.set_class_name("tab-button");
         }
     }) as Box<dyn FnMut(_)>);
     
-    system_tab.add_event_listener_with_callback("click", system_click.as_ref().unchecked_ref())?;
-    system_click.forget();
-    
-    // Task tab click handler
-    let task_click = Closure::wrap(Box::new(move |_event: Event| {
-        let window = web_sys::window().expect("no global window exists");
-        let document = window.document().expect("should have a document");
-        
-        // Hide all content
-        if let Some(system_content) = document.get_element_by_id("system-content") {
-            system_content.set_attribute("style", "display: none;").unwrap();
-        }
-        if let Some(task_content) = document.get_element_by_id("task-content") {
-            task_content.set_attribute("style", "display: block;").unwrap();
-        }
-        if let Some(history_content) = document.get_element_by_id("history-content") {
-            history_content.set_attribute("style", "display: none;").unwrap();
-        }
-        
-        // Update tab classes
-        if let Some(system_tab) = document.get_element_by_id("system-tab") {
-            system_tab.set_class_name("tab-button");
-        }
-        if let Some(task_tab) = document.get_element_by_id("task-tab") {
-            task_tab.set_class_name("tab-button active");
-        }
-        if let Some(history_tab) = document.get_element_by_id("history-tab") {
-            history_tab.set_class_name("tab-button");
-        }
-    }) as Box<dyn FnMut(_)>);
-    
-    task_tab.add_event_listener_with_callback("click", task_click.as_ref().unchecked_ref())?;
-    task_click.forget();
+    main_tab.add_event_listener_with_callback(
+        "click",
+        main_click.as_ref().unchecked_ref(),
+    )?;
+    main_click.forget();
     
     // History tab click handler
     let history_click = Closure::wrap(Box::new(move |_event: Event| {
         let window = web_sys::window().expect("no global window exists");
         let document = window.document().expect("should have a document");
         
-        // Hide all content
-        if let Some(system_content) = document.get_element_by_id("system-content") {
-            system_content.set_attribute("style", "display: none;").unwrap();
+        // Hide main content, show history content
+        if let Some(main_content) = document.get_element_by_id("main-content") {
+            main_content.set_attribute("style", "display: none;").unwrap();
         }
-        if let Some(task_content) = document.get_element_by_id("task-content") {
-            task_content.set_attribute("style", "display: none;").unwrap();
-        }
+        
         if let Some(history_content) = document.get_element_by_id("history-content") {
             history_content.set_attribute("style", "display: block;").unwrap();
         }
         
-        // Update tab classes
-        if let Some(system_tab) = document.get_element_by_id("system-tab") {
-            system_tab.set_class_name("tab-button");
+        // Update active tab
+        if let Some(main_tab) = document.get_element_by_id("main-tab") {
+            main_tab.set_class_name("tab-button");
         }
-        if let Some(task_tab) = document.get_element_by_id("task-tab") {
-            task_tab.set_class_name("tab-button");
-        }
+        
         if let Some(history_tab) = document.get_element_by_id("history-tab") {
             history_tab.set_class_name("tab-button active");
         }
     }) as Box<dyn FnMut(_)>);
     
-    history_tab.add_event_listener_with_callback("click", history_click.as_ref().unchecked_ref())?;
+    history_tab.add_event_listener_with_callback(
+        "click",
+        history_click.as_ref().unchecked_ref(),
+    )?;
     history_click.forget();
     
     Ok(())
