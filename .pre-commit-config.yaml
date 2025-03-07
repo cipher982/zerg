@@ -1,0 +1,20 @@
+# Apply to all files without commiting:
+#   pre-commit run --all-files
+# Update this file:
+#   pre-commit autoupdate
+repos:
+  -   repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v4.6.0
+      hooks:
+        -   id: fix-byte-order-marker
+        -   id: check-case-conflict
+        -   id: check-executables-have-shebangs
+        -   id: check-json
+  -   repo: https://github.com/astral-sh/ruff-pre-commit
+      rev: v0.4.4
+      hooks:
+        -   id: ruff
+            args: ["--fix"]
+            files: ^backend/
+        -   id: ruff-format
+            files: ^backend/

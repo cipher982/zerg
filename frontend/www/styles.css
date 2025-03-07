@@ -191,3 +191,50 @@ button {
         box-sizing: border-box;
     }
 }
+
+/* Status colors */
+#status {
+    padding: 5px 10px;
+    border-radius: 4px;
+    color: white;
+    font-weight: 500;
+}
+
+#status.red {
+    background-color: #e74c3c;
+}
+
+#status.yellow {
+    background-color: #f1c40f;
+    color: #2c3e50;  /* darker text for better contrast on yellow */
+}
+
+#status.green {
+    background-color: #2ecc71;
+}
+
+/* Activity indicator (network port style) */
+#api-status {
+    padding: 5px 10px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    font-family: monospace;
+}
+
+#api-status::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #2c3e50;
+    box-shadow: 0 0 2px #2c3e50;
+    transition: all 0.05s ease; /* Super fast transition */
+}
+
+#api-status.flash::before {
+    background-color: #27ae60;
+    box-shadow: 0 0 4px #2ecc71;
+}
