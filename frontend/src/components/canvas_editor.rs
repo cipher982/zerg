@@ -140,7 +140,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         let y = event.offset_y() as f64;
         
         // First determine what was clicked
-        let (clicked_id, is_agent, offset_x, offset_y) = APP_STATE.with(|state| {
+        let (clicked_id, is_agent, offset_x, offset_y, auto_fit_was_enabled) = APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             
             // Check if we clicked on a node
@@ -156,7 +156,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 };
                 
                 // Return what was clicked with offsets
-                (Some(id), is_agent, offset_x, offset_y)
+                (Some(id), is_agent, offset_x, offset_y, false)
             } else {
                 // Nothing was clicked - prepare for canvas dragging
                 state.selected_node_id = None;
@@ -164,10 +164,28 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 state.drag_start_x = x;
                 state.drag_start_y = y;
                 
-                // Return empty values
-                (None, false, 0.0, 0.0)
+                // If in Auto Layout Mode, automatically switch to Manual Layout Mode
+                let auto_fit_was_enabled = state.auto_fit;
+                if auto_fit_was_enabled {
+                    state.auto_fit = false;
+                }
+                
+                // Return empty values with auto_fit_was_enabled flag
+                (None, false, 0.0, 0.0, auto_fit_was_enabled)
             }
         });
+        
+        // If auto-fit was enabled, update the toggle in the UI
+        if auto_fit_was_enabled {
+            // Update the toggle UI to match the new state
+            let window = web_sys::window().expect("no global window exists");
+            let document = window.document().expect("should have a document");
+            if let Some(toggle) = document.get_element_by_id("auto-fit-toggle") {
+                if let Some(checkbox) = toggle.dyn_ref::<web_sys::HtmlInputElement>() {
+                    checkbox.set_checked(false);
+                }
+            }
+        }
         
         // Check if a node was clicked
         if let Some(id) = clicked_id {
