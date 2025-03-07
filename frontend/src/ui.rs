@@ -93,7 +93,7 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     // Create instruction text
     let instruction_text = document.create_element("div")?;
     instruction_text.set_class_name("instruction-text");
-    instruction_text.set_inner_html("Type text in the input box above and send it to the AI. The response will appear as a connected node on the canvas. You can drag nodes around to organize them.");
+    // instruction_text.set_inner_html("Type text in the input box above and send it to the AI. The response will appear as a connected node on the canvas. You can drag nodes around to organize them.");
     
     // Add all components to app container
     app_container.append_child(&canvas_container)?;
@@ -216,7 +216,13 @@ fn setup_input_keypress_handler(document: &Document) -> Result<(), JsValue> {
 }
 
 fn send_user_input(text: &str) {
-    // Add a node for the user's input
+    // Generate a message ID
+    let message_id = APP_STATE.with(|state| {
+        let state = state.borrow();
+        state.generate_message_id()
+    });
+    
+    // Add a node for the user's input and pre-create a response node
     APP_STATE.with(|state| {
         let mut state = state.borrow_mut();
         state.input_text = text.to_string();
@@ -233,7 +239,18 @@ fn send_user_input(text: &str) {
             lowest_y + 50.0 // Position below the lowest node with spacing
         };
         
-        state.add_node(text.to_string(), 50.0, y_position, NodeType::UserInput);
+        // Create the user input node
+        let input_node_id = state.add_node(text.to_string(), 50.0, y_position, NodeType::UserInput);
+        
+        // Create empty response node with placeholder text and link it to the input node
+        let response_node_id = state.add_response_node(&input_node_id, "...".to_string());
+        
+        // Store a direct mapping from message_id to response node (not input node)
+        state.track_message(message_id.clone(), response_node_id);
+        
+        // Update latest user input ID
+        state.latest_user_input_id = Some(input_node_id);
+        
         state.draw_nodes();
         
         // Save state after adding the node
@@ -242,8 +259,8 @@ fn send_user_input(text: &str) {
         }
     });
     
-    // Send the text to the backend
-    send_text_to_backend(text);
+    // Send the text to the backend with the message ID
+    send_text_to_backend(text, message_id);
 }
 
 pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
@@ -481,18 +498,14 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     // Create an additional clone for use inside the closure
     let canvas_wheel_inside = canvas_wheel.clone();
     
-    let wheel_handler = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
-        let event_obj = event.clone();
-        
-        // Prevent default scrolling behavior
-        event.prevent_default();
-        
+    let wheel_handler = Closure::wrap(Box::new(move |event: web_sys::WheelEvent| {
+        // We won't prevent default since we want natural scrolling when not zooming
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             
             // Only allow manual zooming when auto-fit is disabled
             if !state.auto_fit {
-                // Get canvas dimensions to use center as zoom point (simpler approach)
+                // Get canvas dimensions to use center as zoom point
                 let canvas_width = canvas_wheel_inside.width() as f64;
                 let canvas_height = canvas_wheel_inside.height() as f64;
                 let window = web_sys::window().expect("no global window exists");
@@ -506,11 +519,8 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 let world_x = x / state.zoom_level + state.viewport_x;
                 let world_y = y / state.zoom_level + state.viewport_y;
                 
-                // Get wheel delta using JavaScript property access
-                let delta_y = js_sys::Reflect::get(&event_obj, &"deltaY".into())
-                    .unwrap_or(js_sys::Reflect::get(&event_obj, &"wheelDelta".into()).unwrap_or(0.0.into()))
-                    .as_f64()
-                    .unwrap_or(0.0);
+                // Get wheel delta
+                let delta_y = event.delta_y();
                 
                 // Adjust zoom based on wheel direction
                 let zoom_delta = if delta_y > 0.0 { 0.9 } else { 1.1 };
@@ -526,16 +536,9 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 state.draw_nodes();
             }
         });
-        
-        // Explicitly prevent default again to be extra safe
-        let _ = js_sys::Reflect::set(
-            &event,
-            &"returnValue".into(),
-            &false.into()
-        );
     }) as Box<dyn FnMut(_)>);
     
-    // Use both wheel and mousewheel for cross-browser compatibility
+    // Add wheel event listener with standard method
     canvas_wheel.add_event_listener_with_callback(
         "wheel",
         wheel_handler.as_ref().unchecked_ref(),
@@ -649,6 +652,41 @@ fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
     
     clear_button.add_event_listener_with_callback("click", click_callback.as_ref().unchecked_ref())?;
     click_callback.forget();
+    
+    Ok(())
+}
+
+pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
+    // Create header
+    let header = document.create_element("div")?;
+    header.set_class_name("header");
+    
+    let title = document.create_element("h1")?;
+    title.set_inner_html("AI Agent Platform");
+    header.append_child(&title)?;
+    
+    // Create status bar
+    let status_bar = document.create_element("div")?;
+    status_bar.set_class_name("status-bar");
+    
+    let status = document.create_element("div")?;
+    status.set_id("status");
+    status.set_class_name("yellow"); // Initial state
+    status.set_inner_html("Status: Connecting");
+    
+    let api_status = document.create_element("div")?;
+    api_status.set_id("api-status");
+    api_status.set_inner_html("API: Ready");
+    
+    status_bar.append_child(&status)?;
+    status_bar.append_child(&api_status)?;
+    
+    // Get body element
+    let body = document.body().ok_or(JsValue::from_str("No body found"))?;
+    
+    // Append header and status bar
+    body.append_child(&header)?;
+    body.append_child(&status_bar)?;
     
     Ok(())
 } 

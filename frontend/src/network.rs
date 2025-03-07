@@ -3,86 +3,141 @@ use web_sys::{WebSocket, MessageEvent};
 use crate::state::APP_STATE;
 use wasm_bindgen_futures::JsFuture;
 use js_sys::Array;
+use std::cell::RefCell;
+
+// Track reconnection attempts
+thread_local! {
+    static RECONNECT_ATTEMPT: RefCell<u32> = RefCell::new(0);
+}
+
+// Track packet counter for activity indicator
+thread_local! {
+    static PACKET_COUNTER: RefCell<u32> = RefCell::new(0);
+}
+
+fn get_backoff_ms(attempt: u32) -> u32 {
+    let base_delay = 1000; // Start with 1 second
+    let max_delay = 30000; // Cap at 30 seconds
+    let delay = base_delay * (2_u32.pow(attempt)); // Exponential backoff
+    delay.min(max_delay)
+}
+
+fn schedule_reconnect() {
+    let window = web_sys::window().expect("no global window exists");
+    
+    RECONNECT_ATTEMPT.with(|attempt| {
+        let current = *attempt.borrow();
+        let delay = get_backoff_ms(current);
+        *attempt.borrow_mut() = current + 1;
+        
+        let reconnect_callback = Closure::wrap(Box::new(move || {
+            if let Err(e) = setup_websocket() {
+                web_sys::console::error_1(&format!("Reconnection failed: {:?}", e).into());
+                schedule_reconnect(); // Try again if failed
+            }
+        }) as Box<dyn FnMut()>);
+
+        window.set_timeout_with_callback_and_timeout_and_arguments(
+            reconnect_callback.as_ref().unchecked_ref(),
+            delay as i32,
+            &Array::new(),
+        ).expect("Failed to set timeout");
+        
+        reconnect_callback.forget();
+    });
+}
+
+fn update_connection_status(status: &str, color: &str) {
+    if let Some(window) = web_sys::window() {
+        if let Some(document) = window.document() {
+            if let Some(status_element) = document.get_element_by_id("status") {
+                status_element.set_class_name(color);
+                status_element.set_inner_html(&format!("Status: {}", status));
+            }
+        }
+    }
+}
+
+fn flash_activity() {
+    if let Some(window) = web_sys::window() {
+        if let Some(document) = window.document() {
+            if let Some(status_element) = document.get_element_by_id("api-status") {
+                // Update packet counter
+                PACKET_COUNTER.with(|counter| {
+                    let count = *counter.borrow();
+                    *counter.borrow_mut() = count.wrapping_add(1);
+                    status_element.set_inner_html(&format!("PKT: {:08X}", count));
+                });
+
+                // Flash the LED
+                status_element.set_class_name("flash");
+                
+                // Remove flash after 50ms
+                let status_clone = status_element.clone();
+                let clear_callback = Closure::wrap(Box::new(move || {
+                    status_clone.set_class_name("");
+                }) as Box<dyn FnMut()>);
+                
+                window.set_timeout_with_callback_and_timeout_and_arguments(
+                    clear_callback.as_ref().unchecked_ref(),
+                    50, // Very quick flash
+                    &Array::new(),
+                ).expect("Failed to set timeout");
+                
+                clear_callback.forget();
+            }
+        }
+    }
+}
 
 pub fn setup_websocket() -> Result<(), JsValue> {
     // Create a new WebSocket connection
     let ws = WebSocket::new("ws://localhost:8001/ws")?;
     
+    // Set initial status
+    update_connection_status("Connecting", "yellow");
+    
+    // Set up open handler
+    let onopen_callback = Closure::wrap(Box::new(move |_: web_sys::Event| {
+        update_connection_status("Connected", "green");
+        flash_activity(); // Flash on connect
+        // Reset reconnection counter on successful connection
+        RECONNECT_ATTEMPT.with(|attempt| {
+            *attempt.borrow_mut() = 0;
+        });
+    }) as Box<dyn FnMut(web_sys::Event)>);
+    
+    ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
+    onopen_callback.forget();
+    
     // Set up message event handler
     let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
-        // Get the message data as string
-        let response_json = event.data().as_string().unwrap();
-        
-        // Parse the JSON response
-        let response: JsValue = js_sys::JSON::parse(&response_json).unwrap_or_else(|_| {
-            // If parsing fails, create a default object
-            web_sys::console::log_1(&"Failed to parse response JSON".into());
-            return JsValue::NULL;
-        });
-        
-        // Create a response node
-        APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            
-            // Extract the response text and message ID
-            let response_text = js_sys::Reflect::get(&response, &"response".into())
-                .unwrap_or_else(|_| "No response text".into())
-                .as_string()
-                .unwrap_or_else(|| "No response text".to_string());
-            
-            let message_id = js_sys::Reflect::get(&response, &"message_id".into())
-                .unwrap_or_else(|_| "".into())
-                .as_string()
-                .unwrap_or_else(|| "".to_string());
-            
-            // Find the corresponding node ID using the message ID
-            if !message_id.is_empty() {
-                if let Some(node_id) = state.get_node_id_for_message(&message_id) {
-                    // Clone the node_id to avoid borrowing state immutably while using it mutably
-                    let node_id_copy = node_id.clone();
-                    state.add_response_node(&node_id_copy, response_text);
-                    state.draw_nodes();
-                    return;
-                }
-            }
-            
-            // Fallback to using the latest user input if we can't find a matching message ID
-            if let Some(latest_input_id) = &state.latest_user_input_id {
-                // Clone the ID to avoid borrowing state immutably while using it mutably
-                let input_id_copy = latest_input_id.clone();
-                state.add_response_node(&input_id_copy, response_text);
-                state.draw_nodes();
-            } else {
-                web_sys::console::log_1(&"No user input node found to attach response".into());
-            }
-        });
-    }) as Box<dyn FnMut(_)>);
+        flash_activity(); // Flash on message
+        handle_websocket_message(event);
+    }) as Box<dyn FnMut(MessageEvent)>);
     
     ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
     onmessage_callback.forget();
     
     // Set up error handler
     let onerror_callback = Closure::wrap(Box::new(move |e: web_sys::Event| {
-        // Log more details about the error
-        web_sys::console::log_1(&"WebSocket error occurred:".into());
-        web_sys::console::log_1(&e);
-        
-        // Optionally could implement reconnection logic here
-        // For now just log the error
-    }) as Box<dyn FnMut(_)>);
+        update_connection_status("Error", "red");
+        web_sys::console::error_1(&format!("WebSocket error: {:?}", e).into());
+    }) as Box<dyn FnMut(web_sys::Event)>);
     
     ws.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
     onerror_callback.forget();
     
     // Set up close handler
-    let onclose_callback = Closure::wrap(Box::new(move |e: web_sys::Event| {
-        web_sys::console::log_1(&"WebSocket connection closed:".into());
-        web_sys::console::log_1(&e);
-    }) as Box<dyn FnMut(_)>);
+    let onclose_callback = Closure::wrap(Box::new(move |_: web_sys::Event| {
+        update_connection_status("Disconnected", "red");
+        schedule_reconnect();
+    }) as Box<dyn FnMut(web_sys::Event)>);
     
     ws.set_onclose(Some(onclose_callback.as_ref().unchecked_ref()));
     onclose_callback.forget();
     
+    // Store WebSocket instance
     APP_STATE.with(|state| {
         let mut state = state.borrow_mut();
         state.websocket = Some(ws);
@@ -91,27 +146,85 @@ pub fn setup_websocket() -> Result<(), JsValue> {
     Ok(())
 }
 
-pub fn send_text_to_backend(text: &str) {
-    // Generate a message ID
-    let message_id = APP_STATE.with(|state| {
-        let state = state.borrow();
-        state.generate_message_id()
+fn handle_websocket_message(event: MessageEvent) {
+    // Get the message data as string
+    let response_json = event.data().as_string().unwrap();
+    
+    // Parse the JSON response
+    let response: JsValue = js_sys::JSON::parse(&response_json).unwrap_or_else(|_| {
+        web_sys::console::error_1(&"Failed to parse response JSON".into());
+        return JsValue::NULL;
     });
+
+    // Extract message type and ID
+    let msg_type = js_sys::Reflect::get(&response, &"type".into())
+        .unwrap_or_else(|_| "".into())
+        .as_string()
+        .unwrap_or_else(|| "".to_string());
+    
+    let message_id = js_sys::Reflect::get(&response, &"message_id".into())
+        .unwrap_or_else(|_| "".into())
+        .as_string()
+        .unwrap_or_else(|| "".to_string());
+
+    // Handle the message based on type
+    APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        
+        if let Some(response_node_id) = state.get_node_id_for_message(&message_id) {
+            match msg_type.as_str() {
+                "chunk" => {
+                    // Extract the content from the chunk
+                    let content = js_sys::Reflect::get(&response, &"content".into())
+                        .unwrap_or_else(|_| "".into())
+                        .as_string()
+                        .unwrap_or_else(|| "".to_string());
+                    
+                    // Update the response node text
+                    if let Some(node) = state.nodes.get_mut(&response_node_id) {
+                        // If this is the first chunk, clear the placeholder
+                        if node.text == "..." {
+                            node.text = content;
+                        } else {
+                            node.text.push_str(&content);
+                        }
+                        
+                        // Update node size based on new content
+                        state.resize_node_for_content(&response_node_id);
+                        state.draw_nodes();
+                    } else {
+                        web_sys::console::error_1(&format!("Node not found: {}", response_node_id).into());
+                    }
+                },
+                "completion" => {
+                    state.draw_nodes();
+                },
+                _ => {
+                    // Handle legacy format
+                    if let Ok(response_text) = js_sys::Reflect::get(&response, &"response".into()) {
+                        if let Some(text) = response_text.as_string() {
+                            if let Some(node) = state.nodes.get_mut(&response_node_id) {
+                                node.text = text;
+                                state.resize_node_for_content(&response_node_id);
+                                state.draw_nodes();
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            web_sys::console::error_1(&format!("No node found for message_id: {}", message_id).into());
+        }
+    });
+}
+
+pub fn send_text_to_backend(text: &str, message_id: String) {
+    flash_activity(); // Flash on send
     
     // Get the selected model
     let selected_model = APP_STATE.with(|state| {
         let state = state.borrow();
         state.selected_model.clone()
-    });
-    
-    // Store the message ID mapping to the latest user input node
-    APP_STATE.with(|state| {
-        let mut state = state.borrow_mut();
-        if let Some(latest_input_id) = &state.latest_user_input_id {
-            // Clone the ID to avoid borrowing state immutably while using it mutably
-            let latest_id_copy = latest_input_id.clone();
-            state.track_message(message_id.clone(), latest_id_copy);
-        }
     });
     
     // Use the Fetch API to send data to the backend
@@ -145,11 +258,11 @@ pub fn send_text_to_backend(text: &str) {
     
     // Send the fetch request
     let _ = window.fetch_with_request(&request);
-    
-    // We're not handling the response here since we'll get it via WebSocket
 }
 
 pub async fn fetch_available_models() -> Result<(), JsValue> {
+    flash_activity(); // Flash when fetching models
+    
     let window = web_sys::window().expect("no global window exists");
     
     // Create request

@@ -121,7 +121,7 @@ impl AppState {
         id
     }
 
-    pub fn add_response_node(&mut self, parent_id: &str, response_text: String) {
+    pub fn add_response_node(&mut self, parent_id: &str, response_text: String) -> String {
         if let Some(parent) = self.nodes.get(parent_id) {
             // Position the response node below the parent with some offset
             let x = parent.x + 50.0; // Slight offset to the right
@@ -133,8 +133,13 @@ impl AppState {
             if let Some(response_node) = self.nodes.get_mut(&response_id) {
                 response_node.parent_id = Some(parent_id.to_string());
             }
+            
+            self.state_modified = true; // Mark state as modified
+            response_id
+        } else {
+            // If parent not found, generate a new ID anyway to avoid compilation errors
+            format!("node_{}", self.nodes.len())
         }
-        self.state_modified = true; // Mark state as modified
     }
     
     pub fn draw_nodes(&self) {
@@ -418,6 +423,21 @@ impl AppState {
             }
         } else {
             Ok(())
+        }
+    }
+
+    pub fn resize_node_for_content(&mut self, node_id: &str) {
+        if let Some(node) = self.nodes.get_mut(node_id) {
+            // Calculate approximate node size based on text content
+            let chars_per_line = 25; // Approximate chars per line
+            let lines = (node.text.len() as f64 / chars_per_line as f64).ceil() as usize;
+            
+            // Set minimum sizes but allow for growth
+            node.width = f64::max(200.0, chars_per_line as f64 * 8.0); // Estimate width based on chars
+            node.height = f64::max(80.0, lines as f64 * 20.0 + 40.0);  // Base height + lines
+            
+            // Mark state as modified
+            self.state_modified = true;
         }
     }
 }

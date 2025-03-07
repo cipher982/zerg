@@ -1,5 +1,6 @@
 use wasm_bindgen::prelude::*;
 use web_sys::window;
+use wasm_bindgen_futures::spawn_local;
 
 mod models;
 mod state;
@@ -12,11 +13,17 @@ mod storage;
 // Main entry point for the WASM application
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
-    // Set up the application
-    let window = web_sys::window().expect("no global window exists");
-    let document = window.document().expect("no document exists");
+    // Get the document
+    let window = web_sys::window().expect("no global `window` exists");
+    let document = window.document().expect("should have a document on window");
     
-    // Initialize the UI and canvas first
+    // Create base UI elements (header and status bar)
+    ui::create_base_ui(&document)?;
+    
+    // Set up the WebSocket connection
+    network::setup_websocket()?;
+    
+    // Set up the UI components and canvas
     ui::setup_ui(&document)?;
     ui::setup_canvas(&document)?;
     
@@ -25,9 +32,7 @@ pub fn start() -> Result<(), JsValue> {
         let mut state = state.borrow_mut();
         match storage::load_state(&mut state) {
             Ok(data_loaded) => {
-                // Call enforce_viewport_boundaries and handle the result properly
                 if data_loaded {
-                    // Only enforce boundaries if we loaded data
                     state.enforce_viewport_boundaries();
                 }
                 data_loaded
@@ -43,7 +48,6 @@ pub fn start() -> Result<(), JsValue> {
     if loaded_data {
         state::APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
-            // Make sure to fit nodes to view on initial load
             state.fit_nodes_to_view();
             state.draw_nodes();
         });
@@ -52,11 +56,15 @@ pub fn start() -> Result<(), JsValue> {
     // Generate favicon
     favicon::generate_favicon()?;
     
-    // Set up the WebSocket connection
-    network::setup_websocket()?;
-    
-    // Set up auto-save timer (every 30 seconds)
+    // Set up auto-save timer
     setup_auto_save_timer(30000)?;
+    
+    // Load available models
+    spawn_local(async {
+        if let Err(e) = network::fetch_available_models().await {
+            web_sys::console::log_1(&format!("Error fetching models: {:?}", e).into());
+        }
+    });
     
     Ok(())
 }

@@ -1,11 +1,15 @@
-import os
 import json
-from fastapi import FastAPI, WebSocket, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+import os
+from typing import List
+
 from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi import HTTPException
+from fastapi import WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from openai import OpenAI
-from typing import List, Dict, Any
+from pydantic import BaseModel
 
 # Load environment variables
 load_dotenv()
@@ -74,35 +78,52 @@ async def get_available_models():
 async def process_text(request: TextRequest):
     """Process text with OpenAI API."""
     try:
+        # Create streaming completion
         response = client.chat.completions.create(
-            model=request.model,  # Use the model from the request
+            model=request.model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": request.text},
             ],
             max_tokens=300,
+            stream=True,  # Enable streaming
         )
 
-        # Extract the response text
-        response_text = response.choices[0].message.content
+        accumulated_response = ""
 
-        print(f"Got response: {response_text}")
+        # Stream chunks to websocket clients
+        for chunk in response:
+            if chunk.choices[0].delta.content is not None:
+                content = chunk.choices[0].delta.content
+                accumulated_response += content
 
-        # Prepare response with message_id
-        response_data = {
-            "response": response_text,
-            "message_id": request.message_id  # Include the message_id in the response
+                # Prepare chunk data
+                chunk_data = {
+                    "type": "chunk",
+                    "content": content,
+                    "message_id": request.message_id,
+                }
+
+                # Broadcast chunk to all connected WebSocket clients
+                for websocket_client in connected_clients:
+                    try:
+                        await websocket_client.send_text(json.dumps(chunk_data))
+                    except Exception:
+                        connected_clients.remove(websocket_client)
+
+        # Send completion message
+        completion_data = {
+            "type": "completion",
+            "message_id": request.message_id,
         }
 
-        # Broadcast the response to all connected WebSocket clients
         for websocket_client in connected_clients:
             try:
-                await websocket_client.send_text(json.dumps(response_data))
+                await websocket_client.send_text(json.dumps(completion_data))
             except Exception:
-                # Remove clients that have disconnected
                 connected_clients.remove(websocket_client)
 
-        return TextResponse(response=response_text, message_id=request.message_id)
+        return TextResponse(response=accumulated_response, message_id=request.message_id)
     except Exception as e:
         import traceback
 
@@ -120,12 +141,18 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             # Keep the connection alive and wait for messages
-            data = await websocket.receive_text()
+            _ = await websocket.receive_text()
             # You can process incoming WebSocket messages here if needed
     except Exception:
         # Remove the client when they disconnect
         if websocket in connected_clients:
             connected_clients.remove(websocket)
+
+
+@app.get("/favicon.ico")
+async def get_favicon():
+    """Return a simple favicon."""
+    return Response(status_code=204)  # No content response, browser will use default favicon
 
 
 if __name__ == "__main__":
