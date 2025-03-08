@@ -55,6 +55,8 @@ pub fn start() -> Result<(), JsValue> {
                 if data_loaded {
                     state.enforce_viewport_boundaries();
                 }
+                // Always set Dashboard as the default view, regardless of stored preference
+                state.active_view = storage::ActiveView::Dashboard;
                 data_loaded
             },
             Err(e) => {
@@ -71,6 +73,82 @@ pub fn start() -> Result<(), JsValue> {
             state.fit_nodes_to_view();
             state.draw_nodes();
         });
+        
+        // Show the correct view based on active_view in state
+        state::APP_STATE.with(|state| {
+            let state = state.borrow();
+            let is_dashboard = matches!(state.active_view, storage::ActiveView::Dashboard);
+            
+            // Show dashboard or canvas based on stored state
+            if is_dashboard {
+                // Show dashboard, hide canvas
+                if let Some(container) = document.get_element_by_id("dashboard-container") {
+                    container.set_attribute("style", "display: block;").unwrap_or_default();
+                }
+                if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
+                    canvas_container.set_attribute("style", "display: none;").unwrap_or_default();
+                }
+                if let Some(input_panel) = document.get_element_by_id("input-panel") {
+                    input_panel.set_attribute("style", "display: none;").unwrap_or_default();
+                }
+                
+                // Update tab UI to match
+                if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
+                    dashboard_tab.set_class_name("tab-button active");
+                }
+                if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
+                    canvas_tab.set_class_name("tab-button");
+                }
+                
+                // Refresh the dashboard to make sure it displays current state
+                let _ = components::dashboard::refresh_dashboard(&document);
+            } else {
+                // Show canvas, hide dashboard
+                if let Some(container) = document.get_element_by_id("dashboard-container") {
+                    container.set_attribute("style", "display: none;").unwrap_or_default();
+                }
+                if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
+                    canvas_container.set_attribute("style", "display: block;").unwrap_or_default();
+                }
+                if let Some(input_panel) = document.get_element_by_id("input-panel") {
+                    input_panel.set_attribute("style", "display: block;").unwrap_or_default();
+                }
+                
+                // Update tab UI to match
+                if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
+                    dashboard_tab.set_class_name("tab-button");
+                }
+                if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
+                    canvas_tab.set_class_name("tab-button active");
+                }
+                
+                // Make sure canvas is properly sized
+                if let Some(canvas) = document.get_element_by_id("node-canvas") {
+                    if let Ok(canvas) = canvas.dyn_into::<web_sys::HtmlCanvasElement>() {
+                        let _ = components::canvas_editor::resize_canvas(&canvas);
+                    }
+                }
+            }
+        });
+    } else {
+        // If no data was loaded, default to showing the dashboard
+        if let Some(container) = document.get_element_by_id("dashboard-container") {
+            container.set_attribute("style", "display: block;").unwrap_or_default();
+        }
+        if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
+            canvas_container.set_attribute("style", "display: none;").unwrap_or_default();
+        }
+        if let Some(input_panel) = document.get_element_by_id("input-panel") {
+            input_panel.set_attribute("style", "display: none;").unwrap_or_default();
+        }
+        
+        // Update tab UI to match
+        if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
+            dashboard_tab.set_class_name("tab-button active");
+        }
+        if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
+            canvas_tab.set_class_name("tab-button");
+        }
     }
     
     // Generate favicon
@@ -139,6 +217,19 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
             if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
                 canvas_tab.set_class_name("tab-button");
             }
+            
+            // Update AppState with active view
+            state::APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.active_view = crate::storage::ActiveView::Dashboard;
+                let _ = state.save_if_modified();
+            });
+            
+            // Refresh UI after state change
+            let _ = state::AppState::refresh_ui_after_state_change();
+            
+            // Make sure dashboard is refreshed with latest data
+            let _ = components::dashboard::refresh_dashboard(&document);
         }) as Box<dyn FnMut(_)>);
         
         dashboard_tab.add_event_listener_with_callback("click", dashboard_click.as_ref().unchecked_ref())?;
@@ -172,6 +263,16 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
             if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
                 canvas_tab.set_class_name("tab-button active");
             }
+            
+            // Update AppState with active view
+            state::APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.active_view = crate::storage::ActiveView::Canvas;
+                let _ = state.save_if_modified();
+            });
+            
+            // Refresh UI after state change
+            let _ = state::AppState::refresh_ui_after_state_change();
             
             // Trigger canvas resize to ensure it renders correctly
             if let Some(canvas) = document.get_element_by_id("node-canvas") {

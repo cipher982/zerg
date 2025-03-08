@@ -4,7 +4,7 @@ use web_sys::{
     HtmlCanvasElement, 
     MouseEvent,
 };
-use crate::state::APP_STATE;
+use crate::state::{self, APP_STATE};
 use crate::models::NodeType;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -70,38 +70,39 @@ pub fn resize_canvas(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
         canvas.style().set_property("width", &format!("{}px", container_width))?;
         canvas.style().set_property("height", &format!("{}px", container_height))?;
         
-        // Update AppState with the new dimensions
-        APP_STATE.with(|state| {
+        // Update AppState with the new dimensions and check auto_fit setting
+        let (auto_fit, has_nodes) = APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             state.canvas_width = container_width as f64;
             state.canvas_height = container_height as f64;
+            (state.auto_fit, !state.nodes.is_empty())
         });
         
-        // Update viewport and redraw if necessary
+        // Reset canvas transform and apply scaling
         APP_STATE.with(|state| {
             let state = state.borrow();
-            
             if let Some(context) = &state.context {
                 // Reset transform first to avoid compounding scales
                 let _ = context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
                 
                 // Apply the device pixel ratio scaling
                 let _ = context.scale(dpr, dpr);
-                
-                // If auto-fit is enabled, refit the nodes
-                if state.auto_fit && !state.nodes.is_empty() {
-                    // We need to drop the immutable borrow to get a mutable one
-                    drop(state);
-                    
-                    APP_STATE.with(|state| {
-                        let mut state = state.borrow_mut();
-                        state.fit_nodes_to_view();
-                    });
-                } else {
-                    state.draw_nodes();
-                }
             }
         });
+        
+        // Handle auto-fit if needed
+        if auto_fit && has_nodes {
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.fit_nodes_to_view();
+            });
+        } else {
+            // Just redraw without auto-fit
+            APP_STATE.with(|state| {
+                let state = state.borrow();
+                state.draw_nodes();
+            });
+        }
     }
     
     Ok(())
@@ -248,9 +249,8 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 let world_y = y / state.zoom_level + state.viewport_y;
                 
                 state.update_node_position(&id, world_x - drag_offset_x, world_y - drag_offset_y);
-                
-                // After updating the node position, save state
-                let _ = state.save_if_modified();
+                drop(state);
+                let _ = refresh_dashboard_after_change();
             } else if state.canvas_dragging {
                 // Canvas dragging (new behavior)
                 // Calculate how far the mouse has moved since starting the drag
@@ -319,7 +319,8 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             state.canvas_dragging = false;
             
             // Save state after completing the drag
-            let _ = state.save_if_modified();
+            drop(state);
+            let _ = refresh_dashboard_after_change();
             
             // Return whether we should open modal and node ID
             (was_dragging_agent && was_click, node_id)
@@ -457,4 +458,16 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     wheel_handler.forget();
     
     Ok(())
+}
+
+// Helper function to refresh dashboard after node modifications
+fn refresh_dashboard_after_change() -> Result<(), JsValue> {
+    // Ensure state is saved
+    state::APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        let _ = state.save_if_modified();
+    });
+    
+    // Refresh UI after state changes
+    crate::state::AppState::refresh_ui_after_state_change()
 }

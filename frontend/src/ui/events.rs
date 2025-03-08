@@ -159,6 +159,9 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
                 }
             }
         });
+        
+        // Refresh UI after state changes to update dashboard
+        let _ = crate::state::AppState::refresh_ui_after_state_change();
     }) as Box<dyn FnMut(_)>);
     
     close_button.add_event_listener_with_callback(
@@ -230,18 +233,17 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
                             let reset_btn = Closure::once_into_js(move || {
                                 btn_clone.set_inner_html(&text_clone);
                             });
-                            
-                            window
-                                .set_timeout_with_callback_and_timeout_and_arguments(
-                                    reset_btn.as_ref().unchecked_ref(),
-                                    1500,  // 1.5 second delay
-                                    &js_sys::Array::new(),
-                                )
-                                .expect("Failed to set timeout");
+                            window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                reset_btn.as_ref().unchecked_ref(), 
+                                1500
+                            ).expect("Failed to set timeout");
                         }
                     }
                 }
             });
+            
+            // Refresh UI after state changes to update dashboard
+            let _ = crate::state::AppState::refresh_ui_after_state_change();
         }) as Box<dyn FnMut(_)>);
         
         save_button.add_event_listener_with_callback(
@@ -583,14 +585,9 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
             web_sys::console::log_1(&format!("Created new agent node: {}", node_id).into());
         });
         
-        // Also refresh the dashboard (even if it's not currently visible)
-        let window = web_sys::window().expect("no global window exists");
-        let document = window.document().expect("should have a document");
-        
-        if let Some(dashboard_container) = document.get_element_by_id("dashboard-container") {
-            if let Err(e) = crate::components::dashboard::render_dashboard(&document, &dashboard_container) {
-                web_sys::console::warn_1(&format!("Failed to refresh dashboard: {:?}", e).into());
-            }
+        // Refresh UI after state change
+        if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+            web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
         }
     }) as Box<dyn FnMut(_)>);
     
