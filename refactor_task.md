@@ -112,7 +112,12 @@ We've created views.rs with functions to render different parts of the UI:
 ────────────────────────────────────────────────────────────────
 **COMPLETED**
 
-We've implemented a simple "update, then render" strategy in the AppState::dispatch method.
+We've implemented a "dispatch-then-render" strategy where:
+1. The dispatch method returns a boolean indicating if a render is needed
+2. The caller checks this boolean and then explicitly calls refresh_ui_after_state_change
+3. This approach ensures we never try to borrow APP_STATE while already holding a mutable borrow
+
+This clean separation between state updates and rendering helped solve borrowing issues while maintaining the unidirectional data flow of the pattern.
 
 ────────────────────────────────────────────────────────────────
 9. ❌ OPTIONAL: INTRODUCE A "PROGRAM LOOP"  
@@ -140,6 +145,12 @@ We haven't implemented a program loop yet, as we're focusing on migrating existi
 4. **Testing**: We should add tests for the new message/update pattern to ensure it works correctly.
 
 5. **Performance**: The current implementation re-renders the entire UI on any state change. We might want to optimize this for larger applications.
+
+6. **Rust Borrowing Rules**: We encountered and fixed an issue with Rust's borrowing checker:
+   - Problem: The original implementation tried to refresh the UI while still holding a mutable borrow on APP_STATE
+   - Solution: Modified dispatch() to return a boolean indicating if refresh is needed instead of directly calling refresh
+   - Each event handler now follows a pattern of: borrow → dispatch → drop borrow → conditionally refresh
+   - This avoids "already mutably borrowed: BorrowError" panics by ensuring we never have nested borrows
 
 ## Next Priorities
 

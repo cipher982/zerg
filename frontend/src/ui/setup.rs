@@ -5,6 +5,7 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
     // Create header
     let header = document.create_element("div")?;
     header.set_class_name("header");
+    header.set_attribute("id", "header")?;
     
     let title = document.create_element("h1")?;
     title.set_inner_html("AI Agent Platform");
