@@ -1,6 +1,7 @@
 pub mod setup;
 pub mod events;
 pub mod main;
+pub mod modals;
 
 // Animation loop function
 pub fn setup_animation_loop() {
