@@ -117,8 +117,8 @@ pub fn update(state: &mut AppState, msg: Message) {
                 let dx = current_x - state.drag_last_x;
                 let dy = current_y - state.drag_last_y;
                 
-                state.viewport_x += dx;
-                state.viewport_y += dy;
+                state.viewport_x -= dx;
+                state.viewport_y -= dy;
                 
                 state.drag_last_x = current_x;
                 state.drag_last_y = current_y;
