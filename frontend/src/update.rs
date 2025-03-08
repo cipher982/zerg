@@ -132,6 +132,16 @@ pub fn update(state: &mut AppState, msg: Message) {
             state.state_modified = true;
         },
         
+        Message::ZoomCanvas { new_zoom, viewport_x, viewport_y } => {
+            state.zoom_level = new_zoom;
+            state.viewport_x = viewport_x;
+            state.viewport_y = viewport_y;
+            state.state_modified = true;
+            
+            // Redraw with the new zoom level
+            state.draw_nodes();
+        },
+        
         Message::SaveAgentDetails { name, system_instructions, task_instructions } => {
             if let Some(id) = &state.selected_node_id {
                 let id_clone = id.clone();

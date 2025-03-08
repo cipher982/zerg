@@ -38,6 +38,13 @@ pub enum Message {
     CenterView,                          // Center the canvas view
     ClearCanvas,                         // Clear all nodes from the canvas
     
+    // Canvas zooming
+    ZoomCanvas {
+        new_zoom: f64,
+        viewport_x: f64,
+        viewport_y: f64,
+    },
+    
     // Input handling
     UpdateInputText(String),             // Update the input text field
     

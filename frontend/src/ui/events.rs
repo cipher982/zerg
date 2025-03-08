@@ -4,9 +4,12 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use std::rc::Rc;
 use std::cell::RefCell;
-use crate::models::NodeType;
-use crate::messages::Message;
-use crate::state::AppState;
+use crate::{
+    messages::Message,
+    models::NodeType,
+    state::APP_STATE,
+};
+use web_sys::HtmlElement;
 
 // This will contain event handlers that we'll extract from ui.rs
 // For now, we just have stubs
@@ -29,7 +32,10 @@ pub fn setup_auto_fit_button_handler(document: &Document) -> Result<(), JsValue>
     
     let change_handler = Closure::wrap(Box::new(move |_event: Event| {
         // Use the new dispatch method with ToggleAutoFit message
-        let _ = AppState::dispatch(Message::ToggleAutoFit);
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            let _ = state.dispatch(Message::ToggleAutoFit);
+        });
     }) as Box<dyn FnMut(_)>);
     
     auto_fit_toggle.add_event_listener_with_callback(
@@ -49,7 +55,11 @@ pub fn setup_center_view_handler(document: &Document) -> Result<(), JsValue> {
         .ok_or_else(|| JsValue::from_str("Center button not found"))?;
     
     let click_callback = Closure::wrap(Box::new(move |_event: Event| {
-        let _ = AppState::dispatch(Message::CenterView);
+        // Use the new dispatch method with CenterView message
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            let _ = state.dispatch(Message::CenterView);
+        });
     }) as Box<dyn FnMut(_)>);
     
     center_button.add_event_listener_with_callback(
@@ -74,7 +84,10 @@ pub fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
         
         if confirm {
             // Use the new dispatch method with ClearCanvas message
-            let _ = AppState::dispatch(Message::ClearCanvas);
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                let _ = state.dispatch(Message::ClearCanvas);
+            });
             
             // Clear storage
             if let Err(e) = crate::storage::clear_storage() {
@@ -124,14 +137,20 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         let task_instructions = default_task_textarea.value();
         
         // Save agent details using the new message pattern
-        let _ = AppState::dispatch(Message::SaveAgentDetails {
-            name: name_value,
-            system_instructions,
-            task_instructions,
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            let _ = state.dispatch(Message::SaveAgentDetails {
+                name: name_value,
+                system_instructions,
+                task_instructions,
+            });
         });
         
         // Close the modal using the new message pattern
-        let _ = AppState::dispatch(Message::CloseAgentModal);
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            let _ = state.dispatch(Message::CloseAgentModal);
+        });
     }) as Box<dyn FnMut(_)>);
     
     close_button.add_event_listener_with_callback(
@@ -180,10 +199,13 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
             };
             
             // Save agent details using the new message pattern
-            let _ = AppState::dispatch(Message::SaveAgentDetails {
-                name: name_value,
-                system_instructions,
-                task_instructions,
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                let _ = state.dispatch(Message::SaveAgentDetails {
+                    name: name_value,
+                    system_instructions,
+                    task_instructions,
+                });
             });
             
             // Show a temporary "Saved!" message
@@ -215,7 +237,10 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
     if let Some(send_button) = document.get_element_by_id("send-to-agent") {
         let send_handler = Closure::wrap(Box::new(move |_event: Event| {
             // Use the new message pattern
-            let _ = AppState::dispatch(Message::SendTaskToAgent);
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                let _ = state.dispatch(Message::SendTaskToAgent);
+            });
         }) as Box<dyn FnMut(_)>);
         
         send_button.add_event_listener_with_callback(
@@ -254,7 +279,10 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         let system_instructions_clone = system_instructions.clone();
         let save_function = Closure::once_into_js(move || {
             // Use the new message pattern
-            let _ = AppState::dispatch(Message::UpdateSystemInstructions(system_instructions_clone));
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                let _ = state.dispatch(Message::UpdateSystemInstructions(system_instructions_clone));
+            });
         });
         
         // Set new timeout (500ms debounce)
@@ -289,7 +317,7 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         
         // Get the current value from the input field
         let name_elem = document.get_element_by_id("agent-name").unwrap();
-        let name_input = name_elem.dyn_ref::<HtmlInputElement>().unwrap();
+        let name_input = name_elem.dyn_ref::<web_sys::HtmlInputElement>().unwrap();
         let name_value = name_input.value();
         
         // Only proceed if name is not empty
@@ -306,7 +334,10 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         let name_value_clone = name_value.clone();
         let save_function = Closure::once_into_js(move || {
             // Use the new message pattern
-            let _ = AppState::dispatch(Message::UpdateAgentName(name_value_clone));
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                let _ = state.dispatch(Message::UpdateAgentName(name_value_clone));
+            });
         });
         
         // Set new timeout (500ms debounce)
@@ -342,7 +373,10 @@ fn setup_tab_handlers(document: &Document) -> Result<(), JsValue> {
     // Main tab click handler
     let main_click = Closure::wrap(Box::new(move |_event: Event| {
         // Use the new message pattern
-        let _ = AppState::dispatch(Message::SwitchToMainTab);
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            let _ = state.dispatch(Message::SwitchToMainTab);
+        });
     }) as Box<dyn FnMut(_)>);
     
     main_tab.add_event_listener_with_callback(
@@ -354,7 +388,10 @@ fn setup_tab_handlers(document: &Document) -> Result<(), JsValue> {
     // History tab click handler
     let history_click = Closure::wrap(Box::new(move |_event: Event| {
         // Use the new message pattern
-        let _ = AppState::dispatch(Message::SwitchToHistoryTab);
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            let _ = state.dispatch(Message::SwitchToHistoryTab);
+        });
     }) as Box<dyn FnMut(_)>);
     
     history_tab.add_event_listener_with_callback(
@@ -373,13 +410,16 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
     
     let click_callback = Closure::wrap(Box::new(move |_event: MouseEvent| {
         // Use the new dispatch method with AddNode message
-        let _ = AppState::dispatch(Message::AddNode {
-            text: "New Agent".to_string(),
-            // Calculate position - we need to get the viewport center
-            // This logic is now handled in the update function
-            x: 0.0, // Will be calculated in update
-            y: 0.0, // Will be calculated in update
-            node_type: NodeType::AgentIdentity
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            let _ = state.dispatch(Message::AddNode {
+                text: "New Agent".to_string(),
+                // Calculate position - we need to get the viewport center
+                // This logic is now handled in the update function
+                x: 0.0, // Will be calculated in update
+                y: 0.0, // Will be calculated in update
+                node_type: NodeType::AgentIdentity
+            });
         });
     }) as Box<dyn FnMut(_)>);
     
