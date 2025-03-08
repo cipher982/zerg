@@ -30,6 +30,7 @@ pub struct Node {
     
     // New fields for agent functionality
     pub system_instructions: Option<String>,  // System-level instructions for agents
+    pub task_instructions: Option<String>,    // Persistent task instructions for what the agent should do when run
     pub history: Option<Vec<Message>>,        // Conversation history for this node
     pub status: Option<String>,               // "idle", "processing", "error", etc.
 } 
