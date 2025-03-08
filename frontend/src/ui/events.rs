@@ -564,7 +564,7 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
             let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0; // Center - half node height
             
             // Create a new agent node
-            let _node_id = state.add_node(
+            let node_id = state.add_node(
                 "New Agent".to_string(),
                 x,
                 y,
@@ -575,12 +575,23 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
             state.draw_nodes();
             
             // Save state after adding the node
+            state.state_modified = true;
             if let Err(e) = state.save_if_modified() {
                 web_sys::console::error_1(&format!("Failed to save state: {:?}", e).into());
             }
             
-            web_sys::console::log_1(&"Created new agent node".into());
+            web_sys::console::log_1(&format!("Created new agent node: {}", node_id).into());
         });
+        
+        // Also refresh the dashboard (even if it's not currently visible)
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("should have a document");
+        
+        if let Some(dashboard_container) = document.get_element_by_id("dashboard-container") {
+            if let Err(e) = crate::components::dashboard::render_dashboard(&document, &dashboard_container) {
+                web_sys::console::warn_1(&format!("Failed to refresh dashboard: {:?}", e).into());
+            }
+        }
     }) as Box<dyn FnMut(_)>);
     
     create_agent_button.add_event_listener_with_callback(
