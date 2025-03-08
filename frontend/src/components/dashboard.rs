@@ -2,15 +2,21 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, HtmlElement};
 use crate::state::APP_STATE;
-use crate::models::{NodeType, Message};
+use crate::models::NodeType;
 
 // Agent status for displaying in the dashboard
 #[derive(Clone, Debug, PartialEq)]
 pub enum AgentStatus {
-    Active,
+    // Agent is currently busy with a task
+    Running,
+    // Agent exists but isn't processing anything right now
     Idle,
+    // Agent is in an error state
     Error,
+    // Agent's next run is set for a future time
     Scheduled,
+    // Agent is created but intentionally blocked from running
+    Paused,
 }
 
 // Agent data structure for the dashboard
@@ -23,6 +29,7 @@ pub struct Agent {
     pub next_run: Option<String>,
     pub success_rate: f64,
     pub run_count: u32,
+    pub last_run_success: Option<bool>,
 }
 
 impl Agent {
@@ -35,6 +42,7 @@ impl Agent {
             next_run: None,
             success_rate: 0.0,
             run_count: 0,
+            last_run_success: None,
         }
     }
 }
@@ -260,14 +268,38 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     status_indicator.set_class_name(&format!("status-indicator status-{:?}", agent.status).to_lowercase());
     
     let status_text = match agent.status {
-        AgentStatus::Active => "● Active",
+        AgentStatus::Running => "● Running",
         AgentStatus::Idle => "○ Idle",
         AgentStatus::Error => "⚠ Error",
         AgentStatus::Scheduled => "⏱ Scheduled",
+        AgentStatus::Paused => "⏸ Paused",
     };
     
     status_indicator.set_inner_html(status_text);
     status_cell.append_child(&status_indicator)?;
+    
+    // Add last run success/failure indicator if available
+    if let Some(success) = agent.last_run_success {
+        let last_run_indicator = document.create_element("span")?;
+        last_run_indicator.set_class_name(
+            if success {
+                "last-run-indicator last-run-success"
+            } else {
+                "last-run-indicator last-run-failure"
+            }
+        );
+        
+        last_run_indicator.set_inner_html(
+            if success {
+                " (Last: ✓)"
+            } else {
+                " (Last: ✗)"
+            }
+        );
+        
+        status_cell.append_child(&last_run_indicator)?;
+    }
+    
     row.append_child(&status_cell)?;
     
     // Last Run cell
@@ -432,63 +464,85 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
 fn get_agents_from_app_state() -> Vec<Agent> {
     let mut agents = Vec::new();
     
-    // Define agent_data outside the with() closure so it's in scope for later use
-    let agent_data = APP_STATE.with(|state| {
-        // Create a non-mutable borrow to avoid conflicts with other parts of the code
+    APP_STATE.with(|state| {
         let state = state.borrow();
         
-        // Collect all relevant agent information first while holding the borrow
-        let data: Vec<(String, String, Option<String>, Option<Vec<Message>>)> = state.nodes.iter()
-            .filter(|(_, node)| node.node_type == NodeType::AgentIdentity)
-            .map(|(id, node)| (
-                id.clone(),
-                node.text.clone(),
-                node.status.clone(),
-                node.history.clone()
-            ))
-            .collect();
-        
-        // Return the data so it's assigned to agent_data
-        data
+        // Get agents from node data
+        for (id, node) in &state.nodes {
+            if node.node_type == NodeType::AgentIdentity {
+                // Get agent status
+                let status_str = node.status.clone();
+                
+                // Get message history from node's history field
+                let history = node.history.clone();
+                
+                agents.push((
+                    id.clone(), 
+                    node.text.clone(), 
+                    status_str, 
+                    history
+                ));
+            }
+        }
     });
     
-    // Process the collected data without holding the borrow
-    for (id, name, status_str, history) in agent_data {
+    // Sort by name
+    agents.sort_by(|a, b| a.1.cmp(&b.1));
+    
+    // Convert to Agent objects
+    let mut agent_objects = Vec::new();
+    
+    for (id, name, status_str, history) in agents {
         // Convert node status to AgentStatus
         let status = match status_str.as_deref() {
-            Some("processing") => AgentStatus::Active,
+            Some("processing") => AgentStatus::Running,
             Some("error") => AgentStatus::Error,
             Some("scheduled") => AgentStatus::Scheduled,
+            Some("paused") => AgentStatus::Paused,
+            Some("idle") => AgentStatus::Idle,
+            None => AgentStatus::Idle,
             _ => AgentStatus::Idle, // Default to idle
         };
         
         // Get last run from history if available
-        let last_run = if let Some(history_vec) = &history {
+        let (last_run, last_run_success) = if let Some(history_vec) = &history {
             if !history_vec.is_empty() {
                 // Format timestamp to human-readable format
-                let timestamp = history_vec.last().unwrap().timestamp;
+                let last_message = history_vec.last().unwrap();
+                let timestamp = last_message.timestamp;
                 let date = js_sys::Date::new(&JsValue::from_f64(timestamp as f64));
-                Some(format!(
+                
+                let formatted_date = format!(
                     "{:02}/{:02} {:02}:{:02}",
                     date.get_month() + 1, // JS months are 0-indexed
                     date.get_date(),
                     date.get_hours(),
                     date.get_minutes()
-                ))
+                );
+                
+                // For last run success, check if the message has an error content
+                // For now, we'll assume errors contain the word "error" in the content
+                let success = !last_message.content.to_lowercase().contains("error");
+                
+                (Some(formatted_date), Some(success))
             } else {
-                None
+                (None, None)
             }
         } else {
-            None
+            (None, None)
         };
         
         // Calculate success rate
         let (success_rate, run_count) = if let Some(history_vec) = &history {
             let total = history_vec.len();
-            // For demonstration, assume most messages are successful
-            let successes = total.saturating_sub(total / 10); // 90% success rate as a demo
             
             if total > 0 {
+                // Count successful messages (those without errors)
+                // For now we'll use a simple heuristic - messages without "error" in content
+                let successes = history_vec.iter()
+                    .filter(|msg| !msg.content.to_lowercase().contains("error"))
+                    .count();
+                
                 ((successes as f64 / total as f64) * 100.0, total as u32)
             } else {
                 (0.0, 0)
@@ -503,13 +557,15 @@ fn get_agents_from_app_state() -> Vec<Agent> {
         // Update additional fields
         agent.status = status;
         agent.last_run = last_run;
+        agent.next_run = None; // This would need to be populated from actual scheduling data
         agent.success_rate = success_rate;
         agent.run_count = run_count as u32;
+        agent.last_run_success = last_run_success;
         
-        agents.push(agent);
+        agent_objects.push(agent);
     }
     
-    agents
+    agent_objects
 }
 
 // Function to refresh the dashboard based on the latest state
