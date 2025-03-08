@@ -510,7 +510,7 @@ impl AppState {
     }
 
     // New dispatch method to handle messages
-    pub fn dispatch(&mut self, msg: Message) -> bool {
+    pub fn dispatch(&mut self, msg: Message) -> (bool, Option<(String, String)>) {
         update(self, msg);
         
         // Check if there's a pending network call
@@ -523,15 +523,8 @@ impl AppState {
             }
         }
         
-        // Return true to indicate that UI refresh is needed
-        let need_refresh = true;
-        
-        // If there was a pending network call, execute it now that the borrow is dropped
-        if let Some((task_text, message_id)) = pending_call {
-            crate::network::send_text_to_backend(&task_text, message_id);
-        }
-        
-        need_refresh
+        // Return true to indicate that UI refresh is needed, along with any pending network call
+        (true, pending_call)
     }
 }
 

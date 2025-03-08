@@ -300,8 +300,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let run_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
         
-        // Dispatch SendTaskToAgent message
-        let need_refresh = {
+        // Dispatch SendTaskToAgent message and capture both the need_refresh flag and any pending network call
+        let (need_refresh, pending_call) = {
             // Scope the mutable borrow so it's dropped before refresh_ui_after_state_change
             APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
@@ -319,6 +319,11 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
             if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
                 web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
             }
+        }
+        
+        // Now that we've completely dropped the borrow, we can execute the network call
+        if let Some((task_text, message_id)) = pending_call {
+            crate::network::send_text_to_backend(&task_text, message_id);
         }
     }) as Box<dyn FnMut(_)>);
     
