@@ -81,7 +81,7 @@ fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
     }
 }
 
-fn draw_node(_state: &AppState, node: &Node, context: &CanvasRenderingContext2d) {
+pub fn draw_node(_state: &AppState, node: &Node, context: &CanvasRenderingContext2d) {
     // Draw the appropriate node shape based on type
     match node.node_type {
         NodeType::UserInput => {

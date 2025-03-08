@@ -11,6 +11,9 @@ mod network;
 mod favicon;
 mod storage;
 mod components;
+mod messages;  // New module for Message enum
+mod update;    // New module for update function
+mod views;     // New module for view functions
 
 // Main entry point for the WASM application
 #[wasm_bindgen(start)]
@@ -193,43 +196,8 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     // Set up dashboard tab click handler
     {
         let dashboard_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
-            let window = web_sys::window().expect("no global window exists");
-            let document = window.document().expect("should have document on window");
-            
-            // Show dashboard, hide canvas
-            if let Some(container) = document.get_element_by_id("dashboard-container") {
-                container.set_attribute("style", "display: block;").unwrap();
-            }
-            
-            if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
-                canvas_container.set_attribute("style", "display: none;").unwrap();
-            }
-            
-            if let Some(input_panel) = document.get_element_by_id("input-panel") {
-                input_panel.set_attribute("style", "display: none;").unwrap();
-            }
-            
-            // Update active tab
-            if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
-                dashboard_tab.set_class_name("tab-button active");
-            }
-            
-            if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
-                canvas_tab.set_class_name("tab-button");
-            }
-            
-            // Update AppState with active view
-            state::APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.active_view = crate::storage::ActiveView::Dashboard;
-                let _ = state.save_if_modified();
-            });
-            
-            // Refresh UI after state change
-            let _ = state::AppState::refresh_ui_after_state_change();
-            
-            // Make sure dashboard is refreshed with latest data
-            let _ = components::dashboard::refresh_dashboard(&document);
+            // Use the new dispatch method with ToggleView message
+            let _ = state::AppState::dispatch(messages::Message::ToggleView(storage::ActiveView::Dashboard));
         }) as Box<dyn FnMut(_)>);
         
         dashboard_tab.add_event_listener_with_callback("click", dashboard_click.as_ref().unchecked_ref())?;
@@ -239,57 +207,18 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     // Set up canvas tab click handler
     {
         let canvas_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
-            let window = web_sys::window().expect("no global window exists");
-            let document = window.document().expect("should have document on window");
-            
-            // Show canvas, hide dashboard
-            if let Some(container) = document.get_element_by_id("dashboard-container") {
-                container.set_attribute("style", "display: none;").unwrap();
-            }
-            
-            if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
-                canvas_container.set_attribute("style", "display: block;").unwrap();
-            }
-            
-            if let Some(input_panel) = document.get_element_by_id("input-panel") {
-                input_panel.set_attribute("style", "display: block;").unwrap();
-            }
-            
-            // Update active tab
-            if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
-                dashboard_tab.set_class_name("tab-button");
-            }
-            
-            if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
-                canvas_tab.set_class_name("tab-button active");
-            }
-            
-            // Update AppState with active view
-            state::APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.active_view = crate::storage::ActiveView::Canvas;
-                let _ = state.save_if_modified();
-            });
-            
-            // Refresh UI after state change
-            let _ = state::AppState::refresh_ui_after_state_change();
-            
-            // Trigger canvas resize to ensure it renders correctly
-            if let Some(canvas) = document.get_element_by_id("node-canvas") {
-                let canvas = canvas.dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
-                let _ = components::canvas_editor::resize_canvas(&canvas);
-            }
+            // Use the new dispatch method with ToggleView message
+            let _ = state::AppState::dispatch(messages::Message::ToggleView(storage::ActiveView::Canvas));
         }) as Box<dyn FnMut(_)>);
         
         canvas_tab.add_event_listener_with_callback("click", canvas_click.as_ref().unchecked_ref())?;
         canvas_click.forget();
     }
     
-    // Insert tabs container after header but before status bar
-    if let Some(status_bar) = document.query_selector(".status-bar")?.and_then(|e| Some(e)) {
-        let body = document.body().unwrap();
-        body.insert_before(&tabs_container, Some(&status_bar))?;
-    }
+    // Add the tabs container to the document
+    let header = document.get_element_by_id("header")
+        .ok_or_else(|| JsValue::from_str("Header not found"))?;
+    header.append_child(&tabs_container)?;
     
     Ok(())
 }

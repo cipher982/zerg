@@ -542,15 +542,13 @@ fn get_agents_from_app_state() -> Vec<Agent> {
         };
         
         // Create agent object
-        let agent = Agent {
-            id,
-            name,
-            status,
-            last_run,
-            next_run: None, // Not implemented in the current system
-            success_rate,
-            run_count: run_count as u32,
-        };
+        let mut agent = Agent::new(id, name);
+        
+        // Update additional fields
+        agent.status = status;
+        agent.last_run = last_run;
+        agent.success_rate = success_rate;
+        agent.run_count = run_count as u32;
         
         agents.push(agent);
     }
