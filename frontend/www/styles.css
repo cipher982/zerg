@@ -619,9 +619,21 @@ button {
     color: #3498db;
 }
 
+.agents-table th.actions-header {
+    width: 108px;
+    min-width: 108px;
+    max-width: 108px;
+}
+
 .actions-cell {
     white-space: nowrap;
     text-align: right;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    width: 108px;
+    min-width: 108px;
+    max-width: 108px;
 }
 
 .action-btn {
@@ -635,6 +647,9 @@ button {
     border-radius: 4px;
     color: #eee;
     transition: background 0.2s, transform 0.1s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .action-btn:hover {

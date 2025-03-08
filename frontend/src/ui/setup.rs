@@ -111,23 +111,23 @@ pub fn create_agent_input_modal(document: &Document) -> Result<(), JsValue> {
     system_textarea.set_attribute("rows", "6")?;
     system_textarea.set_attribute("placeholder", "Enter system-level instructions for this agent...")?;
     
-    // Add task input field
-    let task_label = document.create_element("label")?;
-    task_label.set_inner_html("Task Input:");
-    task_label.set_attribute("for", "task-input")?;
+    // Add default task instructions field
+    let default_task_label = document.create_element("label")?;
+    default_task_label.set_inner_html("Task Instructions:");
+    default_task_label.set_attribute("for", "default-task-instructions")?;
     
-    let task_input = document.create_element("textarea")?;
-    task_input.set_id("task-input");
-    task_input.set_attribute("rows", "4")?;
-    task_input.set_attribute("placeholder", "Enter specific task or question for this agent...")?;
+    let default_task_textarea = document.create_element("textarea")?;
+    default_task_textarea.set_id("default-task-instructions");
+    default_task_textarea.set_attribute("rows", "4")?;
+    default_task_textarea.set_attribute("placeholder", "Optional task instructions that will be used when running this agent. If empty, a default 'begin' prompt will be used.")?;
     
     // Add all fields to main content
     main_content.append_child(&name_label)?;
     main_content.append_child(&name_input)?;
     main_content.append_child(&system_label)?;
     main_content.append_child(&system_textarea)?;
-    main_content.append_child(&task_label)?;
-    main_content.append_child(&task_input)?;
+    main_content.append_child(&default_task_label)?;
+    main_content.append_child(&default_task_textarea)?;
     
     // Create history section
     let history_content = document.create_element("div")?;

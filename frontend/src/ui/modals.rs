@@ -6,17 +6,18 @@ use crate::state::APP_STATE;
 /// Opens the agent modal with the data from the specified node
 pub fn open_agent_modal(document: &Document, node_id: &str) -> Result<(), JsValue> {
     // Get agent data first
-    let (node_text, system_instructions, history_data) = APP_STATE.with(|state| {
+    let (node_text, system_instructions, task_instructions, history_data) = APP_STATE.with(|state| {
         let state = state.borrow();
         
         if let Some(node) = state.nodes.get(node_id) {
             (
                 node.text.clone(),
                 node.system_instructions.clone().unwrap_or_default(),
+                node.task_instructions.clone().unwrap_or_default(),
                 node.history.clone().unwrap_or_default()
             )
         } else {
-            (String::new(), String::new(), Vec::new())
+            (String::new(), String::new(), String::new(), Vec::new())
         }
     });
     
@@ -37,6 +38,13 @@ pub fn open_agent_modal(document: &Document, node_id: &str) -> Result<(), JsValu
     if let Some(system_elem) = document.get_element_by_id("system-instructions") {
         if let Some(system_textarea) = system_elem.dyn_ref::<HtmlTextAreaElement>() {
             system_textarea.set_value(&system_instructions);
+        }
+    }
+    
+    // Load default task instructions
+    if let Some(task_elem) = document.get_element_by_id("default-task-instructions") {
+        if let Some(task_textarea) = task_elem.dyn_ref::<HtmlTextAreaElement>() {
+            task_textarea.set_value(&task_instructions);
         }
     }
     

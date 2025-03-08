@@ -137,6 +137,11 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         let system_textarea = system_elem.dyn_ref::<HtmlTextAreaElement>().unwrap();
         let system_instructions = system_textarea.value();
         
+        // Get default task instructions
+        let default_task_elem = document.get_element_by_id("default-task-instructions").unwrap();
+        let default_task_textarea = default_task_elem.dyn_ref::<HtmlTextAreaElement>().unwrap();
+        let task_instructions = default_task_textarea.value();
+        
         // Save system instructions to the selected node
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
@@ -150,6 +155,9 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
                     
                     // Update system instructions
                     node.system_instructions = Some(system_instructions.clone());
+                    
+                    // Update default task instructions
+                    node.task_instructions = Some(task_instructions.clone());
                     
                     state.state_modified = true;
                     let _ = state.save_if_modified();
@@ -259,90 +267,85 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
             let window = web_sys::window().expect("no global window exists");
             let document = window.document().expect("should have a document");
             
-            if let Some(task_elem) = document.get_element_by_id("task-input") {
-                if let Some(task_textarea) = task_elem.dyn_ref::<HtmlTextAreaElement>() {
-                    let task_text = task_textarea.value();
+            // Get the task instructions using our helper method
+            let message_id_and_task = APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                if let Some(agent_id) = &state.selected_node_id {
+                    let agent_id_clone = agent_id.clone();
                     
-                    if !task_text.trim().is_empty() {
-                        // Get the agent ID
-                        let message_id_and_task = APP_STATE.with(|state| {
-                            let mut state = state.borrow_mut();
-                            if let Some(agent_id) = &state.selected_node_id {
-                                let agent_id_clone = agent_id.clone();
-                                
-                                // Get model and system instructions
-                                let _model = state.selected_model.clone();
-                                let _system_instructions = state.nodes.get(&agent_id_clone)
-                                    .and_then(|node| node.system_instructions.clone())
-                                    .unwrap_or_default();
-                                
-                                // Create a message ID
-                                let message_id = state.generate_message_id();
-                                
-                                // Create a response node
-                                if let Some(agent_node) = state.nodes.get_mut(&agent_id_clone) {
-                                    // Create a new message for the history
-                                    let user_message = crate::models::Message {
-                                        role: "user".to_string(),
-                                        content: task_text.clone(),
-                                        timestamp: js_sys::Date::now() as u64,
-                                    };
-                                    
-                                    // Add to history if it exists
-                                    if let Some(history) = &mut agent_node.history {
-                                        history.push(user_message);
-                                    } else {
-                                        agent_node.history = Some(vec![user_message]);
-                                    }
-                                    
-                                    // Update agent status
-                                    agent_node.status = Some("processing".to_string());
-                                }
-                                
-                                // Adjust viewport to fit all nodes
-                                if state.auto_fit {
-                                    state.fit_nodes_to_view();
-                                }
-                                
-                                // Add a response node (this creates a visual node for the response)
-                                let response_node_id = state.add_response_node(&agent_id_clone, "...".to_string());
-                                
-                                // Track the message ID to node ID mapping
-                                state.track_message(message_id.clone(), response_node_id);
-                                
-                                // Save the state and mark as modified
-                                let _ = state.save_if_modified();
-                                
-                                // Return the data we need after the borrow ends
-                                Some((message_id, task_text.clone()))
-                            } else {
-                                None
-                            }
-                        });
+                    // Get the task instructions using our helper method
+                    let task_text = state.get_task_instructions_with_fallback(&agent_id_clone);
+                    
+                    // Get model and system instructions
+                    let _model = state.selected_model.clone();
+                    let _system_instructions = state.nodes.get(&agent_id_clone)
+                        .and_then(|node| node.system_instructions.clone())
+                        .unwrap_or_default();
+                    
+                    // Create a message ID
+                    let message_id = state.generate_message_id();
+                    
+                    // Create a response node
+                    if let Some(agent_node) = state.nodes.get_mut(&agent_id_clone) {
+                        // Create a new message for the history
+                        let user_message = crate::models::Message {
+                            role: "user".to_string(),
+                            content: task_text.clone(),
+                            timestamp: js_sys::Date::now() as u64,
+                        };
                         
-                        // Process the agent request if we have a message ID
-                        if let Some((message_id, task_text)) = message_id_and_task {
-                            // Send to backend (use the network module's implementation)
-                            crate::network::send_text_to_backend(&task_text, message_id);
-                            
-                            // Clear the task input field
-                            task_textarea.set_value("");
-                            
-                            // Show a success message
-                            web_sys::console::log_1(&"Task sent to agent".into());
-                            
-                            // Close the modal after sending
-                            if let Some(modal) = document.get_element_by_id("agent-modal") {
-                                modal.set_attribute("style", "display: none;").unwrap_or_else(|_| {
-                                    web_sys::console::error_1(&"Failed to close modal".into());
-                                });
-                            }
-                            
-                            // Refresh the dashboard in a separate borrow to avoid borrowing issues
-                            let _ = crate::state::AppState::refresh_ui_after_state_change();
+                        // Add to history if it exists
+                        if let Some(history) = &mut agent_node.history {
+                            history.push(user_message);
+                        } else {
+                            agent_node.history = Some(vec![user_message]);
                         }
+                        
+                        // Update agent status
+                        agent_node.status = Some("processing".to_string());
                     }
+                    
+                    // Adjust viewport to fit all nodes
+                    if state.auto_fit {
+                        state.fit_nodes_to_view();
+                    }
+                    
+                    // Add a response node (this creates a visual node for the response)
+                    let response_node_id = state.add_response_node(&agent_id_clone, "...".to_string());
+                    
+                    // Track the message ID to node ID mapping
+                    state.track_message(message_id.clone(), response_node_id);
+                    
+                    // Save the state and mark as modified
+                    let _ = state.save_if_modified();
+                    
+                    // Return the data we need after the borrow ends
+                    Some((message_id, task_text))
+                } else {
+                    None
                 }
+            });
+            
+            // Process the agent request if we have a message ID
+            if let Some((message_id, task_text)) = message_id_and_task {
+                // Send to backend (use the network module's implementation)
+                crate::network::send_text_to_backend(&task_text, message_id);
+                
+                // Don't clear the task input field to preserve it for next time
+                // task_textarea.set_value("");
+                
+                // Show a success message
+                web_sys::console::log_1(&"Task sent to agent".into());
+                
+                // Close the modal after sending
+                if let Some(modal) = document.get_element_by_id("agent-modal") {
+                    modal.set_attribute("style", "display: none;").unwrap_or_else(|_| {
+                        web_sys::console::error_1(&"Failed to close modal".into());
+                    });
+                }
+                
+                // Refresh the dashboard in a separate borrow to avoid borrowing issues
+                let _ = crate::state::AppState::refresh_ui_after_state_change();
             }
         }) as Box<dyn FnMut(_)>);
         

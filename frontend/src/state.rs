@@ -136,6 +136,7 @@ impl AppState {
             parent_id: None, // Parent ID will be set separately if needed
             node_type,
             system_instructions,
+            task_instructions: None, // Initialize with None
             history,
             status,
         };
@@ -502,6 +503,14 @@ impl AppState {
             // Mark state as modified
             self.state_modified = true;
         }
+    }
+
+    /// Gets the task instructions for an agent with a standard fallback
+    pub fn get_task_instructions_with_fallback(&self, agent_id: &str) -> String {
+        self.nodes.get(agent_id)
+            .and_then(|node| node.task_instructions.clone())
+            .filter(|instructions| !instructions.trim().is_empty())
+            .unwrap_or_else(|| "begin".to_string())
     }
 }
 
