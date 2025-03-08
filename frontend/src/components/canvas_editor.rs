@@ -140,93 +140,96 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         let x = event.offset_x() as f64;
         let y = event.offset_y() as f64;
         
-        // First determine what was clicked - isolate in a scope
-        let (clicked_id, is_agent, offset_x, offset_y, auto_fit_was_enabled) = {
+        // First determine what was clicked
+        let clicked_result = {
             APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                
-                // Check if we clicked on a node
-                if let Some((id, offset_x, offset_y)) = state.find_node_at_position(x, y) {
-                    // Store the selected node ID
-                    state.selected_node_id = Some(id.clone());
-                    
-                    // Check if this node is an agent type
-                    let is_agent = if let Some(node) = state.nodes.get(&id) {
-                        matches!(node.node_type, NodeType::AgentIdentity)
-                    } else {
-                        false
-                    };
-                    
-                    // Return what was clicked with offsets
-                    (Some(id), is_agent, offset_x, offset_y, false)
-                } else {
-                    // Nothing was clicked - prepare for canvas dragging
-                    state.selected_node_id = None;
-                    state.canvas_dragging = true;
-                    state.drag_start_x = x;
-                    state.drag_start_y = y;
-                    
-                    // If in Auto Layout Mode, automatically switch to Manual Layout Mode
-                    let auto_fit_was_enabled = state.auto_fit;
-                    if auto_fit_was_enabled {
-                        state.auto_fit = false;
-                    }
-                    
-                    // Return empty values with auto_fit_was_enabled flag
-                    (None, false, 0.0, 0.0, auto_fit_was_enabled)
-                }
+                let state = state.borrow();
+                state.find_node_at_position(x, y)
             })
-        }; // First borrow is dropped here
+        };
         
-        // Check if a node was clicked
-        if let Some(id) = clicked_id {
+        // Based on the result, dispatch the appropriate message
+        if let Some((node_id, offset_x, offset_y)) = clicked_result {
+            // Check if this node is an agent type
+            let is_agent = APP_STATE.with(|state| {
+                let state = state.borrow();
+                if let Some(node) = state.nodes.get(&node_id) {
+                    matches!(node.node_type, NodeType::AgentIdentity)
+                } else {
+                    false
+                }
+            });
+            
             // Check if right click
             if event.button() == 2 {
                 // Right click handling (future: show context menu)
                 return;
             }
             
-            // Check if auto-fit is enabled before disabling it - isolate in a separate scope
-            let auto_fit_was_enabled_in_second_check = {
+            // Check if auto-fit is enabled
+            let auto_fit_enabled = APP_STATE.with(|state| {
+                let state = state.borrow();
+                state.auto_fit
+            });
+            
+            // If auto-fit is enabled, toggle it off
+            if auto_fit_enabled {
                 APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
-                    
-                    // If in Auto Layout Mode, automatically switch to Manual Layout Mode
-                    let was_auto_fit = state.auto_fit;
-                    if was_auto_fit {
-                        state.auto_fit = false;
-                    }
-                    
-                    state.dragging = Some(id.clone());
-                    state.drag_offset_x = offset_x;
-                    state.drag_offset_y = offset_y;
-                    state.canvas_dragging = false; // Ensure canvas dragging is off
-                    
-                    // If this is an agent node, store additional information for the mouseup handler
-                    if is_agent {
-                        state.is_dragging_agent = true;
-                        state.drag_start_x = x; // Store start position to determine if it was a click or drag
-                        state.drag_start_y = y;
-                    }
-                    
-                    was_auto_fit
-                })
-            }; // Second borrow is dropped here
-            
-            // Use either auto_fit flag - if either was true, we need to update the UI
-            let should_update_ui = auto_fit_was_enabled || auto_fit_was_enabled_in_second_check;
-            
-            // If auto-fit was enabled, update the UI toggle
-            if should_update_ui {
-                // Update the toggle UI to match the new state - this is a safe UI operation that doesn't borrow APP_STATE
-                let window = web_sys::window().expect("no global window exists");
-                let document = window.document().expect("should have a document");
-                if let Some(toggle) = document.get_element_by_id("auto-fit-toggle") {
-                    if let Some(checkbox) = toggle.dyn_ref::<web_sys::HtmlInputElement>() {
-                        checkbox.set_checked(false);
-                    }
+                    state.dispatch(crate::messages::Message::ToggleAutoFit);
+                });
+                
+                // Update the UI
+                let auto_fit_toggle = window.document()
+                    .expect("should have a document")
+                    .get_element_by_id("auto-fit-toggle");
+                
+                if let Some(toggle) = auto_fit_toggle {
+                    let _ = toggle.set_attribute("class", "toggle-button");
                 }
             }
+            
+            // Dispatch StartDragging message
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.dispatch(crate::messages::Message::StartDragging {
+                    node_id: node_id.clone(),
+                    offset_x,
+                    offset_y,
+                });
+                
+                // If this is an agent node, store additional information for the mouseup handler
+                if is_agent {
+                    state.is_dragging_agent = true;
+                    state.drag_start_x = x; // Store start position to determine if it was a click or drag
+                    state.drag_start_y = y;
+                }
+            });
+        } else {
+            // Nothing was clicked - prepare for canvas dragging
+            // Dispatch StartCanvasDrag message
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.dispatch(crate::messages::Message::StartCanvasDrag {
+                    start_x: x,
+                    start_y: y,
+                });
+                
+                // If in Auto Layout Mode, automatically switch to Manual Layout Mode
+                let auto_fit_enabled = state.auto_fit;
+                if auto_fit_enabled {
+                    state.dispatch(crate::messages::Message::ToggleAutoFit);
+                    
+                    // Update the UI
+                    let auto_fit_toggle = window.document()
+                        .expect("should have a document")
+                        .get_element_by_id("auto-fit-toggle");
+                    
+                    if let Some(toggle) = auto_fit_toggle {
+                        let _ = toggle.set_attribute("class", "toggle-button");
+                    }
+                }
+            });
         }
     }) as Box<dyn FnMut(_)>);
     
@@ -242,57 +245,64 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         let x = event.offset_x() as f64;
         let y = event.offset_y() as f64;
         
-        // Completely isolate the mutable borrow in its own scope
-        let needs_refresh = {
-            // This creates a new scope so the borrow is dropped at the closing brace
-            APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                
-                if let Some(id) = &state.dragging {
-                    // Node dragging (existing behavior)
-                    let id = id.clone();
-                    let drag_offset_x = state.drag_offset_x;
-                    let drag_offset_y = state.drag_offset_y;
-                    
-                    // Apply viewport transformation to the mouse coordinates
-                    let world_x = x / state.zoom_level + state.viewport_x;
-                    let world_y = y / state.zoom_level + state.viewport_y;
-                    
-                    state.update_node_position(&id, world_x - drag_offset_x, world_y - drag_offset_y);
-                    // Return true to indicate we need to refresh the dashboard
-                    true
-                } else if state.canvas_dragging {
-                    // Canvas dragging (new behavior)
-                    // Calculate how far the mouse has moved since starting the drag
-                    let dx = (state.drag_start_x - x) / state.zoom_level;
-                    let dy = (state.drag_start_y - y) / state.zoom_level;
-                    
-                    // Update the viewport (moving it in the direction of the drag)
-                    state.viewport_x += dx;
-                    state.viewport_y += dy;
-                    
-                    // Enforce boundaries to prevent panning too far
-                    state.enforce_viewport_boundaries();
-                    
-                    // Update the drag start position for next movement
-                    state.drag_start_x = x;
-                    state.drag_start_y = y;
-                    
-                    // Redraw with the new viewport
-                    state.draw_nodes();
-                    // No need to refresh dashboard for canvas dragging
-                    false
-                } else {
-                    // Nothing being dragged
-                    false
-                }
-            })
-        }; // The borrow is definitely dropped here
+        // Check if we're dragging a node or the canvas
+        let dragging_type = APP_STATE.with(|state| {
+            let state = state.borrow();
+            if state.dragging.is_some() {
+                "node"
+            } else if state.canvas_dragging {
+                "canvas"
+            } else {
+                "none"
+            }
+        });
         
-        // Now that the mutable borrow is completely dropped, we can safely call refresh if needed
-        if needs_refresh {
-            // This is a completely separate operation with its own borrow scope
-            let _ = refresh_dashboard_after_change();
+        match dragging_type {
+            "node" => {
+                // Get the node id and offset from state
+                let (node_id, drag_offset_x, drag_offset_y, zoom_level, viewport_x, viewport_y) = APP_STATE.with(|state| {
+                    let state = state.borrow();
+                    let node_id = state.dragging.clone().unwrap();
+                    (
+                        node_id,
+                        state.drag_offset_x,
+                        state.drag_offset_y,
+                        state.zoom_level,
+                        state.viewport_x,
+                        state.viewport_y
+                    )
+                });
+                
+                // Apply viewport transformation to get world coordinates
+                let world_x = x / zoom_level + viewport_x;
+                let world_y = y / zoom_level + viewport_y;
+                
+                // Dispatch UpdateNodePosition message
+                APP_STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    state.dispatch(crate::messages::Message::UpdateNodePosition {
+                        node_id: node_id,
+                        x: world_x - drag_offset_x,
+                        y: world_y - drag_offset_y,
+                    });
+                });
+                
+                // Refresh dashboard after node position update
+                let _ = refresh_dashboard_after_change();
+            },
+            "canvas" => {
+                // Dispatch UpdateCanvasDrag message
+                APP_STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    state.dispatch(crate::messages::Message::UpdateCanvasDrag {
+                        current_x: x,
+                        current_y: y,
+                    });
+                });
+            },
+            _ => {
+                // Not dragging anything
+            }
         }
     }) as Box<dyn FnMut(_)>);
     
@@ -308,54 +318,56 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         let x = event.offset_x() as f64;
         let y = event.offset_y() as f64;
         
-        // Handle agent node click vs. drag - Isolate this borrow in its own scope
-        let (was_dragging_agent, was_click, node_id_opt) = {
+        // Check if we were dragging an agent node and if it was a click (not much movement)
+        let (was_dragging_agent, selected_node_id, was_click) = APP_STATE.with(|state| {
+            let state = state.borrow();
+            
+            let was_dragging_agent = state.is_dragging_agent;
+            let selected_node_id = state.selected_node_id.clone();
+            
+            // Determine if this was a click or drag by checking distance
+            let was_click = if was_dragging_agent {
+                let dx = x - state.drag_start_x;
+                let dy = y - state.drag_start_y;
+                let distance_squared = dx * dx + dy * dy;
+                
+                // If the mouse didn't move much, consider it a click (using a small threshold)
+                distance_squared < 25.0 // 5px threshold
+            } else {
+                false
+            };
+            
+            (was_dragging_agent, selected_node_id, was_click)
+        });
+        
+        // Stop any dragging operation
+        if APP_STATE.with(|state| { state.borrow().dragging.is_some() }) {
+            // We were dragging a node, stop dragging
             APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                
-                // Check if we were dragging an agent
-                let was_dragging_agent = state.is_dragging_agent;
-                state.is_dragging_agent = false;
-                
-                // Determine if this was a click or drag (by checking distance)
-                let was_click = if was_dragging_agent {
-                    let dx = x - state.drag_start_x;
-                    let dy = y - state.drag_start_y;
-                    let distance_squared = dx * dx + dy * dy;
-                    
-                    // If the mouse didn't move much, consider it a click
-                    // (Using a small threshold to account for slight movements)
-                    distance_squared < 25.0 // 5px threshold
-                } else {
-                    false
-                };
-                
-                // Save the node ID if we need to open modal
-                let node_id = if was_dragging_agent && was_click {
-                    state.selected_node_id.clone()
-                } else {
-                    None
-                };
-                
-                // Clean up dragging state
-                state.dragging = None;
-                state.canvas_dragging = false;
-                
-                // Return the values we need
-                (was_dragging_agent, was_click, node_id)
-            })
-        }; // Borrow is definitely dropped here
-        
-        // Now that the mutable borrow is completely dropped, we can safely call refresh in a separate borrow
-        {
-            let _ = refresh_dashboard_after_change();
+                state.dispatch(crate::messages::Message::StopDragging);
+            });
+        } else if APP_STATE.with(|state| { state.borrow().canvas_dragging }) {
+            // We were dragging the canvas, stop canvas drag
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.dispatch(crate::messages::Message::StopCanvasDrag);
+            });
         }
         
+        // Clear is_dragging_agent flag (this isn't part of any message yet)
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.is_dragging_agent = false;
+        });
+        
+        // Refresh the dashboard
+        let _ = refresh_dashboard_after_change();
+        
         // If this was a click on an agent node (not a drag), open the modal
-        let should_open_modal = was_dragging_agent && was_click;
-        if should_open_modal {
-            if let Some(node_id) = node_id_opt {
-                // Open the agent modal - this happens in a completely separate borrow scope
+        if was_dragging_agent && was_click {
+            if let Some(node_id) = selected_node_id {
+                // Open the agent modal
                 let window = web_sys::window().expect("no global window exists");
                 let document = window.document().expect("should have a document");
                 
@@ -377,42 +389,62 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     
     let wheel_handler = Closure::wrap(Box::new(move |event: web_sys::WheelEvent| {
         // We won't prevent default since we want natural scrolling when not zooming
-        APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            
-            // Only allow manual zooming when auto-fit is disabled
-            if !state.auto_fit {
-                // Get canvas dimensions to use center as zoom point
-                let canvas_width = canvas_wheel_inside.width() as f64;
-                let canvas_height = canvas_wheel_inside.height() as f64;
-                let window = web_sys::window().expect("no global window exists");
-                let dpr = window.device_pixel_ratio();
-                
-                // Get center of canvas in screen coordinates
-                let x = canvas_width / (2.0 * dpr);
-                let y = canvas_height / (2.0 * dpr);
-                
-                // Convert to world coordinates
-                let world_x = x / state.zoom_level + state.viewport_x;
-                let world_y = y / state.zoom_level + state.viewport_y;
-                
-                // Get wheel delta
-                let delta_y = event.delta_y();
-                
-                // Adjust zoom based on wheel direction
-                let zoom_delta = if delta_y > 0.0 { 0.9 } else { 1.1 };
-                state.zoom_level *= zoom_delta;
-                
-                // Limit zoom to reasonable values
-                state.zoom_level = f64::max(0.1, f64::min(state.zoom_level, 5.0));
-                
-                // Adjust viewport to zoom toward/away from center
-                state.viewport_x = world_x - x / state.zoom_level;
-                state.viewport_y = world_y - y / state.zoom_level;
-                
-                state.draw_nodes();
-            }
+        
+        // Check if auto-fit is enabled
+        let auto_fit_enabled = APP_STATE.with(|state| {
+            let state = state.borrow();
+            state.auto_fit
         });
+        
+        // Only allow manual zooming when auto-fit is disabled
+        if !auto_fit_enabled {
+            // Get canvas dimensions and other state values
+            let (canvas_width, canvas_height, zoom_level, viewport_x, viewport_y) = APP_STATE.with(|state| {
+                let state = state.borrow();
+                (
+                    canvas_wheel_inside.width() as f64,
+                    canvas_wheel_inside.height() as f64,
+                    state.zoom_level,
+                    state.viewport_x,
+                    state.viewport_y
+                )
+            });
+            
+            let window = web_sys::window().expect("no global window exists");
+            let dpr = window.device_pixel_ratio();
+            
+            // Get center of canvas in screen coordinates
+            let x = canvas_width / (2.0 * dpr);
+            let y = canvas_height / (2.0 * dpr);
+            
+            // Convert to world coordinates
+            let world_x = x / zoom_level + viewport_x;
+            let world_y = y / zoom_level + viewport_y;
+            
+            // Get wheel delta
+            let delta_y = event.delta_y();
+            
+            // Calculate new zoom level
+            let zoom_delta = if delta_y > 0.0 { 0.9 } else { 1.1 };
+            let new_zoom = zoom_level * zoom_delta;
+            
+            // Limit zoom to reasonable values
+            let new_zoom = f64::max(0.1, f64::min(new_zoom, 5.0));
+            
+            // Calculate new viewport based on the zoom
+            let new_viewport_x = world_x - x / new_zoom;
+            let new_viewport_y = world_y - y / new_zoom;
+            
+            // Dispatch ZoomCanvas message
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.dispatch(crate::messages::Message::ZoomCanvas {
+                    new_zoom,
+                    viewport_x: new_viewport_x,
+                    viewport_y: new_viewport_y,
+                });
+            });
+        }
     }) as Box<dyn FnMut(_)>);
     
     // Add wheel event listener with standard method

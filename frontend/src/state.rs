@@ -516,32 +516,15 @@ impl AppState {
     }
 
     // New dispatch method to handle messages
-    pub fn dispatch(msg: Message) -> Result<(), JsValue> {
-        APP_STATE.with(|state| {
-            let mut st = state.borrow_mut();
-            update(&mut st, msg);
-            
-            // Save state if it was modified
-            if st.state_modified {
-                st.state_modified = false; // Reset the modified flag
-                let _ = st.save_if_modified(); // Call on the instance, not the type
-            }
-        });
+    pub fn dispatch(&mut self, msg: Message) -> Result<(), JsValue> {
+        update(self, msg);
         
-        // Get the document for rendering
-        let window = web_sys::window().expect("no global window exists");
-        let document = window.document().expect("should have a document on window");
+        // Save state if it was modified
+        if self.state_modified {
+            self.save_if_modified()?;
+        }
         
-        // Render the active view
-        APP_STATE.with(|state| {
-            let st = state.borrow();
-            // Handle the Result from render_active_view without using ?
-            if let Err(e) = crate::views::render_active_view(&st, &document) {
-                web_sys::console::error_1(&format!("Error rendering view: {:?}", e).into());
-            }
-        });
-        
-        Ok(())
+        AppState::refresh_ui_after_state_change()
     }
 }
 

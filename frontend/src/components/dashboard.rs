@@ -300,75 +300,16 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let run_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
         
-        // Similar to the send button in events.rs, we need to:
-        // 1. Generate a message ID
-        // 2. Create a response node
-        // 3. Set agent status to processing
-        // 4. Send text to backend
-        
-        let message_id_and_task = APP_STATE.with(|state| {
+        // Dispatch SendTaskToAgent message
+        APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             
-            // Use the centralized helper method
-            let task_text = state.get_task_instructions_with_fallback(&agent_id);
-            
-            // Set this agent as the selected node
+            // Set the selected agent first so the message handler knows which agent to run
             state.selected_node_id = Some(agent_id.clone());
             
-            // Create a message ID
-            let message_id = state.generate_message_id();
-            
-            // Create a response node and update agent status
-            if let Some(agent_node) = state.nodes.get_mut(&agent_id) {
-                // Create a new message for the history
-                let user_message = Message {
-                    role: "user".to_string(),
-                    content: task_text.clone(),
-                    timestamp: js_sys::Date::now() as u64,
-                };
-                
-                // Add to history if it exists
-                if let Some(history) = &mut agent_node.history {
-                    history.push(user_message);
-                } else {
-                    agent_node.history = Some(vec![user_message]);
-                }
-                
-                // Update agent status
-                agent_node.status = Some("processing".to_string());
-            }
-            
-            // Adjust viewport to fit all nodes
-            if state.auto_fit {
-                state.fit_nodes_to_view();
-            }
-            
-            // Add a response node (this creates a visual node for the response)
-            let response_node_id = state.add_response_node(&agent_id, "...".to_string());
-            
-            // Track the message ID to node ID mapping
-            state.track_message(message_id.clone(), response_node_id);
-            
-            // Save the state and mark as modified
-            let _ = state.save_if_modified();
-            
-            Some((message_id, task_text))
+            // Dispatch the message to run the agent
+            state.dispatch(crate::messages::Message::SendTaskToAgent);
         });
-        
-        // Now send the message to the backend
-        if let Some((message_id, task_text)) = message_id_and_task {
-            // Send to backend (use the network module's implementation)
-            crate::network::send_text_to_backend(&task_text, message_id);
-            web_sys::console::log_1(&"Task sent to agent".into());
-            
-            // Refresh the dashboard
-            let window = web_sys::window().expect("no global window exists");
-            let document = window.document().expect("should have a document");
-            
-            if let Some(container) = document.get_element_by_id("dashboard-container") {
-                let _ = render_dashboard(&document, &container);
-            }
-        }
     }) as Box<dyn FnMut(_)>);
     
     run_btn.dyn_ref::<HtmlElement>()

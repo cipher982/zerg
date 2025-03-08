@@ -197,7 +197,10 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     {
         let dashboard_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
             // Use the new dispatch method with ToggleView message
-            let _ = state::AppState::dispatch(messages::Message::ToggleView(storage::ActiveView::Dashboard));
+            state::APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                let _ = state.dispatch(messages::Message::ToggleView(storage::ActiveView::Dashboard));
+            });
         }) as Box<dyn FnMut(_)>);
         
         dashboard_tab.add_event_listener_with_callback("click", dashboard_click.as_ref().unchecked_ref())?;
@@ -208,7 +211,10 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     {
         let canvas_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
             // Use the new dispatch method with ToggleView message
-            let _ = state::AppState::dispatch(messages::Message::ToggleView(storage::ActiveView::Canvas));
+            state::APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                let _ = state.dispatch(messages::Message::ToggleView(storage::ActiveView::Canvas));
+            });
         }) as Box<dyn FnMut(_)>);
         
         canvas_tab.add_event_listener_with_callback("click", canvas_click.as_ref().unchecked_ref())?;

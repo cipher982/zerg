@@ -15,8 +15,9 @@ Below is a detailed roadmap for implementing the "Message / Update / View" patte
 - ✅ Created views.rs with view functions
 - ✅ Refactored all UI event handlers in ui/events.rs to use the new pattern
 - ✅ Fixed compiler warnings
-- ❌ Still need to refactor canvas interaction code
-- ❌ Still need to refactor dashboard code
+- ✅ Refactored canvas interaction code
+- ✅ Refactored dashboard code
+- ✅ Added ZoomCanvas message for wheel events
 
 ## Detailed Progress & Next Steps
 
@@ -30,6 +31,7 @@ We've created the messages.rs file with a comprehensive Message enum that includ
 - Agent management (CreateAgent, EditAgent, DeleteAgent)
 - Node manipulation (UpdateNodePosition, AddNode, AddResponseNode)
 - Canvas controls (ToggleAutoFit, CenterView, ClearCanvas)
+- Canvas zooming (ZoomCanvas)
 - Input handling (UpdateInputText)
 - Dragging state (StartDragging, StopDragging)
 - Canvas dragging (StartCanvasDrag, UpdateCanvasDrag, StopCanvasDrag)
@@ -38,18 +40,12 @@ We've created the messages.rs file with a comprehensive Message enum that includ
 - Tab switching (SwitchToMainTab, SwitchToHistoryTab)
 - Auto-save operations (UpdateSystemInstructions, UpdateAgentName)
 
-**Next Steps:**
-- Add more message variants as needed for canvas interactions
-
 ────────────────────────────────────────────────────────────────
 2. ✅ ADD AN "UPDATE.RS" FILE WITH A CENTRAL UPDATE FUNCTION  
 ────────────────────────────────────────────────────────────────
 **COMPLETED**
 
 We've created update.rs with a comprehensive update function that handles all message variants defined in the Message enum.
-
-**Next Steps:**
-- Expand the update function as new message variants are added for canvas interactions
 
 ────────────────────────────────────────────────────────────────
 3. ✅ CLEAN UP YOUR APPSTATE (STATE.RS)  
@@ -80,16 +76,27 @@ We've refactored all event handlers in ui/events.rs to use the new pattern:
 - System instructions auto-save
 - Agent name auto-save
 
-**Next Steps:**
-- Refactor canvas mouse events in components/canvas_editor.rs
-- Refactor dashboard event handlers in components/dashboard.rs
+────────────────────────────────────────────────────────────────
+5. ✅ REFACTOR CANVAS MOUSE EVENTS (COMPONENTS/CANVAS_EDITOR.RS)
+────────────────────────────────────────────────────────────────
+**COMPLETED**
 
-**Important Files to Focus On:**
-- frontend/src/components/canvas_editor.rs (especially setup_canvas_mouse_events)
-- frontend/src/components/dashboard.rs
+We've refactored all canvas mouse events to use the Message/Update pattern:
+- Mousedown event now dispatches StartDragging or StartCanvasDrag messages
+- Mousemove event now dispatches UpdateNodePosition or UpdateCanvasDrag messages
+- Mouseup event now dispatches StopDragging or StopCanvasDrag messages
+- Wheel event now dispatches ZoomCanvas message
 
 ────────────────────────────────────────────────────────────────
-5. ✅ SEPARATE YOUR "VIEW" CODE FROM THE "UPDATE" CODE  
+6. ✅ REFACTOR DASHBOARD EVENT HANDLERS (COMPONENTS/DASHBOARD.RS)
+────────────────────────────────────────────────────────────────
+**COMPLETED**
+
+We've refactored the dashboard event handlers to use the Message/Update pattern:
+- Run button now dispatches SendTaskToAgent message
+
+────────────────────────────────────────────────────────────────
+7. ✅ SEPARATE YOUR "VIEW" CODE FROM THE "UPDATE" CODE  
 ────────────────────────────────────────────────────────────────
 **COMPLETED**
 
@@ -100,34 +107,15 @@ We've created views.rs with functions to render different parts of the UI:
 - hide_agent_modal
 - show_agent_modal
 
-**Next Steps:**
-- Add more specialized view functions for canvas interactions
-
 ────────────────────────────────────────────────────────────────
-6. ✅ DECIDE ON A RENDERING STRATEGY  
+8. ✅ DECIDE ON A RENDERING STRATEGY  
 ────────────────────────────────────────────────────────────────
 **COMPLETED**
 
 We've implemented a simple "update, then render" strategy in the AppState::dispatch method.
 
-**Next Steps:**
-- Consider optimizing rendering to only update what's changed in later iterations
-
 ────────────────────────────────────────────────────────────────
-7. 🔄 MIGRATE FEATURES GRADUALLY  
-────────────────────────────────────────────────────────────────
-**IN PROGRESS**
-
-We've successfully migrated all UI event handlers. Still need to:
-1. Refactor canvas mouse interactions
-2. Refactor dashboard event handlers, particularly the agent run button
-
-**Next Steps:**
-- Focus on canvas_editor.rs next
-- Test thoroughly after each feature is migrated
-
-────────────────────────────────────────────────────────────────
-8. ❌ OPTIONAL: INTRODUCE A "PROGRAM LOOP"  
+9. ❌ OPTIONAL: INTRODUCE A "PROGRAM LOOP"  
 ────────────────────────────────────────────────────────────────
 **NOT STARTED**
 
@@ -139,11 +127,13 @@ We haven't implemented a program loop yet, as we're focusing on migrating existi
 
 ## Known Issues & Considerations
 
-1. **Compiler Warnings**: All compiler warnings have been addressed
+1. **Remaining Direct State Manipulations**: There are still a few places where we directly manipulate state:
+   - Setting `is_dragging_agent` flag in the mouseup handler
+   - This could be moved to a new message type in the future
 
-2. **Canvas Rendering**: The canvas rendering code is complex and needs careful refactoring:
-   - We have multiple draw functions (draw_nodes in state.rs, draw_node in canvas/renderer.rs)
-   - We need to ensure consistent parameter ordering and function signatures
+2. **Canvas Rendering**: The canvas rendering code is complex but has been refactored:
+   - We now use messages for all canvas interactions
+   - The draw_nodes function is still called directly in some places
 
 3. **Error Handling**: We've improved error handling in the dispatch function, but should review other areas.
 
@@ -153,10 +143,10 @@ We haven't implemented a program loop yet, as we're focusing on migrating existi
 
 ## Next Priorities
 
-1. Refactor canvas mouse event handlers to use the Message/Update pattern
-2. Refactor dashboard event handlers, particularly the agent run button
-3. Address any remaining compiler warnings
-4. Consider adding tests for the Message/Update pattern
+1. Consider adding a dedicated message for setting the `is_dragging_agent` flag
+2. Add tests for the Message/Update pattern
+3. Consider implementing a program loop if needed
+4. Optimize rendering to only update what's changed
 
 ## Summary of Files & Roles
 
@@ -183,11 +173,11 @@ We haven't implemented a program loop yet, as we're focusing on migrating existi
 • **ui/events.rs** ✅  
   Fully refactored to dispatch messages instead of mutating state directly.  
 
-• **components/canvas_editor.rs** 🔄  
-  Partially refactored, still need to update canvas mouse event handlers.
+• **components/canvas_editor.rs** ✅  
+  Fully refactored to dispatch messages for all mouse events.
 
-• **components/dashboard.rs** 🔄  
-  Partially refactored, still need to update agent interaction handlers.
+• **components/dashboard.rs** ✅  
+  Fully refactored to dispatch messages for agent interactions.
 
 This unidirectional approach simplifies debugging, reduces confusion about who's mutating state, and helps reason about concurrency and performance. Whenever something happens in the UI, it goes through a clearly defined path:
 
