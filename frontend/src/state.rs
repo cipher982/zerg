@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
 use crate::models::{Node, NodeType};
 use crate::canvas::renderer;
+use crate::storage::ActiveView;
 use js_sys::Date;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
@@ -45,8 +46,10 @@ pub struct AppState {
     pub state_modified: bool,
     // Currently selected node ID
     pub selected_node_id: Option<String>,
-    // Flag to track if we're dragging an agent node
+    // Flag to track if we're dragging an agent
     pub is_dragging_agent: bool,
+    // Track the active view (Dashboard or Canvas)
+    pub active_view: ActiveView,
 }
 
 impl AppState {
@@ -83,6 +86,7 @@ impl AppState {
             state_modified: false,
             selected_node_id: None,
             is_dragging_agent: false,
+            active_view: ActiveView::Dashboard, // Default to Dashboard view
         }
     }
 
@@ -450,16 +454,39 @@ impl AppState {
     // Save state if modified
     pub fn save_if_modified(&mut self) -> Result<(), JsValue> {
         if self.state_modified {
-            match crate::storage::save_state(self) {
-                Ok(_) => {
-                    self.state_modified = false;
-                    Ok(())
-                }
-                Err(e) => Err(e)
-            }
+            // Set this to false first to avoid potential loops if save triggers more UI updates
+            self.state_modified = false;
+            
+            // Save the state
+            crate::storage::save_state(self)?;
+            
+            // Return success for the save operation itself
+            Ok(())
         } else {
             Ok(())
         }
+    }
+
+    // Separate method to refresh UI after state changes
+    pub fn refresh_ui_after_state_change() -> Result<(), JsValue> {
+        // Get window and document
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("no document exists");
+        
+        // Get current active view
+        let active_view = APP_STATE.with(|state| {
+            let state = state.borrow();
+            state.active_view.clone()
+        });
+        
+        // Refresh dashboard if needed
+        if active_view == crate::storage::ActiveView::Dashboard {
+            if let Err(e) = crate::components::dashboard::refresh_dashboard(&document) {
+                web_sys::console::warn_1(&format!("Failed to refresh dashboard: {:?}", e).into());
+            }
+        }
+        
+        Ok(())
     }
 
     pub fn resize_node_for_content(&mut self, node_id: &str) {

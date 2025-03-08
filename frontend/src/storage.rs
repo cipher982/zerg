@@ -8,6 +8,7 @@ use std::collections::HashMap;
 const NODES_KEY: &str = "zerg_nodes";
 const VIEWPORT_KEY: &str = "zerg_viewport";
 const SELECTED_MODEL_KEY: &str = "zerg_selected_model";
+const ACTIVE_VIEW_KEY: &str = "zerg_active_view";
 
 // Structure to store viewport data
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -15,6 +16,13 @@ struct ViewportData {
     x: f64,
     y: f64,
     zoom: f64,
+}
+
+// Store the active view (Dashboard or Canvas)
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum ActiveView {
+    Dashboard,
+    Canvas,
 }
 
 /// Save current app state to localStorage
@@ -40,6 +48,12 @@ pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
     // Save selected model
     storage.set_item(SELECTED_MODEL_KEY, &app_state.selected_model)?;
     
+    // Save active view
+    let active_view = if app_state.active_view == ActiveView::Dashboard { "dashboard" } else { "canvas" };
+    storage.set_item(ACTIVE_VIEW_KEY, active_view)?;
+    
+    web_sys::console::log_1(&"State saved to localStorage".into());
+    
     Ok(())
 }
 
@@ -56,6 +70,7 @@ pub fn load_state(app_state: &mut AppState) -> Result<bool, JsValue> {
             Ok(nodes) => {
                 app_state.nodes = nodes;
                 data_loaded = true;
+                web_sys::console::log_1(&format!("Loaded {} nodes from storage", app_state.nodes.len()).into());
             },
             Err(e) => {
                 web_sys::console::warn_1(&JsValue::from_str(&format!("Error parsing nodes: {}", e)));
@@ -85,6 +100,12 @@ pub fn load_state(app_state: &mut AppState) -> Result<bool, JsValue> {
         data_loaded = true;
     }
     
+    // Load active view
+    if let Some(view) = storage.get_item(ACTIVE_VIEW_KEY)? {
+        app_state.active_view = if view == "dashboard" { ActiveView::Dashboard } else { ActiveView::Canvas };
+        data_loaded = true;
+    }
+    
     Ok(data_loaded)
 }
 
@@ -96,6 +117,7 @@ pub fn clear_storage() -> Result<(), JsValue> {
     storage.remove_item(NODES_KEY)?;
     storage.remove_item(VIEWPORT_KEY)?;
     storage.remove_item(SELECTED_MODEL_KEY)?;
+    storage.remove_item(ACTIVE_VIEW_KEY)?;
     
     Ok(())
 } 

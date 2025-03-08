@@ -192,12 +192,21 @@ fn handle_websocket_message(event: MessageEvent) {
                         // Update node size based on new content
                         state.resize_node_for_content(&response_node_id);
                         state.draw_nodes();
+                        
+                        // Mark state as modified
+                        state.state_modified = true;
                     } else {
                         web_sys::console::error_1(&format!("Node not found: {}", response_node_id).into());
                     }
                 },
                 "completion" => {
                     state.draw_nodes();
+                    
+                    // Save state and refresh dashboard on completion
+                    let _ = state.save_if_modified();
+                    
+                    // Refresh UI after state changes
+                    let _ = crate::state::AppState::refresh_ui_after_state_change();
                 },
                 _ => {
                     // Handle legacy format
@@ -207,6 +216,9 @@ fn handle_websocket_message(event: MessageEvent) {
                                 node.text = text;
                                 state.resize_node_for_content(&response_node_id);
                                 state.draw_nodes();
+                                
+                                // Mark state as modified
+                                state.state_modified = true;
                             }
                         }
                     }

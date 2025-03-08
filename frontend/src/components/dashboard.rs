@@ -424,73 +424,94 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
 fn get_agents_from_app_state() -> Vec<Agent> {
     let mut agents = Vec::new();
     
-    APP_STATE.with(|state| {
+    // Define agent_data outside the with() closure so it's in scope for later use
+    let agent_data = APP_STATE.with(|state| {
+        // Create a non-mutable borrow to avoid conflicts with other parts of the code
         let state = state.borrow();
         
-        // Loop through all nodes in the state
-        for (id, node) in &state.nodes {
-            // Only include AgentIdentity nodes
-            if node.node_type == NodeType::AgentIdentity {
-                // Convert node status to AgentStatus
-                let status = match node.status.as_deref() {
-                    Some("processing") => AgentStatus::Active,
-                    Some("error") => AgentStatus::Error,
-                    Some("scheduled") => AgentStatus::Scheduled,
-                    _ => AgentStatus::Idle, // Default to idle
-                };
-                
-                // Get last run from history if available
-                let last_run = if let Some(history) = &node.history {
-                    if !history.is_empty() {
-                        // Format timestamp to human-readable format
-                        let timestamp = history.last().unwrap().timestamp;
-                        let date = js_sys::Date::new(&JsValue::from_f64(timestamp as f64));
-                        Some(format!(
-                            "{:02}/{:02} {:02}:{:02}",
-                            date.get_month() + 1, // JS months are 0-indexed
-                            date.get_date(),
-                            date.get_hours(),
-                            date.get_minutes()
-                        ))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-                
-                // Calculate success rate
-                let (success_rate, run_count) = if let Some(history) = &node.history {
-                    let total = history.len();
-                    // For demonstration, assume most messages are successful
-                    let successes = total.saturating_sub(total / 10); // 90% success rate as a demo
-                    
-                    if total > 0 {
-                        ((successes as f64 / total as f64) * 100.0, total as u32)
-                    } else {
-                        (0.0, 0)
-                    }
-                } else {
-                    (0.0, 0)
-                };
-                
-                // Create agent object
-                let agent = Agent {
-                    id: id.clone(),
-                    name: node.text.clone(),
-                    status,
-                    last_run,
-                    next_run: None, // Not implemented in the current system
-                    success_rate,
-                    run_count: run_count as u32,
-                };
-                
-                agents.push(agent);
-            }
-        }
+        // Collect all relevant agent information first while holding the borrow
+        let data: Vec<(String, String, Option<String>, Option<Vec<crate::models::Message>>)> = state.nodes.iter()
+            .filter(|(_, node)| node.node_type == NodeType::AgentIdentity)
+            .map(|(id, node)| (
+                id.clone(),
+                node.text.clone(),
+                node.status.clone(),
+                node.history.clone()
+            ))
+            .collect();
+        
+        // Return the data so it's assigned to agent_data
+        data
     });
     
+    // Process the collected data without holding the borrow
+    for (id, name, status_str, history) in agent_data {
+        // Convert node status to AgentStatus
+        let status = match status_str.as_deref() {
+            Some("processing") => AgentStatus::Active,
+            Some("error") => AgentStatus::Error,
+            Some("scheduled") => AgentStatus::Scheduled,
+            _ => AgentStatus::Idle, // Default to idle
+        };
+        
+        // Get last run from history if available
+        let last_run = if let Some(history_vec) = &history {
+            if !history_vec.is_empty() {
+                // Format timestamp to human-readable format
+                let timestamp = history_vec.last().unwrap().timestamp;
+                let date = js_sys::Date::new(&JsValue::from_f64(timestamp as f64));
+                Some(format!(
+                    "{:02}/{:02} {:02}:{:02}",
+                    date.get_month() + 1, // JS months are 0-indexed
+                    date.get_date(),
+                    date.get_hours(),
+                    date.get_minutes()
+                ))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        
+        // Calculate success rate
+        let (success_rate, run_count) = if let Some(history_vec) = &history {
+            let total = history_vec.len();
+            // For demonstration, assume most messages are successful
+            let successes = total.saturating_sub(total / 10); // 90% success rate as a demo
+            
+            if total > 0 {
+                ((successes as f64 / total as f64) * 100.0, total as u32)
+            } else {
+                (0.0, 0)
+            }
+        } else {
+            (0.0, 0)
+        };
+        
+        // Create agent object
+        let agent = Agent {
+            id,
+            name,
+            status,
+            last_run,
+            next_run: None, // Not implemented in the current system
+            success_rate,
+            run_count: run_count as u32,
+        };
+        
+        agents.push(agent);
+    }
+    
     agents
+}
+
+// Function to refresh the dashboard based on the latest state
+pub fn refresh_dashboard(document: &Document) -> Result<(), JsValue> {
+    if let Some(dashboard_container) = document.get_element_by_id("dashboard-container") {
+        render_dashboard(document, &dashboard_container)?;
+    }
+    Ok(())
 }
 
 // Function to set up the dashboard in the application
