@@ -52,6 +52,8 @@ pub struct AppState {
     pub is_dragging_agent: bool,
     // Track the active view (Dashboard or Canvas)
     pub active_view: ActiveView,
+    // Pending network call data to avoid nested borrows
+    pub pending_network_call: Option<(String, String)>,
 }
 
 impl AppState {
@@ -89,6 +91,7 @@ impl AppState {
             selected_node_id: None,
             is_dragging_agent: false,
             active_view: ActiveView::Dashboard, // Default to Dashboard view
+            pending_network_call: None,
         }
     }
 
@@ -510,6 +513,9 @@ impl AppState {
     pub fn dispatch(&mut self, msg: Message) -> bool {
         update(self, msg);
         
+        // Check if there's a pending network call
+        let pending_call = self.pending_network_call.take();
+        
         // Save state if it was modified
         if self.state_modified {
             if let Err(e) = self.save_if_modified() {
@@ -518,7 +524,14 @@ impl AppState {
         }
         
         // Return true to indicate that UI refresh is needed
-        true
+        let need_refresh = true;
+        
+        // If there was a pending network call, execute it now that the borrow is dropped
+        if let Some((task_text, message_id)) = pending_call {
+            crate::network::send_text_to_backend(&task_text, message_id);
+        }
+        
+        need_refresh
     }
 }
 

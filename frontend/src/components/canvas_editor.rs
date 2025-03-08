@@ -2,7 +2,9 @@ use wasm_bindgen::prelude::*;
 use web_sys::{
     Document, 
     HtmlCanvasElement, 
+    HtmlInputElement,
     MouseEvent,
+    WheelEvent,
 };
 use crate::state::{APP_STATE, AppState};
 use crate::models::NodeType;
@@ -229,7 +231,10 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                         .get_element_by_id("auto-fit-toggle");
                     
                     if let Some(toggle) = auto_fit_toggle {
-                        let _ = toggle.set_attribute("class", "toggle-button");
+                        // Cast to HTMLInputElement to set checked property directly
+                        if let Some(toggle_input) = toggle.dyn_ref::<web_sys::HtmlInputElement>() {
+                            toggle_input.set_checked(false);
+                        }
                     }
                 }
             }
@@ -295,7 +300,10 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                         .get_element_by_id("auto-fit-toggle");
                     
                     if let Some(toggle) = auto_fit_toggle {
-                        let _ = toggle.set_attribute("class", "toggle-button");
+                        // Cast to HTMLInputElement to set checked property directly
+                        if let Some(toggle_input) = toggle.dyn_ref::<web_sys::HtmlInputElement>() {
+                            toggle_input.set_checked(false);
+                        }
                     }
                 }
             } else if need_refresh {

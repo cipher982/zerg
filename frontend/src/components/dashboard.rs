@@ -301,15 +301,18 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
         
         // Dispatch SendTaskToAgent message
-        let need_refresh = APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            
-            // Set the selected agent first so the message handler knows which agent to run
-            state.selected_node_id = Some(agent_id.clone());
-            
-            // Dispatch the message to run the agent
-            state.dispatch(crate::messages::Message::SendTaskToAgent)
-        });
+        let need_refresh = {
+            // Scope the mutable borrow so it's dropped before refresh_ui_after_state_change
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                
+                // Set the selected agent first so the message handler knows which agent to run
+                state.selected_node_id = Some(agent_id.clone());
+                
+                // Dispatch the message to run the agent
+                state.dispatch(crate::messages::Message::SendTaskToAgent)
+            })
+        };
         
         // After borrowing mutably, we can refresh UI if needed in a separate borrow
         if need_refresh {
