@@ -75,7 +75,8 @@ fn render_canvas_view(state: &AppState, document: &Document) -> Result<(), JsVal
     // Trigger canvas resize to ensure it renders correctly
     if let Some(canvas_elem) = document.get_element_by_id("node-canvas") {
         if let Ok(canvas) = canvas_elem.dyn_into::<web_sys::HtmlCanvasElement>() {
-            let _ = crate::components::canvas_editor::resize_canvas(&canvas);
+            let _ = crate::components::canvas_editor::resize_canvas(&canvas, 
+                crate::components::canvas_editor::AppStateRef::Immutable(state));
         }
     }
     

@@ -4,10 +4,17 @@ use web_sys::{
     HtmlCanvasElement, 
     MouseEvent,
 };
-use crate::state::APP_STATE;
+use crate::state::{APP_STATE, AppState};
 use crate::models::NodeType;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
+
+// New type to represent either a mutable or immutable reference to AppState
+pub enum AppStateRef<'a> {
+    Mutable(&'a mut AppState),
+    Immutable(&'a AppState),
+    None
+}
 
 pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
     let canvas = document.get_element_by_id("node-canvas")
@@ -15,7 +22,7 @@ pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
         .dyn_into::<HtmlCanvasElement>()?;
     
     // Set canvas dimensions to match container
-    resize_canvas(&canvas)?;
+    resize_canvas(&canvas, AppStateRef::None)?;
     
     let context = canvas
         .get_context("2d")?
@@ -46,7 +53,7 @@ pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
     Ok(())
 }
 
-pub fn resize_canvas(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
+pub fn resize_canvas(canvas: &HtmlCanvasElement, mut app_state_ref: AppStateRef) -> Result<(), JsValue> {
     // Get the parent container dimensions
     let window = web_sys::window().expect("no global window exists");
     let document = window.document().expect("no document exists");
@@ -70,38 +77,66 @@ pub fn resize_canvas(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
         canvas.style().set_property("width", &format!("{}px", container_width))?;
         canvas.style().set_property("height", &format!("{}px", container_height))?;
         
-        // Update AppState with the new dimensions and check auto_fit setting
-        let (auto_fit, has_nodes) = APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            state.canvas_width = container_width as f64;
-            state.canvas_height = container_height as f64;
-            (state.auto_fit, !state.nodes.is_empty())
-        });
-        
-        // Reset canvas transform and apply scaling
-        APP_STATE.with(|state| {
-            let state = state.borrow();
-            if let Some(context) = &state.context {
-                // Reset transform first to avoid compounding scales
-                let _ = context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
-                
-                // Apply the device pixel ratio scaling
-                let _ = context.scale(dpr, dpr);
-            }
-        });
-        
-        // Handle auto-fit if needed
-        if auto_fit && has_nodes {
-            APP_STATE.with(|state| {
+        // Update dimensions and check auto_fit setting based on the reference type
+        let (auto_fit, has_nodes, context) = match app_state_ref {
+            AppStateRef::Mutable(ref mut state) => {
+                // Can update state
+                state.canvas_width = container_width as f64;
+                state.canvas_height = container_height as f64;
+                (state.auto_fit, !state.nodes.is_empty(), state.context.as_ref().cloned())
+            },
+            AppStateRef::Immutable(ref state) => {
+                // Read only - these dimensions won't be saved in state
+                // but that's okay for rendering purposes
+                (state.auto_fit, !state.nodes.is_empty(), state.context.as_ref().cloned())
+            },
+            AppStateRef::None => APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                state.fit_nodes_to_view();
-            });
+                state.canvas_width = container_width as f64;
+                state.canvas_height = container_height as f64;
+                (state.auto_fit, !state.nodes.is_empty(), state.context.as_ref().cloned())
+            })
+        };
+        
+        // Apply the canvas transformations if we have a context
+        if let Some(context) = context {
+            // Reset transform first to avoid compounding scales
+            let _ = context.set_transform(1.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+            
+            // Apply the device pixel ratio scaling
+            let _ = context.scale(dpr, dpr);
+        }
+        
+        // Handle auto-fit if needed based on the reference type
+        if auto_fit && has_nodes {
+            match app_state_ref {
+                AppStateRef::Mutable(ref mut state) => {
+                    state.fit_nodes_to_view();
+                },
+                AppStateRef::Immutable(ref state) => {
+                    // Can't fit nodes in read-only mode,
+                    // but we can still draw them as they are
+                    state.draw_nodes();
+                },
+                AppStateRef::None => APP_STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    state.fit_nodes_to_view();
+                })
+            }
         } else {
             // Just redraw without auto-fit
-            APP_STATE.with(|state| {
-                let state = state.borrow();
-                state.draw_nodes();
-            });
+            match app_state_ref {
+                AppStateRef::Mutable(ref state) => {
+                    state.draw_nodes();
+                },
+                AppStateRef::Immutable(ref state) => {
+                    state.draw_nodes();
+                },
+                AppStateRef::None => APP_STATE.with(|state| {
+                    let state = state.borrow();
+                    state.draw_nodes();
+                })
+            }
         }
     }
     
@@ -109,9 +144,12 @@ pub fn resize_canvas(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
 }
 
 fn setup_resize_handler(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
+    let _window = web_sys::window().expect("no global window exists");
+    
+    // Set up resize handler
     let canvas_clone = canvas.clone();
     let resize_callback = Closure::wrap(Box::new(move || {
-        let _ = resize_canvas(&canvas_clone);
+        let _ = resize_canvas(&canvas_clone, AppStateRef::None);
     }) as Box<dyn FnMut()>);
     
     // Add window resize event listener

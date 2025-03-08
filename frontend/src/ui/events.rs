@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{Document, Event, HtmlTextAreaElement, MouseEvent, HtmlInputElement};
+use web_sys::{Document, Event, HtmlTextAreaElement, MouseEvent};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use std::rc::Rc;
@@ -9,7 +9,6 @@ use crate::{
     models::NodeType,
     state::APP_STATE,
 };
-use web_sys::HtmlElement;
 
 // This will contain event handlers that we'll extract from ui.rs
 // For now, we just have stubs
@@ -468,20 +467,25 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
         .ok_or_else(|| JsValue::from_str("Create agent button not found"))?;
     
     let click_callback = Closure::wrap(Box::new(move |_event: MouseEvent| {
-        // Use the new dispatch method with AddNode message
-        let need_refresh = APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            state.dispatch(Message::AddNode {
-                text: "New Agent".to_string(),
-                // Calculate position - we need to get the viewport center
-                // This logic is now handled in the update function
-                x: 0.0, // Will be calculated in update
-                y: 0.0, // Will be calculated in update
-                node_type: NodeType::AgentIdentity
-            })
-        });
+        // First, create a message we want to dispatch
+        let message = Message::AddNode {
+            text: "New Agent".to_string(),
+            // These will be calculated in update
+            x: 0.0, 
+            y: 0.0, 
+            node_type: NodeType::AgentIdentity
+        };
         
-        // After borrowing mutably, we can refresh UI if needed in a separate borrow
+        // Use the new dispatch method with AddNode message
+        // Scope the mutable borrow to this block
+        let need_refresh = {
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.dispatch(message)
+            })
+        };
+        
+        // After borrowing scope ends, we can refresh UI if needed in a separate borrow
         if need_refresh {
             if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
                 web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());

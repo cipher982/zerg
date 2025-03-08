@@ -125,10 +125,10 @@ pub fn start() -> Result<(), JsValue> {
                     canvas_tab.set_class_name("tab-button active");
                 }
                 
-                // Make sure canvas is properly sized
+                // Make sure canvas is sized properly
                 if let Some(canvas) = document.get_element_by_id("node-canvas") {
                     if let Ok(canvas) = canvas.dyn_into::<web_sys::HtmlCanvasElement>() {
-                        let _ = components::canvas_editor::resize_canvas(&canvas);
+                        let _ = components::canvas_editor::resize_canvas(&canvas, components::canvas_editor::AppStateRef::None);
                     }
                 }
             }

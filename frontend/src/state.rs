@@ -476,20 +476,11 @@ impl AppState {
         let window = web_sys::window().expect("no global window exists");
         let document = window.document().expect("no document exists");
         
-        // Get current active view
-        let active_view = APP_STATE.with(|state| {
+        // Get current state and render the appropriate view
+        APP_STATE.with(|state| {
             let state = state.borrow();
-            state.active_view.clone()
-        });
-        
-        // Refresh dashboard if needed
-        if active_view == crate::storage::ActiveView::Dashboard {
-            if let Err(e) = crate::components::dashboard::refresh_dashboard(&document) {
-                web_sys::console::warn_1(&format!("Failed to refresh dashboard: {:?}", e).into());
-            }
-        }
-        
-        Ok(())
+            crate::views::render_active_view(&state, &document)
+        })
     }
 
     pub fn resize_node_for_content(&mut self, node_id: &str) {
