@@ -174,25 +174,32 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             
             // If auto-fit is enabled, toggle it off
             if auto_fit_enabled {
-                APP_STATE.with(|state| {
+                let need_refresh = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
-                    state.dispatch(crate::messages::Message::ToggleAutoFit);
+                    state.dispatch(crate::messages::Message::ToggleAutoFit)
                 });
                 
-                // Update the UI
-                let auto_fit_toggle = window.document()
-                    .expect("should have a document")
-                    .get_element_by_id("auto-fit-toggle");
-                
-                if let Some(toggle) = auto_fit_toggle {
-                    let _ = toggle.set_attribute("class", "toggle-button");
+                // Update the UI after dropping the mutable borrow
+                if need_refresh {
+                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                        web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                    }
+                    
+                    // Update the auto-fit toggle button
+                    let auto_fit_toggle = window.document()
+                        .expect("should have a document")
+                        .get_element_by_id("auto-fit-toggle");
+                    
+                    if let Some(toggle) = auto_fit_toggle {
+                        let _ = toggle.set_attribute("class", "toggle-button");
+                    }
                 }
             }
             
             // Dispatch StartDragging message
-            APP_STATE.with(|state| {
+            let need_refresh = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                state.dispatch(crate::messages::Message::StartDragging {
+                let result = state.dispatch(crate::messages::Message::StartDragging {
                     node_id: node_id.clone(),
                     offset_x,
                     offset_y,
@@ -204,23 +211,47 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                     state.drag_start_x = x; // Store start position to determine if it was a click or drag
                     state.drag_start_y = y;
                 }
+                
+                result
             });
+            
+            // Refresh UI if needed
+            if need_refresh {
+                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
         } else {
             // Nothing was clicked - prepare for canvas dragging
             // Dispatch StartCanvasDrag message
-            APP_STATE.with(|state| {
+            let need_refresh = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(crate::messages::Message::StartCanvasDrag {
                     start_x: x,
                     start_y: y,
+                })
+            });
+            
+            // After dispatching StartCanvasDrag, check if we need to toggle auto-fit
+            let auto_fit_enabled = APP_STATE.with(|state| {
+                let state = state.borrow();
+                state.auto_fit
+            });
+            
+            // If in Auto Layout Mode, automatically switch to Manual Layout Mode
+            if auto_fit_enabled {
+                let need_refresh_toggle = APP_STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    state.dispatch(crate::messages::Message::ToggleAutoFit)
                 });
                 
-                // If in Auto Layout Mode, automatically switch to Manual Layout Mode
-                let auto_fit_enabled = state.auto_fit;
-                if auto_fit_enabled {
-                    state.dispatch(crate::messages::Message::ToggleAutoFit);
+                // Refresh UI if needed
+                if need_refresh_toggle {
+                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                        web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                    }
                     
-                    // Update the UI
+                    // Update the auto-fit toggle button
                     let auto_fit_toggle = window.document()
                         .expect("should have a document")
                         .get_element_by_id("auto-fit-toggle");
@@ -229,7 +260,12 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                         let _ = toggle.set_attribute("class", "toggle-button");
                     }
                 }
-            });
+            } else if need_refresh {
+                // Refresh UI if needed from the StartCanvasDrag
+                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
         }
     }) as Box<dyn FnMut(_)>);
     
@@ -278,27 +314,41 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 let world_y = y / zoom_level + viewport_y;
                 
                 // Dispatch UpdateNodePosition message
-                APP_STATE.with(|state| {
+                let need_refresh = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::UpdateNodePosition {
                         node_id: node_id,
                         x: world_x - drag_offset_x,
                         y: world_y - drag_offset_y,
-                    });
+                    })
                 });
+                
+                // After borrowing mutably, we can refresh UI if needed in a separate borrow
+                if need_refresh {
+                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                        web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                    }
+                }
                 
                 // Refresh dashboard after node position update
                 let _ = refresh_dashboard_after_change();
             },
             "canvas" => {
                 // Dispatch UpdateCanvasDrag message
-                APP_STATE.with(|state| {
+                let need_refresh = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::UpdateCanvasDrag {
                         current_x: x,
                         current_y: y,
-                    });
+                    })
                 });
+                
+                // After borrowing mutably, we can refresh UI if needed in a separate borrow
+                if need_refresh {
+                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                        web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                    }
+                }
             },
             _ => {
                 // Not dragging anything
@@ -343,16 +393,30 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         // Stop any dragging operation
         if APP_STATE.with(|state| { state.borrow().dragging.is_some() }) {
             // We were dragging a node, stop dragging
-            APP_STATE.with(|state| {
+            let need_refresh = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                state.dispatch(crate::messages::Message::StopDragging);
+                state.dispatch(crate::messages::Message::StopDragging)
             });
+            
+            // After borrowing mutably, we can refresh UI if needed in a separate borrow
+            if need_refresh {
+                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
         } else if APP_STATE.with(|state| { state.borrow().canvas_dragging }) {
             // We were dragging the canvas, stop canvas drag
-            APP_STATE.with(|state| {
+            let need_refresh = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                state.dispatch(crate::messages::Message::StopCanvasDrag);
+                state.dispatch(crate::messages::Message::StopCanvasDrag)
             });
+            
+            // After borrowing mutably, we can refresh UI if needed in a separate borrow
+            if need_refresh {
+                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
         }
         
         // Clear is_dragging_agent flag (this isn't part of any message yet)
@@ -436,14 +500,21 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             let new_viewport_y = world_y - y / new_zoom;
             
             // Dispatch ZoomCanvas message
-            APP_STATE.with(|state| {
+            let need_refresh = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(crate::messages::Message::ZoomCanvas {
                     new_zoom,
                     viewport_x: new_viewport_x,
                     viewport_y: new_viewport_y,
-                });
+                })
             });
+            
+            // After borrowing mutably, we can refresh UI if needed in a separate borrow
+            if need_refresh {
+                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
         }
     }) as Box<dyn FnMut(_)>);
     

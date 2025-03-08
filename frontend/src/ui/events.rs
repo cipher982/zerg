@@ -32,10 +32,17 @@ pub fn setup_auto_fit_button_handler(document: &Document) -> Result<(), JsValue>
     
     let change_handler = Closure::wrap(Box::new(move |_event: Event| {
         // Use the new dispatch method with ToggleAutoFit message
-        APP_STATE.with(|state| {
+        let need_refresh = APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
-            let _ = state.dispatch(Message::ToggleAutoFit);
+            state.dispatch(Message::ToggleAutoFit)
         });
+
+        // After borrowing mutably, we can refresh UI if needed in a separate borrow
+        if need_refresh {
+            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            }
+        }
     }) as Box<dyn FnMut(_)>);
     
     auto_fit_toggle.add_event_listener_with_callback(
@@ -54,19 +61,28 @@ pub fn setup_center_view_handler(document: &Document) -> Result<(), JsValue> {
     let center_button = document.get_element_by_id("center-button")
         .ok_or_else(|| JsValue::from_str("Center button not found"))?;
     
-    let click_callback = Closure::wrap(Box::new(move |_event: Event| {
+    let click_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
         // Use the new dispatch method with CenterView message
-        APP_STATE.with(|state| {
+        let need_refresh = APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
-            let _ = state.dispatch(Message::CenterView);
+            state.dispatch(Message::CenterView)
         });
+
+        // After borrowing mutably, we can refresh UI if needed in a separate borrow
+        if need_refresh {
+            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            }
+        }
     }) as Box<dyn FnMut(_)>);
     
     center_button.add_event_listener_with_callback(
         "click",
-        click_callback.as_ref().unchecked_ref(),
+        click_handler.as_ref().unchecked_ref(),
     )?;
-    click_callback.forget();
+    
+    // Keep the closure alive
+    click_handler.forget();
     
     Ok(())
 }
@@ -76,7 +92,7 @@ pub fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
     let clear_button = document.get_element_by_id("clear-button")
         .ok_or_else(|| JsValue::from_str("Clear button not found"))?;
     
-    let click_callback = Closure::wrap(Box::new(move |_e: Event| {
+    let click_handler = Closure::wrap(Box::new(move |_e: Event| {
         // Show confirmation dialog
         let window = web_sys::window().expect("no global window exists");
         let confirm = window.confirm_with_message("Are you sure you want to clear all nodes? This cannot be undone.")
@@ -84,23 +100,32 @@ pub fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
         
         if confirm {
             // Use the new dispatch method with ClearCanvas message
-            APP_STATE.with(|state| {
+            let need_refresh = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                let _ = state.dispatch(Message::ClearCanvas);
+                state.dispatch(Message::ClearCanvas)
             });
             
             // Clear storage
             if let Err(e) = crate::storage::clear_storage() {
                 web_sys::console::error_1(&format!("Failed to clear storage: {:?}", e).into());
             }
+
+            // After borrowing mutably, we can refresh UI if needed in a separate borrow
+            if need_refresh {
+                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
         }
     }) as Box<dyn FnMut(_)>);
     
     clear_button.add_event_listener_with_callback(
         "click",
-        click_callback.as_ref().unchecked_ref(),
+        click_handler.as_ref().unchecked_ref(),
     )?;
-    click_callback.forget();
+    
+    // Keep the closure alive
+    click_handler.forget();
     
     Ok(())
 }
@@ -136,19 +161,18 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         let default_task_textarea = default_task_elem.dyn_ref::<HtmlTextAreaElement>().unwrap();
         let task_instructions = default_task_textarea.value();
         
-        // Save agent details using the new message pattern
+        // We'll save and close the modal in a single operation to prevent RefCell borrow errors
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
-            let _ = state.dispatch(Message::SaveAgentDetails {
+            
+            // First save the agent details by directly calling the update function
+            crate::update::update(&mut state, Message::SaveAgentDetails {
                 name: name_value,
                 system_instructions,
                 task_instructions,
             });
-        });
-        
-        // Close the modal using the new message pattern
-        APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
+            
+            // Then close the modal using the dispatch method (which will handle UI refresh)
             let _ = state.dispatch(Message::CloseAgentModal);
         });
     }) as Box<dyn FnMut(_)>);
@@ -237,10 +261,17 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
     if let Some(send_button) = document.get_element_by_id("send-to-agent") {
         let send_handler = Closure::wrap(Box::new(move |_event: Event| {
             // Use the new message pattern
-            APP_STATE.with(|state| {
+            let need_refresh = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                let _ = state.dispatch(Message::SendTaskToAgent);
+                state.dispatch(Message::SendTaskToAgent)
             });
+            
+            // After borrowing mutably, we can refresh UI if needed in a separate borrow
+            if need_refresh {
+                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
         }) as Box<dyn FnMut(_)>);
         
         send_button.add_event_listener_with_callback(
@@ -279,10 +310,17 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         let system_instructions_clone = system_instructions.clone();
         let save_function = Closure::once_into_js(move || {
             // Use the new message pattern
-            APP_STATE.with(|state| {
+            let need_refresh = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                let _ = state.dispatch(Message::UpdateSystemInstructions(system_instructions_clone));
+                state.dispatch(Message::UpdateSystemInstructions(system_instructions_clone))
             });
+            
+            // After borrowing mutably, we can refresh UI if needed in a separate borrow
+            if need_refresh {
+                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
         });
         
         // Set new timeout (500ms debounce)
@@ -334,10 +372,17 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         let name_value_clone = name_value.clone();
         let save_function = Closure::once_into_js(move || {
             // Use the new message pattern
-            APP_STATE.with(|state| {
+            let need_refresh = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                let _ = state.dispatch(Message::UpdateAgentName(name_value_clone));
+                state.dispatch(Message::UpdateAgentName(name_value_clone))
             });
+            
+            // After borrowing mutably, we can refresh UI if needed in a separate borrow
+            if need_refresh {
+                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
         });
         
         // Set new timeout (500ms debounce)
@@ -373,10 +418,17 @@ fn setup_tab_handlers(document: &Document) -> Result<(), JsValue> {
     // Main tab click handler
     let main_click = Closure::wrap(Box::new(move |_event: Event| {
         // Use the new message pattern
-        APP_STATE.with(|state| {
+        let need_refresh = APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
-            let _ = state.dispatch(Message::SwitchToMainTab);
+            state.dispatch(Message::SwitchToMainTab)
         });
+        
+        // After borrowing mutably, we can refresh UI if needed in a separate borrow
+        if need_refresh {
+            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            }
+        }
     }) as Box<dyn FnMut(_)>);
     
     main_tab.add_event_listener_with_callback(
@@ -388,10 +440,17 @@ fn setup_tab_handlers(document: &Document) -> Result<(), JsValue> {
     // History tab click handler
     let history_click = Closure::wrap(Box::new(move |_event: Event| {
         // Use the new message pattern
-        APP_STATE.with(|state| {
+        let need_refresh = APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
-            let _ = state.dispatch(Message::SwitchToHistoryTab);
+            state.dispatch(Message::SwitchToHistoryTab)
         });
+        
+        // After borrowing mutably, we can refresh UI if needed in a separate borrow
+        if need_refresh {
+            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            }
+        }
     }) as Box<dyn FnMut(_)>);
     
     history_tab.add_event_listener_with_callback(
@@ -410,17 +469,24 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
     
     let click_callback = Closure::wrap(Box::new(move |_event: MouseEvent| {
         // Use the new dispatch method with AddNode message
-        APP_STATE.with(|state| {
+        let need_refresh = APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
-            let _ = state.dispatch(Message::AddNode {
+            state.dispatch(Message::AddNode {
                 text: "New Agent".to_string(),
                 // Calculate position - we need to get the viewport center
                 // This logic is now handled in the update function
                 x: 0.0, // Will be calculated in update
                 y: 0.0, // Will be calculated in update
                 node_type: NodeType::AgentIdentity
-            });
+            })
         });
+        
+        // After borrowing mutably, we can refresh UI if needed in a separate borrow
+        if need_refresh {
+            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            }
+        }
     }) as Box<dyn FnMut(_)>);
     
     create_agent_button.add_event_listener_with_callback(

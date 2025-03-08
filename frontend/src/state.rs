@@ -516,15 +516,18 @@ impl AppState {
     }
 
     // New dispatch method to handle messages
-    pub fn dispatch(&mut self, msg: Message) -> Result<(), JsValue> {
+    pub fn dispatch(&mut self, msg: Message) -> bool {
         update(self, msg);
         
         // Save state if it was modified
         if self.state_modified {
-            self.save_if_modified()?;
+            if let Err(e) = self.save_if_modified() {
+                web_sys::console::warn_1(&format!("Failed to save state: {:?}", e).into());
+            }
         }
         
-        AppState::refresh_ui_after_state_change()
+        // Return true to indicate that UI refresh is needed
+        true
     }
 }
 

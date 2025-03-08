@@ -197,10 +197,17 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     {
         let dashboard_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
             // Use the new dispatch method with ToggleView message
-            state::APP_STATE.with(|state| {
+            let need_refresh = state::APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                let _ = state.dispatch(messages::Message::ToggleView(storage::ActiveView::Dashboard));
+                state.dispatch(messages::Message::ToggleView(storage::ActiveView::Dashboard))
             });
+            
+            // After borrowing mutably, we can refresh UI if needed in a separate borrow
+            if need_refresh {
+                if let Err(e) = state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
         }) as Box<dyn FnMut(_)>);
         
         dashboard_tab.add_event_listener_with_callback("click", dashboard_click.as_ref().unchecked_ref())?;
@@ -211,10 +218,17 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     {
         let canvas_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
             // Use the new dispatch method with ToggleView message
-            state::APP_STATE.with(|state| {
+            let need_refresh = state::APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                let _ = state.dispatch(messages::Message::ToggleView(storage::ActiveView::Canvas));
+                state.dispatch(messages::Message::ToggleView(storage::ActiveView::Canvas))
             });
+            
+            // After borrowing mutably, we can refresh UI if needed in a separate borrow
+            if need_refresh {
+                if let Err(e) = state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
         }) as Box<dyn FnMut(_)>);
         
         canvas_tab.add_event_listener_with_callback("click", canvas_click.as_ref().unchecked_ref())?;
