@@ -25,6 +25,41 @@ body {
     font-weight: 300;
 }
 
+/* Main navigation tabs */
+.tabs-container {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    right: 0;
+    background-color: #2980b9;
+    padding: 0 20px;
+    display: flex;
+    z-index: 10;
+}
+
+.tabs-container .tab-button {
+    background-color: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    border: none;
+    padding: 12px 20px;
+    margin: 0;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 3px solid transparent;
+}
+
+.tabs-container .tab-button:hover {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.tabs-container .tab-button.active {
+    color: white;
+    border-bottom: 3px solid white;
+    font-weight: 500;
+}
+
 .status-bar {
     position: fixed;
     bottom: 0;
@@ -42,18 +77,15 @@ body {
 
 /* Canvas styles */
 #canvas-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 1;
+    flex: 1;
+    position: relative;
+    overflow: hidden;
 }
 
 /* UI Panel */
 #input-panel {
     position: fixed;
-    top: 70px;
+    top: 110px; /* Adjusted to account for tabs */
     left: 20px;
     background-color: rgba(255, 255, 255, 0.9);
     padding: 15px;
@@ -63,6 +95,17 @@ body {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
+}
+
+/* Dashboard container */
+#dashboard-container {
+    position: absolute;
+    top: 110px; /* Adjusted to account for tabs */
+    left: 0;
+    right: 0;
+    bottom: 30px;
+    padding: 20px;
+    overflow: auto;
 }
 
 /* Instruction text */
@@ -450,4 +493,204 @@ button {
 
 #create-agent-button:hover {
     background-color: #2980b9;
+}
+
+/* Dashboard Styles */
+.dashboard-container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+    background-color: #2a2a3a;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    height: calc(100vh - 140px);
+    overflow-y: auto;
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #3d3d5c;
+}
+
+.search-container {
+    display: flex;
+    align-items: center;
+    background: #252535;
+    border-radius: 4px;
+    padding: 8px 16px;
+    width: 300px;
+}
+
+.search-icon {
+    margin-right: 8px;
+    color: #aaa;
+}
+
+#agent-search {
+    background: transparent;
+    border: none;
+    color: #fff;
+    outline: none;
+    width: 100%;
+    font-size: 14px;
+}
+
+#agent-search::placeholder {
+    color: #777;
+}
+
+.create-agent-btn {
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.create-agent-btn:hover {
+    background: #2980b9;
+}
+
+.agents-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: #eee;
+}
+
+.agents-table th {
+    background: #252535;
+    padding: 14px 16px;
+    text-align: left;
+    font-weight: 600;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+}
+
+.agents-table th:hover {
+    background: #303045;
+}
+
+.agents-table th::after {
+    content: "↕";
+    position: absolute;
+    right: 8px;
+    opacity: 0.3;
+}
+
+.agents-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid #3d3d5c;
+}
+
+.agents-table tr:hover {
+    background: #32324a;
+}
+
+.status-indicator {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.9em;
+}
+
+.status-active {
+    color: #2ecc71;
+}
+
+.status-idle {
+    color: #bdc3c7;
+}
+
+.status-error {
+    color: #e74c3c;
+}
+
+.status-scheduled {
+    color: #3498db;
+}
+
+.actions-cell {
+    white-space: nowrap;
+    text-align: right;
+}
+
+.action-btn {
+    border: none;
+    background: #2c2c40;
+    cursor: pointer;
+    margin-right: 4px;
+    font-size: 16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    color: #eee;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.action-btn:hover {
+    background: #3d3d5c;
+    transform: translateY(-2px);
+}
+
+.run-btn {
+    color: #2ecc71;
+}
+
+.edit-btn {
+    color: #f39c12;
+}
+
+.more-btn {
+    color: #bdc3c7;
+}
+
+/* View tabs for switching between canvas and dashboard */
+.view-tabs {
+    display: flex;
+    background-color: #252535;
+    border-bottom: 1px solid #3d3d5c;
+    margin-bottom: 10px;
+    padding: 0 10px;
+}
+
+.view-tab-button {
+    background: transparent;
+    border: none;
+    color: #bdc3c7;
+    padding: 12px 20px;
+    margin-right: 4px;
+    cursor: pointer;
+    position: relative;
+    font-size: 14px;
+    transition: color 0.3s;
+    border-bottom: 3px solid transparent;
+}
+
+.view-tab-button:hover {
+    color: white;
+}
+
+.view-tab-button.active {
+    color: #3498db;
+    border-bottom: 3px solid #3498db;
+}
+
+/* Ensure we have room for the dashboard */
+#app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding-top: 60px;
+    box-sizing: border-box;
+    overflow: hidden;
 }

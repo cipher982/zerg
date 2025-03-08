@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-use web_sys::window;
+use web_sys::{window, Document};
 use wasm_bindgen_futures::spawn_local;
 
 mod models;
@@ -28,9 +28,24 @@ pub fn start() -> Result<(), JsValue> {
     // Set up the WebSocket connection
     network::setup_websocket()?;
     
-    // Set up the UI components and canvas
+    // Create the tab navigation
+    create_tab_navigation(&document)?;
+    
+    // Set up the UI components and canvas but don't show them initially
     ui::main::setup_ui(&document)?;
     components::canvas_editor::setup_canvas(&document)?;
+    
+    // Hide canvas container initially as we'll show dashboard by default
+    if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
+        canvas_container.set_attribute("style", "display: none;")?;
+    }
+    
+    if let Some(input_panel) = document.get_element_by_id("input-panel") {
+        input_panel.set_attribute("style", "display: none;")?;
+    }
+    
+    // Set up the dashboard
+    components::dashboard::setup_dashboard(&document)?;
     
     // Load state from localStorage
     let loaded_data = state::APP_STATE.with(|state| {
@@ -70,6 +85,110 @@ pub fn start() -> Result<(), JsValue> {
             web_sys::console::log_1(&format!("Error fetching models: {:?}", e).into());
         }
     });
+    
+    Ok(())
+}
+
+// Create tab navigation for switching between dashboard and canvas
+fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
+    // Create a tabs container
+    let tabs_container = document.create_element("div")?;
+    tabs_container.set_id("tabs-container");
+    tabs_container.set_class_name("tabs-container");
+    
+    // Create dashboard tab
+    let dashboard_tab = document.create_element("button")?;
+    dashboard_tab.set_id("dashboard-tab");
+    dashboard_tab.set_class_name("tab-button active");
+    dashboard_tab.set_inner_html("Agent Dashboard");
+    
+    // Create canvas tab
+    let canvas_tab = document.create_element("button")?;
+    canvas_tab.set_id("canvas-tab");
+    canvas_tab.set_class_name("tab-button");
+    canvas_tab.set_inner_html("Canvas Editor");
+    
+    // Add tabs to container
+    tabs_container.append_child(&dashboard_tab)?;
+    tabs_container.append_child(&canvas_tab)?;
+    
+    // Set up dashboard tab click handler
+    {
+        let dashboard_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
+            let window = web_sys::window().expect("no global window exists");
+            let document = window.document().expect("should have document on window");
+            
+            // Show dashboard, hide canvas
+            if let Some(container) = document.get_element_by_id("dashboard-container") {
+                container.set_attribute("style", "display: block;").unwrap();
+            }
+            
+            if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
+                canvas_container.set_attribute("style", "display: none;").unwrap();
+            }
+            
+            if let Some(input_panel) = document.get_element_by_id("input-panel") {
+                input_panel.set_attribute("style", "display: none;").unwrap();
+            }
+            
+            // Update active tab
+            if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
+                dashboard_tab.set_class_name("tab-button active");
+            }
+            
+            if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
+                canvas_tab.set_class_name("tab-button");
+            }
+        }) as Box<dyn FnMut(_)>);
+        
+        dashboard_tab.add_event_listener_with_callback("click", dashboard_click.as_ref().unchecked_ref())?;
+        dashboard_click.forget();
+    }
+    
+    // Set up canvas tab click handler
+    {
+        let canvas_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
+            let window = web_sys::window().expect("no global window exists");
+            let document = window.document().expect("should have document on window");
+            
+            // Show canvas, hide dashboard
+            if let Some(container) = document.get_element_by_id("dashboard-container") {
+                container.set_attribute("style", "display: none;").unwrap();
+            }
+            
+            if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
+                canvas_container.set_attribute("style", "display: block;").unwrap();
+            }
+            
+            if let Some(input_panel) = document.get_element_by_id("input-panel") {
+                input_panel.set_attribute("style", "display: block;").unwrap();
+            }
+            
+            // Update active tab
+            if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
+                dashboard_tab.set_class_name("tab-button");
+            }
+            
+            if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
+                canvas_tab.set_class_name("tab-button active");
+            }
+            
+            // Trigger canvas resize to ensure it renders correctly
+            if let Some(canvas) = document.get_element_by_id("node-canvas") {
+                let canvas = canvas.dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
+                let _ = components::canvas_editor::resize_canvas(&canvas);
+            }
+        }) as Box<dyn FnMut(_)>);
+        
+        canvas_tab.add_event_listener_with_callback("click", canvas_click.as_ref().unchecked_ref())?;
+        canvas_click.forget();
+    }
+    
+    // Insert tabs container after header but before status bar
+    if let Some(status_bar) = document.query_selector(".status-bar")?.and_then(|e| Some(e)) {
+        let body = document.body().unwrap();
+        body.insert_before(&tabs_container, Some(&status_bar))?;
+    }
     
     Ok(())
 }
