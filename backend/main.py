@@ -91,7 +91,7 @@ async def process_text(request: TextRequest):
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": request.text},
             ],
-            max_tokens=300,
+            # max_tokens=300, # disabled for now, some models dont support it.
             stream=True,  # Enable streaming
         )
 
