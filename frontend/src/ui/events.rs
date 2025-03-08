@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{Document, Event, HtmlTextAreaElement, MouseEvent};
+use web_sys::{Document, Event, HtmlTextAreaElement, MouseEvent, HtmlInputElement};
 use crate::state::APP_STATE;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
@@ -401,6 +401,75 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         input_handler.as_ref().unchecked_ref(),
     )?;
     input_handler.forget();
+    
+    // Add input listener to agent name field to auto-save after a delay
+    let agent_name_input = document.get_element_by_id("agent-name")
+        .ok_or_else(|| JsValue::from_str("Agent name input not found"))?;
+    
+    // Create a new timeout ID reference for agent name
+    let name_timeout_id_ref = Rc::new(RefCell::new(None::<i32>));
+    
+    let name_input_timeout_id = name_timeout_id_ref.clone();
+    let name_input_handler = Closure::wrap(Box::new(move |_event: Event| {
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("should have a document");
+        
+        // Get the current value from the input field
+        let name_elem = document.get_element_by_id("agent-name").unwrap();
+        let name_input = name_elem.dyn_ref::<HtmlInputElement>().unwrap();
+        let name_value = name_input.value();
+        
+        // Only proceed if name is not empty
+        if name_value.trim().is_empty() {
+            return;
+        }
+        
+        // Clear previous timeout if it exists
+        if let Some(id) = *name_input_timeout_id.borrow() {
+            window.clear_timeout_with_handle(id);
+        }
+        
+        // Save agent name function
+        let save_function = Closure::once_into_js(move || {
+            // Save to APP_STATE
+            APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                if let Some(id) = &state.selected_node_id {
+                    let id_clone = id.clone();
+                    if let Some(node) = state.nodes.get_mut(&id_clone) {
+                        node.text = name_value.clone();
+                        state.state_modified = true;
+                        let _ = state.save_if_modified();
+                        
+                        // Redraw to update node name in the canvas
+                        state.draw_nodes();
+                        
+                        // Also update the modal title for consistency
+                        if let Some(modal_title) = document.get_element_by_id("modal-title") {
+                            modal_title.set_inner_html(&format!("Agent: {}", name_value));
+                        }
+                    }
+                }
+            });
+        });
+        
+        // Set new timeout (500ms debounce)
+        let new_timeout_id = window
+            .set_timeout_with_callback_and_timeout_and_arguments(
+                save_function.as_ref().unchecked_ref(),
+                500,  // 500ms debounce
+                &js_sys::Array::new(),
+            )
+            .expect("Failed to set timeout");
+        
+        *name_input_timeout_id.borrow_mut() = Some(new_timeout_id);
+    }) as Box<dyn FnMut(_)>);
+    
+    agent_name_input.add_event_listener_with_callback(
+        "input",
+        name_input_handler.as_ref().unchecked_ref(),
+    )?;
+    name_input_handler.forget();
     
     Ok(())
 }
