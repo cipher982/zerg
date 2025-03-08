@@ -167,67 +167,83 @@ fn handle_websocket_message(event: MessageEvent) {
         .as_string()
         .unwrap_or_else(|| "".to_string());
 
-    // Handle the message based on type
-    APP_STATE.with(|state| {
-        let mut state = state.borrow_mut();
-        
-        if let Some(response_node_id) = state.get_node_id_for_message(&message_id) {
-            match msg_type.as_str() {
-                "chunk" => {
-                    // Extract the content from the chunk
-                    let content = js_sys::Reflect::get(&response, &"content".into())
-                        .unwrap_or_else(|_| "".into())
-                        .as_string()
-                        .unwrap_or_else(|| "".to_string());
-                    
-                    // Update the response node text
-                    if let Some(node) = state.nodes.get_mut(&response_node_id) {
-                        // If this is the first chunk, clear the placeholder
-                        if node.text == "..." {
-                            node.text = content;
+    // Track if we need to refresh UI after handling the message
+    let need_refresh = {
+        // Handle the message based on type - isolate the borrow in its own scope
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            
+            if let Some(response_node_id) = state.get_node_id_for_message(&message_id) {
+                match msg_type.as_str() {
+                    "chunk" => {
+                        // Extract the content from the chunk
+                        let content = js_sys::Reflect::get(&response, &"content".into())
+                            .unwrap_or_else(|_| "".into())
+                            .as_string()
+                            .unwrap_or_else(|| "".to_string());
+                        
+                        // Update the response node text
+                        if let Some(node) = state.nodes.get_mut(&response_node_id) {
+                            // If this is the first chunk, clear the placeholder
+                            if node.text == "..." {
+                                node.text = content;
+                            } else {
+                                node.text.push_str(&content);
+                            }
+                            
+                            // Update node size based on new content
+                            state.resize_node_for_content(&response_node_id);
+                            state.draw_nodes();
+                            
+                            // Mark state as modified
+                            state.state_modified = true;
                         } else {
-                            node.text.push_str(&content);
+                            web_sys::console::error_1(&format!("Node not found: {}", response_node_id).into());
                         }
                         
-                        // Update node size based on new content
-                        state.resize_node_for_content(&response_node_id);
+                        // Chunks don't require a full UI refresh
+                        false
+                    },
+                    "completion" => {
                         state.draw_nodes();
                         
-                        // Mark state as modified
-                        state.state_modified = true;
-                    } else {
-                        web_sys::console::error_1(&format!("Node not found: {}", response_node_id).into());
-                    }
-                },
-                "completion" => {
-                    state.draw_nodes();
-                    
-                    // Save state and refresh dashboard on completion
-                    let _ = state.save_if_modified();
-                    
-                    // Refresh UI after state changes
-                    let _ = crate::state::AppState::refresh_ui_after_state_change();
-                },
-                _ => {
-                    // Handle legacy format
-                    if let Ok(response_text) = js_sys::Reflect::get(&response, &"response".into()) {
-                        if let Some(text) = response_text.as_string() {
-                            if let Some(node) = state.nodes.get_mut(&response_node_id) {
-                                node.text = text;
-                                state.resize_node_for_content(&response_node_id);
-                                state.draw_nodes();
-                                
-                                // Mark state as modified
-                                state.state_modified = true;
+                        // Save state on completion
+                        let _ = state.save_if_modified();
+                        
+                        // Return true to indicate we need to refresh the UI after this borrow ends
+                        true
+                    },
+                    _ => {
+                        // Handle legacy format
+                        if let Ok(response_text) = js_sys::Reflect::get(&response, &"response".into()) {
+                            if let Some(text) = response_text.as_string() {
+                                if let Some(node) = state.nodes.get_mut(&response_node_id) {
+                                    node.text = text;
+                                    state.resize_node_for_content(&response_node_id);
+                                    state.draw_nodes();
+                                    
+                                    // Mark state as modified
+                                    state.state_modified = true;
+                                }
                             }
                         }
+                        
+                        // Legacy format doesn't require UI refresh
+                        false
                     }
                 }
+            } else {
+                web_sys::console::error_1(&format!("No node found for message_id: {}", message_id).into());
+                false
             }
-        } else {
-            web_sys::console::error_1(&format!("No node found for message_id: {}", message_id).into());
-        }
-    });
+        })
+    }; // The borrow is completely dropped here
+    
+    // If we need to refresh UI after handling a completion message, do it in a separate borrow
+    if need_refresh {
+        // This happens in its own borrow scope
+        let _ = crate::state::AppState::refresh_ui_after_state_change();
+    }
 }
 
 pub fn send_text_to_backend(text: &str, message_id: String) {

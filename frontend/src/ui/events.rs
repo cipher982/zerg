@@ -265,7 +265,7 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
                     
                     if !task_text.trim().is_empty() {
                         // Get the agent ID
-                        APP_STATE.with(|state| {
+                        let message_id_and_task = APP_STATE.with(|state| {
                             let mut state = state.borrow_mut();
                             if let Some(agent_id) = &state.selected_node_id {
                                 let agent_id_clone = agent_id.clone();
@@ -310,29 +310,37 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
                                 // Track the message ID to node ID mapping
                                 state.track_message(message_id.clone(), response_node_id);
                                 
-                                // Save state
+                                // Save the state and mark as modified
                                 let _ = state.save_if_modified();
                                 
-                                // Release the mutable borrow before making network requests
-                                drop(state);
-                                
-                                // Send to backend (use the network module's implementation)
-                                crate::network::send_text_to_backend(&task_text, message_id);
-                                
-                                // Clear the task input field
-                                task_textarea.set_value("");
-                                
-                                // Show a success message
-                                web_sys::console::log_1(&"Task sent to agent".into());
-                                
-                                // Close the modal after sending
-                                if let Some(modal) = document.get_element_by_id("agent-modal") {
-                                    modal.set_attribute("style", "display: none;").unwrap_or_else(|_| {
-                                        web_sys::console::error_1(&"Failed to close modal".into());
-                                    });
-                                }
+                                // Return the data we need after the borrow ends
+                                Some((message_id, task_text.clone()))
+                            } else {
+                                None
                             }
                         });
+                        
+                        // Process the agent request if we have a message ID
+                        if let Some((message_id, task_text)) = message_id_and_task {
+                            // Send to backend (use the network module's implementation)
+                            crate::network::send_text_to_backend(&task_text, message_id);
+                            
+                            // Clear the task input field
+                            task_textarea.set_value("");
+                            
+                            // Show a success message
+                            web_sys::console::log_1(&"Task sent to agent".into());
+                            
+                            // Close the modal after sending
+                            if let Some(modal) = document.get_element_by_id("agent-modal") {
+                                modal.set_attribute("style", "display: none;").unwrap_or_else(|_| {
+                                    web_sys::console::error_1(&"Failed to close modal".into());
+                                });
+                            }
+                            
+                            // Refresh the dashboard in a separate borrow to avoid borrowing issues
+                            let _ = crate::state::AppState::refresh_ui_after_state_change();
+                        }
                     }
                 }
             }
