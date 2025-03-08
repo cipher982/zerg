@@ -205,6 +205,42 @@ fn handle_websocket_message(event: MessageEvent) {
                         false
                     },
                     "completion" => {
+                        // First extract all needed data from the immutable borrow
+                        let (parent_id_to_update, response_text) = if let Some(node) = state.nodes.get(&response_node_id) {
+                            if let Some(parent_id) = &node.parent_id {
+                                (Some(parent_id.clone()), node.text.clone())
+                            } else {
+                                (None, String::new())
+                            }
+                        } else {
+                            (None, String::new())
+                        };
+                        
+                        // Now use the mutable borrow with the data we extracted
+                        if let Some(parent_id) = parent_id_to_update {
+                            if let Some(agent_node) = state.nodes.get_mut(&parent_id) {
+                                // Set status back to idle
+                                agent_node.status = Some("idle".to_string());
+                                
+                                // Create a new message for the history if it doesn't already exist
+                                let assistant_message = crate::models::Message {
+                                    role: "assistant".to_string(),
+                                    content: response_text.clone(),
+                                    timestamp: js_sys::Date::now() as u64,
+                                };
+                                
+                                // Add to history if it exists
+                                if let Some(history) = &mut agent_node.history {
+                                    // Only add if this exact message isn't already there
+                                    if !history.iter().any(|msg| 
+                                        msg.role == "assistant" && msg.content == response_text
+                                    ) {
+                                        history.push(assistant_message);
+                                    }
+                                }
+                            }
+                        };
+                        
                         state.draw_nodes();
                         
                         // Save state on completion

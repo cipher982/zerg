@@ -2,9 +2,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::{
     Document, 
     HtmlCanvasElement, 
-    HtmlInputElement,
     MouseEvent,
-    WheelEvent,
 };
 use crate::state::{APP_STATE, AppState};
 use crate::models::NodeType;

@@ -475,15 +475,32 @@ impl AppState {
 
     // Separate method to refresh UI after state changes
     pub fn refresh_ui_after_state_change() -> Result<(), JsValue> {
-        // Get window and document
-        let window = web_sys::window().expect("no global window exists");
-        let document = window.document().expect("no document exists");
+        // Refresh both canvas and dashboard views to ensure all UI elements are in sync
+        let window = web_sys::window().ok_or(JsValue::from_str("No window"))?;
+        let document = window.document().ok_or(JsValue::from_str("No document"))?;
         
-        // Get current state and render the appropriate view
+        // First render the active view to ensure proper display of containers
         APP_STATE.with(|state| {
             let state = state.borrow();
             crate::views::render_active_view(&state, &document)
-        })
+        })?;
+        
+        // If we have a canvas, refresh it
+        APP_STATE.with(|state| {
+            let state = state.borrow();
+            if state.canvas.is_some() {
+                // This doesn't require mut access, just redraws
+                state.draw_nodes();
+            }
+        });
+        
+        // Refresh the dashboard if needed
+        let dashboard_container = document.get_element_by_id("dashboard-container");
+        if let Some(_container) = dashboard_container {
+            crate::components::dashboard::refresh_dashboard(&document)?;
+        }
+        
+        Ok(())
     }
 
     pub fn resize_node_for_content(&mut self, node_id: &str) {

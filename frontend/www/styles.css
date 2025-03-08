@@ -601,22 +601,41 @@ button {
     padding: 4px 10px;
     border-radius: 12px;
     font-size: 0.9em;
+    font-weight: 500;
 }
 
-.status-active {
-    color: #2ecc71;
+.status-running {
+    color: #2ecc71; /* Green for active processes */
 }
 
 .status-idle {
-    color: #bdc3c7;
+    color: #95a5a6; /* Neutral gray */
 }
 
 .status-error {
-    color: #e74c3c;
+    color: #e74c3c; /* Red for errors */
 }
 
 .status-scheduled {
-    color: #3498db;
+    color: #3498db; /* Blue for scheduled */
+}
+
+.status-paused {
+    color: #f39c12; /* Orange for paused/disabled */
+}
+
+/* Optional: Add last run success/failure indicator */
+.last-run-indicator {
+    margin-left: 5px;
+    font-size: 0.8em;
+}
+
+.last-run-success {
+    color: #2ecc71;
+}
+
+.last-run-failure {
+    color: #e74c3c;
 }
 
 .agents-table th.actions-header {

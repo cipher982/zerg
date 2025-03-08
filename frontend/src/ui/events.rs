@@ -155,7 +155,7 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         let document = window.document().expect("should have a document");
         
         // Get agent name from input
-        let name_value = if let Some(name_elem) = document.get_element_by_id("agent-name") {
+        let _name_value = if let Some(name_elem) = document.get_element_by_id("agent-name") {
             if let Some(name_input) = name_elem.dyn_ref::<HtmlInputElement>() {
                 name_input.value()
             } else {
@@ -168,12 +168,12 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         // Get system instructions
         let system_elem = document.get_element_by_id("system-instructions").unwrap();
         let system_textarea = system_elem.dyn_ref::<HtmlTextAreaElement>().unwrap();
-        let system_instructions = system_textarea.value();
+        let _system_instructions = system_textarea.value();
         
         // Get default task instructions
         let default_task_elem = document.get_element_by_id("default-task-instructions").unwrap();
         let default_task_textarea = default_task_elem.dyn_ref::<HtmlTextAreaElement>().unwrap();
-        let task_instructions = default_task_textarea.value();
+        let _task_instructions = default_task_textarea.value();
         
         let (need_refresh, pending_call) = APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
@@ -499,7 +499,7 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
         let create_agent_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
             // Create a new agent node message
             let window = web_sys::window().expect("no global window exists");
-            let document = window.document().expect("should have a document on window");
+            let _document = window.document().expect("should have a document on window");
             
             // Determine a good position for the new agent
             // Use center of viewport if available, or a default position

@@ -106,18 +106,24 @@ pub fn draw_node(_state: &AppState, node: &Node, context: &CanvasRenderingContex
                         // Pulsing animation using time
                         let timestamp = Date::now() as f64;
                         let pulse = (timestamp / 500.0).sin() * 0.5 + 0.5; // 0 to 1 pulsing
-                        let pulse_color = format!("rgba(255, 255, 255, {})", 0.5 + pulse * 0.5);
+                        let pulse_color = format!("rgba(46, 204, 113, {})", 0.5 + pulse * 0.5); // Green with pulsing
                         context.set_stroke_style_str(&pulse_color);
                     },
                     "error" => {
-                        context.set_stroke_style_str("rgba(255, 0, 0, 0.8)");
+                        context.set_stroke_style_str("rgba(231, 76, 60, 0.8)"); // Red for error
+                    },
+                    "scheduled" => {
+                        context.set_stroke_style_str("rgba(52, 152, 219, 0.8)"); // Blue for scheduled
+                    },
+                    "paused" => {
+                        context.set_stroke_style_str("rgba(243, 156, 18, 0.8)"); // Orange for paused
                     },
                     _ => { // idle or other
-                        context.set_stroke_style_str("white");
+                        context.set_stroke_style_str("rgba(149, 165, 166, 0.8)"); // Gray for idle
                     }
                 }
             } else {
-                context.set_stroke_style_str("white");
+                context.set_stroke_style_str("rgba(149, 165, 166, 0.8)"); // Gray by default (idle)
             }
             
             context.set_line_width(2.0);
