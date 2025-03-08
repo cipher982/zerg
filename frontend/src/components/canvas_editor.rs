@@ -140,7 +140,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         let y = event.offset_y() as f64;
         
         // First determine what was clicked
-        let (clicked_id, is_agent, offset_x, offset_y, auto_fit_was_enabled) = APP_STATE.with(|state| {
+        let (clicked_id, is_agent, offset_x, offset_y, _auto_fit_was_enabled) = APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             
             // Check if we clicked on a node
@@ -175,18 +175,6 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             }
         });
         
-        // If auto-fit was enabled, update the toggle in the UI
-        if auto_fit_was_enabled {
-            // Update the toggle UI to match the new state
-            let window = web_sys::window().expect("no global window exists");
-            let document = window.document().expect("should have a document");
-            if let Some(toggle) = document.get_element_by_id("auto-fit-toggle") {
-                if let Some(checkbox) = toggle.dyn_ref::<web_sys::HtmlInputElement>() {
-                    checkbox.set_checked(false);
-                }
-            }
-        }
-        
         // Check if a node was clicked
         if let Some(id) = clicked_id {
             // Check if right click
@@ -195,82 +183,41 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 return;
             }
             
-            if is_agent {
-                // Handle agent node click - get necessary data first
-                let (node_text, system_instructions, history_data) = APP_STATE.with(|state| {
-                    let state = state.borrow();
-                    
-                    if let Some(node) = state.nodes.get(&id) {
-                        (
-                            node.text.clone(),
-                            node.system_instructions.clone().unwrap_or_default(),
-                            node.history.clone().unwrap_or_default()
-                        )
-                    } else {
-                        (String::new(), String::new(), Vec::new())
-                    }
-                });
+            // Check if auto-fit is enabled before disabling it
+            let auto_fit_was_enabled = APP_STATE.with(|state| {
+                let mut state = state.borrow_mut();
                 
-                // Now safely manipulate the DOM without holding the borrow
+                // If in Auto Layout Mode, automatically switch to Manual Layout Mode
+                let was_auto_fit = state.auto_fit;
+                if was_auto_fit {
+                    state.auto_fit = false;
+                }
+                
+                state.dragging = Some(id);
+                state.drag_offset_x = offset_x;
+                state.drag_offset_y = offset_y;
+                state.canvas_dragging = false; // Ensure canvas dragging is off
+                
+                // If this is an agent node, store additional information for the mouseup handler
+                if is_agent {
+                    state.is_dragging_agent = true;
+                    state.drag_start_x = x; // Store start position to determine if it was a click or drag
+                    state.drag_start_y = y;
+                }
+                
+                was_auto_fit
+            });
+            
+            // If auto-fit was enabled, update the UI toggle
+            if auto_fit_was_enabled {
+                // Update the toggle UI to match the new state
                 let window = web_sys::window().expect("no global window exists");
                 let document = window.document().expect("should have a document");
-                
-                // Set modal title
-                if let Some(modal_title) = document.get_element_by_id("modal-title") {
-                    modal_title.set_inner_html(&format!("Agent: {}", node_text));
-                }
-                
-                // Set agent name in the input field
-                if let Some(name_elem) = document.get_element_by_id("agent-name") {
-                    if let Some(name_input) = name_elem.dyn_ref::<web_sys::HtmlInputElement>() {
-                        name_input.set_value(&node_text);
+                if let Some(toggle) = document.get_element_by_id("auto-fit-toggle") {
+                    if let Some(checkbox) = toggle.dyn_ref::<web_sys::HtmlInputElement>() {
+                        checkbox.set_checked(false);
                     }
                 }
-                
-                // Load system instructions
-                if let Some(system_elem) = document.get_element_by_id("system-instructions") {
-                    if let Some(system_textarea) = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>() {
-                        system_textarea.set_value(&system_instructions);
-                    }
-                }
-                
-                // Load conversation history
-                if let Some(history_container) = document.get_element_by_id("history-container") {
-                    if history_data.is_empty() {
-                        history_container.set_inner_html("<p>No history available.</p>");
-                    } else {
-                        // Clear existing history
-                        history_container.set_inner_html("");
-                        
-                        // Add each message to the history container
-                        for message in history_data {
-                            if let Ok(message_elem) = document.create_element("div") {
-                                message_elem.set_class_name(&format!("history-item {}", message.role));
-                                
-                                if let Ok(content) = document.create_element("p") {
-                                    content.set_inner_html(&message.content);
-                                    
-                                    let _ = message_elem.append_child(&content);
-                                    let _ = history_container.append_child(&message_elem);
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Show the modal
-                if let Some(modal) = document.get_element_by_id("agent-modal") {
-                    let _ = modal.set_attribute("style", "display: block;");
-                }
-            } else {
-                // Handle regular node dragging
-                APP_STATE.with(|state| {
-                    let mut state = state.borrow_mut();
-                    state.dragging = Some(id);
-                    state.drag_offset_x = offset_x;
-                    state.drag_offset_y = offset_y;
-                    state.canvas_dragging = false; // Ensure canvas dragging is off
-                });
             }
         }
     }) as Box<dyn FnMut(_)>);
@@ -335,15 +282,120 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     
     // Mouse up event
     let canvas_mouseup = canvas.clone();
-    let mouseup_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
-        APP_STATE.with(|state| {
+    let mouseup_handler = Closure::wrap(Box::new(move |event: MouseEvent| {
+        let x = event.offset_x() as f64;
+        let y = event.offset_y() as f64;
+        
+        // Handle agent node click vs. drag
+        let should_open_modal = APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
+            
+            // Check if we were dragging an agent
+            let was_dragging_agent = state.is_dragging_agent;
+            state.is_dragging_agent = false;
+            
+            // Determine if this was a click or drag (by checking distance)
+            let was_click = if was_dragging_agent {
+                let dx = x - state.drag_start_x;
+                let dy = y - state.drag_start_y;
+                let distance_squared = dx * dx + dy * dy;
+                
+                // If the mouse didn't move much, consider it a click
+                // (Using a small threshold to account for slight movements)
+                distance_squared < 25.0 // 5px threshold
+            } else {
+                false
+            };
+            
+            // Save the node ID if we need to open modal
+            let node_id = if was_dragging_agent && was_click {
+                state.selected_node_id.clone()
+            } else {
+                None
+            };
+            
+            // Clean up dragging state
             state.dragging = None;
-            state.canvas_dragging = false; // Clear canvas dragging state
+            state.canvas_dragging = false;
             
             // Save state after completing the drag
             let _ = state.save_if_modified();
+            
+            // Return whether we should open modal and node ID
+            (was_dragging_agent && was_click, node_id)
         });
+        
+        // If this was a click on an agent node (not a drag), open the modal
+        if should_open_modal.0 {
+            if let Some(node_id) = should_open_modal.1 {
+                // Get agent data first
+                let (node_text, system_instructions, history_data) = APP_STATE.with(|state| {
+                    let state = state.borrow();
+                    
+                    if let Some(node) = state.nodes.get(&node_id) {
+                        (
+                            node.text.clone(),
+                            node.system_instructions.clone().unwrap_or_default(),
+                            node.history.clone().unwrap_or_default()
+                        )
+                    } else {
+                        (String::new(), String::new(), Vec::new())
+                    }
+                });
+                
+                // Now update modal without holding the borrow
+                let window = web_sys::window().expect("no global window exists");
+                let document = window.document().expect("should have a document");
+                
+                // Set modal title
+                if let Some(modal_title) = document.get_element_by_id("modal-title") {
+                    modal_title.set_inner_html(&format!("Agent: {}", node_text));
+                }
+                
+                // Set agent name in the input field
+                if let Some(name_elem) = document.get_element_by_id("agent-name") {
+                    if let Some(name_input) = name_elem.dyn_ref::<web_sys::HtmlInputElement>() {
+                        name_input.set_value(&node_text);
+                    }
+                }
+                
+                // Load system instructions
+                if let Some(system_elem) = document.get_element_by_id("system-instructions") {
+                    if let Some(system_textarea) = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>() {
+                        system_textarea.set_value(&system_instructions);
+                    }
+                }
+                
+                // Load conversation history
+                if let Some(history_container) = document.get_element_by_id("history-container") {
+                    if history_data.is_empty() {
+                        history_container.set_inner_html("<p>No history available.</p>");
+                    } else {
+                        // Clear existing history
+                        history_container.set_inner_html("");
+                        
+                        // Add each message to the history container
+                        for message in history_data {
+                            if let Ok(message_elem) = document.create_element("div") {
+                                message_elem.set_class_name(&format!("history-item {}", message.role));
+                                
+                                if let Ok(content) = document.create_element("p") {
+                                    content.set_inner_html(&message.content);
+                                    
+                                    let _ = message_elem.append_child(&content);
+                                    let _ = history_container.append_child(&message_elem);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Show the modal
+                if let Some(modal) = document.get_element_by_id("agent-modal") {
+                    let _ = modal.set_attribute("style", "display: block;");
+                }
+            }
+        }
     }) as Box<dyn FnMut(_)>);
     
     canvas_mouseup.add_event_listener_with_callback(

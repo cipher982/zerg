@@ -45,6 +45,8 @@ pub struct AppState {
     pub state_modified: bool,
     // Currently selected node ID
     pub selected_node_id: Option<String>,
+    // Flag to track if we're dragging an agent node
+    pub is_dragging_agent: bool,
 }
 
 impl AppState {
@@ -80,6 +82,7 @@ impl AppState {
             ],
             state_modified: false,
             selected_node_id: None,
+            is_dragging_agent: false,
         }
     }
 
