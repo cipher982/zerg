@@ -9,6 +9,8 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use std::rc::Rc;
+use crate::messages::Message;
+use crate::update::update;
 
 // Store global application state
 pub struct AppState {
@@ -511,6 +513,35 @@ impl AppState {
             .and_then(|node| node.task_instructions.clone())
             .filter(|instructions| !instructions.trim().is_empty())
             .unwrap_or_else(|| "begin".to_string())
+    }
+
+    // New dispatch method to handle messages
+    pub fn dispatch(msg: Message) -> Result<(), JsValue> {
+        APP_STATE.with(|state| {
+            let mut st = state.borrow_mut();
+            update(&mut st, msg);
+            
+            // Save state if it was modified
+            if st.state_modified {
+                st.state_modified = false; // Reset the modified flag
+                let _ = st.save_if_modified(); // Call on the instance, not the type
+            }
+        });
+        
+        // Get the document for rendering
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("should have a document on window");
+        
+        // Render the active view
+        APP_STATE.with(|state| {
+            let st = state.borrow();
+            // Handle the Result from render_active_view without using ?
+            if let Err(e) = crate::views::render_active_view(&st, &document) {
+                web_sys::console::error_1(&format!("Error rendering view: {:?}", e).into());
+            }
+        });
+        
+        Ok(())
     }
 }
 
