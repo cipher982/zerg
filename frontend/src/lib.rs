@@ -197,7 +197,7 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     {
         let dashboard_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
             // Use the new dispatch method with ToggleView message
-            let need_refresh = state::APP_STATE.with(|state| {
+            let (need_refresh, _) = state::APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(messages::Message::ToggleView(storage::ActiveView::Dashboard))
             });
@@ -218,7 +218,7 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     {
         let canvas_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
             // Use the new dispatch method with ToggleView message
-            let need_refresh = state::APP_STATE.with(|state| {
+            let (need_refresh, _) = state::APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(messages::Message::ToggleView(storage::ActiveView::Canvas))
             });

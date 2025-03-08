@@ -214,7 +214,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             
             // If auto-fit is enabled, toggle it off
             if auto_fit_enabled {
-                let need_refresh = APP_STATE.with(|state| {
+                let (need_refresh, _) = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::ToggleAutoFit)
                 });
@@ -240,7 +240,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             }
             
             // Dispatch StartDragging message
-            let need_refresh = APP_STATE.with(|state| {
+            let (need_refresh, _) = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 let result = state.dispatch(crate::messages::Message::StartDragging {
                     node_id: node_id.clone(),
@@ -267,7 +267,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         } else {
             // Nothing was clicked - prepare for canvas dragging
             // Dispatch StartCanvasDrag message
-            let need_refresh = APP_STATE.with(|state| {
+            let (need_refresh, _) = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(crate::messages::Message::StartCanvasDrag {
                     start_x: x,
@@ -283,7 +283,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             
             // If in Auto Layout Mode, automatically switch to Manual Layout Mode
             if auto_fit_enabled {
-                let need_refresh_toggle = APP_STATE.with(|state| {
+                let (need_refresh_toggle, _) = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::ToggleAutoFit)
                 });
@@ -360,7 +360,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 let world_y = y / zoom_level + viewport_y;
                 
                 // Dispatch UpdateNodePosition message
-                let need_refresh = APP_STATE.with(|state| {
+                let (need_refresh, _) = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::UpdateNodePosition {
                         node_id: node_id,
@@ -381,7 +381,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             },
             "canvas" => {
                 // Dispatch UpdateCanvasDrag message
-                let need_refresh = APP_STATE.with(|state| {
+                let (need_refresh, _) = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::UpdateCanvasDrag {
                         current_x: x,
@@ -439,7 +439,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         // Stop any dragging operation
         if APP_STATE.with(|state| { state.borrow().dragging.is_some() }) {
             // We were dragging a node, stop dragging
-            let need_refresh = APP_STATE.with(|state| {
+            let (need_refresh, _) = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(crate::messages::Message::StopDragging)
             });
@@ -452,7 +452,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             }
         } else if APP_STATE.with(|state| { state.borrow().canvas_dragging }) {
             // We were dragging the canvas, stop canvas drag
-            let need_refresh = APP_STATE.with(|state| {
+            let (need_refresh, _) = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(crate::messages::Message::StopCanvasDrag)
             });
@@ -546,7 +546,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             let new_viewport_y = world_y - y / new_zoom;
             
             // Dispatch ZoomCanvas message
-            let need_refresh = APP_STATE.with(|state| {
+            let (need_refresh, _) = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(crate::messages::Message::ZoomCanvas {
                     new_zoom,
