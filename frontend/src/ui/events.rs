@@ -260,10 +260,13 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
     if let Some(send_button) = document.get_element_by_id("send-to-agent") {
         let send_handler = Closure::wrap(Box::new(move |_event: Event| {
             // Use the new message pattern
-            let need_refresh = APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.dispatch(Message::SendTaskToAgent)
-            });
+            let need_refresh = {
+                // Scope the mutable borrow so it's dropped before refresh_ui_after_state_change
+                APP_STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    state.dispatch(Message::SendTaskToAgent)
+                })
+            };
             
             // After borrowing mutably, we can refresh UI if needed in a separate borrow
             if need_refresh {
