@@ -99,7 +99,7 @@ pub fn setup_center_view_handler(document: &Document) -> Result<(), JsValue> {
 // Clear button handler
 pub fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
     // Set up clear button click handler
-    if let Some(clear_button) = document.get_element_by_id("clear-canvas") {
+    if let Some(clear_button) = document.get_element_by_id("clear-button") {
         let click_handler = Closure::wrap(Box::new(move |_e: Event| {
             // Show confirmation dialog
             let window = web_sys::window().expect("no global window exists");
@@ -495,7 +495,7 @@ fn setup_tab_handlers(document: &Document) -> Result<(), JsValue> {
 // Create Agent button handler
 pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsValue> {
     // Get the create agent button
-    if let Some(create_agent_button) = document.get_element_by_id("create-agent") {
+    if let Some(create_agent_button) = document.get_element_by_id("create-agent-button") {
         let create_agent_handler = Closure::wrap(Box::new(move |_event: MouseEvent| {
             // Create a new agent node message
             let window = web_sys::window().expect("no global window exists");
