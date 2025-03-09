@@ -500,10 +500,10 @@ impl AppState {
     // Save state if modified
     pub fn save_if_modified(&mut self) -> Result<(), JsValue> {
         if self.state_modified {
-            // Save to localStorage for quick local persistence
+            // Save to API as the source of truth
             let result = crate::storage::save_state(self);
             
-            // Also save to the API as the source of truth
+            // Save to the API
             crate::storage::save_state_to_api(self);
             
             // Sync agent messages

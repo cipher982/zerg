@@ -56,10 +56,12 @@ pub fn start() -> Result<(), JsValue> {
     // Show dashboard as the default view
     views::render_active_view(&state::AppState::new(), &document)?;
     
-    // First try loading from API, with localStorage as fallback
+    // Load state from API only
     state::APP_STATE.with(|state_ref| {
         let mut state = state_ref.borrow_mut();
-        storage::load_state_prioritizing_api(&mut state);
+        if let Err(e) = storage::load_state(&mut state) {
+            web_sys::console::error_1(&format!("Error starting state loading: {:?}", e).into());
+        }
     });
     
     // Set up auto-save timer (every 5 seconds)
