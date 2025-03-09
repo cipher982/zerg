@@ -1,3 +1,46 @@
+:root {
+  /* Colors */
+  --color-primary: #3498db;
+  --color-success: #2ecc71;
+  --color-warning: #f39c12;
+  --color-error: #e74c3c;
+  --color-neutral: #95a5a6;
+  
+  /* Background colors */
+  --bg-dark: #252535;
+  --bg-darker: #1f1f2e;
+  --bg-hover: #32324a;
+  --bg-button: #2c2c40;
+  --bg-button-hover: #3d3d5c;
+  
+  /* Border colors */
+  --border-color: #3d3d5c;
+  
+  /* Text colors */
+  --text-primary: #eee;
+  --text-secondary: #bdc3c7;
+  
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  /* Component sizes */
+  --button-size: 2rem;
+  
+  /* Breakpoints */
+  --breakpoint-sm: 576px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 992px;
+  --breakpoint-xl: 1200px;
+  
+  /* Table specific */
+  --table-cell-padding: var(--spacing-md) var(--spacing-lg);
+  --actions-column-width: 7.5rem;
+}
+
 /* Reset and base styles */
 body {
     margin: 0;
@@ -563,12 +606,12 @@ button {
 .agents-table {
     width: 100%;
     border-collapse: collapse;
-    color: #eee;
+    color: var(--text-primary);
 }
 
 .agents-table th {
-    background: #252535;
-    padding: 14px 16px;
+    background: var(--bg-dark);
+    padding: var(--table-cell-padding);
     text-align: left;
     font-weight: 600;
     cursor: pointer;
@@ -577,7 +620,7 @@ button {
 }
 
 .agents-table th:hover {
-    background: #303045;
+    background: var(--bg-hover);
 }
 
 .agents-table th::after {
@@ -588,12 +631,12 @@ button {
 }
 
 .agents-table td {
-    padding: 14px 16px;
-    border-bottom: 1px solid #3d3d5c;
+    padding: var(--table-cell-padding);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .agents-table tr:hover {
-    background: #32324a;
+    background: var(--bg-hover);
 }
 
 .status-indicator {
@@ -639,54 +682,53 @@ button {
 }
 
 .agents-table th.actions-header {
-    width: 108px;
-    min-width: 108px;
-    max-width: 108px;
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background-color: var(--bg-dark);
+    box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+    width: auto;
+    min-width: var(--actions-column-width);
 }
 
 .actions-cell {
     white-space: nowrap;
-    text-align: right;
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    width: 108px;
-    min-width: 108px;
-    max-width: 108px;
+    gap: var(--spacing-xs);
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background-color: #2a2a3a;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+    min-width: var(--actions-column-width);
 }
 
 .action-btn {
     border: none;
-    background: #2c2c40;
+    background: var(--bg-button);
     cursor: pointer;
-    margin-right: 4px;
-    font-size: 16px;
-    width: 32px;
-    height: 32px;
+    font-size: 1rem;
+    width: var(--button-size);
+    height: var(--button-size);
     border-radius: 4px;
-    color: #eee;
+    color: var(--text-primary);
     transition: background 0.2s, transform 0.1s;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
 }
 
 .action-btn:hover {
-    background: #3d3d5c;
+    background: var(--bg-button-hover);
     transform: translateY(-2px);
 }
 
-.run-btn {
-    color: #2ecc71;
-}
-
-.edit-btn {
-    color: #f39c12;
-}
-
-.more-btn {
-    color: #bdc3c7;
-}
+.run-btn { color: var(--color-success); }
+.edit-btn { color: var(--color-warning); }
+.more-btn { color: var(--text-secondary); }
 
 /* View tabs for switching between canvas and dashboard */
 .view-tabs {
@@ -727,4 +769,34 @@ button {
     padding-top: 60px;
     box-sizing: border-box;
     overflow: hidden;
+}
+
+/* Responsive table styles */
+@media (max-width: 992px) {
+    /* Enable horizontal scrolling for the table */
+    .dashboard-container {
+        overflow-x: auto;
+        padding-bottom: var(--spacing-md);
+    }
+    
+    /* Ensure consistent cell heights with flexible widths */
+    .agents-table th, .agents-table td {
+        padding: var(--spacing-sm) var(--spacing-md);
+        white-space: nowrap;
+    }
+    
+    /* Ensure table row hover color includes the sticky column */
+    .agents-table tr:hover .actions-cell {
+        background-color: var(--bg-hover);
+    }
+}
+
+@media (max-width: 576px) {
+    .actions-cell {
+        gap: var(--spacing-sm);
+    }
+    
+    .action-btn {
+        --button-size: 2.25rem;
+    }
 }
