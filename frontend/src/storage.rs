@@ -426,8 +426,13 @@ pub fn migrate_local_storage_to_api() -> Result<(), JsValue> {
 
 /// Load app state with API as source of truth and localStorage as fallback
 pub fn load_state_prioritizing_api(app_state: &mut AppState) {
+    // Mark as loading
+    app_state.is_loading = true;
+    app_state.data_loaded = false;
+    
     // First attempt to load from API
     load_state_from_api_sync(app_state);
+    app_state.api_load_attempted = true;
     
     web_sys::console::log_1(&"Loading data from API with localStorage fallback".into());
     
@@ -438,6 +443,7 @@ pub fn load_state_prioritizing_api(app_state: &mut AppState) {
             Ok(Some(storage)) => storage,
             _ => {
                 web_sys::console::warn_1(&"Could not access localStorage".into());
+                app_state.is_loading = false;
                 return;
             }
         };
@@ -449,6 +455,7 @@ pub fn load_state_prioritizing_api(app_state: &mut AppState) {
                     if !nodes.is_empty() {
                         web_sys::console::log_1(&format!("Loaded {} nodes from localStorage fallback", nodes.len()).into());
                         app_state.nodes = nodes;
+                        app_state.data_loaded = true;
                         
                         // Save to API to ensure sync
                         let nodes_clone = app_state.nodes.clone();
@@ -491,56 +498,39 @@ pub fn load_state_prioritizing_api(app_state: &mut AppState) {
         if let Ok(Some(view)) = storage.get_item(ACTIVE_VIEW_KEY) {
             app_state.active_view = if view == "dashboard" { ActiveView::Dashboard } else { ActiveView::Canvas };
         }
+    } else {
+        app_state.data_loaded = true;
     }
+    
+    // Mark loading as complete
+    app_state.is_loading = false;
+    
+    // Schedule UI refresh after the current function completes
+    // This avoids trying to borrow APP_STATE again while it's already mutably borrowed
+    let window = web_sys::window().expect("no global window exists");
+    let closure = Closure::once(|| {
+        // This will run after the current execution context is complete
+        if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+            web_sys::console::warn_1(&format!("Failed to refresh UI after state load: {:?}", e).into());
+        }
+    });
+    
+    window.set_timeout_with_callback_and_timeout_and_arguments_0(
+        closure.as_ref().unchecked_ref(),
+        0
+    ).expect("Failed to set timeout");
+    
+    // Ensure closure lives long enough
+    closure.forget();
 }
 
-/// A synchronous version of API loading for initial app load
+/// Load state directly from the API (synchronous)
 fn load_state_from_api_sync(app_state: &mut AppState) {
-    use web_sys::{Request, RequestInit, RequestMode};
+    // Display a warning since this function is synchronous
+    web_sys::console::warn_1(&"Synchronous API fetching not implemented yet".into());
     
-    let window = web_sys::window().expect("no global window exists");
-    
-    let opts = RequestInit::new();
-    opts.set_method("GET");
-    opts.set_mode(RequestMode::Cors);
-    
-    // Create a synchronous-like request using a flag
-    let api_loaded = false;
-    let api_url = format!("{}/agents/", API_BASE_URL);
-    
-    match Request::new_with_str_and_init(&api_url, &opts) {
-        Ok(request) => {
-            let promise = window.fetch_with_request(&request);
-            
-            // Since we need synchronous behavior, we'll use a different approach
-            // without XMLHttpRequest (which isn't available in web_sys by default)
-            let _ = promise; // Acknowledging we're not using this promise
-                
-            // For now, we'll just log this as a fallback
-            web_sys::console::log_1(&"Synchronous API fetching not implemented yet".into());
-            // You would need to implement an alternative approach or add XMLHttpRequest
-            // to your web-sys features in Cargo.toml
-                
-            // We don't return a value as this is unit function
-            return;
-        },
-        Err(e) => {
-            web_sys::console::warn_1(&format!("Error creating API request: {:?}", e).into());
-        }
-    }
-    
-    // Also asynchronously load agent messages if we loaded agents
-    if api_loaded && !app_state.nodes.is_empty() {
-        // We already loaded the nodes, but we still need to load messages
-        // This can happen asynchronously
-        for (node_id, _) in app_state.nodes.clone().iter() {
-            if let Some(agent_id_str) = node_id.strip_prefix("agent-") {
-                if let Ok(agent_id) = agent_id_str.parse::<u32>() {
-                    load_agent_messages_from_api(node_id, agent_id);
-                }
-            }
-        }
-    }
+    // TODO: When implementing, don't call refresh functions directly from here
+    // Instead, update app_state and let the caller handle the refresh
 }
 
 /// Helper function to save just the nodes to the API

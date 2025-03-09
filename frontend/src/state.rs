@@ -55,6 +55,10 @@ pub struct AppState {
     pub active_view: ActiveView,
     // Pending network call data to avoid nested borrows
     pub pending_network_call: Option<(String, String)>,
+    // Loading state flags
+    pub is_loading: bool,
+    pub data_loaded: bool,
+    pub api_load_attempted: bool,
 }
 
 impl AppState {
@@ -93,6 +97,9 @@ impl AppState {
             is_dragging_agent: false,
             active_view: ActiveView::Dashboard, // Default to Dashboard view
             pending_network_call: None,
+            is_loading: true,
+            data_loaded: false,
+            api_load_attempted: false,
         }
     }
 
@@ -523,28 +530,31 @@ impl AppState {
         let window = web_sys::window().ok_or(JsValue::from_str("No window"))?;
         let document = window.document().ok_or(JsValue::from_str("No document"))?;
         
-        // First render the active view to ensure proper display of containers
-        APP_STATE.with(|state| {
+        // Get the active view once to avoid multiple borrows
+        let active_view = APP_STATE.with(|state| {
             let state = state.borrow();
-            crate::views::render_active_view(&state, &document)
-        })?;
-        
-        // If we have a canvas, refresh it
-        APP_STATE.with(|state| {
-            let state = state.borrow();
-            if let Some(_canvas) = &state.canvas {
-                if let Some(_context) = &state.context {
-                    // This doesn't require mut access, just redraws
-                    state.draw_nodes();
-                }
-            }
+            state.active_view.clone() // Clone to avoid borrowing issues
         });
         
-        // Refresh the dashboard if needed
-        let dashboard_container = document.get_element_by_id("dashboard-container");
-        if let Some(_container) = dashboard_container {
-            crate::components::dashboard::refresh_dashboard(&document)?;
+        // First render the active view to ensure proper display of containers
+        crate::views::render_active_view_by_type(&active_view, &document)?;
+        
+        // Check if we need to refresh canvas
+        let has_canvas = APP_STATE.with(|state| {
+            let state = state.borrow();
+            state.canvas.is_some() && state.context.is_some()
+        });
+        
+        // If we have a canvas, refresh it
+        if has_canvas {
+            APP_STATE.with(|state| {
+                let state = state.borrow();
+                state.draw_nodes();
+            });
         }
+        
+        // Always refresh the dashboard to ensure it has the latest data
+        crate::components::dashboard::refresh_dashboard(&document)?;
         
         Ok(())
     }
