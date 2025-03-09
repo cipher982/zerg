@@ -5,8 +5,8 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from zerg.app.models import Agent
-from zerg.app.models import AgentMessage
+from zerg.app.models.models import Agent
+from zerg.app.models.models import AgentMessage
 
 
 # Agent CRUD operations
