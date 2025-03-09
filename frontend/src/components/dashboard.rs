@@ -49,17 +49,38 @@ impl Agent {
 }
 
 // Main function to render the dashboard
-pub fn render_dashboard(document: &Document, container: &Element) -> Result<(), JsValue> {
-    // Clear the container
-    container.set_inner_html("");
+pub fn render_dashboard(document: &Document) -> Result<(), JsValue> {
+    let dashboard = document.get_element_by_id("dashboard")
+        .ok_or(JsValue::from_str("Could not find dashboard element"))?;
+    
+    // Clear existing content
+    dashboard.set_inner_html("");
+    
+    // Check loading state
+    let is_loading = APP_STATE.with(|state| {
+        let state = state.borrow();
+        state.is_loading
+    });
+    
+    if is_loading {
+        // Show loading indicator
+        let loading_div = document.create_element("div")?;
+        loading_div.set_class_name("loading-indicator");
+        loading_div.set_inner_html("Loading agents...");
+        dashboard.append_child(&loading_div)?;
+        return Ok(());
+    }
+    
+    // Get agents and render them
+    let agents = get_agents_from_app_state();
     
     // Create header area with search and create button
     let header = create_dashboard_header(document)?;
-    container.append_child(&header)?;
+    dashboard.append_child(&header)?;
     
     // Create the table
     let table = create_agents_table(document)?;
-    container.append_child(&table)?;
+    dashboard.append_child(&table)?;
     
     // Populate the table with data
     populate_agents_table(document)?;
@@ -147,7 +168,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
         let document = window.document().expect("should have a document");
         
         if let Some(container) = document.get_element_by_id("dashboard-container") {
-            match render_dashboard(&document, &container) {
+            match render_dashboard(&document) {
                 Ok(_) => web_sys::console::log_1(&"Dashboard refreshed".into()),
                 Err(e) => web_sys::console::error_1(&format!("Failed to refresh dashboard: {:?}", e).into()),
             }
@@ -475,6 +496,11 @@ fn get_agents_from_app_state() -> Vec<Agent> {
     APP_STATE.with(|state| {
         let state = state.borrow();
         
+        // Return early if still loading
+        if state.is_loading {
+            return;
+        }
+        
         // Get agents from node data
         for (id, node) in &state.nodes {
             if node.node_type == NodeType::AgentIdentity {
@@ -578,9 +604,23 @@ fn get_agents_from_app_state() -> Vec<Agent> {
 
 // Function to refresh the dashboard based on the latest state
 pub fn refresh_dashboard(document: &Document) -> Result<(), JsValue> {
-    if let Some(dashboard_container) = document.get_element_by_id("dashboard-container") {
-        render_dashboard(document, &dashboard_container)?;
+    // Ensure both container and dashboard elements exist
+    if document.get_element_by_id("dashboard-container").is_none() {
+        // If container doesn't exist, set up the dashboard from scratch
+        setup_dashboard(document)?;
+    } else if document.get_element_by_id("dashboard").is_none() {
+        // If container exists but dashboard doesn't, create dashboard
+        let container = document.get_element_by_id("dashboard-container")
+            .ok_or(JsValue::from_str("Dashboard container not found"))?;
+        
+        let dashboard = document.create_element("div")?;
+        dashboard.set_id("dashboard");
+        dashboard.set_class_name("dashboard");
+        container.append_child(&dashboard)?;
     }
+    
+    // Now render the dashboard content
+    render_dashboard(document)?;
     Ok(())
 }
 
@@ -593,6 +633,12 @@ pub fn setup_dashboard(document: &Document) -> Result<(), JsValue> {
         dashboard_container.set_id("dashboard-container");
         dashboard_container.set_class_name("dashboard-container");
         
+        // Create the dashboard element itself
+        let dashboard = document.create_element("div")?;
+        dashboard.set_id("dashboard");
+        dashboard.set_class_name("dashboard");
+        dashboard_container.append_child(&dashboard)?;
+        
         // Get the body element or another appropriate parent
         let app_container = document
             .get_element_by_id("app-container")
@@ -600,14 +646,21 @@ pub fn setup_dashboard(document: &Document) -> Result<(), JsValue> {
         
         // Append the dashboard container
         app_container.append_child(&dashboard_container)?;
+    } else {
+        // If container exists but dashboard doesn't, create dashboard
+        let container = document.get_element_by_id("dashboard-container")
+            .ok_or(JsValue::from_str("Dashboard container not found"))?;
+        
+        if document.get_element_by_id("dashboard").is_none() {
+            let dashboard = document.create_element("div")?;
+            dashboard.set_id("dashboard");
+            dashboard.set_class_name("dashboard");
+            container.append_child(&dashboard)?;
+        }
     }
     
-    // Get the dashboard container and render the dashboard content
-    let dashboard_container = document
-        .get_element_by_id("dashboard-container")
-        .ok_or(JsValue::from_str("Dashboard container not found"))?;
-    
-    render_dashboard(document, &dashboard_container)?;
+    // Now render the dashboard content
+    render_dashboard(document)?;
     
     Ok(())
 } 
