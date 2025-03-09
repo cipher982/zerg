@@ -1,5 +1,5 @@
-from .database import engine
-from .models import Base
+from zerg.app.database import engine
+from zerg.app.models import Base
 
 
 def create_tables():
