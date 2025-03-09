@@ -89,13 +89,56 @@ Below is a high‑level, sequential task list for migrating to a backend‑drive
 ────────────────────────────────
 5) INTEGRATE WITH FRONTEND ⏳
 ────────────────────────────────
-• Modify your Rust/WASM code so that instead of storing everything in localStorage, it does:
-  (i) On load, fetch "GET /api/agents" to show the agent list or dashboard.  
-  (ii) For creation: do a "POST /api/agents" with new agent data.  
-  (iii) For edit: "PUT /api/agents/{id}"  
-  (iv) For removal: "DELETE /api/agents/{id}"  
-• Keep a small cache in the WASM app for quick UI, but treat the DB as the source of truth (re‑fetch from the server on refresh).  
-• Potentially remove the localState "saveState()" calls or refactor them to only store ephemeral UI state (like current tab or layout).
+
+### Frontend Migration Plan
+
+Below is a detailed plan for migrating the Rust/WASM frontend to use the API endpoints instead of localStorage:
+
+1) Setup API Client and Models (IN PROGRESS)
+   - Create an `ApiClient` struct in `network.rs` with methods for all API endpoints ✅
+   - Add API data models in `models.rs` that match the backend schemas ✅
+   - Implement function to handle API requests with proper error handling ✅
+
+2) Create a Transitional Layer (IN PROGRESS)
+   - Update `storage.rs` to add functions for saving/loading from API while preserving localStorage ✅
+   - Enhance `save_state()` to also trigger API updates ✅ 
+   - Modify `load_state()` to try loading from API if localStorage is empty ✅
+   - This dual approach ensures a smooth transition without breaking existing functionality
+
+3) Replace Direct localStorage Access (TODO)
+   - Identify all places in `state.rs` and other modules that access localStorage directly
+   - Replace these with calls to our new API client
+   - Focus on maintaining the same app state structure while changing the data source
+
+4) Implement Node-Agent Mapping
+   - Create a mapping system between Node objects and API Agents
+   - Ensure Node IDs reference their corresponding Agent IDs for proper syncing
+   - Update state update functions to reflect changes from both sources
+
+5) Add API-specific Error Handling
+   - Add proper error handling for network failures
+   - Implement retry mechanisms for important operations
+   - Consider adding a connection status indicator
+
+6) Test with Live Backend
+   - Test all CRUD operations against the live backend
+   - Verify that frontend state correctly reflects backend changes
+   - Ensure that offline/online transitions work smoothly
+
+7) Add Migration Utility
+   - Create a one-time migration utility to transfer existing localStorage data to backend
+   - Add a UI prompt to inform users about the migration
+
+8) Phase Out localStorage
+   - Once confident in the API integration, gradually phase out localStorage
+   - First make it a fallback, then remove entirely
+   - Update documentation to reflect the new architecture
+
+### Current Status
+- The API client has been set up with functions for all endpoints
+- API data models have been created to match backend schemas
+- A transitional approach has been implemented that allows loading/saving to both localStorage and API
+- Currently working on testing the API integration and implementing the Node-Agent mapping
 
 ────────────────────────────────
 6) TRANSFER EXISTING HISTORY ⏳
@@ -141,12 +184,17 @@ We've successfully completed the first four phases of our migration plan:
 3. ✅ Created CRUD utility functions for interacting with our models
 4. ✅ Implemented API endpoints for all required agent operations
 
+We've also started on phase 5 (Frontend Integration):
+1. ✅ Created an API client with methods for all endpoints
+2. ✅ Added API data models matching the backend schemas 
+3. ✅ Implemented a transitional approach for saving/loading from both localStorage and API
+
 ## Next Steps
 
 Our immediate next steps are:
-1. Test the API endpoints to ensure they work correctly
-2. Start integrating with the frontend by updating the Rust/WASM code to use the API endpoints
-3. Create a migration script to transfer existing localStorage data to the database
-4. Consider implementing scheduling functionality using APScheduler
+1. Test the API endpoints with the transitional approach
+2. Complete the replacement of direct localStorage accesses in the codebase
+3. Implement proper Node-Agent mapping to ensure data syncing works correctly
+4. Create a migration utility to transfer existing localStorage data to the database
 
 To test the endpoints, you can use the built-in Swagger UI at http://localhost:8001/docs when the server is running, or use tools like curl or Postman.

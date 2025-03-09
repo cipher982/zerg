@@ -168,24 +168,56 @@ impl AppState {
     }
 
     pub fn add_response_node(&mut self, parent_id: &str, response_text: String) -> String {
-        if let Some(parent) = self.nodes.get(parent_id) {
-            // Position the response node below the parent with some offset
-            let x = parent.x + 50.0; // Slight offset to the right
-            let y = parent.y + parent.height + 30.0; // Below the parent node
-            
-            let response_id = self.add_node(response_text, x, y, NodeType::AgentResponse);
-            
-            // Update the parent_id relationship
-            if let Some(response_node) = self.nodes.get_mut(&response_id) {
-                response_node.parent_id = Some(parent_id.to_string());
-            }
-            
-            self.state_modified = true; // Mark state as modified
-            response_id
-        } else {
-            // If parent not found, generate a new ID anyway to avoid compilation errors
-            format!("node_{}", self.nodes.len())
+        let response_id = format!("resp-{}", self.generate_message_id());
+        let parent = self.nodes.get(parent_id);
+        
+        // Default position for response node is below parent
+        let (mut x, mut y) = (100.0, 100.0);
+        
+        if let Some(parent_node) = parent {
+            x = parent_node.x;
+            y = parent_node.y + parent_node.height + 30.0;
         }
+        
+        let node = crate::models::Node {
+            id: response_id.clone(),
+            x,
+            y,
+            text: response_text.clone(),
+            width: 300.0,
+            height: 100.0,
+            color: "#d5f5e3".to_string(),  // Light green
+            parent_id: Some(parent_id.to_string()),
+            node_type: crate::models::NodeType::AgentResponse,
+            
+            // Response nodes don't have these fields
+            system_instructions: None,
+            task_instructions: None,
+            history: None,
+            status: None,
+        };
+        
+        self.nodes.insert(response_id.clone(), node);
+        self.state_modified = true;
+        
+        // If the parent is an agent node, add this message to its history
+        if let Some(parent_node) = self.nodes.get_mut(parent_id) {
+            if let crate::models::NodeType::AgentIdentity = parent_node.node_type {
+                let message = crate::models::Message {
+                    role: "assistant".to_string(),
+                    content: response_text,
+                    timestamp: js_sys::Date::now() as u64,
+                };
+                
+                let history = parent_node.history.get_or_insert_with(Vec::new);
+                history.push(message.clone());
+                
+                // Sync this message with the API
+                crate::storage::save_agent_messages_to_api(parent_id, &[message]);
+            }
+        }
+        
+        response_id
     }
     
     pub fn draw_nodes(&self) {
@@ -460,14 +492,25 @@ impl AppState {
     // Save state if modified
     pub fn save_if_modified(&mut self) -> Result<(), JsValue> {
         if self.state_modified {
-            // Set this to false first to avoid potential loops if save triggers more UI updates
+            // Save to localStorage for quick local persistence
+            let result = crate::storage::save_state(self);
+            
+            // Also save to the API as the source of truth
+            crate::storage::save_state_to_api(self);
+            
+            // Sync agent messages
+            for (node_id, node) in &self.nodes {
+                if let crate::models::NodeType::AgentIdentity = node.node_type {
+                    if let Some(history) = &node.history {
+                        if !history.is_empty() {
+                            crate::storage::save_agent_messages_to_api(node_id, history);
+                        }
+                    }
+                }
+            }
+            
             self.state_modified = false;
-            
-            // Save the state
-            crate::storage::save_state(self)?;
-            
-            // Return success for the save operation itself
-            Ok(())
+            result
         } else {
             Ok(())
         }
@@ -488,9 +531,11 @@ impl AppState {
         // If we have a canvas, refresh it
         APP_STATE.with(|state| {
             let state = state.borrow();
-            if state.canvas.is_some() {
-                // This doesn't require mut access, just redraws
-                state.draw_nodes();
+            if let Some(_canvas) = &state.canvas {
+                if let Some(_context) = &state.context {
+                    // This doesn't require mut access, just redraws
+                    state.draw_nodes();
+                }
             }
         });
         
@@ -543,9 +588,91 @@ impl AppState {
         // Return true to indicate that UI refresh is needed, along with any pending network call
         (true, pending_call)
     }
+
+    // Update to set the selected node ID and load messages if it's an agent
+    pub fn select_node(&mut self, node_id: Option<String>) {
+        self.selected_node_id = node_id.clone();
+        
+        // If a node was selected and it's an agent, load its messages
+        if let Some(node_id) = &node_id {
+            if let Some(node) = self.nodes.get(node_id) {
+                if let crate::models::NodeType::AgentIdentity = node.node_type {
+                    // Load messages for this agent from the API
+                    crate::storage::load_agent_messages_from_api(node_id, 1); // Using default agent ID of 1 for now
+                }
+            }
+        }
+    }
 }
 
 // We use thread_local to store our app state
 thread_local! {
     pub static APP_STATE: RefCell<AppState> = RefCell::new(AppState::new());
+}
+
+// Add a public function to update the app state with data from the API
+pub fn update_app_state_from_api(nodes: HashMap<String, Node>) -> Result<(), JsValue> {
+    // Get access to the global APP_STATE
+    APP_STATE.with(|app_state_ref| {
+        let mut app_state = app_state_ref.borrow_mut();
+        
+        // Update the nodes with those loaded from the API
+        for (node_id, node) in nodes {
+            app_state.nodes.insert(node_id, node);
+        }
+        
+        // Flag that the state has been modified
+        app_state.state_modified = true;
+        
+        // Refresh the UI
+        if let Some(_canvas) = &app_state.canvas {
+            if let Some(_context) = &app_state.context {
+                // Use the correct draw_nodes function instead of render_canvas
+                crate::canvas::renderer::draw_nodes(&app_state);
+            }
+        }
+    });
+    
+    Ok(())
+}
+
+// Helper function to update node IDs after API creation
+pub fn update_node_id(old_id: &str, new_id: &str) {
+    APP_STATE.with(|state_ref| {
+        let mut state = state_ref.borrow_mut();
+        
+        // If the node exists with the old ID
+        if let Some(node) = state.nodes.remove(old_id) {
+            // Insert it with the new ID
+            let mut updated_node = node.clone();
+            updated_node.id = new_id.to_string();
+            state.nodes.insert(new_id.to_string(), updated_node);
+            
+            web_sys::console::log_1(&format!("Updated node ID from {} to {}", old_id, new_id).into());
+            
+            // Also update any relationships like parent IDs
+            for (_, child_node) in state.nodes.iter_mut() {
+                if let Some(parent_id) = &child_node.parent_id {
+                    if parent_id == old_id {
+                        child_node.parent_id = Some(new_id.to_string());
+                    }
+                }
+            }
+            
+            // Update selected node if necessary
+            if let Some(selected_id) = &state.selected_node_id {
+                if selected_id == old_id {
+                    state.selected_node_id = Some(new_id.to_string());
+                }
+            }
+            
+            // Mark state as modified to ensure it gets saved
+            state.state_modified = true;
+            
+            // Update the UI to reflect the changes
+            if let Err(e) = AppState::refresh_ui_after_state_change() {
+                web_sys::console::error_1(&format!("Error refreshing UI after node ID update: {:?}", e).into());
+            }
+        }
+    });
 } 
