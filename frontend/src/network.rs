@@ -91,8 +91,22 @@ fn flash_activity() {
 }
 
 pub fn setup_websocket() -> Result<(), JsValue> {
+    // Get currently selected agent ID if available
+    let agent_id = APP_STATE.with(|state| {
+        let state = state.borrow();
+        state.selected_node_id.clone()
+    });
+    
+    // Create URL based on agent ID
+    let ws_url = if let Some(id) = agent_id {
+        format!("ws://localhost:8001/api/agents/{}/ws", id)
+    } else {
+        // Fall back to global endpoint if no agent is selected
+        "ws://localhost:8001/ws".to_string()
+    };
+    
     // Create a new WebSocket connection
-    let ws = WebSocket::new("ws://localhost:8001/ws")?;
+    let ws = WebSocket::new(&ws_url)?;
     
     // Set initial status
     update_connection_status("Connecting", "yellow");
@@ -177,7 +191,7 @@ fn handle_websocket_message(event: MessageEvent) {
                 match msg_type.as_str() {
                     "chunk" => {
                         // Extract the content from the chunk
-                        let content = js_sys::Reflect::get(&response, &"content".into())
+                        let content = js_sys::Reflect::get(&response, &"chunk".into())
                             .unwrap_or_else(|_| "".into())
                             .as_string()
                             .unwrap_or_else(|| "".to_string());
@@ -204,6 +218,60 @@ fn handle_websocket_message(event: MessageEvent) {
                         // Chunks don't require a full UI refresh
                         false
                     },
+                    "done" => {
+                        // First get the parent-child relationship and response content
+                        // to avoid borrow issues later
+                        let (parent_id_to_update, response_content) = {
+                            // Get parent ID
+                            let parent_id = if let Some(node) = state.nodes.get(&response_node_id) {
+                                node.parent_id.clone()
+                            } else {
+                                None
+                            };
+                            
+                            // Get response content
+                            let content = if let Some(node) = state.nodes.get(&response_node_id) {
+                                node.text.clone()
+                            } else {
+                                String::new()
+                            };
+                            
+                            (parent_id, content)
+                        };
+                        
+                        // Now update the agent status and add the message to history
+                        if let Some(parent_id) = parent_id_to_update {
+                            if let Some(agent_node) = state.nodes.get_mut(&parent_id) {
+                                // Set status back to idle
+                                agent_node.status = Some("idle".to_string());
+                                
+                                // Create assistant message
+                                let assistant_message = crate::models::Message {
+                                    role: "assistant".to_string(),
+                                    content: response_content.clone(),
+                                    timestamp: js_sys::Date::now() as u64,
+                                };
+                                
+                                // Add to history if it exists
+                                if let Some(history) = &mut agent_node.history {
+                                    // Only add if not already there
+                                    if !history.iter().any(|msg| 
+                                        msg.role == "assistant" && msg.content == response_content
+                                    ) {
+                                        history.push(assistant_message);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        state.draw_nodes();
+                        
+                        // Save state when done
+                        let _ = state.save_if_modified();
+                        
+                        // Return true to indicate we need to refresh the UI after this borrow ends
+                        true
+                    },
                     "completion" => {
                         // First extract all needed data from the immutable borrow
                         let (parent_id_to_update, response_text) = if let Some(node) = state.nodes.get(&response_node_id) {
@@ -222,7 +290,7 @@ fn handle_websocket_message(event: MessageEvent) {
                                 // Set status back to idle
                                 agent_node.status = Some("idle".to_string());
                                 
-                                // Create a new message for the history if it doesn't already exist
+                                // Create a new message for the history
                                 let assistant_message = crate::models::Message {
                                     role: "assistant".to_string(),
                                     content: response_text.clone(),
@@ -239,7 +307,7 @@ fn handle_websocket_message(event: MessageEvent) {
                                     }
                                 }
                             }
-                        };
+                        }
                         
                         state.draw_nodes();
                         
@@ -285,57 +353,94 @@ fn handle_websocket_message(event: MessageEvent) {
 pub fn send_text_to_backend(text: &str, message_id: String) {
     flash_activity(); // Flash on send
     
-    // Get the selected model and system instructions
-    let (selected_model, system_instructions) = APP_STATE.with(|state| {
+    // Check if we have a selected agent and a websocket connection
+    let has_agent_and_websocket = APP_STATE.with(|state| {
         let state = state.borrow();
-        let model = state.selected_model.clone();
-        
-        // Get system instructions from the selected agent
-        let instructions = if let Some(agent_id) = &state.selected_node_id {
-            if let Some(agent) = state.nodes.get(agent_id) {
-                agent.system_instructions.clone().unwrap_or_default()
-            } else {
-                String::new()
-            }
-        } else {
-            String::new()
-        };
-        
-        (model, instructions)
+        state.selected_node_id.is_some() && state.websocket.is_some()
     });
     
-    // Use the Fetch API to send data to the backend
-    let window = web_sys::window().expect("no global window exists");
-    
-    // Create headers
-    let headers = web_sys::Headers::new().unwrap();
-    headers.append("Content-Type", "application/json").unwrap();
-    
-    // Create request body with message ID and model
-    let body_obj = js_sys::Object::new();
-    js_sys::Reflect::set(&body_obj, &"text".into(), &text.into()).unwrap();
-    js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into()).unwrap();
-    js_sys::Reflect::set(&body_obj, &"model".into(), &selected_model.into()).unwrap();
-    js_sys::Reflect::set(&body_obj, &"system".into(), &system_instructions.into()).unwrap();
-    let body_string = js_sys::JSON::stringify(&body_obj).unwrap();
-    
-    // Create request init object
-    let opts = web_sys::RequestInit::new();
-    opts.set_method("POST");
-    opts.set_headers(&headers.into());
-    
-    // Convert body_string to JsValue
-    let body_value: JsValue = body_string.into();
-    opts.set_body(&body_value);
-    
-    // Create request
-    let request = web_sys::Request::new_with_str_and_init(
-        "http://localhost:8001/api/process-text", 
-        &opts
-    ).unwrap();
-    
-    // Send the fetch request
-    let _ = window.fetch_with_request(&request);
+    if has_agent_and_websocket {
+        // Use WebSocket for agent communication
+        APP_STATE.with(|state| {
+            let state = state.borrow();
+            if let Some(ws) = &state.websocket {
+                if ws.ready_state() == 1 { // OPEN
+                    // Create message body
+                    let body_obj = js_sys::Object::new();
+                    js_sys::Reflect::set(&body_obj, &"text".into(), &text.into()).unwrap();
+                    js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into()).unwrap();
+                    
+                    // Get selected model if any
+                    if !state.selected_model.is_empty() {
+                        js_sys::Reflect::set(&body_obj, &"model".into(), &state.selected_model.clone().into()).unwrap();
+                    }
+                    
+                    let body_string = js_sys::JSON::stringify(&body_obj).unwrap();
+                    
+                    // Convert JsString to String before sending
+                    if let Some(string_data) = body_string.as_string() {
+                        // Send through WebSocket
+                        let _ = ws.send_with_str(&string_data);
+                    } else {
+                        web_sys::console::error_1(&"Failed to convert JSON to string".into());
+                    }
+                } else {
+                    // WebSocket not connected, try to reconnect
+                    web_sys::console::warn_1(&"WebSocket not connected, reconnecting...".into());
+                    let _ = setup_websocket();
+                }
+            }
+        });
+    } else {
+        // Use the Fetch API for non-agent communication or as fallback
+        let window = web_sys::window().expect("no global window exists");
+        
+        // Get the selected model and system instructions
+        let (selected_model, system_instructions) = APP_STATE.with(|state| {
+            let state = state.borrow();
+            let model = state.selected_model.clone();
+            
+            // Get system instructions if any
+            let instructions = if let Some(agent_id) = &state.selected_node_id {
+                if let Some(agent) = state.nodes.get(agent_id) {
+                    agent.system_instructions.clone().unwrap_or_default()
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+            
+            (model, instructions)
+        });
+        
+        // Create headers
+        let headers = web_sys::Headers::new().unwrap();
+        headers.append("Content-Type", "application/json").unwrap();
+        
+        // Create request body
+        let body_obj = js_sys::Object::new();
+        js_sys::Reflect::set(&body_obj, &"text".into(), &text.into()).unwrap();
+        js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into()).unwrap();
+        js_sys::Reflect::set(&body_obj, &"model".into(), &selected_model.into()).unwrap();
+        js_sys::Reflect::set(&body_obj, &"system".into(), &system_instructions.into()).unwrap();
+        let body_string = js_sys::JSON::stringify(&body_obj).unwrap();
+        
+        // Create request init object
+        let opts = web_sys::RequestInit::new();
+        opts.set_method("POST");
+        opts.set_headers(&headers.into());
+        opts.set_body(&body_string.into());
+        
+        // Create request
+        let request = web_sys::Request::new_with_str_and_init(
+            "http://localhost:8001/api/process-text", 
+            &opts
+        ).unwrap();
+        
+        // Send the fetch request
+        let _ = window.fetch_with_request(&request);
+    }
 }
 
 pub async fn fetch_available_models() -> Result<(), JsValue> {

@@ -8,12 +8,6 @@ use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen::closure::Closure;
 use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
 
-// Constants for storage keys
-const NODES_KEY: &str = "zerg_nodes";
-const VIEWPORT_KEY: &str = "zerg_viewport";
-const SELECTED_MODEL_KEY: &str = "zerg_selected_model";
-const ACTIVE_VIEW_KEY: &str = "zerg_active_view";
-
 // Add API URL configuration
 const API_BASE_URL: &str = "http://localhost:8001/api";
 
@@ -32,107 +26,31 @@ pub enum ActiveView {
     Canvas,
 }
 
-/// Save current app state to localStorage
+/// Save current app state (previously using localStorage)
 pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
-    let window = web_sys::window().expect("no global window exists");
-    let storage = window.local_storage()?.expect("no localStorage exists");
+    // No longer saving to localStorage
+    web_sys::console::log_1(&"State saving to API only".into());
     
-    // Save nodes
-    let nodes_json = to_string(&app_state.nodes)
-        .map_err(|e| JsValue::from_str(&format!("Error serializing nodes: {}", e)))?;
-    storage.set_item(NODES_KEY, &nodes_json)?;
-    
-    // Save viewport data
-    let viewport_data = ViewportData {
-        x: app_state.viewport_x,
-        y: app_state.viewport_y,
-        zoom: app_state.zoom_level,
-    };
-    let viewport_json = to_string(&viewport_data)
-        .map_err(|e| JsValue::from_str(&format!("Error serializing viewport: {}", e)))?;
-    storage.set_item(VIEWPORT_KEY, &viewport_json)?;
-    
-    // Save selected model
-    storage.set_item(SELECTED_MODEL_KEY, &app_state.selected_model)?;
-    
-    // Save active view
-    let active_view = if app_state.active_view == ActiveView::Dashboard { "dashboard" } else { "canvas" };
-    storage.set_item(ACTIVE_VIEW_KEY, active_view)?;
-    
-    web_sys::console::log_1(&"State saved to localStorage".into());
-    
-    // Also save changes to API if nodes have changed
+    // Save changes to API
     save_state_to_api(app_state);
     
     Ok(())
 }
 
-/// Load app state from localStorage
+/// Load app state from API only
 pub fn load_state(app_state: &mut AppState) -> Result<bool, JsValue> {
-    let window = web_sys::window().expect("no global window exists");
-    let storage = window.local_storage()?.expect("no localStorage exists");
+    // Load data from API only
+    load_state_from_api(app_state);
     
-    let mut data_loaded = false;
-    
-    // Load nodes
-    if let Some(nodes_json) = storage.get_item(NODES_KEY)? {
-        match from_str::<HashMap<String, Node>>(&nodes_json) {
-            Ok(nodes) => {
-                app_state.nodes = nodes;
-                data_loaded = true;
-                web_sys::console::log_1(&format!("Loaded {} nodes from storage", app_state.nodes.len()).into());
-            },
-            Err(e) => {
-                web_sys::console::warn_1(&JsValue::from_str(&format!("Error parsing nodes: {}", e)));
-                // Continue loading other data even if nodes fail
-            }
-        }
-    }
-    
-    // Load viewport
-    if let Some(viewport_json) = storage.get_item(VIEWPORT_KEY)? {
-        match from_str::<ViewportData>(&viewport_json) {
-            Ok(viewport) => {
-                app_state.viewport_x = viewport.x;
-                app_state.viewport_y = viewport.y;
-                app_state.zoom_level = viewport.zoom;
-                data_loaded = true;
-            },
-            Err(e) => {
-                web_sys::console::warn_1(&JsValue::from_str(&format!("Error parsing viewport: {}", e)));
-            }
-        }
-    }
-    
-    // Load selected model
-    if let Some(model) = storage.get_item(SELECTED_MODEL_KEY)? {
-        app_state.selected_model = model;
-        data_loaded = true;
-    }
-    
-    // Load active view
-    if let Some(view) = storage.get_item(ACTIVE_VIEW_KEY)? {
-        app_state.active_view = if view == "dashboard" { ActiveView::Dashboard } else { ActiveView::Canvas };
-        data_loaded = true;
-    }
-    
-    // Try to load data from API if nothing loaded from localStorage
-    if !data_loaded {
-        load_state_from_api(app_state);
-    }
-    
-    Ok(data_loaded)
+    // Return true to indicate we started the loading process
+    // Actual loading happens asynchronously
+    Ok(true)
 }
 
 /// Clear all stored data
 pub fn clear_storage() -> Result<(), JsValue> {
-    let window = web_sys::window().expect("no global window exists");
-    let storage = window.local_storage()?.expect("no localStorage exists");
-    
-    storage.remove_item(NODES_KEY)?;
-    storage.remove_item(VIEWPORT_KEY)?;
-    storage.remove_item(SELECTED_MODEL_KEY)?;
-    storage.remove_item(ACTIVE_VIEW_KEY)?;
+    // No localStorage to clear, but we might want to add
+    // API endpoint calls to clear data in the future
     
     Ok(())
 }
@@ -211,10 +129,12 @@ pub fn save_state_to_api(app_state: &AppState) {
     });
 }
 
-/// Load app state from API (transitional approach)
-pub fn load_state_from_api(_app_state: &mut AppState) {
-    // We need to handle this differently since we can't clone app_state
-    // Clone the necessary fields individually or use a callback approach
+/// Load app state from API
+pub fn load_state_from_api(app_state: &mut AppState) {
+    // Set loading state flags
+    app_state.is_loading = true;
+    app_state.data_loaded = false;
+    app_state.api_load_attempted = true;
     
     // Spawn an async task to load agents from API
     spawn_local(async move {
@@ -254,24 +174,71 @@ pub fn load_state_from_api(_app_state: &mut AppState) {
                             }
                         }
                         
+                        // Update loading state flags after the API call completes
+                        crate::state::APP_STATE.with(|state_ref| {
+                            let mut state = state_ref.borrow_mut();
+                            state.is_loading = false;
+                            state.data_loaded = true;
+                        });
+                        
                         // Use a callback function to update the app state
-                        // This is a workaround since we can't directly modify app_state in the async block
-                        if !loaded_nodes.is_empty() {
-                            if let Err(e) = crate::state::update_app_state_from_api(loaded_nodes) {
-                                web_sys::console::error_1(&format!("Error updating app state: {:?}", e).into());
-                            }
+                        if let Err(e) = crate::state::update_app_state_from_api(loaded_nodes) {
+                            web_sys::console::error_1(&format!("Error updating app state: {:?}", e).into());
                         }
+                        
+                        // Schedule UI refresh after the current function completes
+                        let window = web_sys::window().expect("no global window exists");
+                        let closure = Closure::once(|| {
+                            // This will run after the current execution context is complete
+                            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                                web_sys::console::warn_1(&format!("Failed to refresh UI after state load: {:?}", e).into());
+                            }
+                        });
+                        
+                        window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                            closure.as_ref().unchecked_ref(),
+                            0
+                        ).expect("Failed to set timeout");
+                        
+                        // Ensure closure lives long enough
+                        closure.forget();
                     },
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Error parsing agents from API: {}", e).into());
+                        web_sys::console::error_1(&format!("Error parsing agents from API: {:?}", e).into());
+                        mark_loading_complete();
                     }
                 }
             },
             Err(e) => {
-                web_sys::console::error_1(&format!("Error loading agents from API: {:?}", e).into());
+                web_sys::console::error_1(&format!("Error fetching agents from API: {:?}", e).into());
+                mark_loading_complete();
             }
         }
     });
+}
+
+// Helper function to mark loading as complete and refresh UI
+fn mark_loading_complete() {
+    crate::state::APP_STATE.with(|state_ref| {
+        let mut state = state_ref.borrow_mut();
+        state.is_loading = false;
+        state.data_loaded = true;
+    });
+    
+    // Schedule UI refresh
+    let window = web_sys::window().expect("no global window exists");
+    let closure = Closure::once(|| {
+        if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+            web_sys::console::warn_1(&format!("Failed to refresh UI after state load: {:?}", e).into());
+        }
+    });
+    
+    window.set_timeout_with_callback_and_timeout_and_arguments_0(
+        closure.as_ref().unchecked_ref(),
+        0
+    ).expect("Failed to set timeout");
+    
+    closure.forget();
 }
 
 /// Save agent messages to the API
@@ -363,174 +330,18 @@ pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
 }
 
 /// One-time migration utility to transfer data from localStorage to the API
+/// This function is no longer needed but kept for reference
 pub fn migrate_local_storage_to_api() -> Result<(), JsValue> {
-    let window = web_sys::window().expect("no global window exists");
-    let _storage = window.local_storage()?.expect("no localStorage exists");
-    
-    // We'll use our existing load & save functionality to handle the migration
-    let mut temp_state = crate::state::AppState::new();
-    
-    // First load data from localStorage
-    let data_loaded = load_state(&mut temp_state)?;
-    
-    if data_loaded {
-        web_sys::console::log_1(&"Starting migration of data from localStorage to API...".into());
-        
-        // Then save it to the API - this will create/update all agents
-        save_state_to_api(&temp_state);
-        
-        // Also sync messages for each agent node
-        for (node_id, node) in &temp_state.nodes {
-            if let crate::models::NodeType::AgentIdentity = node.node_type {
-                if let Some(history) = &node.history {
-                    if !history.is_empty() {
-                        save_agent_messages_to_api(node_id, history);
-                    }
-                }
-            }
-        }
-        
-        // Provide user feedback
-        if let Some(document) = window.document() {
-            let migration_message = document.create_element("div")?;
-            migration_message.set_attribute("style", "position: fixed; top: 20px; right: 20px; padding: 15px; background-color: #d4edda; color: #155724; border-radius: 4px; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.2);")?;
-            migration_message.set_text_content(Some("Data migration in progress. Your agents and conversations are being synchronized with the server."));
-            
-            if let Some(body) = document.body() {
-                body.append_child(&migration_message)?;
-                
-                // Remove the message after 10 seconds
-                let closure = Closure::wrap(Box::new(move || {
-                    if let Some(parent) = migration_message.parent_node() {
-                        let _ = parent.remove_child(&migration_message);
-                    }
-                }) as Box<dyn FnMut()>);
-                
-                window.set_timeout_with_callback_and_timeout_and_arguments(
-                    closure.as_ref().unchecked_ref(),
-                    10000,
-                    &js_sys::Array::new(),
-                )?;
-                
-                closure.forget();
-            }
-        }
-        
-        web_sys::console::log_1(&"Migration complete. Data has been synchronized to the API.".into());
-    } else {
-        web_sys::console::log_1(&"No localStorage data found to migrate.".into());
-    }
-    
+    web_sys::console::log_1(&"localStorage migration no longer needed - using API only".into());
     Ok(())
 }
 
-/// Load app state with API as source of truth and localStorage as fallback
+/// Load app state with API as source of truth
 pub fn load_state_prioritizing_api(app_state: &mut AppState) {
-    // Mark as loading
-    app_state.is_loading = true;
-    app_state.data_loaded = false;
+    web_sys::console::log_1(&"Loading data from API only".into());
     
-    // First attempt to load from API
-    load_state_from_api_sync(app_state);
-    app_state.api_load_attempted = true;
-    
-    web_sys::console::log_1(&"Loading data from API with localStorage fallback".into());
-    
-    // If we failed to load anything from API, try localStorage as fallback
-    if app_state.nodes.is_empty() {
-        let window = web_sys::window().expect("no global window exists");
-        let storage = match window.local_storage() {
-            Ok(Some(storage)) => storage,
-            _ => {
-                web_sys::console::warn_1(&"Could not access localStorage".into());
-                app_state.is_loading = false;
-                return;
-            }
-        };
-        
-        // Load nodes from localStorage as fallback
-        if let Ok(Some(nodes_json)) = storage.get_item(NODES_KEY) {
-            match from_str::<HashMap<String, Node>>(&nodes_json) {
-                Ok(nodes) => {
-                    if !nodes.is_empty() {
-                        web_sys::console::log_1(&format!("Loaded {} nodes from localStorage fallback", nodes.len()).into());
-                        app_state.nodes = nodes;
-                        app_state.data_loaded = true;
-                        
-                        // Save to API to ensure sync
-                        let nodes_clone = app_state.nodes.clone();
-                        spawn_local(async move {
-                            web_sys::console::log_1(&"Syncing localStorage data to API...".into());
-                            if let Err(e) = save_nodes_to_api(&nodes_clone) {
-                                web_sys::console::error_1(&format!("Error syncing to API: {:?}", e).into());
-                            } else {
-                                web_sys::console::log_1(&"Successfully synced localStorage data to API".into());
-                            }
-                        });
-                    }
-                },
-                Err(e) => {
-                    web_sys::console::warn_1(&JsValue::from_str(&format!("Error parsing nodes from localStorage: {}", e)));
-                }
-            }
-        }
-        
-        // Load viewport settings from localStorage
-        if let Ok(Some(viewport_json)) = storage.get_item(VIEWPORT_KEY) {
-            match from_str::<ViewportData>(&viewport_json) {
-                Ok(viewport) => {
-                    app_state.viewport_x = viewport.x;
-                    app_state.viewport_y = viewport.y;
-                    app_state.zoom_level = viewport.zoom;
-                },
-                Err(e) => {
-                    web_sys::console::warn_1(&JsValue::from_str(&format!("Error parsing viewport: {}", e)));
-                }
-            }
-        }
-        
-        // Load selected model from localStorage
-        if let Ok(Some(model)) = storage.get_item(SELECTED_MODEL_KEY) {
-            app_state.selected_model = model;
-        }
-        
-        // Load active view from localStorage
-        if let Ok(Some(view)) = storage.get_item(ACTIVE_VIEW_KEY) {
-            app_state.active_view = if view == "dashboard" { ActiveView::Dashboard } else { ActiveView::Canvas };
-        }
-    } else {
-        app_state.data_loaded = true;
-    }
-    
-    // Mark loading as complete
-    app_state.is_loading = false;
-    
-    // Schedule UI refresh after the current function completes
-    // This avoids trying to borrow APP_STATE again while it's already mutably borrowed
-    let window = web_sys::window().expect("no global window exists");
-    let closure = Closure::once(|| {
-        // This will run after the current execution context is complete
-        if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-            web_sys::console::warn_1(&format!("Failed to refresh UI after state load: {:?}", e).into());
-        }
-    });
-    
-    window.set_timeout_with_callback_and_timeout_and_arguments_0(
-        closure.as_ref().unchecked_ref(),
-        0
-    ).expect("Failed to set timeout");
-    
-    // Ensure closure lives long enough
-    closure.forget();
-}
-
-/// Load state directly from the API (synchronous)
-fn load_state_from_api_sync(app_state: &mut AppState) {
-    // Display a warning since this function is synchronous
-    web_sys::console::warn_1(&"Synchronous API fetching not implemented yet".into());
-    
-    // TODO: When implementing, don't call refresh functions directly from here
-    // Instead, update app_state and let the caller handle the refresh
+    // Just call our standard load function
+    load_state_from_api(app_state);
 }
 
 /// Helper function to save just the nodes to the API
