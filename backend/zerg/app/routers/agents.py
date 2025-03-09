@@ -30,20 +30,12 @@ def read_agents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 @router.post("/", response_model=Agent, status_code=status.HTTP_201_CREATED)
 def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
     """Create a new agent"""
-    # Apply defaults if fields are empty
-    system_instructions = agent.system_instructions.strip()
-    if not system_instructions:
-        system_instructions = "You are a helpful assistant."
-
-    task_instructions = agent.task_instructions.strip()
-    if not task_instructions:
-        task_instructions = "Please help with any tasks the user gives you."
-
+    # No default handling, require complete data from API calls
     return crud.create_agent(
         db=db,
         name=agent.name,
-        system_instructions=system_instructions,
-        task_instructions=task_instructions,
+        system_instructions=agent.system_instructions,
+        task_instructions=agent.task_instructions,
         model=agent.model,
         schedule=agent.schedule,
         config=agent.config,
@@ -62,25 +54,13 @@ def read_agent(agent_id: int, db: Session = Depends(get_db)):
 @router.put("/{agent_id}", response_model=Agent)
 def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(get_db)):
     """Update an agent"""
-    # Apply defaults if fields are empty strings but not None
-    system_instructions = None
-    if agent.system_instructions is not None:
-        system_instructions = agent.system_instructions.strip()
-        if not system_instructions:
-            system_instructions = "You are a helpful assistant."
-
-    task_instructions = None
-    if agent.task_instructions is not None:
-        task_instructions = agent.task_instructions.strip()
-        if not task_instructions:
-            task_instructions = "Please help with any tasks the user gives you."
-
+    # No default handling, require complete data from API calls
     db_agent = crud.update_agent(
         db=db,
         agent_id=agent_id,
         name=agent.name,
-        system_instructions=system_instructions,
-        task_instructions=task_instructions,
+        system_instructions=agent.system_instructions,
+        task_instructions=agent.task_instructions,
         model=agent.model,
         status=agent.status,
         schedule=agent.schedule,

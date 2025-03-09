@@ -2,6 +2,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Document, HtmlInputElement, HtmlTextAreaElement};
 use wasm_bindgen::JsCast;
 use crate::state::APP_STATE;
+use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
 
 /// Opens the agent modal with the data from the specified node
 pub fn open_agent_modal(document: &Document, node_id: &str) -> Result<(), JsValue> {
@@ -34,17 +35,31 @@ pub fn open_agent_modal(document: &Document, node_id: &str) -> Result<(), JsValu
         }
     }
     
-    // Load system instructions
+    // Set explicit default values for system instructions if empty
+    let system_instructions_value = if system_instructions.trim().is_empty() {
+        DEFAULT_SYSTEM_INSTRUCTIONS.to_string()
+    } else {
+        system_instructions
+    };
+    
+    // Load system instructions with defaults if empty
     if let Some(system_elem) = document.get_element_by_id("system-instructions") {
         if let Some(system_textarea) = system_elem.dyn_ref::<HtmlTextAreaElement>() {
-            system_textarea.set_value(&system_instructions);
+            system_textarea.set_value(&system_instructions_value);
         }
     }
     
-    // Load default task instructions
+    // Set explicit default values for task instructions if empty
+    let task_instructions_value = if task_instructions.trim().is_empty() {
+        DEFAULT_TASK_INSTRUCTIONS.to_string()
+    } else {
+        task_instructions
+    };
+    
+    // Load default task instructions with defaults if empty
     if let Some(task_elem) = document.get_element_by_id("default-task-instructions") {
         if let Some(task_textarea) = task_elem.dyn_ref::<HtmlTextAreaElement>() {
-            task_textarea.set_value(&task_instructions);
+            task_textarea.set_value(&task_instructions_value);
         }
     }
     
