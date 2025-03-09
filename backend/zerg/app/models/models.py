@@ -17,7 +17,8 @@ class Agent(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     status = Column(String, default="idle")
-    instructions = Column(Text)
+    system_instructions = Column(Text, nullable=False)
+    task_instructions = Column(Text, nullable=False)
     schedule = Column(String, nullable=True)  # CRON expression or interval
     model = Column(String, default="gpt-4o")  # Default model to use
     config = Column(JSON, nullable=True)  # Additional configuration as JSON

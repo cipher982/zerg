@@ -151,7 +151,8 @@ pub fn save_state_to_api(app_state: &AppState) {
                 let agent_update = ApiAgentUpdate {
                     name: Some(node.text.clone()),
                     status: node.status.clone(),
-                    instructions: node.task_instructions.clone(),
+                    system_instructions: node.system_instructions.clone(),
+                    task_instructions: node.task_instructions.clone(),
                     model: Some(selected_model.clone()),
                     schedule: None,
                     config: None, // Will need to add more node data as needed
@@ -179,7 +180,8 @@ pub fn save_state_to_api(app_state: &AppState) {
                     // This is a new agent, create it in the API
                     let agent_create = ApiAgentCreate {
                         name: node.text.clone(),
-                        instructions: node.task_instructions.clone(),
+                        system_instructions: node.system_instructions.clone().unwrap_or_else(|| "You are a helpful assistant.".to_string()),
+                        task_instructions: node.task_instructions.clone().unwrap_or_else(|| "Please help with any tasks the user gives you.".to_string()),
                         model: Some(selected_model.clone()),
                         schedule: None,
                         config: None,
@@ -236,8 +238,8 @@ pub fn load_state_from_api(_app_state: &mut AppState) {
                                     color: "#e0f7fa".to_string(), // Default color
                                     parent_id: None,
                                     node_type: crate::models::NodeType::AgentIdentity,
-                                    system_instructions: None,
-                                    task_instructions: agent.instructions,
+                                    system_instructions: agent.system_instructions.clone(),
+                                    task_instructions: agent.task_instructions.clone(),
                                     history: None, // We'll load this separately
                                     status: agent.status,
                                 };

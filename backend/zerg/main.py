@@ -1,3 +1,5 @@
+import os
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,12 +20,23 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+# Define allowed origins - in dev mode, allow both localhost and [::] variants
+origins = [
+    "http://localhost:8002",
+    "http://[::]:8002",
+    "http://127.0.0.1:8002",
+]
+
+# Add any production origins from environment variables if they exist
+if os.environ.get("ALLOWED_ORIGINS"):
+    origins.extend(os.environ.get("ALLOWED_ORIGINS").split(","))
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
