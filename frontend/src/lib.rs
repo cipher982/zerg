@@ -50,120 +50,22 @@ pub fn start() -> Result<(), JsValue> {
     // Set up the dashboard
     components::dashboard::setup_dashboard(&document)?;
     
-    // Load state from localStorage
-    let loaded_data = state::APP_STATE.with(|state| {
-        let mut state = state.borrow_mut();
-        match storage::load_state(&mut state) {
-            Ok(data_loaded) => {
-                if data_loaded {
-                    state.enforce_viewport_boundaries();
-                }
-                // Always set Dashboard as the default view, regardless of stored preference
-                state.active_view = storage::ActiveView::Dashboard;
-                data_loaded
-            },
-            Err(e) => {
-                web_sys::console::error_1(&format!("Failed to load state: {:?}", e).into());
-                false
-            }
-        }
+    // Show dashboard as the default view
+    views::render_active_view(&state::AppState::new(), &document)?;
+    
+    // First try loading from API, with localStorage as fallback
+    state::APP_STATE.with(|state_ref| {
+        let mut state = state_ref.borrow_mut();
+        storage::load_state_prioritizing_api(&mut state);
     });
     
-    // Draw nodes if we loaded any data
-    if loaded_data {
-        state::APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            state.fit_nodes_to_view();
-            state.draw_nodes();
-        });
-        
-        // Show the correct view based on active_view in state
-        state::APP_STATE.with(|state| {
-            let state = state.borrow();
-            let is_dashboard = matches!(state.active_view, storage::ActiveView::Dashboard);
-            
-            // Show dashboard or canvas based on stored state
-            if is_dashboard {
-                // Show dashboard, hide canvas
-                if let Some(container) = document.get_element_by_id("dashboard-container") {
-                    container.set_attribute("style", "display: block;").unwrap_or_default();
-                }
-                if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
-                    canvas_container.set_attribute("style", "display: none;").unwrap_or_default();
-                }
-                if let Some(input_panel) = document.get_element_by_id("input-panel") {
-                    input_panel.set_attribute("style", "display: none;").unwrap_or_default();
-                }
-                
-                // Update tab UI to match
-                if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
-                    dashboard_tab.set_class_name("tab-button active");
-                }
-                if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
-                    canvas_tab.set_class_name("tab-button");
-                }
-                
-                // Refresh the dashboard to make sure it displays current state
-                let _ = components::dashboard::refresh_dashboard(&document);
-            } else {
-                // Show canvas, hide dashboard
-                if let Some(container) = document.get_element_by_id("dashboard-container") {
-                    container.set_attribute("style", "display: none;").unwrap_or_default();
-                }
-                if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
-                    canvas_container.set_attribute("style", "display: block;").unwrap_or_default();
-                }
-                if let Some(input_panel) = document.get_element_by_id("input-panel") {
-                    input_panel.set_attribute("style", "display: block;").unwrap_or_default();
-                }
-                
-                // Update tab UI to match
-                if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
-                    dashboard_tab.set_class_name("tab-button");
-                }
-                if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
-                    canvas_tab.set_class_name("tab-button active");
-                }
-                
-                // Make sure canvas is sized properly
-                if let Some(canvas) = document.get_element_by_id("node-canvas") {
-                    if let Ok(canvas) = canvas.dyn_into::<web_sys::HtmlCanvasElement>() {
-                        let _ = components::canvas_editor::resize_canvas(&canvas, components::canvas_editor::AppStateRef::None);
-                    }
-                }
-            }
-        });
-    } else {
-        // If no data was loaded, default to showing the dashboard
-        if let Some(container) = document.get_element_by_id("dashboard-container") {
-            container.set_attribute("style", "display: block;").unwrap_or_default();
-        }
-        if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
-            canvas_container.set_attribute("style", "display: none;").unwrap_or_default();
-        }
-        if let Some(input_panel) = document.get_element_by_id("input-panel") {
-            input_panel.set_attribute("style", "display: none;").unwrap_or_default();
-        }
-        
-        // Update tab UI to match
-        if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
-            dashboard_tab.set_class_name("tab-button active");
-        }
-        if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
-            canvas_tab.set_class_name("tab-button");
-        }
-    }
+    // Set up auto-save timer (every 5 seconds)
+    setup_auto_save_timer(5000)?;
     
-    // Generate favicon
-    favicon::generate_favicon()?;
-    
-    // Set up auto-save timer
-    setup_auto_save_timer(30000)?;
-    
-    // Load available models
+    // Fetch available models
     spawn_local(async {
         if let Err(e) = network::fetch_available_models().await {
-            web_sys::console::log_1(&format!("Error fetching models: {:?}", e).into());
+            web_sys::console::error_1(&format!("Error fetching models: {:?}", e).into());
         }
     });
     

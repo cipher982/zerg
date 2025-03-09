@@ -390,4 +390,105 @@ pub async fn fetch_available_models() -> Result<(), JsValue> {
     }
     
     Ok(())
+}
+
+// REST API Client for Agent operations
+pub struct ApiClient;
+
+impl ApiClient {
+    // Base URL for API calls
+    fn api_base_url() -> String {
+        // In a production environment, this might be read from configuration
+        // For development, we'll use the standard FastAPI port
+        "http://localhost:8001".to_string()
+    }
+
+    // Get all agents
+    pub async fn get_agents() -> Result<String, JsValue> {
+        let url = format!("{}/api/agents", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    // Get a specific agent by ID
+    pub async fn get_agent(agent_id: u32) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents/{}", Self::api_base_url(), agent_id);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    // Create a new agent
+    pub async fn create_agent(agent_data: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents", Self::api_base_url());
+        Self::fetch_json(&url, "POST", Some(agent_data)).await
+    }
+
+    // Update an existing agent
+    pub async fn update_agent(agent_id: u32, agent_data: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents/{}", Self::api_base_url(), agent_id);
+        Self::fetch_json(&url, "PUT", Some(agent_data)).await
+    }
+
+    // Delete an agent
+    pub async fn delete_agent(agent_id: u32) -> Result<(), JsValue> {
+        let url = format!("{}/api/agents/{}", Self::api_base_url(), agent_id);
+        let _ = Self::fetch_json(&url, "DELETE", None).await?;
+        Ok(())
+    }
+
+    // Get messages for a specific agent
+    pub async fn get_agent_messages(agent_id: u32) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents/{}/messages", Self::api_base_url(), agent_id);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    // Add a message to an agent
+    pub async fn create_agent_message(agent_id: u32, message_data: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents/{}/messages", Self::api_base_url(), agent_id);
+        Self::fetch_json(&url, "POST", Some(message_data)).await
+    }
+
+    // Trigger an agent to run
+    pub async fn run_agent(agent_id: u32) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents/{}/run", Self::api_base_url(), agent_id);
+        Self::fetch_json(&url, "POST", None).await
+    }
+
+    // Helper function to make fetch requests
+    async fn fetch_json(url: &str, method: &str, body: Option<&str>) -> Result<String, JsValue> {
+        use web_sys::{Request, RequestInit, RequestMode, Response};
+        
+        let opts = RequestInit::new();
+        opts.set_method(method);
+        opts.set_mode(RequestMode::Cors);
+        
+        // Add body if provided
+        if let Some(data) = body {
+            // Create the JsValue once and pass a reference to set_body
+            let js_body = JsValue::from_str(data);
+            opts.set_body(&js_body);
+            
+            // Create and set headers
+            let headers = web_sys::Headers::new()?;
+            headers.append("Content-Type", "application/json")?;
+            opts.set_headers(&headers);
+        }
+        
+        let request = Request::new_with_str_and_init(url, &opts)?;
+        
+        let window = web_sys::window().expect("no global window exists");
+        let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
+        let resp: Response = resp_value.dyn_into()?;
+        
+        // Check if successful
+        if !resp.ok() {
+            let status = resp.status();
+            let status_text = resp.status_text();
+            return Err(JsValue::from_str(&format!(
+                "API request failed: {} {}", status, status_text
+            )));
+        }
+        
+        // Parse JSON
+        let json = JsFuture::from(resp.text()?).await?;
+        Ok(json.as_string().unwrap_or_default())
+    }
 } 
