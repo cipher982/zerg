@@ -1,5 +1,5 @@
 [project]
-name = "agent-platform"
+name = "zerg"
 version = "0.1.0"
 description = "AI Agent Platform Backend"
 authors = [
@@ -26,7 +26,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-packages = ["src"]
+packages = ["zerg"]
 
 [tool.ruff]
 line-length = 120

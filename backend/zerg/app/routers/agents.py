@@ -6,9 +6,9 @@ from fastapi import HTTPException
 from fastapi import status
 from sqlalchemy.orm import Session
 
-from .. import crud
-from .. import schemas
-from ..database import get_db
+from zerg.app import crud
+from zerg.app import schemas
+from zerg.app.database import get_db
 
 router = APIRouter(
     prefix="/api/agents",

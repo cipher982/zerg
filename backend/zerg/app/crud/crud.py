@@ -5,18 +5,19 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from . import models
+from zerg.app.models import Agent
+from zerg.app.models import AgentMessage
 
 
 # Agent CRUD operations
 def get_agents(db: Session, skip: int = 0, limit: int = 100):
     """Get all agents with pagination"""
-    return db.query(models.Agent).offset(skip).limit(limit).all()
+    return db.query(Agent).offset(skip).limit(limit).all()
 
 
 def get_agent(db: Session, agent_id: int):
     """Get a single agent by ID"""
-    return db.query(models.Agent).filter(models.Agent.id == agent_id).first()
+    return db.query(Agent).filter(Agent.id == agent_id).first()
 
 
 def create_agent(
@@ -28,9 +29,7 @@ def create_agent(
     config: Optional[Dict[str, Any]] = None,
 ):
     """Create a new agent"""
-    db_agent = models.Agent(
-        name=name, instructions=instructions, model=model, status="idle", schedule=schedule, config=config
-    )
+    db_agent = Agent(name=name, instructions=instructions, model=model, status="idle", schedule=schedule, config=config)
     db.add(db_agent)
     db.commit()
     db.refresh(db_agent)
@@ -48,7 +47,7 @@ def update_agent(
     config: Optional[Dict[str, Any]] = None,
 ):
     """Update an existing agent"""
-    db_agent = db.query(models.Agent).filter(models.Agent.id == agent_id).first()
+    db_agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if db_agent is None:
         return None
 
@@ -74,7 +73,7 @@ def update_agent(
 
 def delete_agent(db: Session, agent_id: int):
     """Delete an agent and all its messages"""
-    db_agent = db.query(models.Agent).filter(models.Agent.id == agent_id).first()
+    db_agent = db.query(Agent).filter(Agent.id == agent_id).first()
     if db_agent is None:
         return False
     db.delete(db_agent)
@@ -86,9 +85,9 @@ def delete_agent(db: Session, agent_id: int):
 def get_agent_messages(db: Session, agent_id: int, skip: int = 0, limit: int = 100):
     """Get all messages for a specific agent"""
     return (
-        db.query(models.AgentMessage)
-        .filter(models.AgentMessage.agent_id == agent_id)
-        .order_by(models.AgentMessage.timestamp)
+        db.query(AgentMessage)
+        .filter(AgentMessage.agent_id == agent_id)
+        .order_by(AgentMessage.timestamp)
         .offset(skip)
         .limit(limit)
         .all()
@@ -97,7 +96,7 @@ def get_agent_messages(db: Session, agent_id: int, skip: int = 0, limit: int = 1
 
 def create_agent_message(db: Session, agent_id: int, role: str, content: str):
     """Create a new message for an agent"""
-    db_message = models.AgentMessage(agent_id=agent_id, role=role, content=content)
+    db_message = AgentMessage(agent_id=agent_id, role=role, content=content)
     db.add(db_message)
     db.commit()
     db.refresh(db_message)
