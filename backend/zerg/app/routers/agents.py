@@ -6,9 +6,13 @@ from fastapi import HTTPException
 from fastapi import status
 from sqlalchemy.orm import Session
 
-from zerg.app import crud
-from zerg.app import schemas
+from zerg.app.crud import crud
 from zerg.app.database import get_db
+from zerg.app.schemas.schemas import Agent
+from zerg.app.schemas.schemas import AgentCreate
+from zerg.app.schemas.schemas import AgentUpdate
+from zerg.app.schemas.schemas import MessageCreate
+from zerg.app.schemas.schemas import MessageResponse
 
 router = APIRouter(
     prefix="/api/agents",
@@ -16,15 +20,15 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=List[schemas.Agent])
+@router.get("/", response_model=List[Agent])
 def read_agents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Get all agents"""
     agents = crud.get_agents(db, skip=skip, limit=limit)
     return agents
 
 
-@router.post("/", response_model=schemas.Agent, status_code=status.HTTP_201_CREATED)
-def create_agent(agent: schemas.AgentCreate, db: Session = Depends(get_db)):
+@router.post("/", response_model=Agent, status_code=status.HTTP_201_CREATED)
+def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
     """Create a new agent"""
     return crud.create_agent(
         db=db,
@@ -36,7 +40,7 @@ def create_agent(agent: schemas.AgentCreate, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/{agent_id}", response_model=schemas.Agent)
+@router.get("/{agent_id}", response_model=Agent)
 def read_agent(agent_id: int, db: Session = Depends(get_db)):
     """Get a specific agent by ID"""
     db_agent = crud.get_agent(db, agent_id=agent_id)
@@ -45,8 +49,8 @@ def read_agent(agent_id: int, db: Session = Depends(get_db)):
     return db_agent
 
 
-@router.put("/{agent_id}", response_model=schemas.Agent)
-def update_agent(agent_id: int, agent: schemas.AgentUpdate, db: Session = Depends(get_db)):
+@router.put("/{agent_id}", response_model=Agent)
+def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(get_db)):
     """Update an agent"""
     db_agent = crud.update_agent(
         db=db,
@@ -73,7 +77,7 @@ def delete_agent(agent_id: int, db: Session = Depends(get_db)):
 
 
 # Agent messages endpoints
-@router.get("/{agent_id}/messages", response_model=List[schemas.MessageResponse])
+@router.get("/{agent_id}/messages", response_model=List[MessageResponse])
 def read_agent_messages(agent_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Get all messages for a specific agent"""
     # First check if the agent exists
@@ -86,8 +90,8 @@ def read_agent_messages(agent_id: int, skip: int = 0, limit: int = 100, db: Sess
     return messages
 
 
-@router.post("/{agent_id}/messages", response_model=schemas.MessageResponse, status_code=status.HTTP_201_CREATED)
-def create_agent_message(agent_id: int, message: schemas.MessageCreate, db: Session = Depends(get_db)):
+@router.post("/{agent_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def create_agent_message(agent_id: int, message: MessageCreate, db: Session = Depends(get_db)):
     """Create a new message for an agent"""
     # First check if the agent exists
     db_agent = crud.get_agent(db, agent_id=agent_id)
@@ -98,7 +102,7 @@ def create_agent_message(agent_id: int, message: schemas.MessageCreate, db: Sess
     return crud.create_agent_message(db=db, agent_id=agent_id, role=message.role, content=message.content)
 
 
-@router.post("/{agent_id}/run", response_model=schemas.Agent)
+@router.post("/{agent_id}/run", response_model=Agent)
 def run_agent(agent_id: int, db: Session = Depends(get_db)):
     """Trigger an agent to run"""
     # First check if the agent exists

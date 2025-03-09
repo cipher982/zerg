@@ -1,9 +1,12 @@
 from datetime import datetime
 
-from app import schemas
-from app.models import Agent
-from app.models import AgentMessage
 from sqlalchemy.orm import Session
+
+from zerg.app.models.models import Agent
+from zerg.app.models.models import AgentMessage
+from zerg.app.schemas.schemas import AgentCreate
+from zerg.app.schemas.schemas import AgentUpdate
+from zerg.app.schemas.schemas import MessageCreate
 
 
 def test_agent_model(db_session: Session):
@@ -94,7 +97,7 @@ def test_agent_schema_validation():
         "config": {"test_key": "test_value"},
     }
 
-    agent_create = schemas.AgentCreate(**agent_data)
+    agent_create = AgentCreate(**agent_data)
     assert agent_create.name == agent_data["name"]
     assert agent_create.instructions == agent_data["instructions"]
     assert agent_create.model == agent_data["model"]
@@ -104,7 +107,7 @@ def test_agent_schema_validation():
     # Test AgentUpdate with partial data
     update_data = {"name": "Updated Name", "status": "processing"}
 
-    agent_update = schemas.AgentUpdate(**update_data)
+    agent_update = AgentUpdate(**update_data)
     assert agent_update.name == update_data["name"]
     assert agent_update.status == update_data["status"]
     assert agent_update.instructions is None  # Not provided
@@ -113,6 +116,6 @@ def test_agent_schema_validation():
     # Test MessageCreate
     message_data = {"role": "user", "content": "Test message"}
 
-    message_create = schemas.MessageCreate(**message_data)
+    message_create = MessageCreate(**message_data)
     assert message_create.role == message_data["role"]
     assert message_create.content == message_data["content"]

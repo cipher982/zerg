@@ -1,5 +1,6 @@
-from app.models import Agent
 from fastapi.testclient import TestClient
+
+from zerg.app.models.models import Agent
 
 
 def test_read_agents_empty(client: TestClient):

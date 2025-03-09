@@ -59,6 +59,7 @@ class MessageCreate(BaseModel):
 
 class MessageResponse(BaseModel):
     id: int
+    agent_id: int
     role: str
     content: str
     timestamp: datetime

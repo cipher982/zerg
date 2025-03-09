@@ -1,14 +1,27 @@
+import socket
+import sys
+import threading
+import time
+from unittest.mock import MagicMock
+
 import pytest
-from app.database import Base
-from app.database import get_db
-from app.models import Agent
-from app.models import AgentMessage
-from fastapi.testclient import TestClient
+import requests
+import uvicorn
+from fastapi import FastAPI
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from main import app
+from zerg.app.database import Base
+from zerg.app.database import get_db
+from zerg.app.models.models import Agent
+from zerg.app.models.models import AgentMessage
+
+# Mock the OpenAI module before importing main app
+sys.modules["openai"] = MagicMock()
+sys.modules["openai.OpenAI"] = MagicMock()
+
+from zerg.main import app  # noqa: E402
 
 # Create a test database - using in-memory SQLite for tests
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -40,6 +53,48 @@ def db_session():
         Base.metadata.drop_all(bind=engine)
 
 
+# Simple test client that doesn't rely on TestClient
+class SimpleTestClient:
+    def __init__(self, app: FastAPI, base_url: str = None):
+        self.app = app
+        self.port = self._get_free_port()
+        self.base_url = base_url or f"http://localhost:{self.port}"
+        self.server_thread = None
+        self.should_stop = False
+
+    def _get_free_port(self):
+        """Find a free port to use for testing"""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
+    def start_server(self):
+        def run_server():
+            uvicorn.run(self.app, host="127.0.0.1", port=self.port, log_level="error")
+
+        self.server_thread = threading.Thread(target=run_server)
+        self.server_thread.daemon = True
+        self.server_thread.start()
+        time.sleep(1)  # Give the server time to start
+
+    def stop_server(self):
+        if self.server_thread:
+            self.should_stop = True
+            self.server_thread.join(timeout=1)
+
+    def get(self, path, **kwargs):
+        return requests.get(f"{self.base_url}{path}", **kwargs)
+
+    def post(self, path, **kwargs):
+        return requests.post(f"{self.base_url}{path}", **kwargs)
+
+    def put(self, path, **kwargs):
+        return requests.put(f"{self.base_url}{path}", **kwargs)
+
+    def delete(self, path, **kwargs):
+        return requests.delete(f"{self.base_url}{path}", **kwargs)
+
+
 @pytest.fixture
 def client(db_session):
     """
@@ -57,8 +112,10 @@ def client(db_session):
     app.dependency_overrides[get_db] = override_get_db
 
     # Create a test client
-    with TestClient(app) as test_client:
-        yield test_client
+    test_client = SimpleTestClient(app)
+    test_client.start_server()
+    yield test_client
+    test_client.stop_server()
 
     # Clean up the overrides
     app.dependency_overrides = {}
