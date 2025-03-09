@@ -121,7 +121,6 @@ A simplified overview of notable top-level files and folders:
 
 • backend/  
    ├── main.py (FastAPI & streaming logic)  
-   ├── requirements.txt  
    └── pyproject.toml (Python project config & linting)  
 
 • frontend/  
@@ -159,10 +158,8 @@ A simplified overview of notable top-level files and folders:
 2. Copy the environment file and edit it:  
    » cp .env.example .env  
    (Add your `OPENAI_API_KEY` so the backend can call OpenAI.)  
-3. Install dependencies:  
-   » pip install -r requirements.txt  
 4. Run the server:  
-   » uvicorn main:app --host 0.0.0.0 --port 8001  
+   » uv run python -m uvicorn zerg.main:app --reload --port 8001 
 
 ### Frontend Setup
 1. Ensure you have Rust, cargo, and wasm-pack installed.  
