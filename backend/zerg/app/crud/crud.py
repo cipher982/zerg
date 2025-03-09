@@ -23,13 +23,22 @@ def get_agent(db: Session, agent_id: int):
 def create_agent(
     db: Session,
     name: str,
-    instructions: str,
+    system_instructions: str,
+    task_instructions: str,
     model: str = "gpt-4o",
     schedule: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
 ):
     """Create a new agent"""
-    db_agent = Agent(name=name, instructions=instructions, model=model, status="idle", schedule=schedule, config=config)
+    db_agent = Agent(
+        name=name,
+        system_instructions=system_instructions,
+        task_instructions=task_instructions,
+        model=model,
+        status="idle",
+        schedule=schedule,
+        config=config,
+    )
     db.add(db_agent)
     db.commit()
     db.refresh(db_agent)
@@ -40,7 +49,8 @@ def update_agent(
     db: Session,
     agent_id: int,
     name: Optional[str] = None,
-    instructions: Optional[str] = None,
+    system_instructions: Optional[str] = None,
+    task_instructions: Optional[str] = None,
     model: Optional[str] = None,
     status: Optional[str] = None,
     schedule: Optional[str] = None,
@@ -54,8 +64,10 @@ def update_agent(
     # Update provided fields
     if name is not None:
         db_agent.name = name
-    if instructions is not None:
-        db_agent.instructions = instructions
+    if system_instructions is not None:
+        db_agent.system_instructions = system_instructions
+    if task_instructions is not None:
+        db_agent.task_instructions = task_instructions
     if model is not None:
         db_agent.model = model
     if status is not None:

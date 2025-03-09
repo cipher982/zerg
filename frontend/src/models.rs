@@ -44,7 +44,8 @@ pub struct ApiAgent {
     pub id: Option<u32>,
     pub name: String,
     pub status: Option<String>,
-    pub instructions: Option<String>,
+    pub system_instructions: Option<String>,
+    pub task_instructions: Option<String>,
     pub model: Option<String>,
     pub schedule: Option<String>,
     pub config: Option<serde_json::Value>,
@@ -56,7 +57,8 @@ pub struct ApiAgent {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ApiAgentCreate {
     pub name: String,
-    pub instructions: Option<String>,
+    pub system_instructions: String,
+    pub task_instructions: String,
     pub model: Option<String>,
     pub schedule: Option<String>,
     pub config: Option<serde_json::Value>,
@@ -67,7 +69,8 @@ pub struct ApiAgentCreate {
 pub struct ApiAgentUpdate {
     pub name: Option<String>,
     pub status: Option<String>,
-    pub instructions: Option<String>,
+    pub system_instructions: Option<String>,
+    pub task_instructions: Option<String>,
     pub model: Option<String>,
     pub schedule: Option<String>,
     pub config: Option<serde_json::Value>,

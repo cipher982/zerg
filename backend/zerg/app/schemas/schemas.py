@@ -10,7 +10,8 @@ from pydantic import BaseModel
 # Agent schemas
 class AgentBase(BaseModel):
     name: str
-    instructions: str
+    system_instructions: str
+    task_instructions: str
     model: str = "gpt-4o"
     schedule: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
@@ -22,7 +23,8 @@ class AgentCreate(AgentBase):
 
 class AgentUpdate(BaseModel):
     name: Optional[str] = None
-    instructions: Optional[str] = None
+    system_instructions: Optional[str] = None
+    task_instructions: Optional[str] = None
     model: Optional[str] = None
     status: Optional[str] = None
     schedule: Optional[str] = None
