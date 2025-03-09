@@ -11,6 +11,11 @@ from fastapi.responses import Response
 from openai import OpenAI
 from pydantic import BaseModel
 
+# Import our application modules
+from app.database import engine
+from app.models import Base
+from app.routers import agents_router
+
 # Load environment variables
 load_dotenv()
 
@@ -20,6 +25,9 @@ if not api_key:
     raise ValueError("OPENAI_API_KEY environment variable not set")
 
 client = OpenAI(api_key=api_key)
+
+# Create DB tables
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Agent Platform Backend")
 
@@ -31,6 +39,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include our API routers
+app.include_router(agents_router)
 
 
 # Models
