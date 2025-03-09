@@ -11,6 +11,7 @@ use wasm_bindgen::JsCast;
 use std::rc::Rc;
 use crate::messages::Message;
 use crate::update::update;
+use crate::constants::DEFAULT_TASK_INSTRUCTIONS;
 
 // Store global application state
 pub struct AppState {
@@ -567,8 +568,7 @@ impl AppState {
     pub fn get_task_instructions_with_fallback(&self, agent_id: &str) -> String {
         self.nodes.get(agent_id)
             .and_then(|node| node.task_instructions.clone())
-            .filter(|instructions| !instructions.trim().is_empty())
-            .unwrap_or_else(|| "begin".to_string())
+            .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string())
     }
 
     // New dispatch method to handle messages

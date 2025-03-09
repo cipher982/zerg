@@ -6,6 +6,7 @@ use crate::network::ApiClient;
 use std::collections::HashMap;
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen::closure::Closure;
+use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
 
 // Constants for storage keys
 const NODES_KEY: &str = "zerg_nodes";
@@ -151,8 +152,10 @@ pub fn save_state_to_api(app_state: &AppState) {
                 let agent_update = ApiAgentUpdate {
                     name: Some(node.text.clone()),
                     status: node.status.clone(),
-                    system_instructions: node.system_instructions.clone(),
-                    task_instructions: node.task_instructions.clone(),
+                    system_instructions: Some(node.system_instructions.clone()
+                        .unwrap_or_else(|| DEFAULT_SYSTEM_INSTRUCTIONS.to_string())),
+                    task_instructions: Some(node.task_instructions.clone()
+                        .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string())),
                     model: Some(selected_model.clone()),
                     schedule: None,
                     config: None, // Will need to add more node data as needed
@@ -180,8 +183,10 @@ pub fn save_state_to_api(app_state: &AppState) {
                     // This is a new agent, create it in the API
                     let agent_create = ApiAgentCreate {
                         name: node.text.clone(),
-                        system_instructions: node.system_instructions.clone().unwrap_or_else(|| "You are a helpful assistant.".to_string()),
-                        task_instructions: node.task_instructions.clone().unwrap_or_else(|| "Please help with any tasks the user gives you.".to_string()),
+                        system_instructions: node.system_instructions.clone()
+                            .unwrap_or_else(|| DEFAULT_SYSTEM_INSTRUCTIONS.to_string()),
+                        task_instructions: node.task_instructions.clone()
+                            .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string()),
                         model: Some(selected_model.clone()),
                         schedule: None,
                         config: None,

@@ -3,10 +3,12 @@
 // This file contains functions to render different parts of the UI
 // based on the current application state.
 //
-use wasm_bindgen::prelude::*;
 use web_sys::Document;
 use crate::state::AppState;
 use crate::storage::ActiveView;
+use wasm_bindgen::JsValue;
+use wasm_bindgen::JsCast;
+use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
 
 // Render the appropriate view based on the active view in the state
 pub fn render_active_view(state: &AppState, document: &Document) -> Result<(), JsValue> {
@@ -136,9 +138,13 @@ pub fn show_agent_modal(state: &AppState, document: &Document) -> Result<(), JsV
                 if let Some(system_elem) = document.get_element_by_id("system-instructions") {
                     if let Some(system_textarea) = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>() {
                         if let Some(instructions) = &node.system_instructions {
-                            system_textarea.set_value(instructions);
+                            if instructions.trim().is_empty() {
+                                system_textarea.set_value(DEFAULT_SYSTEM_INSTRUCTIONS);
+                            } else {
+                                system_textarea.set_value(instructions);
+                            }
                         } else {
-                            system_textarea.set_value("");
+                            system_textarea.set_value(DEFAULT_SYSTEM_INSTRUCTIONS);
                         }
                     }
                 }
@@ -147,9 +153,13 @@ pub fn show_agent_modal(state: &AppState, document: &Document) -> Result<(), JsV
                 if let Some(task_elem) = document.get_element_by_id("default-task-instructions") {
                     if let Some(task_textarea) = task_elem.dyn_ref::<web_sys::HtmlTextAreaElement>() {
                         if let Some(instructions) = &node.task_instructions {
-                            task_textarea.set_value(instructions);
+                            if instructions.trim().is_empty() {
+                                task_textarea.set_value(DEFAULT_TASK_INSTRUCTIONS);
+                            } else {
+                                task_textarea.set_value(instructions);
+                            }
                         } else {
-                            task_textarea.set_value("");
+                            task_textarea.set_value(DEFAULT_TASK_INSTRUCTIONS);
                         }
                     }
                 }

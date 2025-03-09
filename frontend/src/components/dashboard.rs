@@ -3,6 +3,7 @@ use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, HtmlElement};
 use crate::state::APP_STATE;
 use crate::models::NodeType;
+use crate::constants::DEFAULT_SYSTEM_INSTRUCTIONS;
 
 // Agent status for displaying in the dashboard
 #[derive(Clone, Debug, PartialEq)]
@@ -414,10 +415,17 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
                 }
             }
             
+            // Set system instructions with explicit defaults if empty
+            let system_instructions_value = if system_instructions.trim().is_empty() {
+                DEFAULT_SYSTEM_INSTRUCTIONS.to_string()
+            } else {
+                system_instructions
+            };
+            
             // Load system instructions
             if let Some(system_elem) = document.get_element_by_id("system-instructions") {
                 if let Some(system_textarea) = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>() {
-                    system_textarea.set_value(&system_instructions);
+                    system_textarea.set_value(&system_instructions_value);
                 }
             }
             
