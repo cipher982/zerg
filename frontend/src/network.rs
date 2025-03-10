@@ -182,163 +182,162 @@ fn handle_websocket_message(event: MessageEvent) {
         .unwrap_or_else(|| "".to_string());
 
     // Track if we need to refresh UI after handling the message
-    let need_refresh = {
-        // Handle the message based on type - isolate the borrow in its own scope
+    let need_refresh = if msg_type.is_empty() {
+        // Legacy message format without explicit type
+        false
+    } else {
         APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             
-            if let Some(response_node_id) = state.get_node_id_for_message(&message_id) {
-                match msg_type.as_str() {
-                    "chunk" => {
-                        // Extract the content from the chunk
-                        let content = js_sys::Reflect::get(&response, &"chunk".into())
-                            .unwrap_or_else(|_| "".into())
-                            .as_string()
-                            .unwrap_or_else(|| "".to_string());
-                        
-                        // Update the response node text
-                        if let Some(node) = state.nodes.get_mut(&response_node_id) {
-                            // If this is the first chunk, clear the placeholder
-                            if node.text == "..." {
-                                node.text = content;
-                            } else {
-                                node.text.push_str(&content);
-                            }
-                            
-                            // Update node size based on new content
-                            state.resize_node_for_content(&response_node_id);
-                            state.draw_nodes();
-                            
-                            // Mark state as modified
-                            state.state_modified = true;
-                        } else {
-                            web_sys::console::error_1(&format!("Node not found: {}", response_node_id).into());
-                        }
-                        
-                        // Chunks don't require a full UI refresh
-                        false
-                    },
-                    "done" => {
-                        // First get the parent-child relationship and response content
-                        // to avoid borrow issues later
-                        let (parent_id_to_update, response_content) = {
-                            // Get parent ID
-                            let parent_id = if let Some(node) = state.nodes.get(&response_node_id) {
-                                node.parent_id.clone()
-                            } else {
-                                None
-                            };
-                            
-                            // Get response content
-                            let content = if let Some(node) = state.nodes.get(&response_node_id) {
-                                node.text.clone()
-                            } else {
-                                String::new()
-                            };
-                            
-                            (parent_id, content)
-                        };
-                        
-                        // Now update the agent status and add the message to history
-                        if let Some(parent_id) = parent_id_to_update {
-                            if let Some(agent_node) = state.nodes.get_mut(&parent_id) {
-                                // Set status back to idle
-                                agent_node.status = Some("idle".to_string());
+            // Only try to find node associations for node-specific message types
+            if msg_type == "chunk" || msg_type == "done" || msg_type == "message_id" {
+                // These are messages that need to update specific nodes
+                if !message_id.is_empty() {
+                    let response_node_id = state.get_node_id_for_message(&message_id);
+                    
+                    if let Some(response_node_id) = response_node_id {
+                        // Handle messages that target a specific node
+                        match msg_type.as_str() {
+                            "chunk" => {
+                                // Extract the content from the chunk
+                                let content = js_sys::Reflect::get(&response, &"chunk".into())
+                                    .unwrap_or_else(|_| "".into())
+                                    .as_string()
+                                    .unwrap_or_else(|| "".to_string());
                                 
-                                // Create assistant message
-                                let assistant_message = crate::models::Message {
-                                    role: "assistant".to_string(),
-                                    content: response_content.clone(),
-                                    timestamp: js_sys::Date::now() as u64,
-                                };
-                                
-                                // Add to history if it exists
-                                if let Some(history) = &mut agent_node.history {
-                                    // Only add if not already there
-                                    if !history.iter().any(|msg| 
-                                        msg.role == "assistant" && msg.content == response_content
-                                    ) {
-                                        history.push(assistant_message);
-                                    }
-                                }
-                            }
-                        }
-                        
-                        state.draw_nodes();
-                        
-                        // Save state when done
-                        let _ = state.save_if_modified();
-                        
-                        // Return true to indicate we need to refresh the UI after this borrow ends
-                        true
-                    },
-                    "completion" => {
-                        // First extract all needed data from the immutable borrow
-                        let (parent_id_to_update, response_text) = if let Some(node) = state.nodes.get(&response_node_id) {
-                            if let Some(parent_id) = &node.parent_id {
-                                (Some(parent_id.clone()), node.text.clone())
-                            } else {
-                                (None, String::new())
-                            }
-                        } else {
-                            (None, String::new())
-                        };
-                        
-                        // Now use the mutable borrow with the data we extracted
-                        if let Some(parent_id) = parent_id_to_update {
-                            if let Some(agent_node) = state.nodes.get_mut(&parent_id) {
-                                // Set status back to idle
-                                agent_node.status = Some("idle".to_string());
-                                
-                                // Create a new message for the history
-                                let assistant_message = crate::models::Message {
-                                    role: "assistant".to_string(),
-                                    content: response_text.clone(),
-                                    timestamp: js_sys::Date::now() as u64,
-                                };
-                                
-                                // Add to history if it exists
-                                if let Some(history) = &mut agent_node.history {
-                                    // Only add if this exact message isn't already there
-                                    if !history.iter().any(|msg| 
-                                        msg.role == "assistant" && msg.content == response_text
-                                    ) {
-                                        history.push(assistant_message);
-                                    }
-                                }
-                            }
-                        }
-                        
-                        state.draw_nodes();
-                        
-                        // Save state on completion
-                        let _ = state.save_if_modified();
-                        
-                        // Return true to indicate we need to refresh the UI after this borrow ends
-                        true
-                    },
-                    _ => {
-                        // Handle legacy format
-                        if let Ok(response_text) = js_sys::Reflect::get(&response, &"response".into()) {
-                            if let Some(text) = response_text.as_string() {
+                                // Update the response node text
                                 if let Some(node) = state.nodes.get_mut(&response_node_id) {
-                                    node.text = text;
+                                    // If this is the first chunk, clear the placeholder
+                                    if node.text == "..." {
+                                        node.text = content;
+                                    } else {
+                                        node.text.push_str(&content);
+                                    }
+                                    
+                                    // Update node size based on new content
                                     state.resize_node_for_content(&response_node_id);
                                     state.draw_nodes();
                                     
                                     // Mark state as modified
                                     state.state_modified = true;
+                                } else {
+                                    web_sys::console::error_1(&format!("Node not found: {}", response_node_id).into());
                                 }
+                                
+                                // Chunks don't require a full UI refresh
+                                false
+                            },
+                            "done" => {
+                                // First get the parent-child relationship and response content
+                                // to avoid borrow issues later
+                                let (parent_id_to_update, response_content) = {
+                                    // Get parent ID
+                                    let parent_id = if let Some(node) = state.nodes.get(&response_node_id) {
+                                        node.parent_id.clone()
+                                    } else {
+                                        None
+                                    };
+                                    
+                                    // Get response content
+                                    let content = if let Some(node) = state.nodes.get(&response_node_id) {
+                                        node.text.clone()
+                                    } else {
+                                        String::new()
+                                    };
+                                    
+                                    (parent_id, content)
+                                };
+                                
+                                // Now update the agent status and add the message to history
+                                if let Some(parent_id) = parent_id_to_update {
+                                    if let Some(agent_node) = state.nodes.get_mut(&parent_id) {
+                                        // Set status back to idle
+                                        agent_node.status = Some("idle".to_string());
+                                        
+                                        // Create assistant message
+                                        let assistant_message = crate::models::Message {
+                                            role: "assistant".to_string(),
+                                            content: response_content.clone(),
+                                            timestamp: js_sys::Date::now() as u64,
+                                        };
+                                        
+                                        // Add to history if it exists
+                                        if let Some(history) = &mut agent_node.history {
+                                            // Only add if not already there
+                                            if !history.iter().any(|msg| 
+                                                msg.role == "assistant" && msg.content == response_content
+                                            ) {
+                                                history.push(assistant_message);
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                state.draw_nodes();
+                                
+                                // Save state when done
+                                let _ = state.save_if_modified();
+                                
+                                // Return true to indicate we need to refresh the UI after this borrow ends
+                                true
+                            },
+                            "message_id" => {
+                                // Skip error for empty message IDs
+                                false
+                            },
+                            _ => {
+                                // Log for debugging but don't treat as error
+                                web_sys::console::log_1(&format!("Message ID {} has no associated node, may be intended for a different view", message_id).into());
+                                false
                             }
                         }
-                        
-                        // Legacy format doesn't require UI refresh
+                    } else if message_id.is_empty() {
+                        // Skip error for empty message IDs
+                        false
+                    } else {
+                        // Log for debugging but don't treat as error
+                        web_sys::console::log_1(&format!("Message ID {} has no associated node, may be intended for a different view", message_id).into());
+                        false
+                    }
+                } else {
+                    // Message doesn't have an ID but should have one
+                    web_sys::console::warn_1(&"Node-specific message received without a message_id".into());
+                    false
+                }
+            } else {
+                // Handle general application messages that don't need node associations
+                match msg_type.as_str() {
+                    "system_status" => {
+                        // Handle system status update
+                        web_sys::console::log_1(&"Received system status update".into());
+                        false
+                    },
+                    "agent_status_changed" => {
+                        // Process agent status change
+                        web_sys::console::log_1(&"Received agent status update".into());
+                        // You might want to refresh the dashboard here
+                        true
+                    },
+                    "error" => {
+                        // Handle error messages
+                        if let Ok(error_msg) = js_sys::Reflect::get(&response, &"error".into()) {
+                            if let Some(error_text) = error_msg.as_string() {
+                                web_sys::console::error_1(&format!("WebSocket error: {}", error_text).into());
+                            }
+                        }
+                        false
+                    },
+                    "pong" => {
+                        // Handle ping/pong for connection testing
+                        // No UI update needed
+                        false
+                    },
+                    _ => {
+                        // Unknown message type
+                        web_sys::console::log_1(&format!("Received unknown message type: {}", msg_type).into());
                         false
                     }
                 }
-            } else {
-                web_sys::console::error_1(&format!("No node found for message_id: {}", message_id).into());
-                false
             }
         })
     }; // The borrow is completely dropped here
