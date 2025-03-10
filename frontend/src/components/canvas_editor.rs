@@ -3,6 +3,7 @@ use web_sys::{
     Document, 
     HtmlCanvasElement, 
     MouseEvent,
+    AddEventListenerOptions,
 };
 use crate::state::{APP_STATE, AppState};
 use crate::models::NodeType;
@@ -496,17 +497,15 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     let canvas_wheel_inside = canvas_wheel.clone();
     
     let wheel_handler = Closure::wrap(Box::new(move |event: web_sys::WheelEvent| {
-        // We won't prevent default since we want natural scrolling when not zooming
-        
-        // Check if auto-fit is enabled
+        // Check if auto-fit is enabled before doing anything
         let auto_fit_enabled = APP_STATE.with(|state| {
             let state = state.borrow();
             state.auto_fit
         });
         
-        // Only allow manual zooming when auto-fit is disabled
+        // Only process the event when auto-fit is disabled, never call preventDefault()
         if !auto_fit_enabled {
-            // Get canvas dimensions and other state values
+            // Rest of the zoom handling code
             let (canvas_width, canvas_height, zoom_level, viewport_x, viewport_y) = APP_STATE.with(|state| {
                 let state = state.borrow();
                 (
@@ -562,10 +561,15 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         }
     }) as Box<dyn FnMut(_)>);
     
-    // Add wheel event listener with standard method
-    canvas_wheel.add_event_listener_with_callback(
+    // Create options with passive: true
+    let mut options = AddEventListenerOptions::new();
+    options.passive(true);
+    
+    // Add wheel event listener with passive option
+    canvas_wheel.add_event_listener_with_callback_and_add_event_listener_options(
         "wheel",
         wheel_handler.as_ref().unchecked_ref(),
+        &options,
     )?;
     wheel_handler.forget();
     
