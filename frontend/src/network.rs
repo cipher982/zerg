@@ -557,6 +557,12 @@ impl ApiClient {
         Self::fetch_json(&url, "POST", None).await
     }
 
+    // Reset the database (development only)
+    pub async fn reset_database() -> Result<String, JsValue> {
+        let url = format!("{}/api/reset-database", Self::api_base_url());
+        Self::fetch_json(&url, "POST", None).await
+    }
+
     // Helper function to make fetch requests
     async fn fetch_json(url: &str, method: &str, body: Option<&str>) -> Result<String, JsValue> {
         use web_sys::{Request, RequestInit, RequestMode, Response};

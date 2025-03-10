@@ -109,6 +109,27 @@ async def get_favicon():
     return Response(content=b"", media_type="image/x-icon")
 
 
+# Database reset endpoint for development
+@app.post("/api/reset-database")
+async def reset_database():
+    """Reset the database by dropping all tables and recreating them.
+    This is for development purposes only and should be secured in production.
+    """
+    try:
+        logger.warning("Resetting database - dropping all tables")
+        # Drop all tables
+        Base.metadata.drop_all(bind=engine)
+
+        # Recreate all tables
+        logger.info("Recreating database tables")
+        Base.metadata.create_all(bind=engine)
+
+        return {"message": "Database reset successfully"}
+    except Exception as e:
+        logger.error(f"Error resetting database: {str(e)}")
+        return JSONResponse(status_code=500, content={"detail": f"Failed to reset database: {str(e)}"})
+
+
 # WebSocket endpoint
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

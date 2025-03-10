@@ -151,6 +151,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                 NodeType::AgentIdentity
             );
             
+            // Log the new node ID
             web_sys::console::log_1(&format!("Created new agent with ID: {}", node_id).into());
             
             // Draw the nodes on canvas too
@@ -183,6 +184,67 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     create_callback.forget();
     
     header.append_child(&create_btn)?;
+    
+    // Create reset database button (development only)
+    let reset_btn = document.create_element("button")?;
+    reset_btn.set_id("reset-db-btn");
+    reset_btn.set_class_name("reset-db-btn");
+    reset_btn.set_inner_html("🗑️ Reset DB");
+    
+    let reset_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+        web_sys::console::log_1(&"Reset database requested".into());
+        
+        if let Some(window) = web_sys::window() {
+            // Confirm dialog before proceeding
+            if !window.confirm_with_message("WARNING: This will delete ALL agents and data. This action cannot be undone. Proceed?").unwrap_or(false) {
+                return;
+            }
+            
+            // Use wasm_bindgen_futures to handle the async API call
+            use wasm_bindgen_futures::spawn_local;
+            use crate::network::ApiClient;
+            
+            spawn_local(async move {
+                match ApiClient::reset_database().await {
+                    Ok(response) => {
+                        web_sys::console::log_1(&format!("Database reset successful: {}", response).into());
+                        
+                        // Force a hard refresh without showing another popup
+                        let window = web_sys::window().unwrap();
+                        if let Some(document) = window.document() {
+                            // First try to immediately refresh the dashboard UI
+                            let _ = render_dashboard(&document);
+                            
+                            // Then force a page reload to ensure everything is fresh
+                            // Use a timeout to allow the UI to update first
+                            let reload_callback = Closure::wrap(Box::new(move || {
+                                // Use the raw JS API to force a hard refresh (no cache)
+                                js_sys::eval("window.location.reload(true)").unwrap();
+                            }) as Box<dyn FnMut()>);
+                            
+                            let _ = window.set_timeout_with_callback_and_timeout_and_arguments(
+                                reload_callback.as_ref().unchecked_ref(),
+                                100, // Short delay to ensure message is seen but not requiring interaction
+                                &js_sys::Array::new()
+                            );
+                            reload_callback.forget();
+                        }
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Error resetting database: {:?}", e).into());
+                        window.alert_with_message(&format!("Error resetting database: {:?}", e)).unwrap();
+                    }
+                }
+            });
+        }
+    }) as Box<dyn FnMut(_)>);
+    
+    reset_btn.dyn_ref::<HtmlElement>()
+        .unwrap()
+        .add_event_listener_with_callback("click", reset_callback.as_ref().unchecked_ref())?;
+    reset_callback.forget();
+    
+    header.append_child(&reset_btn)?;
     
     Ok(header)
 }
