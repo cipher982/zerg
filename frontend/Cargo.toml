@@ -46,7 +46,9 @@ features = [
     "WheelEvent",
     "DomRect",
     "CloseEvent",
-    "Storage"
+    "Storage",
+    "EventTarget",
+    "AddEventListenerOptions"
 ]
 
 [package.metadata.wasm-pack.profile.dev]
