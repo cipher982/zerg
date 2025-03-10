@@ -600,7 +600,26 @@ button {
 }
 
 .create-agent-btn:hover {
-    background: #2980b9;
+    background-color: var(--bg-button-hover);
+}
+
+.reset-db-btn {
+    background-color: var(--color-error) !important;
+    color: white;
+    border: none;
+    border-radius: 0.25rem;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.9rem;
+    cursor: pointer;
+    margin-left: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.reset-db-btn:hover {
+    background-color: #c0392b !important; /* Darker red on hover */
 }
 
 .agents-table {
