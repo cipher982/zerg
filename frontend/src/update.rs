@@ -38,7 +38,11 @@ pub fn update(state: &mut AppState, msg: Message) {
         
         Message::UpdateNodePosition { node_id, x, y } => {
             state.update_node_position(&node_id, x, y);
-            state.state_modified = true;
+            // Only mark state as modified if we're not actively dragging
+            // This prevents triggering state saves for every tiny move
+            if !state.is_dragging_agent {
+                state.state_modified = true;
+            }
         },
         
         Message::AddNode { text, x, y, node_type } => {
@@ -102,6 +106,10 @@ pub fn update(state: &mut AppState, msg: Message) {
             state.dragging = None;
             state.is_dragging_agent = false;
             state.state_modified = true;
+            
+            // Explicitly save state to API when dragging is complete
+            // This ensures we only save the final position once
+            crate::storage::save_state_to_api(state);
         },
         
         Message::StartCanvasDrag { start_x, start_y } => {

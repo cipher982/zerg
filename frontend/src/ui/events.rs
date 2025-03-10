@@ -501,42 +501,80 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
             let window = web_sys::window().expect("no global window exists");
             let _document = window.document().expect("should have a document on window");
             
-            // Determine a good position for the new agent
-            // Use center of viewport if available, or a default position
-            let (x, y) = APP_STATE.with(|state| {
-                let state = state.borrow();
-                (state.viewport_x + 200.0, state.viewport_y + 100.0)
-            });
+            // Generate a random agent name
+            let agent_name = format!("Agent {}", (js_sys::Math::random() * 10000.0).round());
             
-            // Create the message with the agent node
-            let message = {
-                // Generate a random name without using rand crate
-                let agent_name = format!("Agent {}", js_sys::Math::random() * 10000.0);
-                Message::AddNode {
-                    text: agent_name,
-                    x,
-                    y,
-                    node_type: NodeType::AgentIdentity,
+            // First create the agent in the API
+            let agent_data = format!(
+                r#"{{
+                    "name": "{}",
+                    "system_instructions": "You are a helpful AI assistant.",
+                    "task_instructions": "Respond to user questions accurately and concisely.",
+                    "model": "gpt-3.5-turbo"
+                }}"#,
+                agent_name
+            );
+            
+            // This is the ONLY place where agents should be created in the API
+            web_sys::console::log_1(&"Creating new agent via the proper API call".into());
+            
+            // Use async block to call the API
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::network::ApiClient::create_agent(&agent_data).await {
+                    Ok(response) => {
+                        // Parse the response to get the agent ID
+                        if let Ok(json) = js_sys::JSON::parse(&response) {
+                            if let Some(id) = js_sys::Reflect::get(&json, &"id".into()).ok()
+                                .and_then(|v| v.as_f64()) 
+                            {
+                                let agent_id = id as u32;
+                                web_sys::console::log_1(&format!("Successfully created agent with ID: {}", agent_id).into());
+                                
+                                // Now create a node in the UI for this agent
+                                let (x, y) = APP_STATE.with(|state| {
+                                    let state = state.borrow();
+                                    (state.viewport_x + 200.0, state.viewport_y + 100.0)
+                                });
+                                
+                                // Create the message with the agent node - correctly ID'ed as agent-{id}
+                                let node_id = format!("agent-{}", agent_id);
+                                
+                                // Use AddNode with the assigned agent ID
+                                APP_STATE.with(|state| {
+                                    let mut state = state.borrow_mut();
+                                    let mut node = crate::models::Node {
+                                        id: node_id.clone(),
+                                        x,
+                                        y,
+                                        text: agent_name,
+                                        width: 200.0,
+                                        height: 80.0,
+                                        color: "#ffecb3".to_string(), // Light amber color
+                                        parent_id: None,
+                                        node_type: NodeType::AgentIdentity,
+                                        system_instructions: Some("You are a helpful AI assistant.".to_string()),
+                                        task_instructions: Some("Respond to user questions accurately and concisely.".to_string()),
+                                        history: Some(Vec::new()),
+                                        status: Some("idle".to_string()),
+                                    };
+                                    
+                                    state.nodes.insert(node_id, node);
+                                    state.state_modified = true;
+                                    state.draw_nodes(); // Redraw to show the new node
+                                });
+                                
+                                // Refresh the UI
+                                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                                    web_sys::console::warn_1(&format!("Failed to refresh UI after agent creation: {:?}", e).into());
+                                }
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to create agent: {:?}", e).into());
+                    }
                 }
-            };
-            
-            // Use the new dispatch method with AddNode message
-            let (need_refresh, pending_call) = APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.dispatch(message)
             });
-            
-            // After borrowing mutably, we can refresh UI if needed in a separate borrow
-            if need_refresh {
-                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
-                }
-            }
-            
-            // Handle any pending network calls (shouldn't be any for AddNode)
-            if let Some((task_text, message_id)) = pending_call {
-                crate::network::send_text_to_backend(&task_text, message_id);
-            }
         }) as Box<dyn FnMut(_)>);
         
         create_agent_button.add_event_listener_with_callback(

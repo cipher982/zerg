@@ -60,28 +60,36 @@ pub fn save_state_to_api(app_state: &AppState) {
     // Clone the necessary data before passing to the async block
     let nodes = app_state.nodes.clone();
     let selected_model = app_state.selected_model.clone();
+    let is_dragging = app_state.is_dragging_agent;
+    
+    // Skip state saving if we're actively dragging to prevent spamming API
+    if is_dragging {
+        web_sys::console::log_1(&"Skipping API save during active dragging".into());
+        return;
+    }
     
     // Spawn an async task to save agents to API
     spawn_local(async move {
         // We'll need to convert each Node of type AgentIdentity to an ApiAgent
         for (node_id, node) in nodes.iter() {
-            if let crate::models::NodeType::AgentIdentity = node.node_type {
-                // Only synchronize agent identity nodes
-                let agent_update = ApiAgentUpdate {
-                    name: Some(node.text.clone()),
-                    status: node.status.clone(),
-                    system_instructions: Some(node.system_instructions.clone()
-                        .unwrap_or_else(|| DEFAULT_SYSTEM_INSTRUCTIONS.to_string())),
-                    task_instructions: Some(node.task_instructions.clone()
-                        .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string())),
-                    model: Some(selected_model.clone()),
-                    schedule: None,
-                    config: None, // Will need to add more node data as needed
-                };
-                
-                // Extract the numeric agent ID if it exists
-                if let Some(agent_id_str) = node_id.strip_prefix("agent-") {
-                    if let Ok(agent_id) = agent_id_str.parse::<u32>() {
+            // ONLY process nodes that are already known to be agents (with agent- prefix)
+            // Skip all other nodes to ensure we NEVER create agents outside the create button flow
+            if let Some(agent_id_str) = node_id.strip_prefix("agent-") {
+                if let Ok(agent_id) = agent_id_str.parse::<u32>() {
+                    if let crate::models::NodeType::AgentIdentity = node.node_type {
+                        // Only synchronize agent identity nodes that already have agent IDs
+                        let agent_update = ApiAgentUpdate {
+                            name: Some(node.text.clone()),
+                            status: node.status.clone(),
+                            system_instructions: Some(node.system_instructions.clone()
+                                .unwrap_or_else(|| DEFAULT_SYSTEM_INSTRUCTIONS.to_string())),
+                            task_instructions: Some(node.task_instructions.clone()
+                                .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string())),
+                            model: Some(selected_model.clone()),
+                            schedule: None,
+                            config: None, // Will need to add more node data as needed
+                        };
+                        
                         // Try to update existing agent
                         let agent_json = match to_string(&agent_update) {
                             Ok(json) => json,
@@ -97,34 +105,15 @@ pub fn save_state_to_api(app_state: &AppState) {
                             web_sys::console::log_1(&format!("Updated agent {} in API", agent_id).into());
                         }
                     }
-                } else {
-                    // This is a new agent, create it in the API
-                    let agent_create = ApiAgentCreate {
-                        name: node.text.clone(),
-                        system_instructions: node.system_instructions.clone()
-                            .unwrap_or_else(|| DEFAULT_SYSTEM_INSTRUCTIONS.to_string()),
-                        task_instructions: node.task_instructions.clone()
-                            .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string()),
-                        model: Some(selected_model.clone()),
-                        schedule: None,
-                        config: None,
-                    };
-                    
-                    let agent_json = match to_string(&agent_create) {
-                        Ok(json) => json,
-                        Err(e) => {
-                            web_sys::console::error_1(&format!("Error serializing agent create: {}", e).into());
-                            continue;
-                        }
-                    };
-                    
-                    if let Err(e) = ApiClient::create_agent(&agent_json).await {
-                        web_sys::console::error_1(&format!("Error creating agent in API: {:?}", e).into());
-                    } else {
-                        web_sys::console::log_1(&format!("Created new agent in API: {}", node.text).into());
-                    }
+                }
+            } else if node_id.starts_with("node_") {
+                // This is a canvas node with no corresponding agent - do not create an agent for it
+                // Simply log it to console
+                if let crate::models::NodeType::AgentIdentity = node.node_type {
+                    web_sys::console::log_1(&format!("Canvas node {} of type AgentIdentity exists but has no agent ID, skipping API sync", node_id).into());
                 }
             }
+            // Completely remove the 'else' branch that was creating new agents
         }
     });
 }
