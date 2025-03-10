@@ -3,7 +3,6 @@ import logging
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from fastapi import Response
 from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
 from fastapi.responses import JSONResponse
@@ -98,15 +97,12 @@ async def get_models():
 # Root endpoint
 @app.get("/")
 async def read_root():
-    """Root endpoint."""
-    return {"message": "Welcome to the AI Agent Platform"}
+    """Return a simple message to indicate the API is working."""
+    return {"message": "Agent Platform API is running"}
 
 
-# Favicon endpoint
-@app.get("/favicon.ico")
-async def get_favicon():
-    """Return an empty response for favicon requests."""
-    return Response(content=b"", media_type="image/x-icon")
+# Favicon endpoint is no longer needed since we use static file in the frontend
+# Browsers will go directly to the frontend server for favicon.ico
 
 
 # Database reset endpoint for development

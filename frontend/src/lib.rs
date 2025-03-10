@@ -8,7 +8,6 @@ mod canvas;
 mod ui;
 // mod ui_old; // Temporarily commented out to confirm everything is refactored
 mod network;
-mod favicon;
 mod storage;
 mod components;
 mod messages;  // New module for Message enum
