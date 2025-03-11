@@ -10,7 +10,12 @@ def test_read_agent_messages_empty(client: TestClient, sample_agent: Agent):
     _ = response.json()
 
     # Create a new agent with no messages
-    agent_data = {"name": "Agent Without Messages", "instructions": "This agent has no messages", "model": "gpt-4o"}
+    agent_data = {
+        "name": "Agent Without Messages",
+        "system_instructions": "System instructions for agent without messages",
+        "task_instructions": "This agent has no messages",
+        "model": "gpt-4o",
+    }
     response = client.post("/api/agents", json=agent_data)
     new_agent = response.json()
 
