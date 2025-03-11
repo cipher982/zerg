@@ -22,7 +22,11 @@ pub fn open_agent_modal(document: &Document, node_id: &str) -> Result<(), JsValu
         }
     });
     
-    // Now update modal without holding the borrow
+    // Store current node ID in a data attribute on the modal
+    if let Some(modal) = document.get_element_by_id("agent-modal") {
+        modal.set_attribute("data-node-id", node_id)?;
+    }
+    
     // Set modal title
     if let Some(modal_title) = document.get_element_by_id("modal-title") {
         modal_title.set_inner_html(&format!("Agent: {}", node_text));
@@ -90,6 +94,16 @@ pub fn open_agent_modal(document: &Document, node_id: &str) -> Result<(), JsValu
     // Show the modal
     if let Some(modal) = document.get_element_by_id("agent-modal") {
         let _ = modal.set_attribute("style", "display: block;");
+    }
+    
+    Ok(())
+}
+
+/// Close the agent modal
+pub fn close_agent_modal(document: &Document) -> Result<(), JsValue> {
+    // Hide the modal
+    if let Some(modal) = document.get_element_by_id("agent-modal") {
+        modal.set_attribute("style", "display: none;")?;
     }
     
     Ok(())

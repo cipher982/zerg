@@ -191,33 +191,56 @@ pub fn update(state: &mut AppState, msg: Message) {
         },
         
         Message::SaveAgentDetails { name, system_instructions, task_instructions } => {
-            if let Some(id) = &state.selected_node_id {
-                let id_clone = id.clone();
-                if let Some(node) = state.nodes.get_mut(&id_clone) {
-                    // Update the node name if provided
-                    if !name.trim().is_empty() {
-                        node.text = name.clone();
+            // Get the current node ID from the modal
+            let node_id = if let Some(window) = web_sys::window() {
+                if let Some(document) = window.document() {
+                    if let Some(modal) = document.get_element_by_id("agent-modal") {
+                        modal.get_attribute("data-node-id")
+                    } else {
+                        None
                     }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            
+            // Update the node with the new details
+            if let Some(node_id) = node_id {
+                if let Some(node) = state.nodes.get_mut(&node_id) {
+                    // Update node properties
+                    node.text = name;
+                    node.system_instructions = Some(system_instructions);
+                    node.task_instructions = Some(task_instructions);
                     
-                    // Update system instructions
-                    node.system_instructions = Some(system_instructions.clone());
-                    
-                    // Update task instructions
-                    node.task_instructions = Some(task_instructions.clone());
-                    
+                    // Mark state as modified
                     state.state_modified = true;
+                    
+                    // Save state to API
+                    let _ = state.save_if_modified();
+                }
+                
+                // Close the modal after saving
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        if let Err(e) = crate::ui::modals::close_agent_modal(&document) {
+                            web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
+                        }
+                    }
                 }
             }
-            
-            // The modal UI update is handled in the view render
         },
         
         Message::CloseAgentModal => {
-            // The actual UI update to hide the modal is handled in the view render
-            let window = web_sys::window().expect("no global window exists");
-            let document = window.document().expect("should have a document");
-            if let Err(e) = crate::views::hide_agent_modal(&document) {
-                web_sys::console::error_1(&format!("Failed to hide modal: {:?}", e).into());
+            // Get the document to close the modal
+            if let Some(window) = web_sys::window() {
+                if let Some(document) = window.document() {
+                    // Close the modal using the modal helper function
+                    if let Err(e) = crate::ui::modals::close_agent_modal(&document) {
+                        web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
+                    }
+                }
             }
         },
         
@@ -367,6 +390,74 @@ pub fn update(state: &mut AppState, msg: Message) {
                         if let Some(modal_title) = document.get_element_by_id("modal-title") {
                             modal_title.set_inner_html(&format!("Agent: {}", node.text));
                         }
+                    }
+                }
+            }
+        },
+        
+        Message::UpdateNodeText { node_id, text, is_first_chunk } => {
+            if let Some(node) = state.nodes.get_mut(&node_id) {
+                // If this is the first chunk, replace the text, otherwise append
+                if is_first_chunk {
+                    node.text = text;
+                } else {
+                    node.text.push_str(&text);
+                }
+                
+                // Update node size based on new content
+                state.resize_node_for_content(&node_id);
+                state.state_modified = true;
+            }
+        },
+        
+        Message::CompleteNodeResponse { node_id, final_text } => {
+            if let Some(node) = state.nodes.get_mut(&node_id) {
+                // Update the final text if needed
+                if !final_text.is_empty() && node.text != final_text {
+                    node.text = final_text;
+                }
+                
+                // Update node status to completed
+                if let Some(status) = &mut node.status {
+                    *status = "complete".to_string();
+                }
+                
+                // Store parent_id before ending the borrow or making other mutable borrows
+                let parent_id = node.parent_id.clone();
+                
+                // Mark state as modified
+                state.state_modified = true;
+                
+                // Update node size for final content
+                state.resize_node_for_content(&node_id);
+                
+                // If this node has a parent, update parent status too
+                if let Some(parent_id) = parent_id {
+                    if let Some(parent) = state.nodes.get_mut(&parent_id) {
+                        if let Some(status) = &mut parent.status {
+                            *status = "idle".to_string();
+                        }
+                    }
+                }
+            }
+        },
+        
+        Message::UpdateNodeStatus { node_id, status } => {
+            if let Some(node) = state.nodes.get_mut(&node_id) {
+                if let Some(node_status) = &mut node.status {
+                    *node_status = status;
+                }
+                state.state_modified = true;
+            }
+        },
+        
+        Message::AnimationTick => {
+            // Process animation updates like pulsing effect for nodes
+            for (_id, node) in state.nodes.iter_mut() {
+                if let Some(status) = &node.status {
+                    if status == "processing" {
+                        // We'd update visual properties here if needed
+                        // This is called on each animation frame
                     }
                 }
             }

@@ -26,20 +26,17 @@ pub enum ActiveView {
     Canvas,
 }
 
-/// Save current app state (previously using localStorage)
+/// Save current app state to API
 pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
-    // No longer saving to localStorage
-    web_sys::console::log_1(&"State saving to API only".into());
-    
     // Save changes to API
     save_state_to_api(app_state);
     
     Ok(())
 }
 
-/// Load app state from API only
+/// Load app state from API
 pub fn load_state(app_state: &mut AppState) -> Result<bool, JsValue> {
-    // Load data from API only
+    // Load data from API
     load_state_from_api(app_state);
     
     // Return true to indicate we started the loading process
@@ -361,25 +358,9 @@ pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
     }
 }
 
-/// One-time migration utility to transfer data from localStorage to the API
-/// This function is no longer needed but kept for reference
-pub fn migrate_local_storage_to_api() -> Result<(), JsValue> {
-    web_sys::console::log_1(&"localStorage migration no longer needed - using API only".into());
-    Ok(())
-}
-
-/// Load app state with API as source of truth
-pub fn load_state_prioritizing_api(app_state: &mut AppState) {
-    web_sys::console::log_1(&"Loading data from API only".into());
-    
-    // Just call our standard load function
-    load_state_from_api(app_state);
-}
-
 /// Helper function to save just the nodes to the API
 fn save_nodes_to_api(nodes: &HashMap<String, Node>) -> Result<(), JsValue> {
     // Implementation to save nodes to API
-    // This is a simplified version - you'll need to expand based on your API client
     web_sys::console::log_1(&format!("Saving {} nodes to API", nodes.len()).into());
     
     for (node_id, node) in nodes {

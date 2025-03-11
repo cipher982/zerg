@@ -94,4 +94,24 @@ pub enum Message {
     // Auto-save operations
     UpdateSystemInstructions(String),
     UpdateAgentName(String),
+    
+    // WebSocket related messages
+    UpdateNodeText {
+        node_id: String,
+        text: String,
+        is_first_chunk: bool,
+    },
+    
+    CompleteNodeResponse {
+        node_id: String,
+        final_text: String,
+    },
+    
+    UpdateNodeStatus {
+        node_id: String,
+        status: String,
+    },
+    
+    // Animation related
+    AnimationTick,
 } 

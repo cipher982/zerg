@@ -6,7 +6,7 @@ mod models;
 mod state;
 mod canvas;
 mod ui;
-// mod ui_old; // Temporarily commented out to confirm everything is refactored
+// Removed: mod ui_old; // Temporarily commented out to confirm everything is refactored
 mod network;
 mod storage;
 mod components;
