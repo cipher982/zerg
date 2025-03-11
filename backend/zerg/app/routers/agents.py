@@ -61,11 +61,14 @@ def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
     )
 
     # Schedule broadcast about new agent creation
-    asyncio.create_task(
-        broadcast_event(
-            EventType.AGENT_CREATED, {"agent_id": new_agent.id, "name": new_agent.name, "model": new_agent.model}
+    try:
+        asyncio.create_task(
+            broadcast_event(
+                EventType.AGENT_CREATED, {"agent_id": new_agent.id, "name": new_agent.name, "model": new_agent.model}
+            )
         )
-    )
+    except Exception as e:
+        logger.error(f"Error broadcasting agent creation: {str(e)}")
 
     return new_agent
 
@@ -174,12 +177,15 @@ def run_agent(agent_id: int, db: Session = Depends(get_db)):
     db_agent = crud.update_agent(db, agent_id=agent_id, status="processing")
 
     # Schedule broadcast about agent status change
-    asyncio.create_task(
-        broadcast_event(
-            EventType.AGENT_STATUS_CHANGED,
-            {"agent_id": db_agent.id, "name": db_agent.name, "status": "processing", "action": "run"},
+    try:
+        asyncio.create_task(
+            broadcast_event(
+                EventType.AGENT_STATUS_CHANGED,
+                {"agent_id": db_agent.id, "name": db_agent.name, "status": "processing", "action": "run"},
+            )
         )
-    )
+    except Exception as e:
+        logger.error(f"Error broadcasting agent status change: {str(e)}")
 
     # In a real implementation, you'd queue the agent execution task here
     # For now, we'll just update the status to show the endpoint works
