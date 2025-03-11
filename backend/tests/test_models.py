@@ -13,7 +13,8 @@ def test_agent_model(db_session: Session):
     """Test creating an Agent model instance"""
     agent = Agent(
         name="Test Agent",
-        instructions="This is a test agent",
+        system_instructions="This is a test system instruction",
+        task_instructions="This is a test task instruction",
         model="gpt-4o",
         status="idle",
         schedule=None,
@@ -26,7 +27,8 @@ def test_agent_model(db_session: Session):
 
     assert agent.id is not None
     assert agent.name == "Test Agent"
-    assert agent.instructions == "This is a test agent"
+    assert agent.system_instructions == "This is a test system instruction"
+    assert agent.task_instructions == "This is a test task instruction"
     assert agent.model == "gpt-4o"
     assert agent.status == "idle"
     assert agent.schedule is None
@@ -91,7 +93,8 @@ def test_agent_schema_validation():
     # Test AgentCreate
     agent_data = {
         "name": "Schema Test Agent",
-        "instructions": "Testing schemas",
+        "system_instructions": "Test system instructions",
+        "task_instructions": "Test task instructions",
         "model": "gpt-4o",
         "schedule": "0 0 * * *",  # Daily at midnight
         "config": {"test_key": "test_value"},
@@ -99,7 +102,8 @@ def test_agent_schema_validation():
 
     agent_create = AgentCreate(**agent_data)
     assert agent_create.name == agent_data["name"]
-    assert agent_create.instructions == agent_data["instructions"]
+    assert agent_create.system_instructions == agent_data["system_instructions"]
+    assert agent_create.task_instructions == agent_data["task_instructions"]
     assert agent_create.model == agent_data["model"]
     assert agent_create.schedule == agent_data["schedule"]
     assert agent_create.config == agent_data["config"]
@@ -110,7 +114,8 @@ def test_agent_schema_validation():
     agent_update = AgentUpdate(**update_data)
     assert agent_update.name == update_data["name"]
     assert agent_update.status == update_data["status"]
-    assert agent_update.instructions is None  # Not provided
+    assert agent_update.system_instructions is None  # Not provided
+    assert agent_update.task_instructions is None  # Not provided
     assert agent_update.model is None  # Not provided
 
     # Test MessageCreate
