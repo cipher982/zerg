@@ -127,7 +127,7 @@ pub fn setup_websocket() -> Result<(), JsValue> {
     // Set up message event handler
     let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
         flash_activity(); // Flash on message
-        handle_websocket_message(event);
+        let _ = handle_websocket_message(event);
     }) as Box<dyn FnMut(MessageEvent)>);
     
     ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
@@ -160,95 +160,225 @@ pub fn setup_websocket() -> Result<(), JsValue> {
     Ok(())
 }
 
-fn handle_websocket_message(event: MessageEvent) {
-    // Get the message data as string
-    let response_json = event.data().as_string().unwrap();
+fn handle_websocket_message(event: web_sys::MessageEvent) -> Result<(), JsValue> {
+    let data = event.data();
+    let text = js_sys::JsString::from(data).as_string().unwrap_or_default();
     
-    // Parse the JSON response
-    let response: JsValue = js_sys::JSON::parse(&response_json).unwrap_or_else(|_| {
-        web_sys::console::error_1(&"Failed to parse response JSON".into());
-        return JsValue::NULL;
-    });
-
-    // Extract message type and ID
-    let msg_type = js_sys::Reflect::get(&response, &"type".into())
-        .unwrap_or_else(|_| "".into())
-        .as_string()
-        .unwrap_or_else(|| "".to_string());
-    
-    let message_id = js_sys::Reflect::get(&response, &"message_id".into())
-        .unwrap_or_else(|_| "".into())
-        .as_string()
-        .unwrap_or_else(|| "".to_string());
-
-    // Indicate activity in the websocket
-    flash_activity();
-    
-    // Handle different message types
-    if msg_type.is_empty() {
-        // Legacy message format without explicit type
-        return;
-    }
-    
-    APP_STATE.with(|state| {
-        let mut state = state.borrow_mut();
-        
-        // Only try to find node associations for node-specific message types
-        if msg_type == "chunk" || msg_type == "done" || msg_type == "message_id" {
-            // These are messages that need to update specific nodes
-            if !message_id.is_empty() {
-                let response_node_id = state.get_node_id_for_message(&message_id);
-                
-                if let Some(response_node_id) = response_node_id {
-                    // Handle messages that target a specific node
-                    match msg_type.as_str() {
-                        "chunk" => {
-                            // Extract the content from the chunk
-                            let content = js_sys::Reflect::get(&response, &"chunk".into())
-                                .unwrap_or_else(|_| "".into())
-                                .as_string()
-                                .unwrap_or_else(|| "".to_string());
-                            
-                            // Determine if this is the first chunk or an update
-                            let is_first_chunk = {
-                                if let Some(node) = state.nodes.get(&response_node_id) {
-                                    node.text == "..."
-                                } else {
-                                    false
+    // Parse the JSON message
+    match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(json) => {
+            if let Some(message_type) = json.get("type") {
+                match message_type.as_str() {
+                    // Agent events
+                    Some("agent_created") => {
+                        web_sys::console::log_1(&"Received agent_created event".into());
+                        // Refresh the agent list from the API
+                        load_agents();
+                        return Ok(());
+                    },
+                    Some("agent_updated") => {
+                        web_sys::console::log_1(&"Received agent_updated event".into());
+                        if let Some(agent_id_value) = json.get("agent_id") {
+                            if let Some(agent_id) = agent_id_value.as_u64() {
+                                let agent_id = agent_id as u32;
+                                
+                                // Reload this specific agent
+                                if let Ok(api_url) = get_api_base_url() {
+                                    let url = format!("{}/api/agents/{}", api_url, agent_id);
+                                    
+                                    let _request = web_sys::Request::new_with_str(&url)
+                                        .expect("Failed to create request");
+                                    
+                                    // Set credentials mode to include cookies
+                                    let opts = web_sys::RequestInit::new();
+                                    opts.set_method("GET");
+                                    opts.set_mode(web_sys::RequestMode::Cors);
+                                    
+                                    wasm_bindgen_futures::spawn_local(async move {
+                                        let window = web_sys::window().expect("no global window exists");
+                                        let opts = web_sys::RequestInit::new();
+                                        opts.set_method("GET");
+                                        opts.set_mode(web_sys::RequestMode::Cors);
+                                        
+                                        match web_sys::Request::new_with_str(&url) {
+                                            Ok(request) => {
+                                                let promise = window.fetch_with_request_and_init(&request, &opts);
+                                                
+                                                match wasm_bindgen_futures::JsFuture::from(promise).await {
+                                                    Ok(resp_value) => {
+                                                        let response: web_sys::Response = resp_value.dyn_into().unwrap();
+                                                        
+                                                        if response.ok() {
+                                                            match response.json() {
+                                                                Ok(json_promise) => {
+                                                                    match wasm_bindgen_futures::JsFuture::from(json_promise).await {
+                                                                        Ok(json_value) => {
+                                                                            let agent_data = json_value;
+                                                                            match serde_wasm_bindgen::from_value::<crate::models::ApiAgent>(agent_data) {
+                                                                                Ok(agent) => {
+                                                                                    // Update the agent in the agents HashMap
+                                                                                    crate::state::APP_STATE.with(|state| {
+                                                                                        let mut state = state.borrow_mut();
+                                                                                        
+                                                                                        // Update agent in the HashMap
+                                                                                        if let Some(id) = agent.id {
+                                                                                            state.agents.insert(id, agent.clone());
+                                                                                            
+                                                                                            // Also update any canvas nodes that reference this agent
+                                                                                            for (_, canvas_node) in state.canvas_nodes.iter_mut() {
+                                                                                                if canvas_node.agent_id == Some(id) {
+                                                                                                    canvas_node.text = agent.name.clone();
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                        
+                                                                                        state.draw_nodes();
+                                                                                    });
+                                                                                    
+                                                                                    // Update the UI
+                                                                                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                                                                                        web_sys::console::error_1(&format!("Error refreshing UI: {:?}", e).into());
+                                                                                    }
+                                                                                },
+                                                                                Err(e) => {
+                                                                                    web_sys::console::error_1(&format!("Failed to deserialize agent: {:?}", e).into());
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        Err(e) => {
+                                                                            web_sys::console::error_1(&format!("Failed to parse json: {:?}", e).into());
+                                                                        }
+                                                                    }
+                                                                },
+                                                                Err(e) => {
+                                                                    web_sys::console::error_1(&format!("Failed to call json(): {:?}", e).into());
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                    Err(e) => {
+                                                        web_sys::console::error_1(&format!("Failed to fetch: {:?}", e).into());
+                                                    }
+                                                }
+                                            },
+                                            Err(e) => {
+                                                web_sys::console::error_1(&format!("Failed to create request: {:?}", e).into());
+                                            }
+                                        }
+                                    });
                                 }
-                            };
-                            
-                            // Use dispatch instead of direct mutation
-                            state.dispatch(crate::messages::Message::UpdateNodeText {
-                                node_id: response_node_id.clone(),
-                                text: content,
-                                is_first_chunk,
-                            });
-                        },
-                        "done" => {
-                            // Get the response content
-                            let content = if let Some(node) = state.nodes.get(&response_node_id) {
-                                node.text.clone()
-                            } else {
-                                String::new()
-                            };
-                            
-                            // Use dispatch for completion
-                            state.dispatch(crate::messages::Message::CompleteNodeResponse {
-                                node_id: response_node_id.clone(),
-                                final_text: content,
-                            });
-                        },
-                        // Add other message types as needed
-                        _ => {}
+                            }
+                        }
+                        return Ok(());
+                    },
+                    Some("agent_deleted") => {
+                        web_sys::console::log_1(&"Received agent_deleted event".into());
+                        if let Some(agent_id_value) = json.get("agent_id") {
+                            if let Some(agent_id) = agent_id_value.as_u64() {
+                                let agent_id = agent_id as u32;
+                                
+                                crate::state::APP_STATE.with(|state| {
+                                    let mut state = state.borrow_mut();
+                                    
+                                    // Remove the agent from the HashMap
+                                    state.agents.remove(&agent_id);
+                                    
+                                    // Remove any canvas nodes that reference this agent
+                                    let nodes_to_remove: Vec<String> = state.canvas_nodes.iter()
+                                        .filter_map(|(node_id, node)| {
+                                            if node.agent_id == Some(agent_id) {
+                                                Some(node_id.clone())
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .collect();
+                                    
+                                    for node_id in nodes_to_remove {
+                                        state.canvas_nodes.remove(&node_id);
+                                    }
+                                    
+                                    // Also remove from any workflows
+                                    for (_, workflow) in state.workflows.iter_mut() {
+                                        workflow.nodes.retain(|node| node.agent_id != Some(agent_id));
+                                    }
+                                    
+                                    state.draw_nodes();
+                                });
+                                
+                                // Update the UI
+                                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                                    web_sys::console::error_1(&format!("Error refreshing UI: {:?}", e).into());
+                                }
+                            }
+                        }
+                        return Ok(());
+                    },
+                    Some("agent_status_changed") => {
+                        if let Some(agent_id_value) = json.get("agent_id") {
+                            if let Some(agent_id) = agent_id_value.as_u64() {
+                                let agent_id = agent_id as u32;
+                                
+                                if let Some(status) = json.get("status").and_then(|s| s.as_str()) {
+                                    web_sys::console::log_1(&format!("Agent {} status changed to {}", agent_id, status).into());
+                                    
+                                    crate::state::APP_STATE.with(|state| {
+                                        let mut state = state.borrow_mut();
+                                        
+                                        // Update agent status in the HashMap
+                                        if let Some(agent) = state.agents.get_mut(&agent_id) {
+                                            agent.status = Some(status.to_string());
+                                        }
+                                        
+                                        state.draw_nodes();
+                                    });
+                                    
+                                    // Update the UI
+                                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                                        web_sys::console::error_1(&format!("Error refreshing UI: {:?}", e).into());
+                                    }
+                                }
+                            }
+                        }
+                        return Ok(());
+                    },
+                    
+                    // Handle other message types
+                    Some(msg_type) => {
+                        web_sys::console::log_1(&format!("Unhandled WebSocket message type: {}", msg_type).into());
+                    },
+                    None => {
+                        web_sys::console::log_1(&"WebSocket message has no type".into());
                     }
                 }
             }
+            
+            // Legacy handling for response streaming
+            // This can be updated later to work with the new structure
+            if let Some(message_id) = json.get("message_id").and_then(|m| m.as_str()) {
+                if let Some(text) = json.get("text").and_then(|t| t.as_str()) {
+                    let is_first_chunk = json.get("first_chunk").and_then(|f| f.as_bool()).unwrap_or(false);
+                    
+                    crate::state::APP_STATE.with(|state| {
+                        let state = state.borrow();
+                        if let Some(node_id) = state.get_node_id_for_message(message_id) {
+                            // Dispatch a message to update the node text
+                            crate::state::dispatch_global_message(crate::messages::Message::UpdateNodeText {
+                                node_id,
+                                text: text.to_string(),
+                                is_first_chunk,
+                            });
+                        }
+                    });
+                }
+            }
+        },
+        Err(e) => {
+            web_sys::console::error_1(&format!("Failed to parse WebSocket message: {:?}", e).into());
         }
-    });
+    }
     
-    // Refresh UI after state changes if needed
-    let _ = crate::state::AppState::refresh_ui_after_state_change();
+    Ok(())
 }
 
 pub fn send_text_to_backend(text: &str, message_id: String) {
@@ -502,5 +632,174 @@ impl ApiClient {
         // Parse JSON
         let json = JsFuture::from(resp.text()?).await?;
         Ok(json.as_string().unwrap_or_default())
+    }
+}
+
+// Load agents from API and update state.agents
+pub fn load_agents() {
+    let _window = web_sys::window().expect("no global window exists");
+    let api_base_url = format!("{}/api/agents", get_api_base_url().unwrap_or_else(|_| "http://localhost:8001".to_string()));
+    
+    // Call the API and update state
+    wasm_bindgen_futures::spawn_local(async move {
+        let window = web_sys::window().expect("no global window exists");
+        let opts = web_sys::RequestInit::new();
+        
+        // Create new request
+        let _request = web_sys::Request::new_with_str(&api_base_url)
+            .expect("Failed to create request");
+        
+        let promise = window.fetch_with_request_and_init(&_request, &opts);
+        
+        match wasm_bindgen_futures::JsFuture::from(promise).await {
+            Ok(resp_value) => {
+                let response: web_sys::Response = resp_value.dyn_into().unwrap();
+                
+                if response.ok() {
+                    match response.json() {
+                        Ok(json_promise) => {
+                            match wasm_bindgen_futures::JsFuture::from(json_promise).await {
+                                Ok(json_value) => {
+                                    let agents_data = json_value;
+                                    match serde_wasm_bindgen::from_value::<Vec<crate::models::ApiAgent>>(agents_data) {
+                                        Ok(agents) => {
+                                            web_sys::console::log_1(&format!("Loaded {} agents from API", agents.len()).into());
+                                            
+                                            // Update the agents HashMap in AppState
+                                            crate::state::APP_STATE.with(|state| {
+                                                let mut state = state.borrow_mut();
+                                                state.agents.clear();
+                                                
+                                                // Add each agent to the HashMap
+                                                for agent in agents {
+                                                    if let Some(id) = agent.id {
+                                                        state.agents.insert(id, agent);
+                                                    }
+                                                }
+                                                
+                                                // Now that we have loaded agents, check if we need to create canvas nodes for them
+                                                // Only create canvas nodes for agents that don't already have one
+                                                create_canvas_nodes_for_agents(&mut state);
+                                                
+                                                state.data_loaded = true;
+                                                state.api_load_attempted = true;
+                                                state.is_loading = false;
+                                            });
+                                            
+                                            // Update the UI
+                                            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                                                web_sys::console::error_1(&format!("Error refreshing UI: {:?}", e).into());
+                                            }
+                                        },
+                                        Err(e) => {
+                                            web_sys::console::error_1(&format!("Failed to deserialize agents: {:?}", e).into());
+                                            
+                                            // Mark as attempted but failed
+                                            crate::state::APP_STATE.with(|state| {
+                                                let mut state = state.borrow_mut();
+                                                state.api_load_attempted = true;
+                                                state.is_loading = false;
+                                            });
+                                        }
+                                    }
+                                },
+                                Err(e) => {
+                                    web_sys::console::error_1(&format!("Failed to parse response: {:?}", e).into());
+                                    
+                                    // Mark as attempted but failed
+                                    crate::state::APP_STATE.with(|state| {
+                                        let mut state = state.borrow_mut();
+                                        state.api_load_attempted = true;
+                                        state.is_loading = false;
+                                    });
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            web_sys::console::error_1(&format!("Failed to call json(): {:?}", e).into());
+                            
+                            // Mark as attempted but failed
+                            crate::state::APP_STATE.with(|state| {
+                                let mut state = state.borrow_mut();
+                                state.api_load_attempted = true;
+                                state.is_loading = false;
+                            });
+                        }
+                    }
+                } else {
+                    web_sys::console::error_1(&format!("API request failed with status: {}", response.status()).into());
+                    
+                    // Mark as attempted but failed
+                    crate::state::APP_STATE.with(|state| {
+                        let mut state = state.borrow_mut();
+                        state.api_load_attempted = true;
+                        state.is_loading = false;
+                    });
+                }
+            },
+            Err(e) => {
+                web_sys::console::error_1(&format!("Failed to fetch agents: {:?}", e).into());
+                
+                // Mark as attempted but failed
+                crate::state::APP_STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    state.api_load_attempted = true;
+                    state.is_loading = false;
+                });
+            }
+        }
+    });
+}
+
+// Create canvas nodes for agents that don't already have one
+fn create_canvas_nodes_for_agents(state: &mut crate::state::AppState) {
+    // First, collect all the information we need without holding the borrow
+    let agents_to_add: Vec<(u32, String)> = state.agents.iter()
+        .filter(|(agent_id, _)| {
+            // Check if there's already a canvas node for this agent
+            !state.canvas_nodes.iter().any(|(_, node)| {
+                node.agent_id == Some(**agent_id)
+            })
+        })
+        .map(|(agent_id, agent)| (*agent_id, agent.name.clone()))
+        .collect();
+    
+    // Calculate grid layout
+    let grid_size = (agents_to_add.len() as f64).sqrt().ceil() as usize;
+    
+    // Now add the nodes without conflicting borrows
+    for (i, (agent_id, name)) in agents_to_add.into_iter().enumerate() {
+        // Calculate a grid-like position for the new node
+        let row = i / grid_size;
+        let col = i % grid_size;
+        
+        let x = 100.0 + (col as f64 * 250.0);
+        let y = 100.0 + (row as f64 * 150.0);
+        
+        let node_id = state.add_canvas_node(
+            Some(agent_id),
+            x, 
+            y, 
+            crate::models::NodeType::AgentIdentity,
+            name
+        );
+        
+        web_sys::console::log_1(&format!("Created canvas node {} for agent {}", node_id, agent_id).into());
+    }
+}
+
+// Fix the get_api_base_url function
+pub fn get_api_base_url() -> Result<String, JsValue> {
+    let window = web_sys::window().expect("no global window exists");
+    let location = window.location();
+    
+    // If we're in local development, use a fixed port of 8001
+    let hostname = location.hostname()?;
+    if hostname == "localhost" || hostname == "127.0.0.1" {
+        Ok("http://localhost:8001".to_string())
+    } else {
+        // For production, use same hostname with :8001
+        let protocol = location.protocol()?;
+        Ok(format!("{}//{}:8001", protocol, hostname))
     }
 } 

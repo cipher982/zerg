@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::cell::RefCell;
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
-use crate::models::{Node, NodeType};
+use crate::models::{Node, NodeType, CanvasNode, Workflow, Edge, ApiAgent};
 use crate::canvas::renderer;
 use crate::storage::ActiveView;
 use js_sys::Date;
@@ -15,7 +15,16 @@ use crate::constants::DEFAULT_TASK_INSTRUCTIONS;
 
 // Store global application state
 pub struct AppState {
+    // Original node structure (will be phased out gradually)
     pub nodes: HashMap<String, Node>,
+    
+    // New separated data structures
+    pub agents: HashMap<u32, ApiAgent>,        // Backend agent data
+    pub canvas_nodes: HashMap<String, CanvasNode>, // Visual layout 
+    pub workflows: HashMap<u32, Workflow>,     // Workflows collection
+    pub current_workflow_id: Option<u32>,      // Currently active workflow
+    
+    // Canvas and rendering related
     pub canvas: Option<HtmlCanvasElement>,
     pub context: Option<CanvasRenderingContext2d>,
     pub input_text: String,
@@ -65,6 +74,10 @@ impl AppState {
     pub fn new() -> Self {
         Self {
             nodes: HashMap::new(),
+            agents: HashMap::new(),
+            canvas_nodes: HashMap::new(),
+            workflows: HashMap::new(),
+            current_workflow_id: None,
             canvas: None,
             context: None,
             input_text: String::new(),
@@ -110,8 +123,9 @@ impl AppState {
         // Determine color based on node type
         let color = match node_type {
             NodeType::UserInput => "#3498db".to_string(),    // Blue
-            NodeType::AgentResponse => "#9b59b6".to_string(), // Purple
+            NodeType::ResponseOutput => "#9b59b6".to_string(), // Purple
             NodeType::AgentIdentity => "#2ecc71".to_string(), // Green
+            NodeType::GenericNode => "#95a5a6".to_string(),  // Gray
         };
         
         // Calculate approximate node size based on text content
@@ -124,18 +138,24 @@ impl AppState {
         
         // Initialize system instructions, history, and status based on node type
         let (system_instructions, history, status) = match node_type {
-            NodeType::AgentIdentity => {
-                web_sys::console::log_1(&JsValue::from_str("Initializing agent node properties"));
-                (Some(String::new()), Some(Vec::new()), Some("idle".to_string()))
-            },
-            NodeType::AgentResponse => {
-                web_sys::console::log_1(&JsValue::from_str("Initializing response node properties"));
-                (None, None, None)
-            },
             NodeType::UserInput => {
                 web_sys::console::log_1(&JsValue::from_str("Initializing user input node properties"));
                 (None, None, None)
             },
+            NodeType::AgentIdentity => {
+                web_sys::console::log_1(&JsValue::from_str("Initializing agent node properties"));
+                
+                // For agent identity nodes, create empty properties
+                (Some(String::new()), Some(Vec::new()), Some("idle".to_string()))
+            },
+            NodeType::ResponseOutput => {
+                web_sys::console::log_1(&JsValue::from_str("Initializing response node properties"));
+                (None, None, None)
+            },
+            NodeType::GenericNode => {
+                web_sys::console::log_1(&JsValue::from_str("Initializing generic node properties"));
+                (None, None, None)
+            }
         };
         
         let node = Node {
@@ -161,7 +181,7 @@ impl AppState {
         self.state_modified = true; // Mark state as modified
         
         // If this is a user input node, update the latest_user_input_id
-        if let NodeType::UserInput = node_type {
+        if let NodeType::UserInput = &node_type {
             self.latest_user_input_id = Some(id.clone());
         }
         
@@ -196,7 +216,7 @@ impl AppState {
             height: 100.0,
             color: "#d5f5e3".to_string(),  // Light green
             parent_id: Some(parent_id.to_string()),
-            node_type: crate::models::NodeType::AgentResponse,
+            node_type: crate::models::NodeType::ResponseOutput,
             
             // Response nodes don't have these fields
             system_instructions: None,
@@ -612,6 +632,146 @@ impl AppState {
                 }
             }
         }
+    }
+
+    /// Creates a new canvas node linked to an optional agent
+    pub fn add_canvas_node(&mut self, agent_id: Option<u32>, x: f64, y: f64, 
+                          node_type: NodeType, text: String) -> String {
+        // Generate a unique ID for the canvas node
+        let node_id = match node_type {
+            NodeType::AgentIdentity => {
+                if let Some(id) = agent_id {
+                    format!("canvas-agent-{}", id)
+                } else {
+                    format!("canvas-node-{}", Date::now() as u32)
+                }
+            },
+            _ => format!("canvas-node-{}", Date::now() as u32)
+        };
+        
+        // Create the new canvas node
+        let canvas_node = CanvasNode {
+            node_id: node_id.clone(),
+            agent_id,
+            x,
+            y,
+            width: 200.0,
+            height: 100.0,
+            text,
+            node_type,
+            color: match node_type {
+                NodeType::AgentIdentity => "#ffecb3".to_string(), // Light amber
+                NodeType::UserInput => "#e3f2fd".to_string(),     // Light blue
+                NodeType::ResponseOutput => "#e8f5e9".to_string(), // Light green
+                NodeType::GenericNode => "#f5f5f5".to_string(),    // Light gray
+            },
+            parent_id: None,
+            is_selected: false,
+            is_dragging: false,
+        };
+        
+        // Add the node to our canvas_nodes collection
+        self.canvas_nodes.insert(node_id.clone(), canvas_node);
+        
+        // If we have a current workflow, add this node to it
+        if let Some(workflow_id) = self.current_workflow_id {
+            if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
+                if let Some(canvas_node) = self.canvas_nodes.get(&node_id) {
+                    workflow.nodes.push(canvas_node.clone());
+                }
+            }
+        }
+        
+        self.state_modified = true;
+        
+        // Return the new node's ID
+        node_id
+    }
+    
+    /// Updates the position of a canvas node
+    pub fn update_canvas_node_position(&mut self, node_id: &str, x: f64, y: f64) {
+        if let Some(node) = self.canvas_nodes.get_mut(node_id) {
+            node.x = x;
+            node.y = y;
+            self.state_modified = true;
+            
+            // Also update the node in the current workflow if it exists
+            if let Some(workflow_id) = self.current_workflow_id {
+                if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
+                    for workflow_node in &mut workflow.nodes {
+                        if workflow_node.node_id == node_id {
+                            workflow_node.x = x;
+                            workflow_node.y = y;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Finds a canvas node at the given position
+    pub fn find_canvas_node_at_position(&self, x: f64, y: f64) -> Option<(String, f64, f64)> {
+        let nodes: Vec<_> = self.canvas_nodes.iter().collect();
+        for (id, node) in nodes.into_iter().rev() {
+            if x >= node.x && x <= node.x + node.width &&
+               y >= node.y && y <= node.y + node.height {
+                // Return the node's ID and the offset from the mouse to the node's top-left corner
+                return Some((id.clone(), x - node.x, y - node.y));
+            }
+        }
+        None
+    }
+    
+    /// Creates a new workflow
+    pub fn create_workflow(&mut self, name: String) -> u32 {
+        // Generate a new workflow ID (simply use the current timestamp for now)
+        let workflow_id = (Date::now() / 1000.0) as u32;
+        
+        // Create the new workflow
+        let workflow = Workflow {
+            id: workflow_id,
+            name,
+            nodes: Vec::new(),
+            edges: Vec::new(),
+        };
+        
+        // Add the workflow to our collection
+        self.workflows.insert(workflow_id, workflow);
+        
+        // Set this as the current workflow
+        self.current_workflow_id = Some(workflow_id);
+        
+        self.state_modified = true;
+        
+        // Return the new workflow's ID
+        workflow_id
+    }
+    
+    /// Creates an edge between two canvas nodes
+    pub fn add_edge(&mut self, from_node_id: String, to_node_id: String, label: Option<String>) -> String {
+        // Generate a unique ID for the edge
+        let edge_id = format!("edge-{}", Date::now() as u32);
+        
+        // Create the new edge
+        let edge = Edge {
+            id: edge_id.clone(),
+            from_node_id,
+            to_node_id,
+            label,
+        };
+        
+        // If we have a current workflow, add this edge to it
+        if let Some(workflow_id) = self.current_workflow_id {
+            if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
+                workflow.edges.push(edge);
+            }
+        }
+        
+        self.state_modified = true;
+        
+        // Return the new edge's ID
+        edge_id
     }
 }
 

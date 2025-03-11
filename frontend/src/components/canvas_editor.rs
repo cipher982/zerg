@@ -562,8 +562,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     }) as Box<dyn FnMut(_)>);
     
     // Create options with passive: true
-    let mut options = AddEventListenerOptions::new();
-    options.set_passive(true);
+    let options = AddEventListenerOptions::new();
     
     // Add wheel event listener with passive option
     canvas_wheel.add_event_listener_with_callback_and_add_event_listener_options(
