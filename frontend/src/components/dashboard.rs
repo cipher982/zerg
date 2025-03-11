@@ -132,50 +132,92 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     let create_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&"Create new agent from dashboard".into());
         
-        // Create a new agent in the app state
-        APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
+        // Generate a random agent name
+        let agent_name = format!("New Agent {}", (js_sys::Math::random() * 100.0).round());
+        
+        // First create the agent in the API
+        let agent_data = format!(
+            r#"{{
+                "name": "{}",
+                "system_instructions": "You are a helpful AI assistant.",
+                "task_instructions": "Respond to user questions accurately and concisely.",
+                "model": "gpt-3.5-turbo"
+            }}"#,
+            agent_name
+        );
+        
+        // Use async block to call the API
+        wasm_bindgen_futures::spawn_local(async move {
+            web_sys::console::log_1(&"Creating agent in API first".into());
             
-            // Get viewport center coordinates for node placement
-            let viewport_width = if state.canvas_width > 0.0 { state.canvas_width } else { 800.0 };
-            let viewport_height = if state.canvas_height > 0.0 { state.canvas_height } else { 600.0 };
-            
-            let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 75.0;
-            let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0;
-            
-            // Create a new agent node
-            let node_id = state.add_node(
-                "New Agent".to_string(),
-                x,
-                y,
-                NodeType::AgentIdentity
-            );
-            
-            // Log the new node ID
-            web_sys::console::log_1(&format!("Created new agent with ID: {}", node_id).into());
-            
-            // Draw the nodes on canvas too
-            state.draw_nodes();
-            
-            // Save state
-            state.state_modified = true;
-            if let Err(e) = state.save_if_modified() {
-                web_sys::console::warn_1(&format!("Failed to save new agent: {:?}", e).into());
+            match crate::network::ApiClient::create_agent(&agent_data).await {
+                Ok(response) => {
+                    // Parse the response to get the agent ID
+                    if let Ok(json) = js_sys::JSON::parse(&response) {
+                        if let Some(id) = js_sys::Reflect::get(&json, &"id".into()).ok()
+                            .and_then(|v| v.as_f64()) 
+                        {
+                            let agent_id = id as u32;
+                            web_sys::console::log_1(&format!("Successfully created agent with ID: {}", agent_id).into());
+                            
+                            // Get viewport center coordinates for node placement
+                            APP_STATE.with(|state| {
+                                let mut state = state.borrow_mut();
+                                
+                                let viewport_width = if state.canvas_width > 0.0 { state.canvas_width } else { 800.0 };
+                                let viewport_height = if state.canvas_height > 0.0 { state.canvas_height } else { 600.0 };
+                                
+                                let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 75.0;
+                                let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0;
+                                
+                                // Create the properly ID'd node
+                                let node_id = format!("agent-{}", agent_id);
+                                
+                                // Create and add the node directly to state
+                                let node = crate::models::Node {
+                                    id: node_id.clone(),
+                                    x,
+                                    y,
+                                    text: agent_name,
+                                    width: 200.0,
+                                    height: 80.0,
+                                    color: "#ffecb3".to_string(), // Light amber color
+                                    parent_id: None,
+                                    node_type: crate::models::NodeType::AgentIdentity,
+                                    system_instructions: Some("You are a helpful AI assistant.".to_string()),
+                                    task_instructions: Some("Respond to user questions accurately and concisely.".to_string()),
+                                    history: Some(Vec::new()),
+                                    status: Some("idle".to_string()),
+                                };
+                                
+                                // Add the node to our state
+                                state.nodes.insert(node_id.clone(), node);
+                                
+                                // Log the new node ID
+                                web_sys::console::log_1(&format!("Created new agent with ID: {}", node_id).into());
+                                
+                                // Draw the nodes on canvas
+                                state.draw_nodes();
+                                
+                                // Save state
+                                state.state_modified = true;
+                                if let Err(e) = state.save_if_modified() {
+                                    web_sys::console::warn_1(&format!("Failed to save new agent: {:?}", e).into());
+                                }
+                                
+                                // Refresh the UI
+                                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                                    web_sys::console::warn_1(&format!("Failed to refresh UI after agent creation: {:?}", e).into());
+                                }
+                            });
+                        }
+                    }
+                },
+                Err(e) => {
+                    web_sys::console::error_1(&format!("Failed to create agent in API: {:?}", e).into());
+                }
             }
         });
-        
-        // Refresh the dashboard immediately
-        let window = web_sys::window().expect("no global window exists");
-        let document = window.document().expect("should have a document");
-        
-        if let Some(container) = document.get_element_by_id("dashboard-container") {
-            match render_dashboard(&document) {
-                Ok(_) => web_sys::console::log_1(&"Dashboard refreshed".into()),
-                Err(e) => web_sys::console::error_1(&format!("Failed to refresh dashboard: {:?}", e).into()),
-            }
-        } else {
-            web_sys::console::warn_1(&"Could not find dashboard container to refresh".into());
-        }
     }) as Box<dyn FnMut(_)>);
     
     create_btn.dyn_ref::<HtmlElement>()
@@ -416,30 +458,50 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let run_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
         
-        // Dispatch SendTaskToAgent message and capture both the need_refresh flag and any pending network call
-        let (need_refresh, pending_call) = {
-            // Scope the mutable borrow so it's dropped before refresh_ui_after_state_change
-            APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                
-                // Set the selected agent first so the message handler knows which agent to run
-                state.selected_node_id = Some(agent_id.clone());
-                
-                // Dispatch the message to run the agent
-                state.dispatch(crate::messages::Message::SendTaskToAgent)
-            })
-        };
-        
-        // After borrowing mutably, we can refresh UI if needed in a separate borrow
-        if need_refresh {
-            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+        // Check if this is an API agent (with agent-{id} format)
+        if let Some(api_agent_id_str) = agent_id.strip_prefix("agent-") {
+            if let Ok(api_agent_id) = api_agent_id_str.parse::<u32>() {
+                // Call the API to run the agent
+                wasm_bindgen_futures::spawn_local(async move {
+                    match crate::network::ApiClient::run_agent(api_agent_id).await {
+                        Ok(_) => {
+                            web_sys::console::log_1(&format!("Agent {} running via API", api_agent_id).into());
+                        }
+                        Err(e) => {
+                            web_sys::console::error_1(&format!("Error running agent {}: {:?}", api_agent_id, e).into());
+                        }
+                    }
+                });
+            } else {
+                web_sys::console::error_1(&format!("Invalid agent ID format: {}", agent_id).into());
             }
-        }
-        
-        // Now that we've completely dropped the borrow, we can execute the network call
-        if let Some((task_text, message_id)) = pending_call {
-            crate::network::send_text_to_backend(&task_text, message_id);
+        } else {
+            // For legacy nodes without the agent- prefix, use the old approach
+            // Dispatch SendTaskToAgent message and capture both the need_refresh flag and any pending network call
+            let (need_refresh, pending_call) = {
+                // Scope the mutable borrow so it's dropped before refresh_ui_after_state_change
+                APP_STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    
+                    // Set the selected agent first so the message handler knows which agent to run
+                    state.selected_node_id = Some(agent_id.clone());
+                    
+                    // Dispatch the message to run the agent
+                    state.dispatch(crate::messages::Message::SendTaskToAgent)
+                })
+            };
+            
+            // After borrowing mutably, we can refresh UI if needed in a separate borrow
+            if need_refresh {
+                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                }
+            }
+            
+            // Now that we've completely dropped the borrow, we can execute the network call
+            if let Some((task_text, message_id)) = pending_call {
+                crate::network::send_text_to_backend(&task_text, message_id);
+            }
         }
     }) as Box<dyn FnMut(_)>);
     
