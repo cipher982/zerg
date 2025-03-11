@@ -18,20 +18,27 @@ def test_read_agents(client: TestClient, sample_agent: Agent):
     assert len(agents) == 1
     assert agents[0]["id"] == sample_agent.id
     assert agents[0]["name"] == sample_agent.name
-    assert agents[0]["instructions"] == sample_agent.instructions
+    assert agents[0]["system_instructions"] == sample_agent.system_instructions
+    assert agents[0]["task_instructions"] == sample_agent.task_instructions
     assert agents[0]["model"] == sample_agent.model
     assert agents[0]["status"] == sample_agent.status
 
 
 def test_create_agent(client: TestClient):
     """Test the POST /api/agents endpoint"""
-    agent_data = {"name": "New Test Agent", "instructions": "This is a new test agent", "model": "gpt-4o"}
+    agent_data = {
+        "name": "New Test Agent",
+        "system_instructions": "System instructions for new test agent",
+        "task_instructions": "This is a new test agent",
+        "model": "gpt-4o",
+    }
 
     response = client.post("/api/agents", json=agent_data)
     assert response.status_code == 201
     created_agent = response.json()
     assert created_agent["name"] == agent_data["name"]
-    assert created_agent["instructions"] == agent_data["instructions"]
+    assert created_agent["system_instructions"] == agent_data["system_instructions"]
+    assert created_agent["task_instructions"] == agent_data["task_instructions"]
     assert created_agent["model"] == agent_data["model"]
     assert created_agent["status"] == "idle"  # Default value
     assert "id" in created_agent
@@ -51,7 +58,8 @@ def test_read_agent(client: TestClient, sample_agent: Agent):
     fetched_agent = response.json()
     assert fetched_agent["id"] == sample_agent.id
     assert fetched_agent["name"] == sample_agent.name
-    assert fetched_agent["instructions"] == sample_agent.instructions
+    assert fetched_agent["system_instructions"] == sample_agent.system_instructions
+    assert fetched_agent["task_instructions"] == sample_agent.task_instructions
     assert fetched_agent["model"] == sample_agent.model
     assert fetched_agent["status"] == sample_agent.status
 
@@ -68,7 +76,8 @@ def test_update_agent(client: TestClient, sample_agent: Agent):
     """Test the PUT /api/agents/{agent_id} endpoint"""
     update_data = {
         "name": "Updated Agent Name",
-        "instructions": "Updated instructions",
+        "system_instructions": "Updated system instructions",
+        "task_instructions": "Updated task instructions",
         "model": "gpt-4o-mini",
         "status": "processing",
     }
@@ -78,7 +87,8 @@ def test_update_agent(client: TestClient, sample_agent: Agent):
     updated_agent = response.json()
     assert updated_agent["id"] == sample_agent.id
     assert updated_agent["name"] == update_data["name"]
-    assert updated_agent["instructions"] == update_data["instructions"]
+    assert updated_agent["system_instructions"] == update_data["system_instructions"]
+    assert updated_agent["task_instructions"] == update_data["task_instructions"]
     assert updated_agent["model"] == update_data["model"]
     assert updated_agent["status"] == update_data["status"]
 
