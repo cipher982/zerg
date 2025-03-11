@@ -1,6 +1,7 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{window, Document};
+use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
+use web_sys::{window, Document};
 
 mod models;
 mod state;
@@ -14,8 +15,6 @@ mod messages;  // New module for Message enum
 mod update;    // New module for update function
 mod views;     // New module for view functions
 mod constants; // Module for constants and default values
-
-use wasm_bindgen::JsCast;
 
 // Main entry point for the WASM application
 #[wasm_bindgen(start)]
@@ -49,27 +48,37 @@ pub fn start() -> Result<(), JsValue> {
         input_panel.set_attribute("style", "display: none;")?;
     }
     
-    // Set up the dashboard
-    components::dashboard::setup_dashboard(&document)?;
-    
-    // Show dashboard as the default view
-    views::render_active_view(&state::AppState::new(), &document)?;
-    
-    // Load state from API only
-    state::APP_STATE.with(|state_ref| {
-        let mut state = state_ref.borrow_mut();
-        if let Err(e) = storage::load_state(&mut state) {
-            web_sys::console::error_1(&format!("Error starting state loading: {:?}", e).into());
+    // Show initial loading spinner
+    if let Some(loading_spinner) = document.get_element_by_id("loading-spinner") {
+        if let Some(spinner_element) = loading_spinner.dyn_ref::<web_sys::HtmlElement>() {
+            spinner_element.set_class_name("active");
         }
-    });
+    }
     
-    // Set up auto-save timer (every 5 seconds)
-    setup_auto_save_timer(5000)?;
-    
-    // Fetch available models
+    // Initialize loading of both legacy data and new agent data
     spawn_local(async {
-        if let Err(e) = network::fetch_available_models().await {
-            web_sys::console::error_1(&format!("Error fetching models: {:?}", e).into());
+        // Load the state (this will also try to load workflows)
+        state::APP_STATE.with(|s| {
+            let mut app_state = s.borrow_mut();
+            if let Err(e) = storage::load_state(&mut app_state) {
+                web_sys::console::error_1(&format!("Error loading state: {:?}", e).into());
+            }
+        }); // The borrow is dropped when this block ends
+        
+        // Load agents from API (new approach)
+        network::load_agents();
+        
+        // Create a default workflow if none exists
+        state::APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            if state.workflows.is_empty() {
+                state.create_workflow("Default Workflow".to_string());
+            }
+        });
+        
+        // Set up auto-save timer
+        if let Err(e) = setup_auto_save_timer(30000) { // 30 seconds
+            web_sys::console::error_1(&format!("Failed to setup auto-save: {:?}", e).into());
         }
     });
     

@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 use serde_json::{to_string, from_str};
 use crate::state::AppState;
-use crate::models::{Node, ApiAgent, ApiAgentUpdate};
+use crate::models::{Node, ApiAgent, ApiAgentUpdate, Workflow};
 use crate::network::ApiClient;
 use std::collections::HashMap;
 use wasm_bindgen_futures::spawn_local;
@@ -31,6 +31,33 @@ pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
     // Save changes to API
     save_state_to_api(app_state);
     
+    // Save the original node data
+    let window = web_sys::window().expect("no global window exists");
+    let local_storage = window.local_storage()?.expect("no local storage exists");
+    
+    // Convert nodes to a JSON string
+    let nodes_str = to_string(&app_state.nodes).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    
+    // Save to localStorage
+    local_storage.set_item("nodes", &nodes_str)?;
+    
+    // Save viewport position and zoom
+    let viewport_data = ViewportData {
+        x: app_state.viewport_x,
+        y: app_state.viewport_y,
+        zoom: app_state.zoom_level,
+    };
+    
+    let viewport_str = to_string(&viewport_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    local_storage.set_item("viewport", &viewport_str)?;
+    
+    // Save active view
+    let active_view_str = to_string(&app_state.active_view).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    local_storage.set_item("active_view", &active_view_str)?;
+    
+    // Save workflows and CanvasNodes
+    save_workflows(app_state)?;
+    
     Ok(())
 }
 
@@ -38,6 +65,9 @@ pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
 pub fn load_state(app_state: &mut AppState) -> Result<bool, JsValue> {
     // Load data from API
     load_state_from_api(app_state);
+    
+    // Also load workflows
+    load_workflows(app_state)?;
     
     // Return true to indicate we started the loading process
     // Actual loading happens asynchronously
@@ -193,7 +223,7 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                                     parent_id: None,
                                     node_type: crate::models::NodeType::AgentIdentity,
                                     system_instructions: agent.system_instructions.clone(),
-                                    task_instructions: agent.task_instructions.clone(),
+                                    task_instructions: agent.system_instructions.clone(),
                                     history: None, // We'll load this separately
                                     status: agent.status,
                                 };
@@ -368,6 +398,64 @@ fn save_nodes_to_api(nodes: &HashMap<String, Node>) -> Result<(), JsValue> {
             // Create or update agent in API
             web_sys::console::log_1(&format!("Would save agent {}: {}", node_id, node.text).into());
             // Here you would call your API client to save the agent
+        }
+    }
+    
+    Ok(())
+}
+
+// Save workflows to localStorage
+pub fn save_workflows(app_state: &AppState) -> Result<(), JsValue> {
+    let window = web_sys::window().expect("no global window exists");
+    let local_storage = window.local_storage()?.expect("no local storage exists");
+    
+    // Convert the workflows to a JSON string
+    let workflows_str = to_string(&app_state.workflows).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    
+    // Save to localStorage
+    local_storage.set_item("workflows", &workflows_str)?;
+    
+    // Also save the current workflow ID if it exists
+    if let Some(workflow_id) = app_state.current_workflow_id {
+        local_storage.set_item("current_workflow_id", &workflow_id.to_string())?;
+    } else {
+        local_storage.remove_item("current_workflow_id")?;
+    }
+    
+    Ok(())
+}
+
+// Load workflows from localStorage
+pub fn load_workflows(app_state: &mut AppState) -> Result<(), JsValue> {
+    let window = web_sys::window().expect("no global window exists");
+    let local_storage = window.local_storage()?.expect("no local storage exists");
+    
+    // Load workflows
+    if let Some(workflows_str) = local_storage.get_item("workflows")? {
+        match from_str::<HashMap<u32, Workflow>>(&workflows_str) {
+            Ok(workflows) => {
+                app_state.workflows = workflows;
+            },
+            Err(e) => {
+                web_sys::console::error_1(&format!("Failed to parse workflows: {}", e).into());
+                // Initialize with empty workflows
+                app_state.workflows = HashMap::new();
+            }
+        }
+    }
+    
+    // Load current workflow ID
+    if let Some(workflow_id_str) = local_storage.get_item("current_workflow_id")? {
+        if let Ok(workflow_id) = workflow_id_str.parse::<u32>() {
+            app_state.current_workflow_id = Some(workflow_id);
+            
+            // Load the nodes from the current workflow into canvas_nodes
+            if let Some(workflow) = app_state.workflows.get(&workflow_id) {
+                app_state.canvas_nodes.clear();
+                for node in &workflow.nodes {
+                    app_state.canvas_nodes.insert(node.node_id.clone(), node.clone());
+                }
+            }
         }
     }
     

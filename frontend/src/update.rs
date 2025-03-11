@@ -462,5 +462,82 @@ pub fn update(state: &mut AppState, msg: Message) {
                 }
             }
         },
+        
+        // New Canvas Node message handlers
+        Message::AddCanvasNode { agent_id, x, y, node_type, text } => {
+            let node_id = state.add_canvas_node(agent_id, x, y, node_type, text);
+            web_sys::console::log_1(&format!("Created new canvas node with ID: {}", node_id).into());
+            
+            // Draw the nodes on canvas
+            state.draw_nodes();
+            
+            state.state_modified = true;
+        },
+        
+        Message::UpdateCanvasNodePosition { node_id, x, y } => {
+            state.update_canvas_node_position(&node_id, x, y);
+            
+            // Draw the nodes on canvas
+            state.draw_nodes();
+            
+            state.state_modified = true;
+        },
+        
+        Message::DeleteCanvasNode { node_id } => {
+            state.canvas_nodes.remove(&node_id);
+            
+            // If we have a current workflow, remove this node from it
+            if let Some(workflow_id) = state.current_workflow_id {
+                if let Some(workflow) = state.workflows.get_mut(&workflow_id) {
+                    workflow.nodes.retain(|node| node.node_id != node_id);
+                    
+                    // Also remove any edges connected to this node
+                    workflow.edges.retain(|edge| 
+                        edge.from_node_id != node_id && edge.to_node_id != node_id
+                    );
+                }
+            }
+            
+            // Draw the nodes on canvas
+            state.draw_nodes();
+            
+            state.state_modified = true;
+        },
+        
+        // Workflow management messages
+        Message::CreateWorkflow { name } => {
+            let workflow_id = state.create_workflow(name.clone());
+            web_sys::console::log_1(&format!("Created new workflow '{}' with ID: {}", name, workflow_id).into());
+            
+            state.state_modified = true;
+        },
+        
+        Message::SelectWorkflow { workflow_id } => {
+            state.current_workflow_id = Some(workflow_id);
+            
+            // Clear canvas_nodes and repopulate from the selected workflow
+            state.canvas_nodes.clear();
+            
+            if let Some(workflow) = state.workflows.get(&workflow_id) {
+                for node in &workflow.nodes {
+                    state.canvas_nodes.insert(node.node_id.clone(), node.clone());
+                }
+            }
+            
+            // Draw the nodes on canvas
+            state.draw_nodes();
+            
+            state.state_modified = true;
+        },
+        
+        Message::AddEdge { from_node_id, to_node_id, label } => {
+            let edge_id = state.add_edge(from_node_id, to_node_id, label);
+            web_sys::console::log_1(&format!("Created new edge with ID: {}", edge_id).into());
+            
+            // Draw the nodes and edges on canvas
+            state.draw_nodes();
+            
+            state.state_modified = true;
+        },
     }
 } 

@@ -88,7 +88,7 @@ pub fn draw_node(_state: &AppState, node: &Node, context: &CanvasRenderingContex
             // Draw a rounded rectangle for user inputs
             shapes::draw_rounded_rect(context, node);
         },
-        NodeType::AgentResponse => {
+        NodeType::ResponseOutput => {
             // Draw a thought bubble for AI responses
             shapes::draw_thought_bubble(context, node);
         },
@@ -135,6 +135,10 @@ pub fn draw_node(_state: &AppState, node: &Node, context: &CanvasRenderingContex
             context.fill();
             
             context.restore();
+        },
+        NodeType::GenericNode => {
+            // Draw a simple rectangle for generic nodes
+            shapes::draw_rounded_rect(context, node);
         },
     }
     

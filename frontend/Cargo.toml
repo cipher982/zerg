@@ -48,7 +48,8 @@ features = [
     "CloseEvent",
     "Storage",
     "EventTarget",
-    "AddEventListenerOptions"
+    "AddEventListenerOptions",
+    "Location"
 ]
 
 [package.metadata.wasm-pack.profile.dev]
