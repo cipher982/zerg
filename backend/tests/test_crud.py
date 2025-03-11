@@ -14,9 +14,14 @@ def test_get_agents(db_session: Session, sample_agent: Agent):
     """Test getting all agents"""
     # Create a few more agents
     for i in range(3):
-        agent = Agent(name=f"Test Agent {i}", instructions=f"Instructions for agent {i}", model="gpt-4o", status="idle")
+        agent = Agent(
+            name=f"Test Agent {i}",
+            system_instructions=f"System instructions for agent {i}",
+            task_instructions=f"Instructions for agent {i}",
+            model="gpt-4o",
+            status="idle",
+        )
         db_session.add(agent)
-
     db_session.commit()
 
     # Get all agents
@@ -49,7 +54,8 @@ def test_create_agent(db_session: Session):
     agent = create_agent(
         db_session,
         name="New CRUD Agent",
-        instructions="Testing CRUD operations",
+        system_instructions="System instructions for testing",
+        task_instructions="Testing CRUD operations",
         model="gpt-4o-mini",
         schedule="0 12 * * *",  # Noon every day
         config={"test": True},
@@ -57,7 +63,8 @@ def test_create_agent(db_session: Session):
 
     assert agent.id is not None
     assert agent.name == "New CRUD Agent"
-    assert agent.instructions == "Testing CRUD operations"
+    assert agent.system_instructions == "System instructions for testing"
+    assert agent.task_instructions == "Testing CRUD operations"
     assert agent.model == "gpt-4o-mini"
     assert agent.status == "idle"  # Default value
     assert agent.schedule == "0 12 * * *"
@@ -82,7 +89,8 @@ def test_update_agent(db_session: Session, sample_agent: Agent):
     assert updated_agent.name == "Updated CRUD Agent"
     assert updated_agent.status == "processing"
     assert updated_agent.model == "gpt-4o-mini"
-    assert updated_agent.instructions == sample_agent.instructions  # Should be unchanged
+    assert updated_agent.system_instructions == sample_agent.system_instructions  # Should be unchanged
+    assert updated_agent.task_instructions == sample_agent.task_instructions  # Should be unchanged
 
     # Verify the changes were saved to the database
     db_agent = get_agent(db_session, sample_agent.id)

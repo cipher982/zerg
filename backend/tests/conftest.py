@@ -126,7 +126,13 @@ def sample_agent(db_session):
     """
     Create a sample agent in the database
     """
-    agent = Agent(name="Test Agent", instructions="This is a test agent", model="gpt-4o", status="idle")
+    agent = Agent(
+        name="Test Agent",
+        system_instructions="System instructions for test agent",
+        task_instructions="This is a test agent",
+        model="gpt-4o",
+        status="idle",
+    )
     db_session.add(agent)
     db_session.commit()
     db_session.refresh(agent)
