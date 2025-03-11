@@ -1,6 +1,6 @@
 # Agent Platform
 
-Agent Platform is a full-stack application combining a Rust + WebAssembly (WASM) frontend, a FastAPI/OpenAI backend, and an optional Node/Playwright pre‑rendering layer for improved SEO. It enables you to create and manage AI-driven “agents” to handle user requests in real-time, streaming AI-generated responses into the browser.
+Agent Platform is a full-stack application combining a Rust + WebAssembly (WASM) frontend, a FastAPI/OpenAI backend, and an optional Node/Playwright pre‑rendering layer for improved SEO. It enables you to create and manage AI-driven "agents" to handle user requests in real-time, streaming AI-generated responses into the browser.
 
 --------------------------------------------------------------------------------
 ## Table of Contents
@@ -8,28 +8,29 @@ Agent Platform is a full-stack application combining a Rust + WebAssembly (WASM)
 1. [Overview](#overview)  
 2. [Quick Start](#quick-start)  
 3. [Architecture Overview](#architecture-overview)  
-4. [Key Features](#key-features)  
-5. [Directory Structure](#directory-structure)  
-6. [Dependencies](#dependencies)  
-7. [Setup & Running](#setup--running)  
+4. [Frontend State Management](#frontend-state-management)  
+5. [Key Features](#key-features)  
+6. [Directory Structure](#directory-structure)  
+7. [Dependencies](#dependencies)  
+8. [Setup & Running](#setup--running)  
    - [Backend Setup](#backend-setup)  
    - [Frontend Setup](#frontend-setup)  
    - [Pre‑Rendering Setup (Optional)](#pre-rendering-setup-optional)  
-8. [Using the Dashboard & Canvas Editor](#using-the-dashboard--canvas-editor)  
-9. [Pre‑Rendering & SEO Details](#pre-rendering--seo-details)  
-10. [How It Works](#how-it-works)  
-11. [Extending the Project & Future Plans](#extending-the-project--future-plans)  
-12. [Testing & Verification](#testing--verification)  
-13. [License](#license)  
+9. [Using the Dashboard & Canvas Editor](#using-the-dashboard--canvas-editor)  
+10. [Pre‑Rendering & SEO Details](#pre-rendering--seo-details)  
+11. [How It Works](#how-it-works)  
+12. [Extending the Project & Future Plans](#extending-the-project--future-plans)  
+13. [Testing & Verification](#testing--verification)  
+14. [License](#license)  
 
 --------------------------------------------------------------------------------
 ## Overview
 
-Agent Platform is designed for users who need to create, manage, and orchestrate conversational or task-based AI “agents.” At a high level:  
+Agent Platform is designed for users who need to create, manage, and orchestrate conversational or task-based AI "agents." At a high level:  
 
 • Agents can be created or edited via either:  
   1. The Dashboard view (for a structured, spreadsheet-like experience of agent cards).  
-  2. A node-based “Canvas Editor” (built in Rust/WASM) for visually configuring complex instructions or multi-step flows.  
+  2. A node-based "Canvas Editor" (built in Rust/WASM) for visually configuring complex instructions or multi-step flows.  
 
 • Agents can be paused, scheduled, or run on-demand. Each agent can maintain a conversation history and system instructions.  
 
@@ -40,7 +41,7 @@ Agent Platform is designed for users who need to create, manage, and orchestrate
 --------------------------------------------------------------------------------
 ## Quick Start
 
-Here’s the minimal set of commands to get Agent Platform running locally:
+Here's the minimal set of commands to get Agent Platform running locally:
 
 1. Clone the repository:  
    » git clone https://github.com/your-username/agent-platform.git  
@@ -82,7 +83,7 @@ The repository is divided into three main areas:
 
 1. **Frontend (Rust + WebAssembly)**  
    - Uses wasm-bindgen, web-sys, and js-sys for DOM/event handling.  
-   - Renders a “Dashboard” for quick agent management and a “Canvas Editor” for more advanced flows.  
+   - Renders a "Dashboard" for quick agent management and a "Canvas Editor" for more advanced flows.  
    - State, events, and UI logic are in modules (src/state.rs, src/ui/, src/components/).
 
 2. **Backend (Python + FastAPI)**  
@@ -95,6 +96,57 @@ The repository is divided into three main areas:
    - An Express-based server (server.js) detects bot user agents and returns the pre-rendered snapshot.
 
 --------------------------------------------------------------------------------
+## Frontend State Management
+
+The frontend uses an Elm-like message-passing architecture for state management:
+
+### Message-Based State Updates
+
+All state modifications should follow these principles:
+
+1. **Never Directly Mutate State**: Instead of directly modifying `APP_STATE`, dispatch a message that describes the change.
+
+2. **Define Messages in `messages.rs`**: Each possible state change should have a corresponding message type.
+
+3. **Handle State Logic in `update.rs`**: All state mutation logic belongs in the `update()` function.
+
+4. **Use the Global Dispatch Function**:
+   ```rust
+   // Good: Message-based state update
+   crate::state::dispatch_global_message(Message::UpdateNodePosition { 
+       node_id: id.clone(), 
+       x: new_x, 
+       y: new_y 
+   });
+   
+   // Bad: Direct state mutation - avoid this!
+   APP_STATE.with(|state| {
+       let mut state = state.borrow_mut();
+       state.nodes.insert(id.clone(), node);
+       state.draw_nodes();
+   });
+   ```
+
+### Avoiding Borrowing Issues
+
+The message-passing architecture prevents Rust borrowing conflicts by:
+
+1. **Single Point of Mutation**: Only the `update()` function should mutably borrow `APP_STATE`
+2. **Automatic UI Refresh**: The dispatch function handles UI refreshes after state changes
+3. **Clean Separation**: Components only dispatch messages, they don't access state directly
+
+### For New Developers
+
+When extending or modifying the frontend:
+
+1. **Look at Existing Patterns**: See how similar functionality is implemented
+2. **Add New Message Types**: Create specific message types for new state changes
+3. **Update the Handler**: Add handlers for new messages in the `update()` function
+4. **Use `dispatch_global_message`**: Always use the dispatch function for state changes
+
+This architecture makes the codebase more maintainable, prevents bugs related to borrowing, and creates a predictable data flow.
+
+--------------------------------------------------------------------------------
 ## Key Features
 
 • **Two UI Approaches (Dashboard & Canvas)**  
@@ -102,9 +154,9 @@ The repository is divided into three main areas:
   - The Canvas Editor (in Rust/WASM) is used for more advanced flows or multi-step instructions.  
 
 • **Real‑Time AI Streaming**  
-  - The backend streams incremental tokens from OpenAI’s API to connected browsers via websockets.  
+  - The backend streams incremental tokens from OpenAI's API to connected browsers via websockets.  
 
-• **Extensible “Agent” Model**  
+• **Extensible "Agent" Model**  
   - Each agent stores system instructions, conversation history, and status.  
   - Agents can be triggered manually or scheduled.  
 
@@ -140,7 +192,7 @@ A simplified overview of notable top-level files and folders:
 1. **Frontend**  
    - Rust (edition 2021) & wasm-pack  
    - wasm-bindgen, web-sys, serde, console_error_panic_hook  
-   - Python 3 for the local dev server in build.sh (if using the script’s local server)  
+   - Python 3 for the local dev server in build.sh (if using the script's local server)  
 
 2. **Backend**  
    - Python 3.12+  
@@ -182,18 +234,18 @@ A simplified overview of notable top-level files and folders:
 After launching the frontend (http://localhost:8002):
 
 1. **Dashboard**  
-   - The default tab shows “Agent Dashboard,” with existing agents in a table.  
+   - The default tab shows "Agent Dashboard," with existing agents in a table.  
    - Each card shows agent name, status, quick actions (run, pause, edit), logs if available.  
-   - Clicking “Create Agent” adds a new agent node.
+   - Clicking "Create Agent" adds a new agent node.
 
 2. **Canvas Editor**  
-   - Switch to “Canvas Editor” from the top tabs.  
+   - Switch to "Canvas Editor" from the top tabs.  
    - This view shows a node-based interface for advanced flows.  
-   - You can create “User Input” nodes and “Agent Response” nodes, connect them, drag them around, etc.  
-   - The Canvas Editor is best for complex multi-step instructions or officially “chaining” steps.
+   - You can create "User Input" nodes and "Agent Response" nodes, connect them, drag them around, etc.  
+   - The Canvas Editor is best for complex multi-step instructions or officially "chaining" steps.
 
 3. **Agent Modal**  
-   - In the canvas, clicking on an “Agent Identity” node opens a modal for system instructions, scheduling, advanced settings.
+   - In the canvas, clicking on an "Agent Identity" node opens a modal for system instructions, scheduling, advanced settings.
 
 --------------------------------------------------------------------------------
 ## Pre‑Rendering & SEO Details
@@ -207,11 +259,11 @@ After launching the frontend (http://localhost:8002):
 
 • Serving the Snapshot:  
   1) node server.js starts an Express server on http://localhost:8003.  
-  2) When a recognized bot user-agent hits “/”, it serves the dist/index.html snapshot.  
+  2) When a recognized bot user-agent hits "/", it serves the dist/index.html snapshot.  
   3) Regular users see the live WASM app from the frontend.  
 
 • Testing Bot Detection:  
-  - The test-crawler.sh script simulates requests from normal and “Googlebot” user agents, saving the results to human.html or googlebot.html for comparison.  
+  - The test-crawler.sh script simulates requests from normal and "Googlebot" user agents, saving the results to human.html or googlebot.html for comparison.  
 
 --------------------------------------------------------------------------------
 ## How It Works

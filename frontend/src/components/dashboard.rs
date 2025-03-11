@@ -72,7 +72,7 @@ pub fn render_dashboard(document: &Document) -> Result<(), JsValue> {
     }
     
     // Get agents and render them
-    let agents = get_agents_from_app_state();
+    let _agents = get_agents_from_app_state();
     
     // Create header area with search and create button
     let header = create_dashboard_header(document)?;
@@ -160,56 +160,15 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                             let agent_id = id as u32;
                             web_sys::console::log_1(&format!("Successfully created agent with ID: {}", agent_id).into());
                             
-                            // Get viewport center coordinates for node placement
-                            APP_STATE.with(|state| {
-                                let mut state = state.borrow_mut();
-                                
-                                let viewport_width = if state.canvas_width > 0.0 { state.canvas_width } else { 800.0 };
-                                let viewport_height = if state.canvas_height > 0.0 { state.canvas_height } else { 600.0 };
-                                
-                                let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 75.0;
-                                let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0;
-                                
-                                // Create the properly ID'd node
-                                let node_id = format!("agent-{}", agent_id);
-                                
-                                // Create and add the node directly to state
-                                let node = crate::models::Node {
-                                    id: node_id.clone(),
-                                    x,
-                                    y,
-                                    text: agent_name,
-                                    width: 200.0,
-                                    height: 80.0,
-                                    color: "#ffecb3".to_string(), // Light amber color
-                                    parent_id: None,
-                                    node_type: crate::models::NodeType::AgentIdentity,
-                                    system_instructions: Some("You are a helpful AI assistant.".to_string()),
-                                    task_instructions: Some("Respond to user questions accurately and concisely.".to_string()),
-                                    history: Some(Vec::new()),
-                                    status: Some("idle".to_string()),
-                                };
-                                
-                                // Add the node to our state
-                                state.nodes.insert(node_id.clone(), node);
-                                
-                                // Log the new node ID
-                                web_sys::console::log_1(&format!("Created new agent with ID: {}", node_id).into());
-                                
-                                // Draw the nodes on canvas
-                                state.draw_nodes();
-                                
-                                // Save state
-                                state.state_modified = true;
-                                if let Err(e) = state.save_if_modified() {
-                                    web_sys::console::warn_1(&format!("Failed to save new agent: {:?}", e).into());
-                                }
-                                
-                                // Refresh the UI
-                                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                                    web_sys::console::warn_1(&format!("Failed to refresh UI after agent creation: {:?}", e).into());
-                                }
+                            // Use the global helper function to dispatch the message and handle UI refresh
+                            crate::state::dispatch_global_message(crate::messages::Message::CreateAgentWithDetails {
+                                name: agent_name,
+                                agent_id,
+                                system_instructions: "You are a helpful AI assistant.".to_string(),
+                                task_instructions: "Respond to user questions accurately and concisely.".to_string(),
                             });
+                            
+                            web_sys::console::log_1(&format!("Created new agent with ID: {}", agent_id).into());
                         }
                     }
                 },

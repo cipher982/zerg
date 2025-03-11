@@ -539,16 +539,16 @@ impl AppState {
         // First render the active view to ensure proper display of containers
         crate::views::render_active_view_by_type(&active_view, &document)?;
         
-        // Check if we need to refresh canvas
+        // Check if we need to refresh canvas in a separate borrow scope
         let has_canvas = APP_STATE.with(|state| {
             let state = state.borrow();
             state.canvas.is_some() && state.context.is_some()
         });
         
-        // If we have a canvas, refresh it
         if has_canvas {
+            // Refresh canvas in a separate borrow scope
             APP_STATE.with(|state| {
-                let state = state.borrow();
+                let state = state.borrow_mut();
                 state.draw_nodes();
             });
         }
@@ -682,6 +682,33 @@ pub fn update_node_id(old_id: &str, new_id: &str) {
             // Update the UI to reflect the changes
             if let Err(e) = AppState::refresh_ui_after_state_change() {
                 web_sys::console::error_1(&format!("Error refreshing UI after node ID update: {:?}", e).into());
+            }
+        }
+    });
+}
+
+// Global helper function for dispatching messages with proper UI refresh handling
+pub fn dispatch_global_message(msg: crate::messages::Message) {
+    // Dispatch the message to update state
+    APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        let (refresh_needed, pending_network_call) = state.dispatch(msg);
+        
+        // Store pending network call data for processing outside of this borrow
+        let network_data = pending_network_call.clone();
+        
+        // Drop the mutable borrow before any additional operations
+        drop(state);
+        
+        // Process any pending network calls
+        if let Some((text, message_id)) = network_data {
+            crate::network::send_text_to_backend(&text, message_id);
+        }
+        
+        // Refresh UI after state changes if needed
+        if refresh_needed {
+            if let Err(e) = AppState::refresh_ui_after_state_change() {
+                web_sys::console::warn_1(&format!("Failed to refresh UI after action: {:?}", e).into());
             }
         }
     });

@@ -542,7 +542,7 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
                                 // Use AddNode with the assigned agent ID
                                 APP_STATE.with(|state| {
                                     let mut state = state.borrow_mut();
-                                    let mut node = crate::models::Node {
+                                    let node = crate::models::Node {
                                         id: node_id.clone(),
                                         x,
                                         y,

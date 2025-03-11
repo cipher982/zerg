@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 use serde_json::{to_string, from_str};
 use crate::state::AppState;
-use crate::models::{Node, ApiAgent, ApiAgentCreate, ApiAgentUpdate};
+use crate::models::{Node, ApiAgent, ApiAgentUpdate};
 use crate::network::ApiClient;
 use std::collections::HashMap;
 use wasm_bindgen_futures::spawn_local;
