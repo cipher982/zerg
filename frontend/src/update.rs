@@ -18,6 +18,46 @@ pub fn update(state: &mut AppState, msg: Message) {
             state.state_modified = true;
         },
         
+        Message::CreateAgentWithDetails { name, agent_id, system_instructions, task_instructions } => {
+            // Calculate center position for the new agent
+            let viewport_width = if state.canvas_width > 0.0 { state.canvas_width } else { 800.0 };
+            let viewport_height = if state.canvas_height > 0.0 { state.canvas_height } else { 600.0 };
+            
+            let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 75.0; // Center - half node width
+            let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0; // Center - half node height
+            
+            // Create the node with the proper ID format
+            let node_id = format!("agent-{}", agent_id);
+            
+            // Create and add the node directly to state
+            let node = crate::models::Node {
+                id: node_id.clone(),
+                x,
+                y,
+                text: name,
+                width: 200.0,
+                height: 80.0,
+                color: "#ffecb3".to_string(), // Light amber color
+                parent_id: None,
+                node_type: NodeType::AgentIdentity,
+                system_instructions: Some(system_instructions),
+                task_instructions: Some(task_instructions),
+                history: Some(Vec::new()),
+                status: Some("idle".to_string()),
+            };
+            
+            // Add the node to our state
+            state.nodes.insert(node_id.clone(), node);
+            
+            // Log the new node ID
+            web_sys::console::log_1(&format!("Created new agent with ID: {}", node_id).into());
+            
+            // Draw the nodes on canvas
+            state.draw_nodes();
+            
+            state.state_modified = true;
+        },
+        
         Message::EditAgent(agent_id) => {
             state.selected_node_id = Some(agent_id);
             state.active_view = ActiveView::Canvas;

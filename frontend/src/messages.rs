@@ -13,6 +13,12 @@ pub enum Message {
     
     // Agent management
     CreateAgent(String),                 // Create a new agent with a given name
+    CreateAgentWithDetails {              // Enhanced version with complete details
+        name: String,
+        agent_id: u32,                   // API-provided ID
+        system_instructions: String,
+        task_instructions: String,
+    },
     EditAgent(String),                   // Edit existing agent by ID
     DeleteAgent(String),                 // Delete an agent by ID
     
