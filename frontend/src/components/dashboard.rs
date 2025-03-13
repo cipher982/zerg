@@ -499,7 +499,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
                 if let Some(node) = state.nodes.get(&agent_id) {
                     (
                         node.text.clone(),
-                        node.system_instructions.clone().unwrap_or_default(),
+                        node.system_instructions().clone().unwrap_or_default(),
                     )
                 } else {
                     (String::new(), String::new())
@@ -575,40 +575,39 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
 fn get_agents_from_app_state() -> Vec<Agent> {
     let mut agents = Vec::new();
     
-    APP_STATE.with(|state| {
+    // Collect all necessary data in a single borrow to avoid nested borrows
+    let nodes_data = APP_STATE.with(|state| {
         let state = state.borrow();
         
         // Return early if still loading
         if state.is_loading {
-            return;
+            return Vec::new();
         }
         
-        // Get agents from node data
-        for (id, node) in &state.nodes {
-            if node.node_type == NodeType::AgentIdentity {
-                // Get agent status
-                let status_str = node.status.clone();
+        // Collect all node data we need in a single pass
+        state.nodes.iter()
+            .filter(|(_, node)| node.node_type == NodeType::AgentIdentity)
+            .map(|(id, node)| {
+                // Pre-fetch all required data
+                let node_id = id.clone();
+                let node_text = node.text.clone();
                 
-                // Get message history from node's history field
-                let history = node.history.clone();
+                // Get status directly using the new method
+                let status_str = node.get_status_from_agents(&state.agents);
                 
-                agents.push((
-                    id.clone(), 
-                    node.text.clone(), 
-                    status_str, 
-                    history
-                ));
-            }
-        }
+                let history = node.history();
+                
+                (node_id, node_text, status_str, history)
+            })
+            .collect::<Vec<_>>()
     });
     
-    // Sort by name
-    agents.sort_by(|a, b| a.1.cmp(&b.1));
+    // Sort by name outside the borrow
+    let mut sorted_data = nodes_data;
+    sorted_data.sort_by(|a, b| a.1.cmp(&b.1));
     
     // Convert to Agent objects
-    let mut agent_objects = Vec::new();
-    
-    for (id, name, status_str, history) in agents {
+    for (id, name, status_str, history) in sorted_data {
         // Convert node status to AgentStatus
         let status = match status_str.as_deref() {
             Some("processing") => AgentStatus::Running,
@@ -622,6 +621,7 @@ fn get_agents_from_app_state() -> Vec<Agent> {
         
         // Get last run from history if available
         let (last_run, last_run_success) = if let Some(history_vec) = &history {
+            let history_vec: &Vec<crate::models::Message> = history_vec;
             if !history_vec.is_empty() {
                 // Format timestamp to human-readable format
                 let last_message = history_vec.last().unwrap();
@@ -678,10 +678,10 @@ fn get_agents_from_app_state() -> Vec<Agent> {
         agent.run_count = run_count as u32;
         agent.last_run_success = last_run_success;
         
-        agent_objects.push(agent);
+        agents.push(agent);
     }
     
-    agent_objects
+    agents
 }
 
 // Function to refresh the dashboard based on the latest state

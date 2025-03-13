@@ -13,9 +13,9 @@ pub fn open_agent_modal(document: &Document, node_id: &str) -> Result<(), JsValu
         if let Some(node) = state.nodes.get(node_id) {
             (
                 node.text.clone(),
-                node.system_instructions.clone().unwrap_or_default(),
-                node.task_instructions.clone().unwrap_or_default(),
-                node.history.clone().unwrap_or_default()
+                node.system_instructions().unwrap_or_default(),
+                node.task_instructions().unwrap_or_default(),
+                node.history().unwrap_or_default()
             )
         } else {
             (String::new(), String::new(), String::new(), Vec::new())

@@ -11,12 +11,12 @@
  *    - Stored in the backend database and cached in the frontend state.agents HashMap
  *
  * 2. Canvas/Visualization Models:
- *    - CanvasNode - purely frontend visual representation with x, y coordinates
+ *    - Node - purely frontend visual representation with x, y coordinates
  *    - References an Agent by ID but doesn't embed all agent properties
- *    - Stored in the frontend state.canvas_nodes HashMap
+ *    - Stored in the frontend state.nodes HashMap
  *
  * 3. Workflow Models:
- *    - Workflow - collection of CanvasNodes and Edges forming a user-defined workflow
+ *    - Workflow - collection of Nodes and Edges forming a user-defined workflow
  *    - Edge - represents connections between nodes in a workflow
  *    - Stored in frontend state.workflows HashMap
  * 
@@ -31,19 +31,16 @@
  * 
  * 2. Frontend Agent Representation:
  *    - ApiAgent instances are loaded from the backend and stored in state.agents
- *    - CanvasNode instances reference agents by ID and add visual properties
+ *    - Node instances reference agents by ID and add visual properties
  *    - Changes to ApiAgent instances are synced with the backend
  *
  * 3. Frontend-only Models (for now):
  *    - Workflow and Edge are currently frontend-only and stored in localStorage
  *    - Can be extended to backend persistence in the future
- *
- * The original Node struct is gradually being phased out in favor of this separation.
- * This separation ensures that agent logic is independent of its visual representation,
- * allowing for cleaner code, better persistence, and more advanced visualizations.
  */
 
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
 
 /// Type of node (e.g., AgentIdentity, UserInput, ResponseOutput)
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -62,31 +59,11 @@ pub struct Message {
     pub timestamp: u64,    // Unix timestamp
 }
 
-/// Node represents a visual element in our graph
-#[derive(Clone, Serialize, Deserialize)]
-pub struct Node {
-    pub id: String,
-    pub x: f64,
-    pub y: f64,
-    pub text: String,
-    pub width: f64,
-    pub height: f64,
-    pub color: String,
-    pub parent_id: Option<String>,
-    pub node_type: NodeType,
-    
-    // New fields for agent functionality
-    pub system_instructions: Option<String>,  // System-level instructions for agents
-    pub task_instructions: Option<String>,    // Persistent task instructions for what the agent should do when run
-    pub history: Option<Vec<Message>>,        // Conversation history for this node
-    pub status: Option<String>,               // "idle", "processing", "error", etc.
-}
-
-/// CanvasNode represents a visual element on the canvas with layout information
+/// Node represents a visual element on the canvas with layout information
 /// This separates the visual/layout concerns from the agent business logic
 #[derive(Clone, Serialize, Deserialize)]
-pub struct CanvasNode {
-    pub node_id: String,           // Unique identifier for this canvas node
+pub struct Node {
+    pub node_id: String,           // Unique identifier for this node
     pub agent_id: Option<u32>,     // Optional reference to a backend agent
     pub x: f64,                    // X position on canvas
     pub y: f64,                    // Y position on canvas
@@ -114,11 +91,11 @@ pub struct Edge {
 pub struct Workflow {
     pub id: u32,                   // Unique identifier for this workflow
     pub name: String,              // Name of the workflow
-    pub nodes: Vec<CanvasNode>,    // Nodes in this workflow
+    pub nodes: Vec<Node>,          // Nodes in this workflow
     pub edges: Vec<Edge>,          // Edges connecting nodes in this workflow
 }
 
-// New API models that match the backend schema
+// API models that match the backend schema
 // These are used for API requests and responses
 
 /// ApiAgent represents an agent in the backend database
@@ -173,4 +150,98 @@ pub struct ApiMessage {
 pub struct ApiMessageCreate {
     pub role: String,
     pub content: String,
+}
+
+/// Extension methods for Node to provide backward compatibility with legacy code
+impl Node {
+    // Property getters that map old field names to new ones
+    pub fn id(&self) -> String {
+        self.node_id.clone()
+    }
+    
+    pub fn system_instructions(&self) -> Option<String> {
+        // If node is linked to an agent, get its system instructions
+        if let Some(agent_id) = self.agent_id {
+            // This is a read-only operation, so using APP_STATE.with is OK
+            // But we need to be careful not to create nested borrows
+            crate::state::APP_STATE.with(|state| {
+                let state = state.borrow();
+                state.agents.get(&agent_id).and_then(|agent| agent.system_instructions.clone())
+            })
+        } else {
+            None
+        }
+    }
+    
+    pub fn task_instructions(&self) -> Option<String> {
+        // For backward compatibility
+        None
+    }
+    
+    pub fn history(&self) -> Option<Vec<crate::models::Message>> {
+        // In the new model, history is stored with agent data, not on nodes
+        None
+    }
+    
+    pub fn status(&self) -> Option<String> {
+        // If node is linked to an agent, get its status
+        if let Some(agent_id) = self.agent_id {
+            crate::state::APP_STATE.with(|state| {
+                let state = state.borrow();
+                state.agents.get(&agent_id).and_then(|agent| agent.status.clone())
+            })
+        } else {
+            None
+        }
+    }
+    
+    // New method that accepts agents HashMap to avoid APP_STATE borrowing
+    pub fn get_status_from_agents(&self, agents: &HashMap<u32, ApiAgent>) -> Option<String> {
+        // If node is linked to an agent, get its status directly from the provided agents HashMap
+        if let Some(agent_id) = self.agent_id {
+            agents.get(&agent_id).and_then(|agent| agent.status.clone())
+        } else {
+            None
+        }
+    }
+    
+    // Setters for backward compatibility
+    pub fn set_id(&mut self, id: String) {
+        self.node_id = id;
+    }
+    
+    pub fn set_system_instructions(&mut self, instructions: Option<String>) {
+        // Forward to agent if linked
+        if let Some(agent_id) = self.agent_id {
+            if let Some(instr) = instructions {
+                crate::state::APP_STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    if let Some(agent) = state.agents.get_mut(&agent_id) {
+                        agent.system_instructions = Some(instr);
+                    }
+                });
+            }
+        }
+    }
+    
+    pub fn set_task_instructions(&mut self, _instructions: Option<String>) {
+        // No direct mapping in new model
+    }
+    
+    pub fn set_history(&mut self, _history: Option<Vec<crate::models::Message>>) {
+        // No direct mapping in new model
+    }
+    
+    pub fn set_status(&mut self, status: Option<String>) {
+        // Forward to agent if linked
+        if let Some(agent_id) = self.agent_id {
+            if let Some(status_str) = status {
+                // Use dispatch_global_message instead of directly accessing APP_STATE
+                crate::state::dispatch_global_message(crate::messages::Message::UpdateNodeStatus {
+                    node_id: self.node_id.clone(),
+                    status: status_str,
+                });
+            }
+        }
+    }
 } 

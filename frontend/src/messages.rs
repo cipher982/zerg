@@ -22,7 +22,7 @@ pub enum Message {
     EditAgent(String),                   // Edit existing agent by ID
     DeleteAgent(String),                 // Delete an agent by ID
     
-    // Node manipulation (legacy - will be gradually replaced)
+    // Node manipulation 
     UpdateNodePosition {
         node_id: String,
         x: f64,
@@ -39,24 +39,19 @@ pub enum Message {
         response_text: String,
     },
     
-    // New Canvas Node manipulation
-    AddCanvasNode {
+    // Node manipulation with agent references
+    AddAgentNode {
         agent_id: Option<u32>,
         x: f64,
         y: f64,
         node_type: NodeType,
         text: String,
     },
-    UpdateCanvasNodePosition {
-        node_id: String,
-        x: f64,
-        y: f64,
-    },
-    DeleteCanvasNode {
+    DeleteNode {
         node_id: String,
     },
     
-    // New Workflow management
+    // Workflow management
     CreateWorkflow {
         name: String,
     },

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::cell::RefCell;
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
-use crate::models::{Node, NodeType, CanvasNode, Workflow, Edge, ApiAgent};
+use crate::models::{Node, NodeType, Workflow, Edge, ApiAgent};
 use crate::canvas::renderer;
 use crate::storage::ActiveView;
 use js_sys::Date;
@@ -15,12 +15,11 @@ use crate::constants::DEFAULT_TASK_INSTRUCTIONS;
 
 // Store global application state
 pub struct AppState {
-    // Original node structure (will be phased out gradually)
-    pub nodes: HashMap<String, Node>,
-    
-    // New separated data structures
+    // Agent domain data (business logic)
     pub agents: HashMap<u32, ApiAgent>,        // Backend agent data
-    pub canvas_nodes: HashMap<String, CanvasNode>, // Visual layout 
+    
+    // Canvas visualization data
+    pub nodes: HashMap<String, Node>,          // Visual layout nodes
     pub workflows: HashMap<u32, Workflow>,     // Workflows collection
     pub current_workflow_id: Option<u32>,      // Currently active workflow
     
@@ -73,9 +72,8 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         Self {
-            nodes: HashMap::new(),
             agents: HashMap::new(),
-            canvas_nodes: HashMap::new(),
+            nodes: HashMap::new(),
             workflows: HashMap::new(),
             current_workflow_id: None,
             canvas: None,
@@ -136,30 +134,9 @@ impl AppState {
         let width = f64::max(200.0, chars_per_line as f64 * 8.0); // Estimate width based on chars
         let height = f64::max(80.0, lines as f64 * 20.0 + 40.0);  // Base height + lines
         
-        // Initialize system instructions, history, and status based on node type
-        let (system_instructions, history, status) = match node_type {
-            NodeType::UserInput => {
-                web_sys::console::log_1(&JsValue::from_str("Initializing user input node properties"));
-                (None, None, None)
-            },
-            NodeType::AgentIdentity => {
-                web_sys::console::log_1(&JsValue::from_str("Initializing agent node properties"));
-                
-                // For agent identity nodes, create empty properties
-                (Some(String::new()), Some(Vec::new()), Some("idle".to_string()))
-            },
-            NodeType::ResponseOutput => {
-                web_sys::console::log_1(&JsValue::from_str("Initializing response node properties"));
-                (None, None, None)
-            },
-            NodeType::GenericNode => {
-                web_sys::console::log_1(&JsValue::from_str("Initializing generic node properties"));
-                (None, None, None)
-            }
-        };
-        
         let node = Node {
-            id: id.clone(),
+            node_id: id.clone(),
+            agent_id: None,
             x,
             y,
             text,
@@ -168,10 +145,8 @@ impl AppState {
             color,
             parent_id: None, // Parent ID will be set separately if needed
             node_type,
-            system_instructions,
-            task_instructions: None, // Initialize with None
-            history,
-            status,
+            is_selected: false,
+            is_dragging: false,
         };
         
         web_sys::console::log_1(&format!("Node created with dimensions: {}x{} at position ({}, {})", 
@@ -207,22 +182,19 @@ impl AppState {
             y = parent_node.y + parent_node.height + 30.0;
         }
         
-        let node = crate::models::Node {
-            id: response_id.clone(),
+        let node = Node {
+            node_id: response_id.clone(),
+            agent_id: None,
             x,
             y,
-            text: response_text.clone(),
             width: 300.0,
             height: 100.0,
             color: "#d5f5e3".to_string(),  // Light green
+            text: response_text.clone(),
+            node_type: NodeType::ResponseOutput,
             parent_id: Some(parent_id.to_string()),
-            node_type: crate::models::NodeType::ResponseOutput,
-            
-            // Response nodes don't have these fields
-            system_instructions: None,
-            task_instructions: None,
-            history: None,
-            status: None,
+            is_selected: false,
+            is_dragging: false,
         };
         
         self.nodes.insert(response_id.clone(), node);
@@ -237,10 +209,17 @@ impl AppState {
                     timestamp: js_sys::Date::now() as u64,
                 };
                 
-                let history = parent_node.history.get_or_insert_with(Vec::new);
-                history.push(message.clone());
+                // Instead of directly accessing history, use agent_id to add the message
+                if let Some(agent_id) = parent_node.agent_id {
+                    crate::state::APP_STATE.with(|state| {
+                        let mut state = state.borrow_mut();
+                        if let Some(agent) = state.agents.get_mut(&agent_id) {
+                            // Store the message with the agent (actual implementation would depend on your API structure)
+                        }
+                    });
+                }
                 
-                // Sync this message with the API
+                // Still save the message to API
                 crate::storage::save_agent_messages_to_api(parent_id, &[message]);
             }
         }
@@ -249,13 +228,44 @@ impl AppState {
     }
     
     pub fn draw_nodes(&self) {
-        renderer::draw_nodes(self);
+        if let (Some(context), Some(canvas)) = (&self.context, &self.canvas) {
+            // Clear the canvas with a slight off-white color for better visibility
+            context.set_fill_style(&JsValue::from_str("#f5f5f5"));
+            context.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
+            
+            // Apply transformations for viewport
+            context.save();
+            context.translate(-self.viewport_x, -self.viewport_y).unwrap();
+            context.scale(self.zoom_level, self.zoom_level).unwrap();
+            
+            // Draw canvas nodes (new structure)
+            for (_, node) in &self.nodes {
+                renderer::draw_node(&context, node, &self.agents);
+            }
+            
+            // Draw legacy nodes (for backward compatibility - will be removed later)
+            for (_, node) in &self.nodes {
+                renderer::draw_node(&context, node, &self.agents);
+            }
+            
+            // Restore the canvas context to its original state
+            context.restore();
+        }
     }
     
     pub fn update_node_position(&mut self, node_id: &str, x: f64, y: f64) {
+        // Track if any updates were made
+        let mut updated = false;
+        
+        // First, try to update in nodes (new structure)
         if let Some(node) = self.nodes.get_mut(node_id) {
             node.x = x;
             node.y = y;
+            updated = true;
+        }
+        
+        // Only proceed if an update was made
+        if updated {
             self.state_modified = true; // Mark state as modified
             
             // Auto-fit all nodes if enabled
@@ -268,25 +278,58 @@ impl AppState {
     }
     
     pub fn find_node_at_position(&self, x: f64, y: f64) -> Option<(String, f64, f64)> {
-        // Convert canvas coordinates to world coordinates
-        let world_x = x / self.zoom_level + self.viewport_x;
-        let world_y = y / self.zoom_level + self.viewport_y;
+        // Apply viewport transformation to the coordinates
+        let adjusted_x = x / self.zoom_level + self.viewport_x;
+        let adjusted_y = y / self.zoom_level + self.viewport_y;
         
+        // First, check in nodes (new structure)
         for (id, node) in &self.nodes {
-            if world_x >= node.x && world_x <= node.x + node.width &&
-               world_y >= node.y && world_y <= node.y + node.height {
-                return Some((id.clone(), world_x - node.x, world_y - node.y));
+            if adjusted_x >= node.x && 
+               adjusted_x <= node.x + node.width &&
+               adjusted_y >= node.y && 
+               adjusted_y <= node.y + node.height {
+                return Some((id.clone(), adjusted_x - node.x, adjusted_y - node.y));
             }
         }
+        
         None
     }
     
     // Apply transform to ensure all nodes are visible
     pub fn fit_nodes_to_view(&mut self) {
+        // If there are no nodes at all, nothing to fit
         if self.nodes.is_empty() {
             return;
         }
         
+        // Find bounding box of all nodes
+        let mut min_x = f64::MAX;
+        let mut min_y = f64::MAX;
+        let mut max_x = f64::MIN;
+        let mut max_y = f64::MIN;
+        
+        // Check nodes (new structure)
+        for (_, node) in &self.nodes {
+            min_x = f64::min(min_x, node.x);
+            min_y = f64::min(min_y, node.y);
+            max_x = f64::max(max_x, node.x + node.width);
+            max_y = f64::max(max_y, node.y + node.height);
+        }
+        
+        // Calculate the bounding box dimensions
+        let box_width = max_x - min_x;
+        let box_height = max_y - min_y;
+        
+        // Get the canvas dimensions
+        let canvas_width = self.canvas_width;
+        let canvas_height = self.canvas_height;
+        
+        // Calculate zoom level to fit all nodes with padding
+        let padding = 50.0; // Padding around the bounding box
+        let zoom_x = canvas_width / (box_width + padding * 2.0);
+        let zoom_y = canvas_height / (box_height + padding * 2.0);
+        
+        // Take the smaller of the two to ensure all nodes fit
         if let Some(canvas) = &self.canvas {
             // Find bounding box of all nodes
             let mut min_x = f64::MAX;
@@ -529,7 +572,7 @@ impl AppState {
             // Sync agent messages
             for (node_id, node) in &self.nodes {
                 if let crate::models::NodeType::AgentIdentity = node.node_type {
-                    if let Some(history) = &node.history {
+                    if let Some(history) = &node.history() {
                         if !history.is_empty() {
                             crate::storage::save_agent_messages_to_api(node_id, history);
                         }
@@ -597,7 +640,7 @@ impl AppState {
     /// Gets the task instructions for an agent with a standard fallback
     pub fn get_task_instructions_with_fallback(&self, agent_id: &str) -> String {
         self.nodes.get(agent_id)
-            .and_then(|node| node.task_instructions.clone())
+            .and_then(|node| node.task_instructions())
             .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string())
     }
 
@@ -634,93 +677,47 @@ impl AppState {
         }
     }
 
-    /// Creates a new canvas node linked to an optional agent
-    pub fn add_canvas_node(&mut self, agent_id: Option<u32>, x: f64, y: f64, 
-                          node_type: NodeType, text: String) -> String {
-        // Generate a unique ID for the canvas node
+    /// Creates a new node linked to an optional agent
+    pub fn add_node_with_agent(&mut self, agent_id: Option<u32>, x: f64, y: f64, 
+                    node_type: NodeType, text: String) -> String {
+        // Generate a unique ID for the node
         let node_id = match node_type {
             NodeType::AgentIdentity => {
                 if let Some(id) = agent_id {
-                    format!("canvas-agent-{}", id)
+                    format!("agent-{}", id)
                 } else {
-                    format!("canvas-node-{}", Date::now() as u32)
+                    format!("node-{}", js_sys::Date::now() as u32)
                 }
             },
-            _ => format!("canvas-node-{}", Date::now() as u32)
+            _ => format!("node-{}", js_sys::Date::now() as u32)
         };
         
-        // Create the new canvas node
-        let canvas_node = CanvasNode {
+        // Create the new node
+        let node = Node {
             node_id: node_id.clone(),
             agent_id,
             x,
             y,
             width: 200.0,
             height: 100.0,
+            color: match node_type {
+                NodeType::UserInput => "#3498db".to_string(),    // Blue
+                NodeType::ResponseOutput => "#9b59b6".to_string(), // Purple
+                NodeType::AgentIdentity => "#2ecc71".to_string(), // Green
+                NodeType::GenericNode => "#95a5a6".to_string(),  // Gray
+            },
             text,
             node_type,
-            color: match node_type {
-                NodeType::AgentIdentity => "#ffecb3".to_string(), // Light amber
-                NodeType::UserInput => "#e3f2fd".to_string(),     // Light blue
-                NodeType::ResponseOutput => "#e8f5e9".to_string(), // Light green
-                NodeType::GenericNode => "#f5f5f5".to_string(),    // Light gray
-            },
             parent_id: None,
             is_selected: false,
             is_dragging: false,
         };
         
-        // Add the node to our canvas_nodes collection
-        self.canvas_nodes.insert(node_id.clone(), canvas_node);
-        
-        // If we have a current workflow, add this node to it
-        if let Some(workflow_id) = self.current_workflow_id {
-            if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
-                if let Some(canvas_node) = self.canvas_nodes.get(&node_id) {
-                    workflow.nodes.push(canvas_node.clone());
-                }
-            }
-        }
-        
+        // Store the node
+        self.nodes.insert(node_id.clone(), node);
         self.state_modified = true;
         
-        // Return the new node's ID
         node_id
-    }
-    
-    /// Updates the position of a canvas node
-    pub fn update_canvas_node_position(&mut self, node_id: &str, x: f64, y: f64) {
-        if let Some(node) = self.canvas_nodes.get_mut(node_id) {
-            node.x = x;
-            node.y = y;
-            self.state_modified = true;
-            
-            // Also update the node in the current workflow if it exists
-            if let Some(workflow_id) = self.current_workflow_id {
-                if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
-                    for workflow_node in &mut workflow.nodes {
-                        if workflow_node.node_id == node_id {
-                            workflow_node.x = x;
-                            workflow_node.y = y;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    /// Finds a canvas node at the given position
-    pub fn find_canvas_node_at_position(&self, x: f64, y: f64) -> Option<(String, f64, f64)> {
-        let nodes: Vec<_> = self.canvas_nodes.iter().collect();
-        for (id, node) in nodes.into_iter().rev() {
-            if x >= node.x && x <= node.x + node.width &&
-               y >= node.y && y <= node.y + node.height {
-                // Return the node's ID and the offset from the mouse to the node's top-left corner
-                return Some((id.clone(), x - node.x, y - node.y));
-            }
-        }
-        None
     }
     
     /// Creates a new workflow
@@ -815,7 +812,7 @@ pub fn update_node_id(old_id: &str, new_id: &str) {
         if let Some(node) = state.nodes.remove(old_id) {
             // Insert it with the new ID
             let mut updated_node = node.clone();
-            updated_node.id = new_id.to_string();
+            updated_node.set_id(new_id.to_string());
             state.nodes.insert(new_id.to_string(), updated_node);
             
             web_sys::console::log_1(&format!("Updated node ID from {} to {}", old_id, new_id).into());

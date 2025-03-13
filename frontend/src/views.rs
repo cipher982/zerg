@@ -123,7 +123,7 @@ fn render_canvas_view(state: &AppState, document: &Document) -> Result<(), JsVal
         
         // Draw all nodes
         for (_, node) in &state.nodes {
-            crate::canvas::renderer::draw_node(state, node, context);
+            crate::canvas::renderer::draw_node(context, node, &state.agents);
         }
         
         // Restore the context
@@ -164,11 +164,12 @@ pub fn show_agent_modal(state: &AppState, document: &Document) -> Result<(), JsV
                 // Set system instructions in textarea
                 if let Some(system_elem) = document.get_element_by_id("system-instructions") {
                     if let Some(system_textarea) = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>() {
-                        if let Some(instructions) = &node.system_instructions {
+                        let instructions = node.system_instructions();
+                        if let Some(instructions) = instructions {
                             if instructions.trim().is_empty() {
                                 system_textarea.set_value(DEFAULT_SYSTEM_INSTRUCTIONS);
                             } else {
-                                system_textarea.set_value(instructions);
+                                system_textarea.set_value(&instructions);
                             }
                         } else {
                             system_textarea.set_value(DEFAULT_SYSTEM_INSTRUCTIONS);
@@ -179,11 +180,12 @@ pub fn show_agent_modal(state: &AppState, document: &Document) -> Result<(), JsV
                 // Set task instructions in textarea
                 if let Some(task_elem) = document.get_element_by_id("default-task-instructions") {
                     if let Some(task_textarea) = task_elem.dyn_ref::<web_sys::HtmlTextAreaElement>() {
-                        if let Some(instructions) = &node.task_instructions {
+                        let instructions = node.task_instructions();
+                        if let Some(instructions) = instructions {
                             if instructions.trim().is_empty() {
                                 task_textarea.set_value(DEFAULT_TASK_INSTRUCTIONS);
                             } else {
-                                task_textarea.set_value(instructions);
+                                task_textarea.set_value(&instructions);
                             }
                         } else {
                             task_textarea.set_value(DEFAULT_TASK_INSTRUCTIONS);
