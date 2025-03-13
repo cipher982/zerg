@@ -135,7 +135,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
         // Generate a random agent name
         let agent_name = format!("New Agent {}", (js_sys::Math::random() * 100.0).round());
         
-        // First create the agent in the API
+        // Create the agent data payload for the API
         let agent_data = format!(
             r#"{{
                 "name": "{}",
@@ -150,6 +150,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
         wasm_bindgen_futures::spawn_local(async move {
             web_sys::console::log_1(&"Creating agent in API first".into());
             
+            // Make the API call to create the agent
             match crate::network::ApiClient::create_agent(&agent_data).await {
                 Ok(response) => {
                     // Parse the response to get the agent ID
@@ -160,15 +161,13 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                             let agent_id = id as u32;
                             web_sys::console::log_1(&format!("Successfully created agent with ID: {}", agent_id).into());
                             
-                            // Use the global helper function to dispatch the message and handle UI refresh
+                            // Now that we have the ID from API, add to state with the proper node ID format
                             crate::state::dispatch_global_message(crate::messages::Message::CreateAgentWithDetails {
                                 name: agent_name,
                                 agent_id,
                                 system_instructions: "You are a helpful AI assistant.".to_string(),
                                 task_instructions: "Respond to user questions accurately and concisely.".to_string(),
                             });
-                            
-                            web_sys::console::log_1(&format!("Created new agent with ID: {}", agent_id).into());
                         }
                     }
                 },

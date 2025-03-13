@@ -19,6 +19,7 @@ pub fn setup_ui_event_handlers(document: &Document) -> Result<(), JsValue> {
     setup_center_view_handler(document)?;
     setup_clear_button_handler(document)?;
     setup_modal_handlers(document)?;
+    setup_modal_action_handlers(document)?;
     setup_create_agent_button_handler(document)?;
     
     Ok(())
@@ -238,6 +239,9 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
                 String::new()
             };
             
+            // Log to console to help with debugging
+            web_sys::console::log_1(&"Save button clicked - processing agent details".into());
+            
             let (need_refresh, pending_call) = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 let _ = state.dispatch(Message::SaveAgentDetails {
@@ -258,6 +262,28 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
             if let Some((task_text, message_id)) = pending_call {
                 crate::network::send_text_to_backend(&task_text, message_id);
             }
+            
+            // Show a visual feedback that the save was successful
+            if let Some(save_btn) = document.get_element_by_id("save-agent") {
+                let original_text = save_btn.inner_html();
+                save_btn.set_inner_html("Saved!");
+                
+                // Reset button text after a delay
+                let btn_clone = save_btn.clone();
+                let text_clone = original_text.clone();
+                let reset_btn = Closure::once_into_js(move || {
+                    btn_clone.set_inner_html(&text_clone);
+                });
+                window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                    reset_btn.as_ref().unchecked_ref(), 
+                    1500
+                ).expect("Failed to set timeout");
+            }
+            
+            // Explicitly close the modal after saving
+            if let Err(e) = crate::ui::modals::close_agent_modal(&document) {
+                web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
+            }
         }) as Box<dyn FnMut(_)>);
         
         save_button.add_event_listener_with_callback(
@@ -267,164 +293,8 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         save_handler.forget();
     }
     
-    // Set up send button
-    if let Some(send_button) = document.get_element_by_id("send-to-agent") {
-        let send_btn_handler = Closure::wrap(Box::new(move |_event: Event| {
-            // Use the new message pattern
-            let (need_refresh, pending_call) = APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.dispatch(Message::SendTaskToAgent)
-            });
-            
-            // After borrowing mutably, we can refresh UI if needed in a separate borrow
-            if need_refresh {
-                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
-                }
-            }
-            
-            // Handle any pending network calls (likely for SendTaskToAgent)
-            if let Some((task_text, message_id)) = pending_call {
-                crate::network::send_text_to_backend(&task_text, message_id);
-            }
-        }) as Box<dyn FnMut(_)>);
-        
-        send_button.add_event_listener_with_callback(
-            "click",
-            send_btn_handler.as_ref().unchecked_ref(),
-        )?;
-        send_btn_handler.forget();
-    }
-    
     // Set up tab switching
     setup_tab_handlers(document)?;
-    
-    // Add input listener to system instructions to auto-save after a delay
-    let system_textarea = document.get_element_by_id("system-instructions")
-        .ok_or_else(|| JsValue::from_str("System instructions textarea not found"))?;
-    
-    // Create a new timeout ID reference
-    let timeout_id_ref = Rc::new(RefCell::new(None::<i32>));
-    
-    let input_timeout_id = timeout_id_ref.clone();
-    let input_handler = Closure::wrap(Box::new(move |_event: Event| {
-        let window = web_sys::window().expect("no global window exists");
-        let document = window.document().expect("should have a document");
-        
-        // Get the current value from the textarea
-        let system_elem = document.get_element_by_id("system-instructions").unwrap();
-        let system_textarea = system_elem.dyn_ref::<HtmlTextAreaElement>().unwrap();
-        let system_instructions = system_textarea.value();
-        
-        // Clear previous timeout if it exists
-        if let Some(id) = *input_timeout_id.borrow() {
-            window.clear_timeout_with_handle(id);
-        }
-        
-        // Create a function to save the system instructions after a delay
-        let system_instructions_clone = system_instructions.clone();
-        let save_fn = Closure::once_into_js(move || {
-            // Use the new message pattern
-            let (need_refresh, pending_call) = APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.dispatch(Message::UpdateSystemInstructions(system_instructions_clone))
-            });
-            
-            // After borrowing mutably, we can refresh UI if needed in a separate borrow
-            if need_refresh {
-                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
-                }
-            }
-            
-            // Handle any pending network calls (shouldn't be any for UpdateSystemInstructions)
-            if let Some((task_text, message_id)) = pending_call {
-                crate::network::send_text_to_backend(&task_text, message_id);
-            }
-        });
-        
-        // Set new timeout (500ms debounce)
-        let new_timeout_id = window
-            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                save_fn.as_ref().unchecked_ref(),
-                500,  // 500ms debounce
-            )
-            .expect("Failed to set timeout");
-        
-        *input_timeout_id.borrow_mut() = Some(new_timeout_id);
-    }) as Box<dyn FnMut(_)>);
-    
-    system_textarea.add_event_listener_with_callback(
-        "input",
-        input_handler.as_ref().unchecked_ref(),
-    )?;
-    input_handler.forget();
-    
-    // Add input listener to agent name field to auto-save after a delay
-    let agent_name_input = document.get_element_by_id("agent-name")
-        .ok_or_else(|| JsValue::from_str("Agent name input not found"))?;
-    
-    // Create a new timeout ID reference for agent name
-    let name_timeout_id_ref = Rc::new(RefCell::new(None::<i32>));
-    
-    let name_input_timeout_id = name_timeout_id_ref.clone();
-    let name_input_handler = Closure::wrap(Box::new(move |_event: Event| {
-        let window = web_sys::window().expect("no global window exists");
-        let document = window.document().expect("should have a document");
-        
-        // Get the current value from the input field
-        let name_elem = document.get_element_by_id("agent-name").unwrap();
-        let name_input = name_elem.dyn_ref::<web_sys::HtmlInputElement>().unwrap();
-        let name_value = name_input.value();
-        
-        // Only proceed if name is not empty
-        if name_value.trim().is_empty() {
-            return;
-        }
-        
-        // Clear previous timeout if it exists
-        if let Some(id) = *name_input_timeout_id.borrow() {
-            window.clear_timeout_with_handle(id);
-        }
-        
-        // Create a function to save the agent name after a delay
-        let name_value_clone = name_value.clone();
-        let save_name_fn = Closure::once_into_js(move || {
-            // Use the new message pattern
-            let (need_refresh, pending_call) = APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.dispatch(Message::UpdateAgentName(name_value_clone))
-            });
-            
-            // After borrowing mutably, we can refresh UI if needed in a separate borrow
-            if need_refresh {
-                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
-                }
-            }
-            
-            // Handle any pending network calls (shouldn't be any for UpdateAgentName)
-            if let Some((task_text, message_id)) = pending_call {
-                crate::network::send_text_to_backend(&task_text, message_id);
-            }
-        });
-        
-        // Set new timeout (500ms debounce)
-        let new_timeout_id = window
-            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                save_name_fn.as_ref().unchecked_ref(),
-                500,  // 500ms debounce
-            )
-            .expect("Failed to set timeout");
-        
-        *name_input_timeout_id.borrow_mut() = Some(new_timeout_id);
-    }) as Box<dyn FnMut(_)>);
-    
-    agent_name_input.add_event_listener_with_callback(
-        "input",
-        name_input_handler.as_ref().unchecked_ref(),
-    )?;
-    name_input_handler.forget();
     
     Ok(())
 }
@@ -588,7 +458,7 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
 }
 
 // Set up modal handlers for close, save, and send actions
-fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
+pub fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
     // Set up close button
     if let Some(close_button) = document.get_element_by_id("close-agent-modal") {
         let close_handler = Closure::wrap(Box::new(move |_event: Event| {
@@ -644,6 +514,9 @@ fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
             let system_instructions = system_instructions_textarea.value();
             let task_instructions = default_task_textarea.value();
             
+            // Log to console to help with debugging
+            web_sys::console::log_1(&"Save button clicked via action handlers - processing agent details".into());
+            
             // Save agent details using the new message pattern
             let (need_refresh, pending_call) = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
@@ -681,6 +554,11 @@ fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
                     reset_btn.as_ref().unchecked_ref(), 
                     1500
                 ).expect("Failed to set timeout");
+            }
+            
+            // Explicitly close the modal after saving
+            if let Err(e) = crate::ui::modals::close_agent_modal(&document) {
+                web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
             }
         }) as Box<dyn FnMut(_)>);
         

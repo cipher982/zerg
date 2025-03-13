@@ -100,7 +100,7 @@ pub fn save_state_to_api(app_state: &AppState) {
         // We'll need to convert each Node of type AgentIdentity to an ApiAgent
         for (node_id, node) in nodes.iter() {
             if let crate::models::NodeType::AgentIdentity = node.node_type {
-                // First check for the preferred format: "agent-{id}"
+                // Only update existing agents with proper agent-{id} format
                 if let Some(agent_id_str) = node_id.strip_prefix("agent-") {
                     if let Ok(agent_id) = agent_id_str.parse::<u32>() {
                         // Regular API agent with proper ID format
@@ -129,57 +129,6 @@ pub fn save_state_to_api(app_state: &AppState) {
                             web_sys::console::error_1(&format!("Error updating agent in API: {:?}", e).into());
                         } else {
                             web_sys::console::log_1(&format!("Updated agent {} in API", agent_id).into());
-                        }
-                    }
-                } else {
-                    // Handle nodes created with node_0 format (no agent-prefix)
-                    web_sys::console::log_1(&format!("Canvas node {} of type AgentIdentity exists but has no agent ID, creating in API", node_id).into());
-                    
-                    // Create a new agent in the API
-                    let agent_create = crate::models::ApiAgentCreate {
-                        name: node.text.clone(),
-                        system_instructions: node.system_instructions.clone()
-                            .unwrap_or_else(|| DEFAULT_SYSTEM_INSTRUCTIONS.to_string()),
-                        task_instructions: node.task_instructions.clone()
-                            .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string()),
-                        model: Some(selected_model.clone()),
-                        schedule: None,
-                        config: None,
-                    };
-                    
-                    // Serialize and create the agent
-                    let agent_json = match to_string(&agent_create) {
-                        Ok(json) => json,
-                        Err(e) => {
-                            web_sys::console::error_1(&format!("Error serializing new agent: {}", e).into());
-                            continue;
-                        }
-                    };
-                    
-                    // Create the agent in the API
-                    match ApiClient::create_agent(&agent_json).await {
-                        Ok(response) => {
-                            // Parse the response to get the agent ID
-                            if let Ok(json) = js_sys::JSON::parse(&response) {
-                                if let Some(id) = js_sys::Reflect::get(&json, &"id".into()).ok()
-                                    .and_then(|v| v.as_f64()) 
-                                {
-                                    let agent_id = id as u32;
-                                    web_sys::console::log_1(&format!("Created agent in API with ID: {}", agent_id).into());
-                                    
-                                    // Update the node ID in the app state
-                                    let new_node_id = format!("agent-{}", agent_id);
-                                    web_sys::console::log_1(&format!("Node ID should be updated from {} to {}", node_id, new_node_id).into());
-                                    
-                                    // We need to update the node ID in the app state
-                                    // This would need to be done outside of this async function
-                                    // For now, log a message to indicate the need
-                                    crate::state::update_node_id(node_id, &new_node_id);
-                                }
-                            }
-                        },
-                        Err(e) => {
-                            web_sys::console::error_1(&format!("Error creating agent in API: {:?}", e).into());
                         }
                     }
                 }

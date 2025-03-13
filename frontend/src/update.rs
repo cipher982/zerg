@@ -55,7 +55,20 @@ pub fn update(state: &mut AppState, msg: Message) {
             // Draw the nodes on canvas
             state.draw_nodes();
             
-            state.state_modified = true;
+            // IMPORTANT: We intentionally don't set state_modified = true here
+            // This prevents the auto-save mechanism from making redundant API calls
+            // Since we just created this agent through a direct API call, 
+            // there's no need to immediately update it again
+            // state.state_modified = true;
+            
+            // IMPORTANT: Don't call refresh_ui_after_state_change() directly here
+            // as it would try to borrow APP_STATE while it's already mutably borrowed.
+            // Instead, dispatch_global_message will handle the UI refresh after the update completes.
+            // This is why we return a tuple (bool, Option<...>) from dispatch() where the bool 
+            // indicates if we need a UI refresh.
+            
+            // Return true to indicate UI refresh is needed
+            // The actual refresh will be handled by dispatch_global_message after this borrow is released
         },
         
         Message::EditAgent(agent_id) => {
