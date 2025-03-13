@@ -57,7 +57,7 @@ pub fn start() -> Result<(), JsValue> {
     
     // Initialize loading of both legacy data and new agent data
     spawn_local(async {
-        // Load the state (this will also try to load workflows)
+        // Load the state (this will also try to load workflows and agents)
         state::APP_STATE.with(|s| {
             let mut app_state = s.borrow_mut();
             if let Err(e) = storage::load_state(&mut app_state) {
@@ -65,8 +65,8 @@ pub fn start() -> Result<(), JsValue> {
             }
         }); // The borrow is dropped when this block ends
         
-        // Load agents from API (new approach)
-        network::load_agents();
+        // We don't need to call load_agents() here as it's already called by load_state_from_api
+        // network::load_agents();
         
         // Create a default workflow if none exists
         state::APP_STATE.with(|state| {

@@ -150,12 +150,7 @@ pub fn create_agent_input_modal(document: &Document) -> Result<(), JsValue> {
     save_button.set_id("save-agent");
     save_button.set_inner_html("Save");
     
-    let send_button = document.create_element("button")?;
-    send_button.set_id("send-to-agent");
-    send_button.set_inner_html("Send");
-    
     button_container.append_child(&save_button)?;
-    button_container.append_child(&send_button)?;
     
     // Add all elements to the document
     modal_content.append_child(&modal_header)?;
