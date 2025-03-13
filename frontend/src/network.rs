@@ -224,10 +224,10 @@ fn handle_websocket_message(event: web_sys::MessageEvent) -> Result<(), JsValue>
                                                                                         if let Some(id) = agent.id {
                                                                                             state.agents.insert(id, agent.clone());
                                                                                             
-                                                                                            // Also update any canvas nodes that reference this agent
-                                                                                            for (_, canvas_node) in state.canvas_nodes.iter_mut() {
-                                                                                                if canvas_node.agent_id == Some(id) {
-                                                                                                    canvas_node.text = agent.name.clone();
+                                                                                            // Also update any nodes that reference this agent
+                                                                                            for (_, node) in state.nodes.iter_mut() {
+                                                                                                if node.agent_id == Some(id) {
+                                                                                                    node.text = agent.name.clone();
                                                                                                 }
                                                                                             }
                                                                                         }
@@ -283,8 +283,8 @@ fn handle_websocket_message(event: web_sys::MessageEvent) -> Result<(), JsValue>
                                     // Remove the agent from the HashMap
                                     state.agents.remove(&agent_id);
                                     
-                                    // Remove any canvas nodes that reference this agent
-                                    let nodes_to_remove: Vec<String> = state.canvas_nodes.iter()
+                                    // Remove any nodes that reference this agent
+                                    let nodes_to_remove: Vec<String> = state.nodes.iter()
                                         .filter_map(|(node_id, node)| {
                                             if node.agent_id == Some(agent_id) {
                                                 Some(node_id.clone())
@@ -295,7 +295,7 @@ fn handle_websocket_message(event: web_sys::MessageEvent) -> Result<(), JsValue>
                                         .collect();
                                     
                                     for node_id in nodes_to_remove {
-                                        state.canvas_nodes.remove(&node_id);
+                                        state.nodes.remove(&node_id);
                                     }
                                     
                                     // Also remove from any workflows
@@ -434,7 +434,7 @@ pub fn send_text_to_backend(text: &str, message_id: String) {
             // Get system instructions if any
             let instructions = if let Some(agent_id) = &state.selected_node_id {
                 if let Some(agent) = state.nodes.get(agent_id) {
-                    agent.system_instructions.clone().unwrap_or_default()
+                    agent.system_instructions().clone().unwrap_or_default()
                 } else {
                     String::new()
                 }
@@ -677,9 +677,9 @@ pub fn load_agents() {
                                                     }
                                                 }
                                                 
-                                                // Now that we have loaded agents, check if we need to create canvas nodes for them
-                                                // Only create canvas nodes for agents that don't already have one
-                                                create_canvas_nodes_for_agents(&mut state);
+                                                // Now that we have loaded agents, check if we need to create nodes for them
+                                                // Only create nodes for agents that don't already have one
+                                                create_nodes_for_agents(&mut state);
                                                 
                                                 state.data_loaded = true;
                                                 state.api_load_attempted = true;
@@ -751,13 +751,13 @@ pub fn load_agents() {
     });
 }
 
-// Create canvas nodes for agents that don't already have one
-fn create_canvas_nodes_for_agents(state: &mut crate::state::AppState) {
+// Create nodes for agents that don't already have one
+fn create_nodes_for_agents(state: &mut crate::state::AppState) {
     // First, collect all the information we need without holding the borrow
     let agents_to_add: Vec<(u32, String)> = state.agents.iter()
         .filter(|(agent_id, _)| {
-            // Check if there's already a canvas node for this agent
-            !state.canvas_nodes.iter().any(|(_, node)| {
+            // Check if there's already a node for this agent
+            !state.nodes.iter().any(|(_, node)| {
                 node.agent_id == Some(**agent_id)
             })
         })
@@ -776,15 +776,10 @@ fn create_canvas_nodes_for_agents(state: &mut crate::state::AppState) {
         let x = 100.0 + (col as f64 * 250.0);
         let y = 100.0 + (row as f64 * 150.0);
         
-        let node_id = state.add_canvas_node(
-            Some(agent_id),
-            x, 
-            y, 
-            crate::models::NodeType::AgentIdentity,
-            name
-        );
+        let node_id = state.add_node_with_agent(Some(agent_id), x, y, 
+            crate::models::NodeType::AgentIdentity, name);
         
-        web_sys::console::log_1(&format!("Created canvas node {} for agent {}", node_id, agent_id).into());
+        web_sys::console::log_1(&format!("Created node {} for agent {}", node_id, agent_id).into());
     }
 }
 

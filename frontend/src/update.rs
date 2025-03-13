@@ -31,19 +31,18 @@ pub fn update(state: &mut AppState, msg: Message) {
             
             // Create and add the node directly to state
             let node = crate::models::Node {
-                id: node_id.clone(),
+                node_id: node_id.clone(),
+                agent_id: Some(agent_id),
                 x,
                 y,
                 text: name,
                 width: 200.0,
                 height: 80.0,
                 color: "#ffecb3".to_string(), // Light amber color
-                parent_id: None,
                 node_type: NodeType::AgentIdentity,
-                system_instructions: Some(system_instructions),
-                task_instructions: Some(task_instructions),
-                history: Some(Vec::new()),
-                status: Some("idle".to_string()),
+                parent_id: None,
+                is_selected: false,
+                is_dragging: false,
             };
             
             // Add the node to our state
@@ -224,8 +223,8 @@ pub fn update(state: &mut AppState, msg: Message) {
                 if let Some(node) = state.nodes.get_mut(&node_id) {
                     // Update node properties
                     node.text = name;
-                    node.system_instructions = Some(system_instructions);
-                    node.task_instructions = Some(task_instructions);
+                    node.set_system_instructions(Some(system_instructions));
+                    node.set_task_instructions(Some(task_instructions));
                     
                     // Mark state as modified
                     state.state_modified = true;
@@ -276,15 +275,14 @@ pub fn update(state: &mut AppState, msg: Message) {
                         timestamp: js_sys::Date::now() as u64,
                     };
                     
-                    // Add to history if it exists
-                    if let Some(history) = &mut agent_node.history {
-                        history.push(user_message);
-                    } else {
-                        agent_node.history = Some(vec![user_message]);
-                    }
+                    // Instead of directly modifying history, use API calls
+                    // Save the message to agent history via API
+                    crate::storage::save_agent_messages_to_api(&agent_id_clone, &[user_message]);
                     
-                    // Update agent status
-                    agent_node.status = Some("processing".to_string());
+                    // Update agent status via API if it has an agent_id
+                    if let Some(agent_id) = agent_node.agent_id {
+                        agent_node.set_status(Some("processing".to_string()));
+                    }
                 }
                 
                 // Adjust viewport to fit all nodes if auto-fit is enabled
@@ -382,7 +380,7 @@ pub fn update(state: &mut AppState, msg: Message) {
             if let Some(id) = &state.selected_node_id {
                 let id_clone = id.clone();
                 if let Some(node) = state.nodes.get_mut(&id_clone) {
-                    node.system_instructions = Some(instructions);
+                    node.set_system_instructions(Some(instructions));
                     state.state_modified = true;
                 }
             }
@@ -431,9 +429,7 @@ pub fn update(state: &mut AppState, msg: Message) {
                 }
                 
                 // Update node status to completed
-                if let Some(status) = &mut node.status {
-                    *status = "complete".to_string();
-                }
+                node.set_status(Some("complete".to_string()));
                 
                 // Store parent_id before ending the borrow or making other mutable borrows
                 let parent_id = node.parent_id.clone();
@@ -447,9 +443,7 @@ pub fn update(state: &mut AppState, msg: Message) {
                 // If this node has a parent, update parent status too
                 if let Some(parent_id) = parent_id {
                     if let Some(parent) = state.nodes.get_mut(&parent_id) {
-                        if let Some(status) = &mut parent.status {
-                            *status = "idle".to_string();
-                        }
+                        parent.set_status(Some("idle".to_string()));
                     }
                 }
             }
@@ -457,9 +451,7 @@ pub fn update(state: &mut AppState, msg: Message) {
         
         Message::UpdateNodeStatus { node_id, status } => {
             if let Some(node) = state.nodes.get_mut(&node_id) {
-                if let Some(node_status) = &mut node.status {
-                    *node_status = status;
-                }
+                node.set_status(Some(status));
                 state.state_modified = true;
             }
         },
@@ -467,8 +459,11 @@ pub fn update(state: &mut AppState, msg: Message) {
         Message::AnimationTick => {
             // Process animation updates like pulsing effect for nodes
             for (_id, node) in state.nodes.iter_mut() {
-                if let Some(status) = &node.status {
-                    if status == "processing" {
+                // Use the new method that doesn't access APP_STATE
+                let status = node.get_status_from_agents(&state.agents);
+                
+                if let Some(status_str) = status {
+                    if status_str == "processing" {
                         // We'd update visual properties here if needed
                         // This is called on each animation frame
                     }
@@ -477,32 +472,21 @@ pub fn update(state: &mut AppState, msg: Message) {
         },
         
         // New Canvas Node message handlers
-        Message::AddCanvasNode { agent_id, x, y, node_type, text } => {
-            let node_id = state.add_canvas_node(agent_id, x, y, node_type, text);
-            web_sys::console::log_1(&format!("Created new canvas node with ID: {}", node_id).into());
-            
-            // Draw the nodes on canvas
-            state.draw_nodes();
-            
+        Message::AddAgentNode { agent_id, x, y, node_type, text } => {
+            // This method creates a Node
+            let node_id = state.add_node_with_agent(agent_id, x, y, node_type, text);
+            web_sys::console::log_1(&format!("Created new node: {}", node_id).into());
             state.state_modified = true;
         },
         
-        Message::UpdateCanvasNodePosition { node_id, x, y } => {
-            state.update_canvas_node_position(&node_id, x, y);
+        Message::DeleteNode { node_id } => {
+            // This method deletes a Node
+            state.nodes.remove(&node_id);
             
-            // Draw the nodes on canvas
-            state.draw_nodes();
-            
-            state.state_modified = true;
-        },
-        
-        Message::DeleteCanvasNode { node_id } => {
-            state.canvas_nodes.remove(&node_id);
-            
-            // If we have a current workflow, remove this node from it
+            // Also remove it from the current workflow if it exists
             if let Some(workflow_id) = state.current_workflow_id {
                 if let Some(workflow) = state.workflows.get_mut(&workflow_id) {
-                    workflow.nodes.retain(|node| node.node_id != node_id);
+                    workflow.nodes.retain(|n| n.node_id != node_id);
                     
                     // Also remove any edges connected to this node
                     workflow.edges.retain(|edge| 
@@ -510,9 +494,6 @@ pub fn update(state: &mut AppState, msg: Message) {
                     );
                 }
             }
-            
-            // Draw the nodes on canvas
-            state.draw_nodes();
             
             state.state_modified = true;
         },
@@ -528,12 +509,12 @@ pub fn update(state: &mut AppState, msg: Message) {
         Message::SelectWorkflow { workflow_id } => {
             state.current_workflow_id = Some(workflow_id);
             
-            // Clear canvas_nodes and repopulate from the selected workflow
-            state.canvas_nodes.clear();
+            // Clear nodes and repopulate from the selected workflow
+            state.nodes.clear();
             
             if let Some(workflow) = state.workflows.get(&workflow_id) {
                 for node in &workflow.nodes {
-                    state.canvas_nodes.insert(node.node_id.clone(), node.clone());
+                    state.nodes.insert(node.node_id.clone(), node.clone());
                 }
             }
             

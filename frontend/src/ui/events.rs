@@ -413,7 +413,8 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
                                 APP_STATE.with(|state| {
                                     let mut state = state.borrow_mut();
                                     let node = crate::models::Node {
-                                        id: node_id.clone(),
+                                        node_id: node_id.clone(),
+                                        agent_id: Some(agent_id),
                                         x,
                                         y,
                                         text: agent_name,
@@ -422,10 +423,8 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
                                         color: "#ffecb3".to_string(), // Light amber color
                                         parent_id: None,
                                         node_type: NodeType::AgentIdentity,
-                                        system_instructions: Some("You are a helpful AI assistant.".to_string()),
-                                        task_instructions: Some("Respond to user questions accurately and concisely.".to_string()),
-                                        history: Some(Vec::new()),
-                                        status: Some("idle".to_string()),
+                                        is_selected: false,
+                                        is_dragging: false,
                                     };
                                     
                                     state.nodes.insert(node_id, node);

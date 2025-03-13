@@ -106,10 +106,10 @@ pub fn save_state_to_api(app_state: &AppState) {
                         // Regular API agent with proper ID format
                         let agent_update = ApiAgentUpdate {
                             name: Some(node.text.clone()),
-                            status: node.status.clone(),
-                            system_instructions: Some(node.system_instructions.clone()
+                            status: node.status(),
+                            system_instructions: Some(node.system_instructions()
                                 .unwrap_or_else(|| DEFAULT_SYSTEM_INSTRUCTIONS.to_string())),
-                            task_instructions: Some(node.task_instructions.clone()
+                            task_instructions: Some(node.task_instructions()
                                 .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string())),
                             model: Some(selected_model.clone()),
                             schedule: None,
@@ -162,7 +162,8 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                                 
                                 // Create a node for this agent
                                 let node = Node {
-                                    id: node_id.clone(),
+                                    node_id: node_id.clone(),
+                                    agent_id: Some(id),
                                     x: 100.0, // Default position, would need to be stored in config
                                     y: 100.0,
                                     text: agent.name,
@@ -171,10 +172,8 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                                     color: "#e0f7fa".to_string(), // Default color
                                     parent_id: None,
                                     node_type: crate::models::NodeType::AgentIdentity,
-                                    system_instructions: agent.system_instructions.clone(),
-                                    task_instructions: agent.system_instructions.clone(),
-                                    history: None, // We'll load this separately
-                                    status: agent.status,
+                                    is_selected: false,
+                                    is_dragging: false,
                                 };
                                 
                                 // Add the node to our temporary collection
@@ -317,7 +316,7 @@ pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
                                     crate::state::APP_STATE.with(|app_state_ref| {
                                         let mut app_state = app_state_ref.borrow_mut();
                                         if let Some(node) = app_state.nodes.get_mut(&node_id) {
-                                            node.history = Some(messages);
+                                            node.set_history(Some(messages));
                                             app_state.state_modified = true;
                                         }
                                     });
@@ -398,11 +397,11 @@ pub fn load_workflows(app_state: &mut AppState) -> Result<(), JsValue> {
         if let Ok(workflow_id) = workflow_id_str.parse::<u32>() {
             app_state.current_workflow_id = Some(workflow_id);
             
-            // Load the nodes from the current workflow into canvas_nodes
+            // Load the nodes from the current workflow into nodes
             if let Some(workflow) = app_state.workflows.get(&workflow_id) {
-                app_state.canvas_nodes.clear();
+                app_state.nodes.clear();
                 for node in &workflow.nodes {
-                    app_state.canvas_nodes.insert(node.node_id.clone(), node.clone());
+                    app_state.nodes.insert(node.node_id.clone(), node.clone());
                 }
             }
         }

@@ -1,8 +1,9 @@
 use web_sys::CanvasRenderingContext2d;
-use crate::models::{Node, NodeType};
+use crate::models::{Node, NodeType, ApiAgent};
 use crate::state::AppState;
 use super::shapes;
 use js_sys::Date;
+use std::collections::HashMap;
 
 pub fn draw_nodes(state: &AppState) {
     if let (Some(canvas), Some(context)) = (&state.canvas, &state.context) {
@@ -31,7 +32,7 @@ pub fn draw_nodes(state: &AppState) {
         
         // Draw all nodes
         for (_, node) in &state.nodes {
-            draw_node(state, node, &context);
+            draw_node(&context, node, &state.agents);
         }
         
         // Restore original context
@@ -81,7 +82,7 @@ fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
     }
 }
 
-pub fn draw_node(_state: &AppState, node: &Node, context: &CanvasRenderingContext2d) {
+pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashMap<u32, ApiAgent>) {
     // Draw the appropriate node shape based on type
     match node.node_type {
         NodeType::UserInput => {
@@ -99,8 +100,14 @@ pub fn draw_node(_state: &AppState, node: &Node, context: &CanvasRenderingContex
             // Draw outer rectangle
             context.begin_path();
             
+            // Get agent status directly from the agents HashMap that was passed in
+            // This avoids accessing APP_STATE completely
+            let status = node.agent_id.and_then(|agent_id| {
+                agents.get(&agent_id).and_then(|agent| agent.status.clone())
+            });
+            
             // Set different border styles based on agent status
-            if let Some(status) = &node.status {
+            if let Some(status) = status {
                 match status.as_str() {
                     "processing" => {
                         // Pulsing animation using time
