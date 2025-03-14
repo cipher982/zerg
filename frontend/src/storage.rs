@@ -88,6 +88,7 @@ pub fn save_state_to_api(app_state: &AppState) {
     let nodes = app_state.nodes.clone();
     let selected_model = app_state.selected_model.clone();
     let is_dragging = app_state.is_dragging_agent;
+    let agents = app_state.agents.clone();
     
     // Skip state saving if we're actively dragging to prevent spamming API
     if is_dragging {
@@ -103,7 +104,7 @@ pub fn save_state_to_api(app_state: &AppState) {
                 // Only update existing agents with proper agent-{id} format
                 if let Some(agent_id_str) = node_id.strip_prefix("agent-") {
                     if let Ok(agent_id) = agent_id_str.parse::<u32>() {
-                        // Regular API agent with proper ID format
+                        // Create the agent update object
                         let agent_update = ApiAgentUpdate {
                             name: Some(node.text.clone()),
                             status: node.status(),
@@ -116,19 +117,63 @@ pub fn save_state_to_api(app_state: &AppState) {
                             config: None, // Will need to add more node data as needed
                         };
                         
-                        // Try to update existing agent
-                        let agent_json = match to_string(&agent_update) {
-                            Ok(json) => json,
-                            Err(e) => {
-                                web_sys::console::error_1(&format!("Error serializing agent update: {}", e).into());
-                                continue;
+                        // Check if the agent data has actually changed by comparing with backend data
+                        let should_update = if let Some(backend_agent) = agents.get(&agent_id) {
+                            // Log the values for debugging
+                            web_sys::console::log_1(&format!("Comparing agent {}: Backend vs Frontend", agent_id).into());
+                            web_sys::console::log_1(&format!("Name: '{}' vs '{}'", 
+                                backend_agent.name, 
+                                agent_update.name.as_ref().unwrap_or(&String::new())).into());
+                            web_sys::console::log_1(&format!("System Instructions: '{:?}' vs '{:?}'", 
+                                backend_agent.system_instructions, 
+                                agent_update.system_instructions).into());
+                            web_sys::console::log_1(&format!("Model: '{:?}' vs '{:?}'", 
+                                backend_agent.model, 
+                                agent_update.model).into());
+                            
+                            // Compare name (String vs Option<String>)
+                            let name_changed = backend_agent.name != *agent_update.name.as_ref().unwrap_or(&String::new());
+                            // Compare system_instructions (Option<String> vs Option<String>)
+                            let sys_instr_changed = backend_agent.system_instructions != agent_update.system_instructions;
+                            // Compare model (Option<String> vs Option<String>)
+                            let model_changed = backend_agent.model != agent_update.model;
+                            
+                            if name_changed {
+                                web_sys::console::log_1(&"Name differs".into());
                             }
+                            if sys_instr_changed {
+                                web_sys::console::log_1(&"System instructions differ".into());
+                            }
+                            if model_changed {
+                                web_sys::console::log_1(&"Model differs".into());
+                            }
+                            
+                            name_changed || sys_instr_changed || model_changed
+                        } else {
+                            // If we don't have backend data, assume we need to update
+                            web_sys::console::log_1(&format!("No backend data for agent {}, will update", agent_id).into());
+                            true
                         };
                         
-                        if let Err(e) = ApiClient::update_agent(agent_id, &agent_json).await {
-                            web_sys::console::error_1(&format!("Error updating agent in API: {:?}", e).into());
+                        // Only update if there are actual changes
+                        if should_update {
+                            // Try to update existing agent
+                            let agent_json = match to_string(&agent_update) {
+                                Ok(json) => json,
+                                Err(e) => {
+                                    web_sys::console::error_1(&format!("Error serializing agent update: {}", e).into());
+                                    continue;
+                                }
+                            };
+                            
+                            if let Err(e) = ApiClient::update_agent(agent_id, &agent_json).await {
+                                web_sys::console::error_1(&format!("Error updating agent in API: {:?}", e).into());
+                            } else {
+                                web_sys::console::log_1(&format!("Updated agent {} in API (with changes)", agent_id).into());
+                            }
                         } else {
-                            web_sys::console::log_1(&format!("Updated agent {} in API", agent_id).into());
+                            // No changes detected, log it differently
+                            web_sys::console::log_1(&format!("Verified agent {} in API (no changes)", agent_id).into());
                         }
                     }
                 }
@@ -152,6 +197,19 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                 match from_str::<Vec<ApiAgent>>(&agents_json) {
                     Ok(agents) => {
                         web_sys::console::log_1(&format!("Loaded {} agents from API", agents.len()).into());
+                        
+                        // Update the agents in the global APP_STATE first
+                        crate::state::APP_STATE.with(|state_ref| {
+                            let mut state = state_ref.borrow_mut();
+                            state.agents.clear();
+                            
+                            // Add each agent to the HashMap
+                            for agent in &agents {
+                                if let Some(id) = agent.id {
+                                    state.agents.insert(id, agent.clone());
+                                }
+                            }
+                        });
                         
                         // Convert API agents to Node objects
                         let mut loaded_nodes = HashMap::new();
