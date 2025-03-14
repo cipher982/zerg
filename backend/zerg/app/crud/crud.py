@@ -25,7 +25,7 @@ def create_agent(
     name: str,
     system_instructions: str,
     task_instructions: str,
-    model: str = "gpt-4o",
+    model: str,
     schedule: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
 ):

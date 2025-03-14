@@ -6,7 +6,7 @@ use crate::network::ApiClient;
 use std::collections::HashMap;
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen::closure::Closure;
-use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
+use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS, DEFAULT_MODEL};
 
 // Add API URL configuration
 const API_BASE_URL: &str = "http://localhost:8001/api";
@@ -112,7 +112,7 @@ pub fn save_state_to_api(app_state: &AppState) {
                                 .unwrap_or_else(|| DEFAULT_SYSTEM_INSTRUCTIONS.to_string())),
                             task_instructions: Some(node.task_instructions()
                                 .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string())),
-                            model: Some(selected_model.clone()),
+                            model: Some(DEFAULT_MODEL.to_string()),
                             schedule: None,
                             config: None, // Will need to add more node data as needed
                         };

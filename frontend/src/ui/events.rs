@@ -6,6 +6,12 @@ use crate::{
     messages::Message,
     models::NodeType,
     state::APP_STATE,
+    constants::{
+        DEFAULT_NODE_WIDTH,
+        DEFAULT_NODE_HEIGHT,
+        DEFAULT_AGENT_NODE_COLOR,
+        DEFAULT_MODEL
+    },
 };
 
 // This will contain event handlers that we'll extract from ui.rs
@@ -246,6 +252,7 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
                     name: name_value.clone(),
                     system_instructions: system_instructions.clone(),
                     task_instructions: task_instructions.clone(),
+                    model: DEFAULT_MODEL.to_string(),
                 });
                 
                 // Return values that match the expected return from other dispatch calls
@@ -416,9 +423,9 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
                                         x,
                                         y,
                                         text: agent_name,
-                                        width: 200.0,
-                                        height: 80.0,
-                                        color: "#ffecb3".to_string(), // Light amber color
+                                        width: DEFAULT_NODE_WIDTH,
+                                        height: DEFAULT_NODE_HEIGHT,
+                                        color: DEFAULT_AGENT_NODE_COLOR.to_string(),
                                         parent_id: None,
                                         node_type: NodeType::AgentIdentity,
                                         is_selected: false,
@@ -521,6 +528,7 @@ pub fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
                     name: name_value.clone(),
                     system_instructions: system_instructions.clone(),
                     task_instructions: task_instructions.clone(),
+                    model: DEFAULT_MODEL.to_string(),
                 })
             });
             

@@ -4,6 +4,11 @@ use crate::state::APP_STATE;
 use wasm_bindgen_futures::JsFuture;
 use js_sys::Array;
 use std::cell::RefCell;
+use crate::constants::{
+    DEFAULT_NODE_WIDTH,
+    DEFAULT_NODE_HEIGHT,
+    DEFAULT_AGENT_NODE_COLOR
+};
 
 // Track reconnection attempts
 thread_local! {
@@ -783,13 +788,13 @@ fn create_nodes_for_agents(state: &mut crate::state::AppState) {
         let row = i / grid_size;
         let col = i % grid_size;
         
-        let x = 100.0 + (col as f64 * 250.0);
-        let y = 100.0 + (row as f64 * 150.0);
+        let x = 100.0 + (col as f64 * (DEFAULT_NODE_WIDTH + 50.0));
+        let y = 100.0 + (row as f64 * (DEFAULT_NODE_HEIGHT + 70.0));
         
         let node_id = state.add_node_with_agent(Some(agent_id), x, y, 
             crate::models::NodeType::AgentIdentity, name);
         
-        web_sys::console::log_1(&format!("Created node {} for agent {}", node_id, agent_id).into());
+        web_sys::console::log_1(&format!("Created visual node with ID: {} for agent {}", node_id, agent_id).into());
     }
 }
 

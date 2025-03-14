@@ -118,6 +118,7 @@ pub enum Message {
         name: String,
         system_instructions: String,
         task_instructions: String,
+        model: String,
     },
     
     CloseAgentModal,
