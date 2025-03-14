@@ -26,13 +26,13 @@ Agent Platform is a full-stack application combining a Rust + WebAssembly (WASM)
 --------------------------------------------------------------------------------
 ## Overview
 
-Agent Platform is designed for users who need to create, manage, and orchestrate conversational or task-based AI "agents." At a high level:  
+Agent Platform is designed for users who need to create, manage, and orchestrate threadal or task-based AI "agents." At a high level:  
 
 • Agents can be created or edited via either:  
   1. The Dashboard view (for a structured, spreadsheet-like experience of agent cards).  
   2. A node-based "Canvas Editor" (built in Rust/WASM) for visually configuring complex instructions or multi-step flows.  
 
-• Agents can be paused, scheduled, or run on-demand. Each agent can maintain a conversation history and system instructions.  
+• Agents can be paused, scheduled, or run on-demand. Each agent can maintain a thread history and system instructions.  
 
 • The backend (FastAPI) streams real-time responses from the OpenAI API to connected browsers over WebSockets.  
 
@@ -157,7 +157,7 @@ This architecture makes the codebase more maintainable, prevents bugs related to
   - The backend streams incremental tokens from OpenAI's API to connected browsers via websockets.  
 
 • **Extensible "Agent" Model**  
-  - Each agent stores system instructions, conversation history, and status.  
+  - Each agent stores system instructions, thread history, and status.  
   - Agents can be triggered manually or scheduled.  
 
 • **SEO-Friendly Pre‑Rendering**  

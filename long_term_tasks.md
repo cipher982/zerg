@@ -17,7 +17,7 @@ This document outlines a set of improvements and new features to be implemented 
 
 3. [Better Presentation & Utilization of Outputs](#better-presentation--utilization-of-outputs)  
    1. [Extensible Output Panels](#extensible-output-panels)  
-   2. [“Conversation Log” vs. “Result Panel”](#conversation-log-vs-result-panel)  
+   2. [“Thread Log” vs. “Result Panel”](#thread-log-vs-result-panel)  
    3. [Export / Summaries](#export--summaries)  
    4. [Analytics & Stats](#analytics--stats)  
 
@@ -95,7 +95,7 @@ This document outlines a set of improvements and new features to be implemented 
   1. Install Celery or RQ.  
   2. Adjust the “Run Agent” function to insert a job into the queue.  
   3. Worker consumes the job, streams partial tokens to the WebSocket.  
-  4. Confirm final results are saved to the agent’s conversation log or output field.
+  4. Confirm final results are saved to the agent’s thread log or output field.
 
 --------------------------------------------------------------------------------
 ## 2. Adding Tools & External Services
@@ -178,41 +178,41 @@ This document outlines a set of improvements and new features to be implemented 
   3. Provide a fallback for plain text if parsing fails.
 
 --------------------------------------------------------------------------------
-### 3.2 “Conversation Log” vs. “Result Panel”
+### 3.2 “Thread Log” vs. “Result Panel”
 
 • **Goal**  
   Differentiate between the step-by-step chat log and a final summarized “result” of the agent’s operation.
 
 • **Approach**  
-  – Maintain a “history” array for conversation transcripts.  
+  – Maintain a “history” array for thread transcripts.  
   – Also store a “latestResult” or “finalOutput.”  
   – The UI can show a collapsible Chat Log area plus a more prominent “Result” box.
 
 • **Relevant Code**  
   – Node and agent history is currently in “frontend/src/models.rs” (`history` field).  
-  – “frontend/src/components/modals.rs” or “ui/modals.rs” for the agent modal that displays conversation history.
+  – “frontend/src/components/modals.rs” or “ui/modals.rs” for the agent modal that displays thread history.
 
 • **Implementation Steps**  
   1. Add a “finalOutput” field in the node or agent structure.  
   2. After the last streaming chunk, store the text in “finalOutput.”  
-  3. In the UI’s agent modal or dashboard, show a distinct “Result Panel” next to the conversation log.
+  3. In the UI’s agent modal or dashboard, show a distinct “Result Panel” next to the thread log.
 
 --------------------------------------------------------------------------------
 ### 3.3 Export / Summaries
 
 • **Goal**  
-  Let users export conversation logs or final outputs, and optionally generate short summaries.
+  Let users export thread logs or final outputs, and optionally generate short summaries.
 
 • **Approach**  
   – Add export buttons in the dashboard or modal (e.g., “Export as JSON” or “Export as CSV”).  
-  – Summaries: Use an additional quick prompt to your AI (like “Please summarize the above conversation in 100 words.”).
+  – Summaries: Use an additional quick prompt to your AI (like “Please summarize the above thread in 100 words.”).
 
 • **File References**  
   – “frontend/src/components/dashboard.rs” or “modals.rs” for your new “Export” button.  
   – “backend/main.py” (if you want to do the summary generation server-side).
 
 • **Implementation Steps**  
-  1. Implement a small function that clones the agent’s conversation from state.  
+  1. Implement a small function that clones the agent’s thread from state.  
   2. Convert to JSON or CSV, prompt user to download.  
   3. Optionally, have a “Summarize” button that calls your AI endpoint with a short summary prompt.  
   4. Display the result in a read-only text area or message node.
@@ -268,7 +268,7 @@ If your team wants a phased approach:
    – Provide a small UI to connect them in the Canvas Editor.  
 
 3) **Enhance Output Panels**  
-   – Differentiate final output from the conversation log.  
+   – Differentiate final output from the thread log.  
    – Optionally add the “Export” and “Summarize” features.  
 
 4) **Introduce Worker Queue**  

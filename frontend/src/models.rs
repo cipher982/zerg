@@ -51,7 +51,7 @@ pub enum NodeType {
     GenericNode,
 }
 
-/// Message represents a conversation entry between user and agent
+/// Message represents a thread entry between user and agent
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Message {
     pub role: String,      // "user" or "assistant"
@@ -135,7 +135,7 @@ pub struct ApiAgentUpdate {
     pub config: Option<serde_json::Value>,
 }
 
-/// ApiMessage represents a message in the agent conversation
+/// ApiMessage represents a message in the agent thread
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ApiMessage {
     pub id: Option<u32>,

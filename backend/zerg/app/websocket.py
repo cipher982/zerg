@@ -22,10 +22,19 @@ connected_clients: List[WebSocket] = []
 class EventType(str, Enum):
     """Standardized event types for the WebSocket system."""
 
+    # Agent events
     AGENT_CREATED = "agent_created"
     AGENT_UPDATED = "agent_updated"
     AGENT_DELETED = "agent_deleted"
     AGENT_STATUS_CHANGED = "agent_status_changed"
+
+    # Thread events
+    CONVERSATION_CREATED = "thread_created"
+    CONVERSATION_UPDATED = "thread_updated"
+    CONVERSATION_DELETED = "thread_deleted"
+    CONVERSATION_MESSAGE_ADDED = "thread_message_added"
+
+    # System events
     SYSTEM_STATUS = "system_status"
     ERROR = "error"
 

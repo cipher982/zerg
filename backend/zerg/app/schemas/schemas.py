@@ -42,6 +42,58 @@ class AgentMessage(BaseModel):
         orm_mode = True
 
 
+# Thread Message schemas
+class ThreadMessageBase(BaseModel):
+    role: str
+    content: str
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_call_id: Optional[str] = None
+    name: Optional[str] = None
+
+
+class ThreadMessageCreate(ThreadMessageBase):
+    pass
+
+
+class ThreadMessageResponse(ThreadMessageBase):
+    id: int
+    thread_id: int
+    timestamp: datetime
+
+    class Config:
+        orm_mode = True
+
+
+# Thread schemas
+class ThreadBase(BaseModel):
+    title: str
+    agent_state: Optional[Dict[str, Any]] = None
+    memory_strategy: Optional[str] = "buffer"
+    active: Optional[bool] = True
+
+
+class ThreadCreate(ThreadBase):
+    agent_id: int
+
+
+class ThreadUpdate(BaseModel):
+    title: Optional[str] = None
+    agent_state: Optional[Dict[str, Any]] = None
+    memory_strategy: Optional[str] = None
+    active: Optional[bool] = None
+
+
+class Thread(ThreadBase):
+    id: int
+    agent_id: int
+    created_at: datetime
+    updated_at: datetime
+    messages: List[ThreadMessageResponse] = []
+
+    class Config:
+        orm_mode = True
+
+
 class Agent(AgentBase):
     id: int
     status: str

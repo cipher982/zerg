@@ -3,6 +3,7 @@ import sys
 import threading
 import time
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
 import requests
@@ -16,10 +17,37 @@ from zerg.app.database import Base
 from zerg.app.database import get_db
 from zerg.app.models.models import Agent
 from zerg.app.models.models import AgentMessage
+from zerg.app.models.models import Thread
+from zerg.app.models.models import ThreadMessage
 
 # Mock the OpenAI module before importing main app
+mock_openai = MagicMock()
+mock_client = MagicMock()
+mock_chat = MagicMock()
+mock_completions = MagicMock()
+
+# Configure the mock to return a string for the content
+mock_message = MagicMock()
+mock_message.content = "This is a mock response from the LLM"
+mock_choice = MagicMock()
+mock_choice.message = mock_message
+mock_choices = [mock_choice]
+mock_response = MagicMock()
+mock_response.choices = mock_choices
+
+mock_completions.create.return_value = mock_response
+mock_chat.completions = mock_completions
+mock_client.chat = mock_chat
+mock_openai.return_value = mock_client
+
 sys.modules["openai"] = MagicMock()
-sys.modules["openai.OpenAI"] = MagicMock()
+sys.modules["openai.OpenAI"] = mock_openai
+
+# Mock LangGraph modules
+sys.modules["langgraph"] = MagicMock()
+sys.modules["langgraph.graph"] = MagicMock()
+sys.modules["langgraph.graph.message"] = MagicMock()
+sys.modules["langchain_openai"] = MagicMock()
 
 from zerg.main import app  # noqa: E402
 
@@ -156,3 +184,92 @@ def sample_messages(db_session, sample_agent):
     db_session.commit()
 
     return messages
+
+
+@pytest.fixture
+def sample_thread(db_session, sample_agent):
+    """
+    Create a sample thread in the database
+    """
+    thread = Thread(
+        agent_id=sample_agent.id,
+        title="Test Thread",
+        active=True,
+        agent_state={"test_key": "test_value"},
+        memory_strategy="buffer",
+    )
+    db_session.add(thread)
+    db_session.commit()
+    db_session.refresh(thread)
+    return thread
+
+
+@pytest.fixture
+def sample_thread_messages(db_session, sample_thread):
+    """
+    Create sample messages for the sample thread
+    """
+    messages = [
+        ThreadMessage(
+            thread_id=sample_thread.id,
+            role="system",
+            content="You are a test assistant",
+        ),
+        ThreadMessage(
+            thread_id=sample_thread.id,
+            role="user",
+            content="Hello, test assistant",
+        ),
+        ThreadMessage(
+            thread_id=sample_thread.id,
+            role="assistant",
+            content="Hello, I'm the test assistant",
+        ),
+    ]
+
+    for message in messages:
+        db_session.add(message)
+
+    db_session.commit()
+    return messages
+
+
+@pytest.fixture
+def mock_langgraph_state_graph():
+    """
+    Mock the StateGraph class from LangGraph
+    """
+    with patch("zerg.app.agents.StateGraph") as mock_state_graph:
+        # Create a mock graph
+        mock_graph = MagicMock()
+        mock_state_graph.return_value = mock_graph
+
+        # Mock the compile method to return a graph instance
+        compiled_graph = MagicMock()
+        mock_graph.compile.return_value = compiled_graph
+
+        # Set up streaming response
+        compiled_graph.stream.return_value = [{"chatbot": {"messages": [MagicMock(content="Test response")]}}]
+
+        # Set up non-streaming response
+        compiled_graph.invoke.return_value = {"messages": [MagicMock(content="Test response")]}
+
+        yield mock_state_graph
+
+
+@pytest.fixture
+def mock_langchain_openai():
+    """
+    Mock the ChatOpenAI class from LangChain
+    """
+    with patch("zerg.app.agents.ChatOpenAI") as mock_chat_openai:
+        # Create a mock ChatOpenAI instance
+        mock_llm = MagicMock()
+        mock_chat_openai.return_value = mock_llm
+
+        # Mock the invoke method
+        response = MagicMock()
+        response.content = "This is a test response"
+        mock_llm.invoke.return_value = response
+
+        yield mock_chat_openai
