@@ -396,9 +396,9 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
             // Use async block to call the API
             wasm_bindgen_futures::spawn_local(async move {
                 match crate::network::ApiClient::create_agent(&agent_data).await {
-                    Ok(response) => {
+                    Ok(response_string) => {
                         // Parse the response to get the agent ID
-                        if let Ok(json) = js_sys::JSON::parse(&response) {
+                        if let Ok(json) = js_sys::JSON::parse(&response_string) {
                             if let Some(id) = js_sys::Reflect::get(&json, &"id".into()).ok()
                                 .and_then(|v| v.as_f64()) 
                             {

@@ -9,7 +9,7 @@ mod canvas;
 mod ui;
 // Removed: mod ui_old; // Temporarily commented out to confirm everything is refactored
 mod network;
-mod storage;
+pub mod storage;
 mod components;
 mod messages;  // New module for Message enum
 mod update;    // New module for update function
