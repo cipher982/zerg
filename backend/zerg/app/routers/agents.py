@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import os
@@ -47,7 +46,7 @@ def read_agents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=Agent, status_code=status.HTTP_201_CREATED)
 @router.post("", response_model=Agent, status_code=status.HTTP_201_CREATED)
-def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
+async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
     """Create a new agent"""
     # No default handling, require complete data from API calls
     new_agent = crud.create_agent(
@@ -60,12 +59,10 @@ def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
         config=agent.config,
     )
 
-    # Schedule broadcast about new agent creation
+    # Broadcast about new agent creation
     try:
-        asyncio.create_task(
-            broadcast_event(
-                EventType.AGENT_CREATED, {"agent_id": new_agent.id, "name": new_agent.name, "model": new_agent.model}
-            )
+        await broadcast_event(
+            EventType.AGENT_CREATED, {"agent_id": new_agent.id, "name": new_agent.name, "model": new_agent.model}
         )
     except Exception as e:
         logger.error(f"Error broadcasting agent creation: {str(e)}")
@@ -83,7 +80,7 @@ def read_agent(agent_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{agent_id}", response_model=Agent)
-def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(get_db)):
+async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(get_db)):
     """Update an agent"""
     # Explicit validation
     if agent_id is None:
@@ -110,12 +107,10 @@ def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(get_db
     if db_agent is None:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    # Schedule broadcast about agent update
+    # Broadcast about agent update
     try:
-        asyncio.create_task(
-            broadcast_event(
-                EventType.AGENT_UPDATED, {"agent_id": db_agent.id, "name": db_agent.name, "status": db_agent.status}
-            )
+        await broadcast_event(
+            EventType.AGENT_UPDATED, {"agent_id": db_agent.id, "name": db_agent.name, "status": db_agent.status}
         )
     except Exception as e:
         logger.error(f"Error broadcasting agent update: {str(e)}")
@@ -124,15 +119,15 @@ def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(get_db
 
 
 @router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_agent(agent_id: int, db: Session = Depends(get_db)):
+async def delete_agent(agent_id: int, db: Session = Depends(get_db)):
     """Delete an agent"""
     success = crud.delete_agent(db, agent_id=agent_id)
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    # Schedule broadcast about agent deletion
+    # Broadcast about agent deletion
     try:
-        asyncio.create_task(broadcast_event(EventType.AGENT_DELETED, {"agent_id": agent_id}))
+        await broadcast_event(EventType.AGENT_DELETED, {"agent_id": agent_id})
     except Exception as e:
         logger.error(f"Error broadcasting agent deletion: {str(e)}")
 
@@ -166,7 +161,7 @@ def create_agent_message(agent_id: int, message: MessageCreate, db: Session = De
 
 
 @router.post("/{agent_id}/run", response_model=Agent)
-def run_agent(agent_id: int, db: Session = Depends(get_db)):
+async def run_agent(agent_id: int, db: Session = Depends(get_db)):
     """Trigger an agent to run"""
     # First check if the agent exists
     db_agent = crud.get_agent(db, agent_id=agent_id)
@@ -176,20 +171,60 @@ def run_agent(agent_id: int, db: Session = Depends(get_db)):
     # Update agent status to "processing"
     db_agent = crud.update_agent(db, agent_id=agent_id, status="processing")
 
-    # Schedule broadcast about agent status change
+    # Broadcast agent status change to "processing"
+    await broadcast_event(
+        EventType.AGENT_STATUS_CHANGED,
+        {"agent_id": db_agent.id, "name": db_agent.name, "status": "processing", "action": "run"},
+    )
+
     try:
-        asyncio.create_task(
-            broadcast_event(
-                EventType.AGENT_STATUS_CHANGED,
-                {"agent_id": db_agent.id, "name": db_agent.name, "status": "processing", "action": "run"},
-            )
+        # Prepare messages for OpenAI
+        messages = []
+
+        # Add system instructions if available
+        if db_agent.system_instructions:
+            messages.append({"role": "system", "content": db_agent.system_instructions})
+
+        # Add task instructions as the user message
+        if db_agent.task_instructions:
+            messages.append({"role": "user", "content": db_agent.task_instructions})
+        else:
+            logger.error(f"Agent {agent_id} has no task_instructions")
+            raise HTTPException(status_code=400, detail="Agent has no task instructions")
+
+        # Make the OpenAI API call
+        response = client.chat.completions.create(
+            model=db_agent.model,
+            messages=messages,
         )
+
+        # Save response to message history
+        if response.choices and response.choices[0].message:
+            content = response.choices[0].message.content
+            crud.create_agent_message(db, agent_id=agent_id, role="assistant", content=content)
+
+        # Update agent status back to "idle"
+        crud.update_agent(db, agent_id=agent_id, status="idle")
+
+        # Broadcast status change back to "idle"
+        await broadcast_event(
+            EventType.AGENT_STATUS_CHANGED,
+            {"agent_id": db_agent.id, "name": db_agent.name, "status": "idle", "action": "run_complete"},
+        )
+
     except Exception as e:
-        logger.error(f"Error broadcasting agent status change: {str(e)}")
+        logger.error(f"Error running agent {agent_id}: {str(e)}")
 
-    # In a real implementation, you'd queue the agent execution task here
-    # For now, we'll just update the status to show the endpoint works
+        # Update agent status to "error"
+        crud.update_agent(db, agent_id=agent_id, status="error")
 
+        # Broadcast error status
+        await broadcast_event(
+            EventType.AGENT_STATUS_CHANGED,
+            {"agent_id": db_agent.id, "name": db_agent.name, "status": "error", "error": str(e), "action": "run_error"},
+        )
+
+    # Return the agent with its current status
     return db_agent
 
 
