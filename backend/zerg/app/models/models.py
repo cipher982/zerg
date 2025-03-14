@@ -76,6 +76,7 @@ class ThreadMessage(Base):
     tool_call_id = Column(String, nullable=True)  # For tool responses
     name = Column(String, nullable=True)  # For tool messages
     timestamp = Column(DateTime, server_default=func.now())
+    processed = Column(Boolean, default=False, nullable=False)  # Track if message has been processed by agent
 
     # Define relationship with Thread
     thread = relationship("Thread", back_populates="messages")

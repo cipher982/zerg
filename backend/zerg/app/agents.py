@@ -149,14 +149,14 @@ class AgentManager:
                 content=self.agent_model.system_instructions,
             )
 
-    def process_message(self, db, thread: ThreadModel, content: str, stream=True):
+    def process_message(self, db, thread: ThreadModel, content: str = None, stream=True):
         """
         Process a new user message through the LangGraph agent.
 
         Args:
             db: Database session
             thread: The thread to add the message to
-            content: The content of the user message
+            content: The content of the user message, None if processing existing unprocessed messages
             stream: Whether to stream the response
 
         Returns:
@@ -165,13 +165,22 @@ class AgentManager:
         """
         from zerg.app.crud import crud
 
-        # Add the user message to the database
-        crud.create_thread_message(
-            db=db,
-            thread_id=thread.id,
-            role="user",
-            content=content,
-        )
+        # Add the user message to the database if content is provided
+        if content:
+            user_message = crud.create_thread_message(
+                db=db,
+                thread_id=thread.id,
+                role="user",
+                content=content,
+                processed=False,  # Will be marked as processed after agent handles it
+            )
+
+        # Get unprocessed messages
+        unprocessed_messages = crud.get_unprocessed_messages(db, thread.id)
+
+        # If no unprocessed messages and no new content, nothing to do
+        if not unprocessed_messages and not content:
+            return
 
         # Build the graph
         graph = self._build_graph()
@@ -241,7 +250,17 @@ class AgentManager:
                 thread_id=thread.id,
                 role="assistant",
                 content=response_content,
+                processed=True,  # Assistant responses are always processed
             )
+
+            # Mark all unprocessed messages as processed
+            for msg in unprocessed_messages:
+                crud.mark_message_processed(db, msg.id)
+
+            # If we had a new message with content, mark it as processed too
+            if content:
+                user_message_id = user_message.id
+                crud.mark_message_processed(db, user_message_id)
 
             # Update the thread timestamp
             crud.update_thread(db, thread.id)

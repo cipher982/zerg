@@ -59,6 +59,7 @@ class ThreadMessageResponse(ThreadMessageBase):
     id: int
     thread_id: int
     timestamp: datetime
+    processed: bool = False
 
     class Config:
         orm_mode = True

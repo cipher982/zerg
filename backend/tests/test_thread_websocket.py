@@ -133,7 +133,7 @@ async def test_thread_websocket_connect(websocket_mock, sample_thread: Thread, d
 
 @pytest.mark.asyncio
 async def test_thread_websocket_process_message(websocket_mock, sample_thread: Thread, db_session):
-    """Test processing a message through the thread WebSocket"""
+    """Test receiving a message through the thread WebSocket"""
     # Import here to avoid circular imports during testing
     from zerg.app.routers.threads import thread_websocket
 
@@ -149,9 +149,67 @@ async def test_thread_websocket_process_message(websocket_mock, sample_thread: T
         # Mock crud.get_thread_messages to return empty list
         mock_crud.get_thread_messages.return_value = []
 
-        # Mock creating messages
+        # Mock creating messages - this is what we expect to be called
         mock_user_message = MagicMock(id=1)
         mock_crud.create_thread_message.return_value = mock_user_message
+
+        # Configure the WebSocket mock to receive a message and then disconnect
+        websocket_mock.receive_text = AsyncMock()
+        websocket_mock.receive_text.side_effect = [
+            json.dumps({"type": "message", "content": "Hello, assistant"}),
+            Exception("Simulated disconnect"),
+        ]
+
+        # Call the WebSocket handler with our mocks
+        try:
+            await thread_websocket(websocket_mock, sample_thread.id, db_session)
+        except Exception as e:
+            # Expected exception from the simulated disconnect
+            assert str(e) == "Simulated disconnect"
+
+        # Verify create_thread_message was called with the correct parameters
+        mock_crud.create_thread_message.assert_called_once()
+        args, kwargs = mock_crud.create_thread_message.call_args
+        assert kwargs["thread_id"] == sample_thread.id
+        assert kwargs["role"] == "user"
+        assert kwargs["content"] == "Hello, assistant"
+        assert kwargs["processed"] is False  # Ensure message is marked as unprocessed
+
+        # Verify the message_received notification was sent
+        message_received_sent = False
+        for call in websocket_mock.send_json.call_args_list:
+            args, kwargs = call
+            data = args[0]
+            if data.get("type") == "message_received":
+                message_received_sent = True
+                assert data["message_id"] == mock_user_message.id
+                assert data["thread_id"] == sample_thread.id
+                break
+
+        assert message_received_sent, "Expected message_received notification to be sent"
+
+
+@pytest.mark.asyncio
+async def test_thread_websocket_run_command(websocket_mock, sample_thread: Thread, db_session):
+    """Test running unprocessed messages through the thread WebSocket"""
+    # Import here to avoid circular imports during testing
+    from zerg.app.routers.threads import thread_websocket
+
+    with patch("zerg.app.routers.threads.crud") as mock_crud:
+        # Mock crud.get_thread to return the sample thread
+        mock_crud.get_thread.return_value = sample_thread
+
+        # Mock crud.get_agent to return the agent
+        mock_agent = MagicMock(spec=Agent)
+        mock_agent.id = sample_thread.agent_id
+        mock_crud.get_agent.return_value = mock_agent
+
+        # Mock crud.get_thread_messages to return empty list
+        mock_crud.get_thread_messages.return_value = []
+
+        # Mock unprocessed messages
+        mock_unprocessed_messages = [MagicMock(), MagicMock()]  # Two unprocessed messages
+        mock_crud.get_unprocessed_messages.return_value = mock_unprocessed_messages
 
         # Mock AgentManager
         with patch("zerg.app.routers.threads.AgentManager") as mock_agent_manager_class:
@@ -160,17 +218,16 @@ async def test_thread_websocket_process_message(websocket_mock, sample_thread: T
 
             # Set up the process_message mock to yield chunks
             def mock_process_message(*args, **kwargs):
-                yield "First "
-                yield "chunk "
-                yield "of "
-                yield "response"
+                yield "Processing "
+                yield "unprocessed "
+                yield "messages"
 
             mock_agent_manager.process_message.return_value = mock_process_message()
 
-            # Configure the WebSocket mock to receive a message and then disconnect
+            # Configure the WebSocket mock to receive a run command and then disconnect
             websocket_mock.receive_text = AsyncMock()
             websocket_mock.receive_text.side_effect = [
-                json.dumps({"type": "message", "content": "Hello, assistant"}),
+                json.dumps({"type": "run"}),
                 Exception("Simulated disconnect"),
             ]
 
@@ -181,16 +238,18 @@ async def test_thread_websocket_process_message(websocket_mock, sample_thread: T
                 # Expected exception from the simulated disconnect
                 assert str(e) == "Simulated disconnect"
 
-            # Verify the agent manager's process_message was called
+            # Verify get_unprocessed_messages was called
+            mock_crud.get_unprocessed_messages.assert_called_once_with(db_session, sample_thread.id)
+
+            # Verify process_message was called with the right parameters
             mock_agent_manager.process_message.assert_called_once()
             args, kwargs = mock_agent_manager.process_message.call_args
             assert kwargs["db"] == db_session
             assert kwargs["thread"] == sample_thread
-            assert kwargs["content"] == "Hello, assistant"
+            assert kwargs["content"] is None  # When running unprocessed messages, content is None
             assert kwargs["stream"] is True
 
-            # Verify the messages were sent
-            message_received_call = None
+            # Verify the expected messages were sent
             stream_start_call = None
             stream_end_call = None
             chunk_calls = []
@@ -199,26 +258,70 @@ async def test_thread_websocket_process_message(websocket_mock, sample_thread: T
                 args, kwargs = call
                 data = args[0]
 
-                if data.get("type") == "message_received":
-                    message_received_call = data
-                elif data.get("type") == "stream_start":
+                if data.get("type") == "stream_start":
                     stream_start_call = data
                 elif data.get("type") == "stream_end":
                     stream_end_call = data
                 elif data.get("type") == "stream_chunk":
                     chunk_calls.append(data)
 
-            # Verify all expected messages were sent
-            assert message_received_call is not None
+            # Verify streaming messages
             assert stream_start_call is not None
             assert stream_end_call is not None
-            assert len(chunk_calls) == 4
+            assert len(chunk_calls) == 3
+            assert chunk_calls[0]["content"] == "Processing "
+            assert chunk_calls[1]["content"] == "unprocessed "
+            assert chunk_calls[2]["content"] == "messages"
 
-            # Verify the chunks
-            assert chunk_calls[0]["content"] == "First "
-            assert chunk_calls[1]["content"] == "chunk "
-            assert chunk_calls[2]["content"] == "of "
-            assert chunk_calls[3]["content"] == "response"
+
+@pytest.mark.asyncio
+async def test_thread_websocket_run_no_unprocessed(websocket_mock, sample_thread: Thread, db_session):
+    """Test the run command when there are no unprocessed messages"""
+    # Import here to avoid circular imports during testing
+    from zerg.app.routers.threads import thread_websocket
+
+    with patch("zerg.app.routers.threads.crud") as mock_crud:
+        # Mock crud.get_thread to return the sample thread
+        mock_crud.get_thread.return_value = sample_thread
+
+        # Mock crud.get_agent to return the agent
+        mock_agent = MagicMock(spec=Agent)
+        mock_agent.id = sample_thread.agent_id
+        mock_crud.get_agent.return_value = mock_agent
+
+        # Mock crud.get_thread_messages to return empty list
+        mock_crud.get_thread_messages.return_value = []
+
+        # Mock empty unprocessed messages
+        mock_crud.get_unprocessed_messages.return_value = []
+
+        # Configure the WebSocket mock to receive a run command and then disconnect
+        websocket_mock.receive_text = AsyncMock()
+        websocket_mock.receive_text.side_effect = [
+            json.dumps({"type": "run"}),
+            Exception("Simulated disconnect"),
+        ]
+
+        # Call the WebSocket handler with our mocks
+        try:
+            await thread_websocket(websocket_mock, sample_thread.id, db_session)
+        except Exception as e:
+            # Expected exception from the simulated disconnect
+            assert str(e) == "Simulated disconnect"
+
+        # Verify get_unprocessed_messages was called
+        mock_crud.get_unprocessed_messages.assert_called_once_with(db_session, sample_thread.id)
+
+        # Verify the info message was sent
+        info_message_sent = False
+        for call in websocket_mock.send_json.call_args_list:
+            args, kwargs = call
+            data = args[0]
+            if data.get("type") == "info" and "No unprocessed messages to run" in data.get("message", ""):
+                info_message_sent = True
+                break
+
+        assert info_message_sent, "Expected 'No unprocessed messages to run' info message"
 
 
 @pytest.mark.asyncio
