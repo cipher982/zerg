@@ -79,7 +79,6 @@ pub fn update(state: &mut AppState, msg: Message) {
         Message::EditAgent(agent_id) => {
             // agent_id will be in the format "agent-{numeric_id}"
             state.selected_node_id = Some(agent_id.clone());
-            state.active_view = ActiveView::Canvas;
             state.state_modified = true;
             
             // Show the agent modal for editing
