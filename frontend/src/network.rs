@@ -342,6 +342,16 @@ fn handle_websocket_message(event: web_sys::MessageEvent) -> Result<(), JsValue>
                         }
                         return Ok(());
                     },
+                    Some("system_status") => {
+                        web_sys::console::log_1(&"Received system_status event".into());
+                        // Update connection status if message contains relevant info
+                        if let Some(event) = json.get("event").and_then(|e| e.as_str()) {
+                            if event == "connected" {
+                                update_connection_status("Connected", "green");
+                            }
+                        }
+                        return Ok(());
+                    },
                     
                     // Handle other message types
                     Some(msg_type) => {
