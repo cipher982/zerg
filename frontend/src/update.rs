@@ -4,6 +4,12 @@ use crate::messages::Message;
 use crate::state::AppState;
 use crate::models::NodeType;
 use crate::storage::ActiveView;
+use crate::constants::{
+    DEFAULT_NODE_WIDTH, 
+    DEFAULT_NODE_HEIGHT, 
+    DEFAULT_AGENT_NODE_COLOR,
+    DEFAULT_MODEL
+};
 
 pub fn update(state: &mut AppState, msg: Message) {
     match msg {
@@ -23,8 +29,8 @@ pub fn update(state: &mut AppState, msg: Message) {
             let viewport_width = if state.canvas_width > 0.0 { state.canvas_width } else { 800.0 };
             let viewport_height = if state.canvas_height > 0.0 { state.canvas_height } else { 600.0 };
             
-            let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 75.0; // Center - half node width
-            let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0; // Center - half node height
+            let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - DEFAULT_NODE_WIDTH / 2.0; 
+            let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - DEFAULT_NODE_HEIGHT / 2.0; 
             
             // Create the node with the proper ID format
             let node_id = format!("agent-{}", agent_id);
@@ -36,9 +42,9 @@ pub fn update(state: &mut AppState, msg: Message) {
                 x,
                 y,
                 text: name,
-                width: 200.0,
-                height: 80.0,
-                color: "#ffecb3".to_string(), // Light amber color
+                width: DEFAULT_NODE_WIDTH,
+                height: DEFAULT_NODE_HEIGHT,
+                color: DEFAULT_AGENT_NODE_COLOR.to_string(),
                 node_type: NodeType::AgentIdentity,
                 parent_id: None,
                 is_selected: false,
@@ -48,8 +54,8 @@ pub fn update(state: &mut AppState, msg: Message) {
             // Add the node to our state
             state.nodes.insert(node_id.clone(), node);
             
-            // Log the new node ID
-            web_sys::console::log_1(&format!("Created new agent with ID: {}", node_id).into());
+            // Log the new node ID - make it clear this is a visual node representing an agent
+            web_sys::console::log_1(&format!("Created visual node with ID: {} for agent {}", node_id, agent_id).into());
             
             // Draw the nodes on canvas
             state.draw_nodes();
@@ -71,7 +77,8 @@ pub fn update(state: &mut AppState, msg: Message) {
         },
         
         Message::EditAgent(agent_id) => {
-            state.selected_node_id = Some(agent_id);
+            // agent_id will be in the format "agent-{numeric_id}"
+            state.selected_node_id = Some(agent_id.clone());
             state.active_view = ActiveView::Canvas;
             state.state_modified = true;
             
@@ -109,7 +116,7 @@ pub fn update(state: &mut AppState, msg: Message) {
                 let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0; // Center - half node height
                 
                 let node_id = state.add_node(text, x, y, node_type);
-                web_sys::console::log_1(&format!("Created new agent node: {}", node_id).into());
+                web_sys::console::log_1(&format!("Created visual node for agent: {}", node_id).into());
             } else {
                 // Normal case with specific coordinates
                 let _ = state.add_node(text, x, y, node_type);
@@ -202,7 +209,7 @@ pub fn update(state: &mut AppState, msg: Message) {
             state.draw_nodes();
         },
         
-        Message::SaveAgentDetails { name, system_instructions, task_instructions } => {
+        Message::SaveAgentDetails { name, system_instructions, task_instructions, model } => {
             // Get the current node ID from the modal
             let node_id = if let Some(window) = web_sys::window() {
                 if let Some(document) = window.document() {
@@ -218,20 +225,58 @@ pub fn update(state: &mut AppState, msg: Message) {
                 None
             };
             
-            // Update the node with the new details
+            // Process the save operation
             if let Some(node_id) = node_id {
+                // Extract agent_id from node_id if in format "agent-{id}"
+                let agent_id = if let Some(node) = state.nodes.get(&node_id) {
+                    // If we have a node, get its agent_id
+                    node.agent_id
+                } else if let Some(id_str) = node_id.strip_prefix("agent-") {
+                    // If no node but ID is in "agent-{id}" format, extract numeric ID
+                    id_str.parse::<u32>().ok()
+                } else {
+                    None
+                };
+                
+                // Update node if it exists
                 if let Some(node) = state.nodes.get_mut(&node_id) {
-                    // Update node properties
-                    node.text = name;
-                    node.set_system_instructions(Some(system_instructions));
-                    node.set_task_instructions(Some(task_instructions));
-                    
-                    // Mark state as modified
-                    state.state_modified = true;
-                    
-                    // Save state to API
-                    let _ = state.save_if_modified();
+                    // Update node's visual representation
+                    node.text = name.clone();
                 }
+                
+                // Update agent data if we have an agent ID
+                if let Some(id) = agent_id {
+                    if let Some(agent) = state.agents.get_mut(&id) {
+                        // Update agent properties
+                        agent.name = name;
+                        agent.system_instructions = Some(system_instructions.clone());
+                        agent.model = Some(model.clone());
+                        
+                        // Create API update payload
+                        let update_payload = format!(
+                            r#"{{
+                                "name": "{}",
+                                "system_instructions": "{}",
+                                "model": "{}"
+                            }}"#,
+                            agent.name,
+                            agent.system_instructions.clone().unwrap_or_default(),
+                            model
+                        );
+                        
+                        // Queue the API call
+                        state.pending_network_call = Some((
+                            update_payload,
+                            format!("agent-update-{}", id)
+                        ));
+                    }
+                }
+                
+                // Mark state as modified
+                state.state_modified = true;
+                
+                // Save state to API
+                let _ = state.save_if_modified();
                 
                 // Close the modal after saving
                 if let Some(window) = web_sys::window() {
@@ -649,75 +694,59 @@ pub fn update(state: &mut AppState, msg: Message) {
         },
         
         Message::GenerateCanvasFromAgents => {
-            // Create nodes for agents that don't already have a corresponding node
+            // Loop through all agents in state.agents and create nodes for any that don't have one
+            let mut nodes_created = 0;
             
-            // First, collect all agent IDs that already have a node
-            let mut agents_with_nodes = std::collections::HashSet::new();
+            // First, find all agents that need nodes
+            let agents_needing_nodes = state.agents.iter()
+                .filter(|(id, _)| {
+                    // Check if this agent already has a node
+                    let node_id = format!("agent-{}", id);
+                    !state.nodes.contains_key(&node_id)
+                })
+                .map(|(id, agent)| (*id, agent.name.clone()))
+                .collect::<Vec<_>>();
             
-            for (_node_id, node) in &state.nodes {
-                if let Some(agent_id) = node.agent_id {
-                    agents_with_nodes.insert(agent_id);
-                }
-            }
-            
-            // Keep track of how many nodes we create
-            let mut created_count = 0;
-            
-            // Create a grid layout for positioning the new nodes
-            let grid_size = (state.agents.len() as f64).sqrt().ceil() as usize;
-            let spacing = 250.0; // Space between nodes
-            let start_x = 100.0;
-            let start_y = 100.0;
-            
-            // Create nodes for agents that don't have one yet
-            for (agent_id, agent) in &state.agents {
-                if !agents_with_nodes.contains(agent_id) {
-                    // Calculate grid position
-                    let index = created_count;
-                    let row = index / grid_size;
-                    let col = index % grid_size;
-                    
-                    let x = start_x + (col as f64 * spacing);
-                    let y = start_y + (row as f64 * spacing);
-                    
-                    // Create node ID based on agent ID
-                    let node_id = format!("agent-{}", agent_id);
-                    
-                    // Create a new node for this agent
-                    let node = crate::models::Node {
-                        node_id: node_id.clone(),
-                        agent_id: Some(*agent_id),
-                        x,
-                        y,
-                        text: agent.name.clone(),
-                        width: 200.0,
-                        height: 100.0,
-                        color: "#ffecb3".to_string(), // Light amber color
-                        node_type: crate::models::NodeType::AgentIdentity,
-                        parent_id: None,
-                        is_selected: false,
-                        is_dragging: false,
-                    };
-                    
-                    // Add the node to our state
-                    state.nodes.insert(node_id, node);
-                    created_count += 1;
-                }
-            }
-            
-            if created_count > 0 {
-                web_sys::console::log_1(&format!("Created {} new nodes from agents", created_count).into());
+            // Now create nodes for each agent
+            for (i, (agent_id, name)) in agents_needing_nodes.iter().enumerate() {
+                // Calculate grid position
+                let row = i / 3; // 3 nodes per row
+                let col = i % 3;
                 
-                // If we created new nodes, draw them and mark state as modified
-                state.draw_nodes();
+                let x = 100.0 + (col as f64 * 250.0); // 250px horizontal spacing
+                let y = 100.0 + (row as f64 * 150.0); // 150px vertical spacing
+                
+                // Create the node with the proper ID format
+                let node_id = format!("agent-{}", agent_id);
+                
+                // Create and add the node directly to state
+                let node = crate::models::Node {
+                    node_id: node_id.clone(),
+                    agent_id: Some(*agent_id),
+                    x,
+                    y,
+                    text: name.clone(),
+                    width: 200.0,
+                    height: 80.0,
+                    color: "#ffecb3".to_string(), // Light amber color
+                    node_type: NodeType::AgentIdentity,
+                    parent_id: None,
+                    is_selected: false,
+                    is_dragging: false,
+                };
+                
+                // Add the node to our state
+                state.nodes.insert(node_id.clone(), node);
+                nodes_created += 1;
+            }
+            
+            web_sys::console::log_1(&format!("Created {} nodes for agents without visual representation", nodes_created).into());
+            
+            // Only mark as modified if we actually created nodes
+            if nodes_created > 0 {
                 state.state_modified = true;
-                
-                // Auto-fit the view to show all nodes
-                if state.auto_fit {
-                    state.fit_nodes_to_view();
-                }
-            } else {
-                web_sys::console::log_1(&"No new nodes created - all agents already have nodes".into());
+                // Draw the updated nodes on canvas
+                state.draw_nodes();
             }
         },
         

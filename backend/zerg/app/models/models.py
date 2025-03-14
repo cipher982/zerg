@@ -20,7 +20,7 @@ class Agent(Base):
     system_instructions = Column(Text, nullable=False)
     task_instructions = Column(Text, nullable=False)
     schedule = Column(String, nullable=True)  # CRON expression or interval
-    model = Column(String, default="gpt-4o")  # Default model to use
+    model = Column(String, nullable=False)  # Model to use (no default)
     config = Column(JSON, nullable=True)  # Additional configuration as JSON
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

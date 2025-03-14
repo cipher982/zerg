@@ -11,7 +11,13 @@ use wasm_bindgen::JsCast;
 use std::rc::Rc;
 use crate::messages::Message;
 use crate::update::update;
-use crate::constants::DEFAULT_TASK_INSTRUCTIONS;
+use crate::constants::{
+    DEFAULT_TASK_INSTRUCTIONS,
+    DEFAULT_NODE_WIDTH,
+    DEFAULT_NODE_HEIGHT,
+    DEFAULT_AGENT_NODE_COLOR,
+    DEFAULT_MODEL
+};
 
 // Store global application state
 pub struct AppState {
@@ -96,7 +102,7 @@ impl AppState {
             auto_fit: true, // Enable auto-fit by default
             latest_user_input_id: None,
             message_id_to_node_id: HashMap::new(),
-            selected_model: "gpt-4o".to_string(), // Default model
+            selected_model: DEFAULT_MODEL.to_string(), // Default model - use constant
             available_models: vec![
                 // Default models until we fetch from the server
                 ("gpt-4o".to_string(), "GPT-4o".to_string()),
@@ -698,12 +704,12 @@ impl AppState {
             agent_id,
             x,
             y,
-            width: 200.0,
-            height: 100.0,
+            width: DEFAULT_NODE_WIDTH,
+            height: DEFAULT_NODE_HEIGHT,
             color: match node_type {
                 NodeType::UserInput => "#3498db".to_string(),    // Blue
                 NodeType::ResponseOutput => "#9b59b6".to_string(), // Purple
-                NodeType::AgentIdentity => "#2ecc71".to_string(), // Green
+                NodeType::AgentIdentity => DEFAULT_AGENT_NODE_COLOR.to_string(),
                 NodeType::GenericNode => "#95a5a6".to_string(),  // Gray
             },
             text,

@@ -3,7 +3,12 @@ use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, HtmlElement};
 use crate::state::APP_STATE;
 use crate::models::NodeType;
-use crate::constants::DEFAULT_SYSTEM_INSTRUCTIONS;
+use crate::constants::{
+    DEFAULT_AGENT_NAME, 
+    DEFAULT_SYSTEM_INSTRUCTIONS, 
+    DEFAULT_TASK_INSTRUCTIONS,
+    DEFAULT_MODEL
+};
 
 // Agent status for displaying in the dashboard
 #[derive(Clone, Debug, PartialEq)]
@@ -126,17 +131,20 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
         web_sys::console::log_1(&"Create new agent from dashboard".into());
         
         // Generate a random agent name
-        let agent_name = format!("New Agent {}", (js_sys::Math::random() * 100.0).round());
+        let agent_name = format!("{} {}", DEFAULT_AGENT_NAME, (js_sys::Math::random() * 100.0).round());
         
         // Create the agent data payload for the API
         let agent_data = format!(
             r#"{{
                 "name": "{}",
-                "system_instructions": "You are a helpful AI assistant.",
-                "task_instructions": "Respond to user questions accurately and concisely.",
-                "model": "gpt-3.5-turbo"
+                "system_instructions": "{}",
+                "task_instructions": "{}",
+                "model": "{}"
             }}"#,
-            agent_name
+            agent_name,
+            DEFAULT_SYSTEM_INSTRUCTIONS,
+            DEFAULT_TASK_INSTRUCTIONS,
+            DEFAULT_MODEL
         );
         
         // Use async block to call the API
@@ -158,8 +166,8 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                             crate::state::dispatch_global_message(crate::messages::Message::CreateAgentWithDetails {
                                 name: agent_name,
                                 agent_id,
-                                system_instructions: "You are a helpful AI assistant.".to_string(),
-                                task_instructions: "Respond to user questions accurately and concisely.".to_string(),
+                                system_instructions: DEFAULT_SYSTEM_INSTRUCTIONS.to_string(),
+                                task_instructions: DEFAULT_TASK_INSTRUCTIONS.to_string(),
                             });
                             
                             // Refresh agents from API to update state
@@ -493,62 +501,9 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let edit_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&format!("Edit agent: {}", agent_id).into());
         
-        // Set the selected node ID
-        APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            state.selected_node_id = Some(agent_id.clone());
-        });
-        
-        // Open the agent modal
-        let window = web_sys::window().expect("no global window exists");
-        let document = window.document().expect("should have a document");
-        
-        if let Some(modal) = document.get_element_by_id("agent-modal") {
-            // Get agent data
-            let (node_text, system_instructions) = APP_STATE.with(|state| {
-                let state = state.borrow();
-                
-                if let Some(node) = state.nodes.get(&agent_id) {
-                    (
-                        node.text.clone(),
-                        node.system_instructions().clone().unwrap_or_default(),
-                    )
-                } else {
-                    (String::new(), String::new())
-                }
-            });
-            
-            // Set modal title
-            if let Some(modal_title) = document.get_element_by_id("modal-title") {
-                modal_title.set_inner_html(&format!("Agent: {}", node_text));
-            }
-            
-            // Set agent name in the input field
-            if let Some(name_elem) = document.get_element_by_id("agent-name") {
-                if let Some(name_input) = name_elem.dyn_ref::<web_sys::HtmlInputElement>() {
-                    name_input.set_value(&node_text);
-                }
-            }
-            
-            // Set system instructions with explicit defaults if empty
-            let system_instructions_value = if system_instructions.trim().is_empty() {
-                DEFAULT_SYSTEM_INSTRUCTIONS.to_string()
-            } else {
-                system_instructions
-            };
-            
-            // Load system instructions
-            if let Some(system_elem) = document.get_element_by_id("system-instructions") {
-                if let Some(system_textarea) = system_elem.dyn_ref::<web_sys::HtmlTextAreaElement>() {
-                    system_textarea.set_value(&system_instructions_value);
-                }
-            }
-            
-            // Show the modal
-            if let Err(e) = modal.set_attribute("style", "display: block;") {
-                web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
-            }
-        }
+        // agent_id is already in the correct format since we construct it in get_agents_from_app_state
+        // Just dispatch the EditAgent message directly
+        crate::state::dispatch_global_message(crate::messages::Message::EditAgent(agent_id.clone()));
     }) as Box<dyn FnMut(_)>);
     
     edit_btn.dyn_ref::<HtmlElement>()
@@ -596,13 +551,12 @@ fn get_agents_from_app_state() -> Vec<Agent> {
         // Collect all agent data directly from the agents HashMap
         state.agents.iter()
             .map(|(id, api_agent)| {
-                // Convert from ApiAgent to dashboard Agent
-                let agent_id = id.to_string();
+                // Format agent_id with the "agent-" prefix to be consistent with node IDs
+                // This is necessary because nodes referencing agents use the "agent-{id}" format
+                let agent_id = format!("agent-{}", id);
                 let name = api_agent.name.clone();
                 let status_str = api_agent.status.clone();
                 
-                // We could also collect history if we have it associated with agents
-                // For now we'll set some defaults
                 (agent_id, name, status_str)
             })
             .collect::<Vec<_>>()
@@ -630,7 +584,6 @@ fn get_agents_from_app_state() -> Vec<Agent> {
         agent.status = status;
         
         // For now, we'll set default values for the other fields
-        // In a more complete implementation, you'd pull this data from your agent history storage
         agent.success_rate = 100.0; // Default to 100%
         agent.run_count = 0;
         
