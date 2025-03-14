@@ -213,7 +213,7 @@ impl AppState {
                 if let Some(agent_id) = parent_node.agent_id {
                     crate::state::APP_STATE.with(|state| {
                         let mut state = state.borrow_mut();
-                        if let Some(agent) = state.agents.get_mut(&agent_id) {
+                        if let Some(_agent) = state.agents.get_mut(&agent_id) {
                             // Store the message with the agent (actual implementation would depend on your API structure)
                         }
                     });
@@ -230,7 +230,7 @@ impl AppState {
     pub fn draw_nodes(&self) {
         if let (Some(context), Some(canvas)) = (&self.context, &self.canvas) {
             // Clear the canvas with a slight off-white color for better visibility
-            context.set_fill_style(&JsValue::from_str("#f5f5f5"));
+            context.set_fill_style_str("#f5f5f5");
             context.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
             
             // Apply transformations for viewport
@@ -326,8 +326,8 @@ impl AppState {
         
         // Calculate zoom level to fit all nodes with padding
         let padding = 50.0; // Padding around the bounding box
-        let zoom_x = canvas_width / (box_width + padding * 2.0);
-        let zoom_y = canvas_height / (box_height + padding * 2.0);
+        let _zoom_x = canvas_width / (box_width + padding * 2.0);
+        let _zoom_y = canvas_height / (box_height + padding * 2.0);
         
         // Take the smaller of the two to ensure all nodes fit
         if let Some(canvas) = &self.canvas {

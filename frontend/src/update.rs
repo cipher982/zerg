@@ -451,7 +451,54 @@ pub fn update(state: &mut AppState, msg: Message) {
         
         Message::UpdateNodeStatus { node_id, status } => {
             if let Some(node) = state.nodes.get_mut(&node_id) {
-                node.set_status(Some(status));
+                // Update the node's visual properties based on status
+                match status.as_str() {
+                    "idle" => node.color = "#ffecb3".to_string(),      // Light amber
+                    "processing" => node.color = "#b3e5fc".to_string(), // Light blue
+                    "complete" => node.color = "#c8e6c9".to_string(),   // Light green
+                    "error" => node.color = "#ffcdd2".to_string(),      // Light red
+                    _ => node.color = "#ffecb3".to_string(),           // Default light amber
+                }
+                
+                // If this node is associated with an agent, update the agent's status
+                // but do it through an explicit sync mechanism
+                if let Some(agent_id) = node.agent_id {
+                    if let Some(agent) = state.agents.get_mut(&agent_id) {
+                        // Update agent status directly in our local model
+                        agent.status = Some(status.clone());
+                        
+                        // Create an update for the API
+                        let update = crate::models::ApiAgentUpdate {
+                            name: None,
+                            status: Some(status.clone()),
+                            system_instructions: None,
+                            task_instructions: None,
+                            model: None,
+                            schedule: None,
+                            config: None,
+                        };
+                        
+                        // Clone data for async use
+                        let agent_id_clone = agent_id;
+                        let update_clone = update.clone();
+                        
+                        // Update the agent via API
+                        wasm_bindgen_futures::spawn_local(async move {
+                            // Serialize the update struct to a JSON string
+                            match serde_json::to_string(&update_clone) {
+                                Ok(json_str) => {
+                                    if let Err(e) = crate::network::ApiClient::update_agent(agent_id_clone, &json_str).await {
+                                        web_sys::console::error_1(&format!("Failed to update agent: {:?}", e).into());
+                                    }
+                                },
+                                Err(e) => {
+                                    web_sys::console::error_1(&format!("Failed to serialize agent update: {}", e).into());
+                                }
+                            }
+                        });
+                    }
+                }
+                
                 state.state_modified = true;
             }
         },
@@ -532,6 +579,197 @@ pub fn update(state: &mut AppState, msg: Message) {
             state.draw_nodes();
             
             state.state_modified = true;
+        },
+        
+        Message::SyncNodeToAgent { node_id, agent_id } => {
+            // Explicitly sync node data to agent (e.g., when node text changes and should update agent name)
+            if let Some(node) = state.nodes.get(&node_id) {
+                if let Some(agent) = state.agents.get_mut(&agent_id) {
+                    // Update agent data based on node
+                    // For now, we're just syncing the name from node.text
+                    agent.name = node.text.clone();
+                    
+                    // Create an update object for the API
+                    let update = crate::models::ApiAgentUpdate {
+                        name: Some(agent.name.clone()),
+                        status: None,
+                        system_instructions: None,
+                        task_instructions: None,
+                        model: None,
+                        schedule: None,
+                        config: None,
+                    };
+                    
+                    // Clone data for async use
+                    let agent_id_clone = agent_id;
+                    let update_clone = update.clone();
+                    
+                    // Update the agent via API
+                    wasm_bindgen_futures::spawn_local(async move {
+                        // Serialize the update struct to a JSON string
+                        match serde_json::to_string(&update_clone) {
+                            Ok(json_str) => {
+                                if let Err(e) = crate::network::ApiClient::update_agent(agent_id_clone, &json_str).await {
+                                    web_sys::console::error_1(&format!("Failed to update agent: {:?}", e).into());
+                                }
+                            },
+                            Err(e) => {
+                                web_sys::console::error_1(&format!("Failed to serialize agent update: {}", e).into());
+                            }
+                        }
+                    });
+                    
+                    state.state_modified = true;
+                }
+            }
+        },
+        
+        Message::SyncAgentToNode { agent_id, node_id } => {
+            // Explicitly sync agent data to node (e.g., when agent data changes and should update node display)
+            if let Some(agent) = state.agents.get(&agent_id) {
+                if let Some(node) = state.nodes.get_mut(&node_id) {
+                    // Update node data based on agent
+                    node.text = agent.name.clone();
+                    
+                    // Update node color based on agent status if desired
+                    if let Some(status) = &agent.status {
+                        // Example of how you might set node color based on agent status
+                        match status.as_str() {
+                            "idle" => node.color = "#ffecb3".to_string(),      // Light amber
+                            "processing" => node.color = "#b3e5fc".to_string(), // Light blue
+                            "complete" => node.color = "#c8e6c9".to_string(),   // Light green
+                            "error" => node.color = "#ffcdd2".to_string(),      // Light red
+                            _ => node.color = "#ffecb3".to_string(),           // Default light amber
+                        }
+                    }
+                    
+                    state.state_modified = true;
+                }
+            }
+        },
+        
+        Message::GenerateCanvasFromAgents => {
+            // Create nodes for agents that don't already have a corresponding node
+            
+            // First, collect all agent IDs that already have a node
+            let mut agents_with_nodes = std::collections::HashSet::new();
+            
+            for (_node_id, node) in &state.nodes {
+                if let Some(agent_id) = node.agent_id {
+                    agents_with_nodes.insert(agent_id);
+                }
+            }
+            
+            // Keep track of how many nodes we create
+            let mut created_count = 0;
+            
+            // Create a grid layout for positioning the new nodes
+            let grid_size = (state.agents.len() as f64).sqrt().ceil() as usize;
+            let spacing = 250.0; // Space between nodes
+            let start_x = 100.0;
+            let start_y = 100.0;
+            
+            // Create nodes for agents that don't have one yet
+            for (agent_id, agent) in &state.agents {
+                if !agents_with_nodes.contains(agent_id) {
+                    // Calculate grid position
+                    let index = created_count;
+                    let row = index / grid_size;
+                    let col = index % grid_size;
+                    
+                    let x = start_x + (col as f64 * spacing);
+                    let y = start_y + (row as f64 * spacing);
+                    
+                    // Create node ID based on agent ID
+                    let node_id = format!("agent-{}", agent_id);
+                    
+                    // Create a new node for this agent
+                    let node = crate::models::Node {
+                        node_id: node_id.clone(),
+                        agent_id: Some(*agent_id),
+                        x,
+                        y,
+                        text: agent.name.clone(),
+                        width: 200.0,
+                        height: 100.0,
+                        color: "#ffecb3".to_string(), // Light amber color
+                        node_type: crate::models::NodeType::AgentIdentity,
+                        parent_id: None,
+                        is_selected: false,
+                        is_dragging: false,
+                    };
+                    
+                    // Add the node to our state
+                    state.nodes.insert(node_id, node);
+                    created_count += 1;
+                }
+            }
+            
+            if created_count > 0 {
+                web_sys::console::log_1(&format!("Created {} new nodes from agents", created_count).into());
+                
+                // If we created new nodes, draw them and mark state as modified
+                state.draw_nodes();
+                state.state_modified = true;
+                
+                // Auto-fit the view to show all nodes
+                if state.auto_fit {
+                    state.fit_nodes_to_view();
+                }
+            } else {
+                web_sys::console::log_1(&"No new nodes created - all agents already have nodes".into());
+            }
+        },
+        
+        Message::ResetDatabase => {
+            // The actual database reset happens via API call (already done in dashboard.rs)
+            // We don't need to do anything here because:
+            // 1. The page will be refreshed immediately after this (in dashboard.rs)
+            // 2. On refresh, it will automatically load the fresh state from the backend
+            web_sys::console::log_1(&"Reset database message received - state will refresh".into());
+        },
+        
+        Message::RefreshAgentsFromAPI => {
+            // Trigger an async operation to fetch agents from the API
+            web_sys::console::log_1(&"Refreshing agents from API".into());
+            
+            // Clone whatever data we need from state before leaving the borrow
+            let current_view = state.active_view.clone();
+            
+            // Spawn an async operation to fetch agents
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::network::ApiClient::get_agents().await {
+                    Ok(agents_json) => {
+                        if let Ok(agents) = serde_json::from_str::<Vec<crate::models::ApiAgent>>(&agents_json) {
+                            web_sys::console::log_1(&format!("Refreshed {} agents from API", agents.len()).into());
+                            
+                            // Update the agents in the global APP_STATE using message dispatch
+                            crate::state::APP_STATE.with(|state_ref| {
+                                let mut state = state_ref.borrow_mut();
+                                state.agents.clear();
+                                
+                                // Add each agent to the HashMap
+                                for agent in &agents {
+                                    if let Some(id) = agent.id {
+                                        state.agents.insert(id, agent.clone());
+                                    }
+                                }
+                                
+                                // Set active view back to what it was
+                                state.active_view = current_view;
+                            });
+                            
+                            // Refresh the UI
+                            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                                web_sys::console::error_1(&format!("Failed to refresh UI: {:?}", e).into());
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Error refreshing agents: {:?}", e).into());
+                    }
+                }
+            });
         },
     }
 } 

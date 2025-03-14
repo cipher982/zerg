@@ -160,17 +160,9 @@ impl Node {
     }
     
     pub fn system_instructions(&self) -> Option<String> {
-        // If node is linked to an agent, get its system instructions
-        if let Some(agent_id) = self.agent_id {
-            // This is a read-only operation, so using APP_STATE.with is OK
-            // But we need to be careful not to create nested borrows
-            crate::state::APP_STATE.with(|state| {
-                let state = state.borrow();
-                state.agents.get(&agent_id).and_then(|agent| agent.system_instructions.clone())
-            })
-        } else {
-            None
-        }
+        // Don't directly access agent data - this is just a node method
+        // Return None to indicate nodes don't have system instructions
+        None
     }
     
     pub fn task_instructions(&self) -> Option<String> {
@@ -184,15 +176,8 @@ impl Node {
     }
     
     pub fn status(&self) -> Option<String> {
-        // If node is linked to an agent, get its status
-        if let Some(agent_id) = self.agent_id {
-            crate::state::APP_STATE.with(|state| {
-                let state = state.borrow();
-                state.agents.get(&agent_id).and_then(|agent| agent.status.clone())
-            })
-        } else {
-            None
-        }
+        // Don't directly access agent data - return None
+        None
     }
     
     // New method that accepts agents HashMap to avoid APP_STATE borrowing
@@ -210,18 +195,9 @@ impl Node {
         self.node_id = id;
     }
     
-    pub fn set_system_instructions(&mut self, instructions: Option<String>) {
-        // Forward to agent if linked
-        if let Some(agent_id) = self.agent_id {
-            if let Some(instr) = instructions {
-                crate::state::APP_STATE.with(|state| {
-                    let mut state = state.borrow_mut();
-                    if let Some(agent) = state.agents.get_mut(&agent_id) {
-                        agent.system_instructions = Some(instr);
-                    }
-                });
-            }
-        }
+    pub fn set_system_instructions(&mut self, _instructions: Option<String>) {
+        // Don't modify agent data from a node method
+        // This should be done through an explicit agent update message
     }
     
     pub fn set_task_instructions(&mut self, _instructions: Option<String>) {
@@ -232,16 +208,8 @@ impl Node {
         // No direct mapping in new model
     }
     
-    pub fn set_status(&mut self, status: Option<String>) {
-        // Forward to agent if linked
-        if let Some(agent_id) = self.agent_id {
-            if let Some(status_str) = status {
-                // Use dispatch_global_message instead of directly accessing APP_STATE
-                crate::state::dispatch_global_message(crate::messages::Message::UpdateNodeStatus {
-                    node_id: self.node_id.clone(),
-                    status: status_str,
-                });
-            }
-        }
+    pub fn set_status(&mut self, _status: Option<String>) {
+        // Don't modify agent data from a node method
+        // This should be done through an explicit agent update message
     }
 } 

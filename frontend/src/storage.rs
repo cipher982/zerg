@@ -198,7 +198,7 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                     Ok(agents) => {
                         web_sys::console::log_1(&format!("Loaded {} agents from API", agents.len()).into());
                         
-                        // Update the agents in the global APP_STATE first
+                        // Update the agents in the global APP_STATE
                         crate::state::APP_STATE.with(|state_ref| {
                             let mut state = state_ref.borrow_mut();
                             state.agents.clear();
@@ -209,76 +209,49 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                                     state.agents.insert(id, agent.clone());
                                 }
                             }
-                        });
-                        
-                        // Convert API agents to Node objects
-                        let mut loaded_nodes = HashMap::new();
-                        
-                        for agent in agents {
-                            if let Some(id) = agent.id {
-                                let node_id = format!("agent-{}", id);
+                            
+                            // IMPORTANT: We no longer automatically create nodes for agents
+                            // This is a key part of separating agent domain logic from node UI logic
+                            
+                            // Update loading state flags after the API call completes
+                            state.is_loading = false;
+                            state.data_loaded = true;
+                            
+                            // If there are no nodes but we have agents, show a message to user
+                            if state.nodes.is_empty() && !state.agents.is_empty() {
+                                // Show message that agents are loaded but not displayed
+                                web_sys::console::log_1(&"Agents loaded but no nodes exist. Use 'Generate Canvas' to visualize agents.".into());
                                 
-                                // Create a node for this agent
-                                let node = Node {
-                                    node_id: node_id.clone(),
-                                    agent_id: Some(id),
-                                    x: 100.0, // Default position, would need to be stored in config
-                                    y: 100.0,
-                                    text: agent.name,
-                                    width: 300.0, // Default width
-                                    height: 200.0, // Default height
-                                    color: "#e0f7fa".to_string(), // Default color
-                                    parent_id: None,
-                                    node_type: crate::models::NodeType::AgentIdentity,
-                                    is_selected: false,
-                                    is_dragging: false,
-                                };
-                                
-                                // Add the node to our temporary collection
-                                loaded_nodes.insert(node_id, node);
+                                // In a real app, you might want to display a UI message or button
+                                // that lets users generate nodes for their agents
                             }
-                        }
-                        
-                        // Update loading state flags after the API call completes
+                        });
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Error parsing agents from API: {}", e).into());
+                        // Update loading state flags even in case of error
                         crate::state::APP_STATE.with(|state_ref| {
                             let mut state = state_ref.borrow_mut();
                             state.is_loading = false;
-                            state.data_loaded = true;
                         });
-                        
-                        // Use a callback function to update the app state
-                        if let Err(e) = crate::state::update_app_state_from_api(loaded_nodes) {
-                            web_sys::console::error_1(&format!("Error updating app state: {:?}", e).into());
-                        }
-                        
-                        // Schedule UI refresh after the current function completes
-                        let window = web_sys::window().expect("no global window exists");
-                        let closure = Closure::once(|| {
-                            // This will run after the current execution context is complete
-                            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                                web_sys::console::warn_1(&format!("Failed to refresh UI after state load: {:?}", e).into());
-                            }
-                        });
-                        
-                        window.set_timeout_with_callback_and_timeout_and_arguments_0(
-                            closure.as_ref().unchecked_ref(),
-                            0
-                        ).expect("Failed to set timeout");
-                        
-                        // Ensure closure lives long enough
-                        closure.forget();
-                    },
-                    Err(e) => {
-                        web_sys::console::error_1(&format!("Error parsing agents from API: {:?}", e).into());
-                        mark_loading_complete();
                     }
                 }
             },
             Err(e) => {
                 web_sys::console::error_1(&format!("Error fetching agents from API: {:?}", e).into());
-                mark_loading_complete();
+                // Update loading state flags even in case of error
+                crate::state::APP_STATE.with(|state_ref| {
+                    let mut state = state_ref.borrow_mut();
+                    state.is_loading = false;
+                });
             }
         }
+        
+        // Schedule a UI refresh
+        crate::state::AppState::refresh_ui_after_state_change().expect("Failed to refresh UI");
+        
+        // Call a function to signal that loading is complete
+        mark_loading_complete();
     });
 }
 
