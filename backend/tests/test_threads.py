@@ -239,3 +239,76 @@ def test_read_thread_messages_not_found(client: TestClient):
     assert response.status_code == 404
     assert "detail" in response.json()
     assert response.json()["detail"] == "Thread not found"
+
+
+def test_create_thread_message(client: TestClient, sample_thread: Thread):
+    """Test the POST /api/threads/{thread_id}/messages endpoint (without processing)"""
+    message_data = {"role": "user", "content": "Hello, assistant"}
+
+    response = client.post(f"/api/threads/{sample_thread.id}/messages", json=message_data)
+    assert response.status_code == 201
+
+    created_message = response.json()
+    assert created_message["thread_id"] == sample_thread.id
+    assert created_message["role"] == message_data["role"]
+    assert created_message["content"] == message_data["content"]
+    assert created_message["processed"] is False  # Verify message is marked as unprocessed
+
+
+def test_create_thread_message_not_found(client: TestClient):
+    """Test the POST /api/threads/{thread_id}/messages endpoint with a non-existent thread ID"""
+    message_data = {"role": "user", "content": "Hello, assistant"}
+
+    response = client.post("/api/threads/999/messages", json=message_data)
+    assert response.status_code == 404
+    assert "detail" in response.json()
+    assert response.json()["detail"] == "Thread not found"
+
+
+def test_run_thread(client: TestClient, sample_thread: Thread, db_session):
+    """Test the POST /api/threads/{thread_id}/run endpoint"""
+    # Create an unprocessed message
+    message = ThreadMessage(thread_id=sample_thread.id, role="user", content="Hello, run this message", processed=False)
+    db_session.add(message)
+    db_session.commit()
+
+    # Mock the agent manager process_message method
+    with patch("zerg.app.routers.threads.AgentManager") as mock_agent_manager_class:
+        mock_agent_manager = MagicMock()
+        mock_agent_manager_class.return_value = mock_agent_manager
+
+        def mock_process_message(*args, **kwargs):
+            yield "Test response"
+
+        mock_agent_manager.process_message.return_value = mock_process_message()
+
+        # Run the thread
+        response = client.post(f"/api/threads/{sample_thread.id}/run")
+
+        # Verify response
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+        assert content == "Test response"
+
+        # Verify the process_message was called correctly
+        mock_agent_manager.process_message.assert_called_once()
+        args, kwargs = mock_agent_manager.process_message.call_args
+        assert kwargs["db"] is not None
+        assert kwargs["thread"] == sample_thread
+        assert kwargs["content"] is None
+        assert kwargs["stream"] is True
+
+
+def test_run_thread_no_unprocessed_messages(client: TestClient, sample_thread: Thread):
+    """Test the POST /api/threads/{thread_id}/run endpoint with no unprocessed messages"""
+    response = client.post(f"/api/threads/{sample_thread.id}/run")
+    assert response.status_code == 200
+    assert response.json() == {"detail": "No unprocessed messages to run"}
+
+
+def test_run_thread_not_found(client: TestClient):
+    """Test the POST /api/threads/{thread_id}/run endpoint with a non-existent thread ID"""
+    response = client.post("/api/threads/999/run")
+    assert response.status_code == 404
+    assert "detail" in response.json()
+    assert response.json()["detail"] == "Thread not found"

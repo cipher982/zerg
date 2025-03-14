@@ -174,9 +174,35 @@ def read_thread_messages(thread_id: int, skip: int = 0, limit: int = 100, db: Se
     return messages
 
 
-@router.post("/{thread_id}/messages", status_code=status.HTTP_201_CREATED)
+@router.post("/{thread_id}/messages", response_model=ThreadMessageResponse, status_code=status.HTTP_201_CREATED)
 async def create_thread_message(thread_id: int, message: ThreadMessageCreate, db: Session = Depends(get_db)):
-    """Process a new message in a thread and get a streaming response"""
+    """Add a new message to a thread without processing it"""
+    # Check if the thread exists
+    db_thread = crud.get_thread(db, thread_id=thread_id)
+    if db_thread is None:
+        raise HTTPException(status_code=404, detail="Thread not found")
+
+    # Add the message to the database (unprocessed)
+    db_message = crud.create_thread_message(
+        db=db,
+        thread_id=thread_id,
+        role=message.role,
+        content=message.content,
+        tool_calls=message.tool_calls,
+        tool_call_id=message.tool_call_id,
+        name=message.name,
+        processed=False,  # Mark as unprocessed
+    )
+
+    # Update the thread timestamp
+    crud.update_thread(db, thread_id)
+
+    return db_message
+
+
+@router.post("/{thread_id}/run")
+async def run_thread(thread_id: int, db: Session = Depends(get_db)):
+    """Process unprocessed messages in a thread and get a streaming response"""
     # Check if the thread exists
     db_thread = crud.get_thread(db, thread_id=thread_id)
     if db_thread is None:
@@ -190,10 +216,15 @@ async def create_thread_message(thread_id: int, message: ThreadMessageCreate, db
     # Set up the agent manager
     agent_manager = AgentManager(db_agent)
 
-    # Process the message and stream the response
+    # Check if there are unprocessed messages
+    unprocessed_messages = crud.get_unprocessed_messages(db, thread_id)
+    if not unprocessed_messages:
+        return {"detail": "No unprocessed messages to run"}
+
+    # Process the unprocessed messages and stream the response
     async def stream_response():
         try:
-            for chunk in agent_manager.process_message(db=db, thread=db_thread, content=message.content, stream=True):
+            for chunk in agent_manager.process_message(db=db, thread=db_thread, content=None, stream=True):
                 yield chunk
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")
@@ -255,29 +286,33 @@ async def thread_websocket(websocket: WebSocket, thread_id: int, db: Session = D
                     await websocket.send_json({"type": "error", "error": "Message content is required"})
                     continue
 
-                # Process the message and stream the response
+                # Store the message without processing
+                user_db_message = crud.create_thread_message(
+                    db=db, thread_id=thread_id, role="user", content=user_message, processed=False
+                )
+
+                # Send acknowledgment of the user message
+                await websocket.send_json(
+                    {
+                        "type": "message_received",
+                        "message_id": user_db_message.id,
+                        "thread_id": thread_id,
+                    }
+                )
+
+            elif message_data.get("type") == "run":
+                # Check if there are unprocessed messages
+                unprocessed_messages = crud.get_unprocessed_messages(db, thread_id)
+                if not unprocessed_messages:
+                    await websocket.send_json({"type": "info", "message": "No unprocessed messages to run"})
+                    continue
+
+                # Start streaming the response
+                await websocket.send_json({"type": "stream_start"})
+
                 try:
-                    # First, add the user message to the database
-                    user_db_message = crud.create_thread_message(
-                        db=db, thread_id=thread_id, role="user", content=user_message
-                    )
-
-                    # Send acknowledgment of the user message
-                    await websocket.send_json(
-                        {
-                            "type": "message_received",
-                            "message_id": user_db_message.id,
-                            "thread_id": thread_id,
-                        }
-                    )
-
-                    # Start streaming the response
-                    await websocket.send_json({"type": "stream_start"})
-
                     response_content = ""
-                    for chunk in agent_manager.process_message(
-                        db=db, thread=db_thread, content=user_message, stream=True
-                    ):
+                    for chunk in agent_manager.process_message(db=db, thread=db_thread, content=None, stream=True):
                         response_content += chunk
                         await websocket.send_json({"type": "stream_chunk", "content": chunk})
 
@@ -285,7 +320,7 @@ async def thread_websocket(websocket: WebSocket, thread_id: int, db: Session = D
                     await websocket.send_json({"type": "stream_end"})
 
                 except Exception as e:
-                    logger.error(f"Error processing message: {str(e)}")
+                    logger.error(f"Error processing messages: {str(e)}")
                     await websocket.send_json({"type": "error", "error": str(e)})
 
             elif message_data.get("type") == "ping":

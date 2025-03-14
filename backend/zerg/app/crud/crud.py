@@ -228,6 +228,7 @@ def create_thread_message(
     tool_calls: Optional[List[Dict[str, Any]]] = None,
     tool_call_id: Optional[str] = None,
     name: Optional[str] = None,
+    processed: bool = False,
 ):
     """Create a new message for a thread"""
     db_message = ThreadMessage(
@@ -237,8 +238,30 @@ def create_thread_message(
         tool_calls=tool_calls,
         tool_call_id=tool_call_id,
         name=name,
+        processed=processed,
     )
     db.add(db_message)
     db.commit()
     db.refresh(db_message)
     return db_message
+
+
+def mark_message_processed(db: Session, message_id: int):
+    """Mark a message as processed"""
+    db_message = db.query(ThreadMessage).filter(ThreadMessage.id == message_id).first()
+    if db_message:
+        db_message.processed = True
+        db.commit()
+        db.refresh(db_message)
+        return db_message
+    return None
+
+
+def get_unprocessed_messages(db: Session, thread_id: int):
+    """Get unprocessed messages for a thread"""
+    return (
+        db.query(ThreadMessage)
+        .filter(ThreadMessage.thread_id == thread_id, ~ThreadMessage.processed)
+        .order_by(ThreadMessage.timestamp)
+        .all()
+    )
