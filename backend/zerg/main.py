@@ -14,6 +14,7 @@ from zerg.app.database import Base
 # Import our application modules directly from their source
 from zerg.app.database import engine
 from zerg.app.routers.agents import router as agents_router
+from zerg.app.routers.threads import router as threads_router
 from zerg.app.websocket import EventType
 from zerg.app.websocket import connected_clients
 
@@ -80,8 +81,9 @@ async def options_handler(rest_of_path: str):
     return response
 
 
-# Include the agents router
+# Include the routers
 app.include_router(agents_router)
+app.include_router(threads_router)
 
 # Set up logging
 logger = logging.getLogger(__name__)

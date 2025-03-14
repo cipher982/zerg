@@ -67,7 +67,7 @@ pub fn open_agent_modal(document: &Document, node_id: &str) -> Result<(), JsValu
         }
     }
     
-    // Load conversation history
+    // Load thread history
     if let Some(history_container) = document.get_element_by_id("history-container") {
         if history_data.is_empty() {
             history_container.set_inner_html("<p>No history available.</p>");

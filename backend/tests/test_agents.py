@@ -1,3 +1,6 @@
+from unittest.mock import MagicMock
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 from zerg.app.models.models import Agent
@@ -129,17 +132,29 @@ def test_delete_agent_not_found(client: TestClient):
 
 def test_run_agent(client: TestClient, sample_agent: Agent):
     """Test the POST /api/agents/{agent_id}/run endpoint"""
-    response = client.post(f"/api/agents/{sample_agent.id}/run")
-    assert response.status_code == 200
-    run_agent = response.json()
-    assert run_agent["id"] == sample_agent.id
-    assert run_agent["status"] == "processing"  # Status should be updated
+    # Patch the client instance from agents.py module
+    with patch("zerg.app.routers.agents.client.chat.completions.create") as mock_create:
+        # Configure the mock to return a proper response with string content
+        mock_message = MagicMock()
+        mock_message.content = "This is a test response from the mock LLM"
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_create.return_value = mock_response
 
-    # Verify the agent status was updated in the database
-    response = client.get(f"/api/agents/{sample_agent.id}")
-    assert response.status_code == 200
-    fetched_agent = response.json()
-    assert fetched_agent["status"] == "processing"
+        # Call the endpoint
+        response = client.post(f"/api/agents/{sample_agent.id}/run")
+        assert response.status_code == 200
+        run_agent = response.json()
+        assert run_agent["id"] == sample_agent.id
+        assert run_agent["status"] == "idle"  # Status should be "idle" after completion
+
+        # Verify the agent status in the database is "idle"
+        response = client.get(f"/api/agents/{sample_agent.id}")
+        assert response.status_code == 200
+        fetched_agent = response.json()
+        assert fetched_agent["status"] == "idle"
 
 
 def test_run_agent_not_found(client: TestClient):
