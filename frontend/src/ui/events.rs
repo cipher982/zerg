@@ -2,8 +2,6 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Document, Event, HtmlInputElement, HtmlTextAreaElement, MouseEvent};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
-use std::rc::Rc;
-use std::cell::RefCell;
 use crate::{
     messages::Message,
     models::NodeType,

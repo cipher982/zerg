@@ -22,6 +22,9 @@ pub enum Message {
     EditAgent(String),                   // Edit existing agent by ID
     DeleteAgent(String),                 // Delete an agent by ID
     
+    // Canvas generation from agents
+    GenerateCanvasFromAgents,           // Create nodes for agents that don't have one
+    
     // Node manipulation 
     UpdateNodePosition {
         node_id: String,
@@ -48,6 +51,16 @@ pub enum Message {
         text: String,
     },
     DeleteNode {
+        node_id: String,
+    },
+    
+    // Explicit sync between agents and nodes
+    SyncNodeToAgent {
+        node_id: String,
+        agent_id: u32,
+    },
+    SyncAgentToNode {
+        agent_id: u32,
         node_id: String,
     },
     
@@ -136,6 +149,12 @@ pub enum Message {
         node_id: String,
         status: String,
     },
+    
+    // Database management
+    ResetDatabase,                      // Clear all agent data from database
+    
+    // Reload agents from the API to refresh state
+    RefreshAgentsFromAPI,
     
     // Animation related
     AnimationTick,

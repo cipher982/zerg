@@ -100,36 +100,29 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     let search_icon = document.create_element("span")?;
     search_icon.set_class_name("search-icon");
     search_icon.set_inner_html("🔍");
-    search_container.append_child(&search_icon)?;
     
     let search_input = document.create_element("input")?;
-    search_input.set_id("agent-search");
-    search_input.dyn_ref::<web_sys::HtmlInputElement>().unwrap().set_placeholder("Search agents...");
+    search_input.set_class_name("search-input");
+    let search_input_element = search_input.dyn_ref::<web_sys::HtmlInputElement>()
+        .ok_or(JsValue::from_str("Could not cast to HtmlInputElement"))?;
+    search_input_element.set_placeholder("Search agents...");
+    search_input_element.set_attribute("id", "agent-search")?;
     
-    // Add event listener for searching
-    let search_callback = Closure::wrap(Box::new(move |event: web_sys::Event| {
-        let target = event.target().unwrap();
-        let input = target.dyn_ref::<web_sys::HtmlInputElement>().unwrap();
-        let search_term = input.value();
-        web_sys::console::log_1(&format!("Search term: {}", search_term).into());
-        // Implement search filtering
-    }) as Box<dyn FnMut(_)>);
-    
-    search_input.dyn_ref::<HtmlElement>()
-        .unwrap()
-        .add_event_listener_with_callback("input", search_callback.as_ref().unchecked_ref())?;
-    search_callback.forget();
-    
+    search_container.append_child(&search_icon)?;
     search_container.append_child(&search_input)?;
-    header.append_child(&search_container)?;
     
-    // Create new agent button
-    let create_btn = document.create_element("button")?;
-    create_btn.set_id("create-agent-btn");
-    create_btn.set_class_name("create-agent-btn");
-    create_btn.set_inner_html("+ Create New Agent");
+    // Button container
+    let button_container = document.create_element("div")?;
+    button_container.set_class_name("button-container");
     
-    let create_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+    // Create Agent button
+    let create_button = document.create_element("button")?;
+    create_button.set_class_name("create-agent-button");
+    create_button.set_inner_html("Create Agent");
+    create_button.set_attribute("id", "create-agent-button")?;
+    
+    // Add click event handler for Create Agent button
+    let create_callback = Closure::wrap(Box::new(move || {
         web_sys::console::log_1(&"Create new agent from dashboard".into());
         
         // Generate a random agent name
@@ -168,6 +161,19 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                                 system_instructions: "You are a helpful AI assistant.".to_string(),
                                 task_instructions: "Respond to user questions accurately and concisely.".to_string(),
                             });
+                            
+                            // Refresh agents from API to update state
+                            crate::state::dispatch_global_message(crate::messages::Message::RefreshAgentsFromAPI);
+                            
+                            // Now explicitly refresh the dashboard to show the new agent
+                            if let Some(window) = web_sys::window() {
+                                if let Some(document) = window.document() {
+                                    // Refresh the dashboard UI
+                                    if let Err(e) = render_dashboard(&document) {
+                                        web_sys::console::error_1(&format!("Failed to refresh dashboard: {:?}", e).into());
+                                    }
+                                }
+                            }
                         }
                     }
                 },
@@ -176,21 +182,20 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                 }
             }
         });
-    }) as Box<dyn FnMut(_)>);
+    }) as Box<dyn FnMut()>);
     
-    create_btn.dyn_ref::<HtmlElement>()
-        .unwrap()
-        .add_event_listener_with_callback("click", create_callback.as_ref().unchecked_ref())?;
+    let create_btn = create_button.dyn_ref::<web_sys::HtmlElement>()
+        .ok_or(JsValue::from_str("Could not cast to HtmlElement"))?;
+    create_btn.set_onclick(Some(create_callback.as_ref().unchecked_ref()));
     create_callback.forget();
-    
-    header.append_child(&create_btn)?;
     
     // Create reset database button (development only)
     let reset_btn = document.create_element("button")?;
-    reset_btn.set_id("reset-db-btn");
     reset_btn.set_class_name("reset-db-btn");
     reset_btn.set_inner_html("🗑️ Reset DB");
+    reset_btn.set_attribute("id", "reset-db-btn")?;
     
+    // Reset button click handler
     let reset_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&"Reset database requested".into());
         
@@ -208,6 +213,9 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                 match ApiClient::reset_database().await {
                     Ok(response) => {
                         web_sys::console::log_1(&format!("Database reset successful: {}", response).into());
+                        
+                        // Use message-based state update instead of direct mutation
+                        crate::state::dispatch_global_message(crate::messages::Message::ResetDatabase);
                         
                         // Force a hard refresh without showing another popup
                         let window = web_sys::window().unwrap();
@@ -239,12 +247,16 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
         }
     }) as Box<dyn FnMut(_)>);
     
-    reset_btn.dyn_ref::<HtmlElement>()
-        .unwrap()
-        .add_event_listener_with_callback("click", reset_callback.as_ref().unchecked_ref())?;
+    let reset_btn_elem = reset_btn.dyn_ref::<web_sys::HtmlElement>()
+        .ok_or(JsValue::from_str("Could not cast to HtmlElement"))?;
+    reset_btn_elem.set_onclick(Some(reset_callback.as_ref().unchecked_ref()));
     reset_callback.forget();
     
-    header.append_child(&reset_btn)?;
+    button_container.append_child(&create_button)?;
+    button_container.append_child(&reset_btn)?;
+    
+    header.append_child(&search_container)?;
+    header.append_child(&button_container)?;
     
     Ok(header)
 }
@@ -573,10 +585,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
 
 // Get agents from the application state
 fn get_agents_from_app_state() -> Vec<Agent> {
-    let mut agents = Vec::new();
-    
-    // Collect all necessary data in a single borrow to avoid nested borrows
-    let nodes_data = APP_STATE.with(|state| {
+    let agents_data = APP_STATE.with(|state| {
         let state = state.borrow();
         
         // Return early if still loading
@@ -584,99 +593,46 @@ fn get_agents_from_app_state() -> Vec<Agent> {
             return Vec::new();
         }
         
-        // Collect all node data we need in a single pass
-        state.nodes.iter()
-            .filter(|(_, node)| node.node_type == NodeType::AgentIdentity)
-            .map(|(id, node)| {
-                // Pre-fetch all required data
-                let node_id = id.clone();
-                let node_text = node.text.clone();
+        // Collect all agent data directly from the agents HashMap
+        state.agents.iter()
+            .map(|(id, api_agent)| {
+                // Convert from ApiAgent to dashboard Agent
+                let agent_id = id.to_string();
+                let name = api_agent.name.clone();
+                let status_str = api_agent.status.clone();
                 
-                // Get status directly using the new method
-                let status_str = node.get_status_from_agents(&state.agents);
-                
-                let history = node.history();
-                
-                (node_id, node_text, status_str, history)
+                // We could also collect history if we have it associated with agents
+                // For now we'll set some defaults
+                (agent_id, name, status_str)
             })
             .collect::<Vec<_>>()
     });
     
     // Sort by name outside the borrow
-    let mut sorted_data = nodes_data;
+    let mut sorted_data = agents_data;
     sorted_data.sort_by(|a, b| a.1.cmp(&b.1));
     
     // Convert to Agent objects
-    for (id, name, status_str, history) in sorted_data {
-        // Convert node status to AgentStatus
+    let mut agents = Vec::new();
+    for (id, name, status_str) in sorted_data {
+        // Convert API status to AgentStatus
         let status = match status_str.as_deref() {
             Some("processing") => AgentStatus::Running,
             Some("error") => AgentStatus::Error,
             Some("scheduled") => AgentStatus::Scheduled,
             Some("paused") => AgentStatus::Paused,
-            Some("idle") => AgentStatus::Idle,
-            None => AgentStatus::Idle,
+            Some("idle") | None => AgentStatus::Idle,
             _ => AgentStatus::Idle, // Default to idle
         };
         
-        // Get last run from history if available
-        let (last_run, last_run_success) = if let Some(history_vec) = &history {
-            let history_vec: &Vec<crate::models::Message> = history_vec;
-            if !history_vec.is_empty() {
-                // Format timestamp to human-readable format
-                let last_message = history_vec.last().unwrap();
-                let timestamp = last_message.timestamp;
-                let date = js_sys::Date::new(&JsValue::from_f64(timestamp as f64));
-                
-                let formatted_date = format!(
-                    "{:02}/{:02} {:02}:{:02}",
-                    date.get_month() + 1, // JS months are 0-indexed
-                    date.get_date(),
-                    date.get_hours(),
-                    date.get_minutes()
-                );
-                
-                // For last run success, check if the message has an error content
-                // For now, we'll assume errors contain the word "error" in the content
-                let success = !last_message.content.to_lowercase().contains("error");
-                
-                (Some(formatted_date), Some(success))
-            } else {
-                (None, None)
-            }
-        } else {
-            (None, None)
-        };
-        
-        // Calculate success rate
-        let (success_rate, run_count) = if let Some(history_vec) = &history {
-            let total = history_vec.len();
-            
-            if total > 0 {
-                // Count successful messages (those without errors)
-                // For now we'll use a simple heuristic - messages without "error" in content
-                let successes = history_vec.iter()
-                    .filter(|msg| !msg.content.to_lowercase().contains("error"))
-                    .count();
-                
-                ((successes as f64 / total as f64) * 100.0, total as u32)
-            } else {
-                (0.0, 0)
-            }
-        } else {
-            (0.0, 0)
-        };
-        
-        // Create agent object
+        // Create agent with available data
         let mut agent = Agent::new(id, name);
-        
-        // Update additional fields
         agent.status = status;
-        agent.last_run = last_run;
-        agent.next_run = None; // This would need to be populated from actual scheduling data
-        agent.success_rate = success_rate;
-        agent.run_count = run_count as u32;
-        agent.last_run_success = last_run_success;
+        
+        // For now, we'll set default values for the other fields
+        // In a more complete implementation, you'd pull this data from your agent history storage
+        agent.success_rate = 100.0; // Default to 100%
+        agent.run_count = 0;
         
         agents.push(agent);
     }
