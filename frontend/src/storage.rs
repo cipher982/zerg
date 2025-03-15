@@ -19,11 +19,12 @@ struct ViewportData {
     zoom: f64,
 }
 
-// Store the active view (Dashboard or Canvas)
+// Store the active view (Dashboard, Canvas, or Chat)
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ActiveView {
     Dashboard,
     Canvas,
+    ChatView,
 }
 
 /// Save current app state to API
@@ -86,7 +87,7 @@ pub fn clear_storage() -> Result<(), JsValue> {
 pub fn save_state_to_api(app_state: &AppState) {
     // Clone the necessary data before passing to the async block
     let nodes = app_state.nodes.clone();
-    let selected_model = app_state.selected_model.clone();
+    let _selected_model = app_state.selected_model.clone();
     let is_dragging = app_state.is_dragging_agent;
     let agents = app_state.agents.clone();
     

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::cell::RefCell;
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
-use crate::models::{Node, NodeType, Workflow, Edge, ApiAgent};
+use crate::models::{Node, NodeType, Workflow, Edge, ApiAgent, ApiThread, ApiThreadMessage};
 use crate::canvas::renderer;
 use crate::storage::ActiveView;
 use js_sys::Date;
@@ -65,7 +65,7 @@ pub struct AppState {
     pub selected_node_id: Option<String>,
     // Flag to track if we're dragging an agent
     pub is_dragging_agent: bool,
-    // Track the active view (Dashboard or Canvas)
+    // Track the active view (Dashboard, Canvas, or ChatView)
     pub active_view: ActiveView,
     // Pending network call data to avoid nested borrows
     pub pending_network_call: Option<(String, String)>,
@@ -73,6 +73,11 @@ pub struct AppState {
     pub is_loading: bool,
     pub data_loaded: bool,
     pub api_load_attempted: bool,
+    // Chat/Thread related state
+    pub current_thread_id: Option<u32>,
+    pub threads: HashMap<u32, ApiThread>,
+    pub thread_messages: HashMap<u32, Vec<ApiThreadMessage>>,
+    pub is_chat_loading: bool,
 }
 
 impl AppState {
@@ -117,6 +122,11 @@ impl AppState {
             is_loading: true,
             data_loaded: false,
             api_load_attempted: false,
+            // Initialize thread-related state
+            current_thread_id: None,
+            threads: HashMap::new(),
+            thread_messages: HashMap::new(),
+            is_chat_loading: false,
         }
     }
 

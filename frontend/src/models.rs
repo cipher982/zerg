@@ -152,6 +152,49 @@ pub struct ApiMessageCreate {
     pub content: String,
 }
 
+/// Thread model from the API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiThread {
+    pub id: Option<u32>,
+    pub agent_id: u32,
+    pub title: String,
+    pub active: bool,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+/// Create a new thread
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiThreadCreate {
+    pub agent_id: u32,
+    pub title: String,
+    pub active: bool,
+}
+
+/// Update a thread
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiThreadUpdate {
+    pub title: Option<String>,
+    pub active: Option<bool>,
+}
+
+/// Thread message from the API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiThreadMessage {
+    pub id: Option<u32>,
+    pub thread_id: u32,
+    pub role: String,
+    pub content: String,
+    pub created_at: Option<String>,
+}
+
+/// Create a new thread message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiThreadMessageCreate {
+    pub role: String,
+    pub content: String,
+}
+
 /// Extension methods for Node to provide backward compatibility with legacy code
 impl Node {
     // Property getters that map old field names to new ones

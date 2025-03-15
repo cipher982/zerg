@@ -5,7 +5,6 @@ use wasm_bindgen_futures::spawn_local;
 use crate::network::fetch_available_models;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
-use crate::constants::DEFAULT_MODEL;
 
 pub fn update_model_dropdown(document: &Document) -> Result<(), JsValue> {
     if let Some(select_el) = document.get_element_by_id("model-select") {

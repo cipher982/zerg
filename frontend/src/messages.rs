@@ -3,7 +3,8 @@
 // The events that can occur in your UI. Expand as needed.
 //
 use crate::storage::ActiveView;
-use crate::models::NodeType;
+use crate::models::{NodeType, ApiThread, ApiThreadMessage};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 #[allow(dead_code)] // Suppress warnings about unused variants
@@ -159,4 +160,32 @@ pub enum Message {
     
     // Animation related
     AnimationTick,
+    
+    // Thread-related messages
+    LoadThreads(u32),                // Load threads for an agent
+    ThreadsLoaded(String),           // Threads loaded from API
+    CreateThread(u32, String),       // Create a new thread for an agent
+    ThreadCreated(String),           // Thread created response
+    SelectThread(u32),               // Select a thread
+    LoadThreadMessages(u32),         // Load messages for a thread
+    ThreadMessagesLoaded(String),    // Thread messages loaded
+    SendThreadMessage(u32, String),  // Send a message to a thread
+    ThreadMessageSent(String),       // Message sent response
+    ThreadMessageReceived(String),   // Message received from websocket
+    UpdateThreadTitle(u32, String),  // Update thread title
+    DeleteThread(u32),               // Delete thread
+    
+    // Navigation messages
+    NavigateToChatView(u32),         // Navigate to chat view with agent
+    NavigateToThreadView(u32),       // Navigate to specific thread
+    NavigateToDashboard,             // Back to dashboard
+    
+    // Chat view messages
+    LoadAgentInfo(u32),                    // Request to load agent info
+    AgentInfoLoaded(String),               // Agent info loaded
+    RequestNewThread,                      // Request to create new thread
+    RequestSendMessage(String),            // Request to send message
+    RequestUpdateThreadTitle(String),      // Request to update thread title
+    UpdateThreadList(Vec<ApiThread>, Option<u32>, HashMap<u32, Vec<ApiThreadMessage>>),  // Update thread list UI
+    UpdateConversation(Vec<ApiThreadMessage>),  // Update conversation UI
 } 

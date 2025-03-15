@@ -6,7 +6,6 @@ pub mod ui_updates;
 // Re-export commonly used functions for backwards compatibility
 pub use ws_client::{setup_websocket, send_text_to_backend, fetch_available_models};
 pub use api_client::ApiClient;
-pub use ui_updates::{update_connection_status, flash_activity};
 
 use wasm_bindgen::JsValue;
 

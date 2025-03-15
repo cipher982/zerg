@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 from typing import List
@@ -6,7 +5,6 @@ from typing import List
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
-from fastapi import WebSocket
 from fastapi import status
 from openai import OpenAI
 from sqlalchemy.orm import Session
@@ -160,169 +158,173 @@ def create_agent_message(agent_id: int, message: MessageCreate, db: Session = De
     return crud.create_agent_message(db=db, agent_id=agent_id, role=message.role, content=message.content)
 
 
-@router.post("/{agent_id}/run", response_model=Agent)
-async def run_agent(agent_id: int, db: Session = Depends(get_db)):
-    """Trigger an agent to run"""
-    # First check if the agent exists
-    db_agent = crud.get_agent(db, agent_id=agent_id)
-    if db_agent is None:
-        raise HTTPException(status_code=404, detail="Agent not found")
+# DEPRECATED: Will be removed after frontend migration
+# Use thread-based execution instead (/api/threads/{thread_id}/run)
+# @router.post("/{agent_id}/run", response_model=Agent)
+# async def run_agent(agent_id: int, db: Session = Depends(get_db)):
+#     """Trigger an agent to run"""
+#     # First check if the agent exists
+#     db_agent = crud.get_agent(db, agent_id=agent_id)
+#     if db_agent is None:
+#         raise HTTPException(status_code=404, detail="Agent not found")
+#
+#     # Update agent status to "processing"
+#     db_agent = crud.update_agent(db, agent_id=agent_id, status="processing")
+#
+#     # Broadcast agent status change to "processing"
+#     await broadcast_event(
+#         EventType.AGENT_STATUS_CHANGED,
+#         {"agent_id": db_agent.id, "name": db_agent.name, "status": "processing", "action": "run"},
+#     )
+#
+#     try:
+#         # Prepare messages for OpenAI
+#         messages = []
+#
+#         # Add system instructions if available
+#         if db_agent.system_instructions:
+#             messages.append({"role": "system", "content": db_agent.system_instructions})
+#
+#         # Add task instructions as the user message
+#         if db_agent.task_instructions:
+#             messages.append({"role": "user", "content": db_agent.task_instructions})
+#         else:
+#             logger.error(f"Agent {agent_id} has no task_instructions")
+#             raise HTTPException(status_code=400, detail="Agent has no task instructions")
+#
+#         # Make the OpenAI API call
+#         response = client.chat.completions.create(
+#             model=db_agent.model,
+#             messages=messages,
+#         )
+#
+#         # Save response to message history
+#         if response.choices and response.choices[0].message:
+#             content = response.choices[0].message.content
+#             crud.create_agent_message(db, agent_id=agent_id, role="assistant", content=content)
+#
+#         # Update agent status back to "idle"
+#         crud.update_agent(db, agent_id=agent_id, status="idle")
+#
+#         # Broadcast status change back to "idle"
+#         await broadcast_event(
+#             EventType.AGENT_STATUS_CHANGED,
+#             {"agent_id": db_agent.id, "name": db_agent.name, "status": "idle", "action": "run_complete"},
+#         )
+#
+#     except Exception as e:
+#         logger.error(f"Error running agent {agent_id}: {str(e)}")
+#
+#         # Update agent status to "error"
+#         crud.update_agent(db, agent_id=agent_id, status="error")
+#
+#         # Broadcast error status
+#         await broadcast_event(
+#             EventType.AGENT_STATUS_CHANGED,
+#             {"agent_id": db_agent.id, "name": db_agent.name, "status": "error", "error": str(e),
+#         )
+#
+#     # Return the agent with its current status
+#     return db_agent
 
-    # Update agent status to "processing"
-    db_agent = crud.update_agent(db, agent_id=agent_id, status="processing")
 
-    # Broadcast agent status change to "processing"
-    await broadcast_event(
-        EventType.AGENT_STATUS_CHANGED,
-        {"agent_id": db_agent.id, "name": db_agent.name, "status": "processing", "action": "run"},
-    )
-
-    try:
-        # Prepare messages for OpenAI
-        messages = []
-
-        # Add system instructions if available
-        if db_agent.system_instructions:
-            messages.append({"role": "system", "content": db_agent.system_instructions})
-
-        # Add task instructions as the user message
-        if db_agent.task_instructions:
-            messages.append({"role": "user", "content": db_agent.task_instructions})
-        else:
-            logger.error(f"Agent {agent_id} has no task_instructions")
-            raise HTTPException(status_code=400, detail="Agent has no task instructions")
-
-        # Make the OpenAI API call
-        response = client.chat.completions.create(
-            model=db_agent.model,
-            messages=messages,
-        )
-
-        # Save response to message history
-        if response.choices and response.choices[0].message:
-            content = response.choices[0].message.content
-            crud.create_agent_message(db, agent_id=agent_id, role="assistant", content=content)
-
-        # Update agent status back to "idle"
-        crud.update_agent(db, agent_id=agent_id, status="idle")
-
-        # Broadcast status change back to "idle"
-        await broadcast_event(
-            EventType.AGENT_STATUS_CHANGED,
-            {"agent_id": db_agent.id, "name": db_agent.name, "status": "idle", "action": "run_complete"},
-        )
-
-    except Exception as e:
-        logger.error(f"Error running agent {agent_id}: {str(e)}")
-
-        # Update agent status to "error"
-        crud.update_agent(db, agent_id=agent_id, status="error")
-
-        # Broadcast error status
-        await broadcast_event(
-            EventType.AGENT_STATUS_CHANGED,
-            {"agent_id": db_agent.id, "name": db_agent.name, "status": "error", "error": str(e), "action": "run_error"},
-        )
-
-    # Return the agent with its current status
-    return db_agent
-
-
-@router.websocket("/{agent_id}/ws")
-async def agent_websocket(websocket: WebSocket, agent_id: int, db: Session = Depends(get_db)):
-    """WebSocket endpoint for real-time agent communication"""
-    await websocket.accept()
-
-    # Get the agent
-    db_agent = crud.get_agent(db, agent_id=agent_id)
-    if db_agent is None:
-        await websocket.send_json({"type": "error", "error": "Agent not found"})
-        await websocket.close()
-        return
-
-    try:
-        # Update agent status to processing
-        crud.update_agent(db, agent_id=agent_id, status="processing")
-
-        # Broadcast status change
-        await broadcast_event(
-            EventType.AGENT_STATUS_CHANGED,
-            {"agent_id": agent_id, "name": db_agent.name, "status": "processing", "action": "websocket_connected"},
-        )
-
-        # Get user message
-        data = await websocket.receive_text()
-        json_data = json.loads(data)
-
-        # Create message in DB
-        _ = crud.create_agent_message(db=db, agent_id=agent_id, role="user", content=json_data.get("text", ""))
-
-        # Prepare messages for OpenAI
-        messages = []
-        if db_agent.system_instructions:
-            messages.append({"role": "system", "content": db_agent.system_instructions})
-
-        # Add the user message
-        messages.append({"role": "user", "content": json_data.get("text", "")})
-
-        # Stream response from OpenAI
-        response = client.chat.completions.create(
-            model=db_agent.model or "gpt-4o",
-            messages=messages,
-            stream=True,
-        )
-
-        # Return message_id if provided
-        if "message_id" in json_data:
-            await websocket.send_json({"type": "message_id", "message_id": json_data["message_id"]})
-
-        # Collection for full response
-        full_response = ""
-
-        # Stream the response
-        for chunk in response:
-            if chunk.choices and chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                full_response += content
-                await websocket.send_json({"type": "chunk", "chunk": content})
-
-        # Create assistant message in DB
-        _ = crud.create_agent_message(db=db, agent_id=agent_id, role="assistant", content=full_response)
-
-        # Update agent status back to idle
-        crud.update_agent(db, agent_id=agent_id, status="idle")
-
-        # Broadcast status change back to idle
-        await broadcast_event(
-            EventType.AGENT_STATUS_CHANGED,
-            {"agent_id": agent_id, "name": db_agent.name, "status": "idle", "action": "processing_complete"},
-        )
-
-        # Signal end of response
-        await websocket.send_json({"type": "done"})
-
-    except Exception as e:
-        logger.error(f"Agent WebSocket error: {str(e)}")
-
-        # Update agent status on error
-        crud.update_agent(db, agent_id=agent_id, status="error")
-
-        # Broadcast error status
-        await broadcast_event(
-            EventType.AGENT_STATUS_CHANGED,
-            {
-                "agent_id": agent_id,
-                "name": db_agent.name if db_agent else "Unknown",
-                "status": "error",
-                "error": str(e),
-                "action": "websocket_error",
-            },
-        )
-
-        await websocket.send_json({"type": "error", "error": str(e)})
-
-        # Try to close WebSocket gracefully
-        try:
-            await websocket.close()
-        except Exception:
-            pass
+# DEPRECATED: Will be removed after frontend migration
+# Use thread-based WebSocket instead (/api/threads/{thread_id}/ws)
+# @router.websocket("/{agent_id}/ws")
+# async def agent_websocket(websocket: WebSocket, agent_id: int, db: Session = Depends(get_db)):
+#     """WebSocket endpoint for real-time agent communication"""
+#     await websocket.accept()
+#
+#     # Get the agent
+#     db_agent = crud.get_agent(db, agent_id=agent_id)
+#     if db_agent is None:
+#         await websocket.send_json({"type": "error", "error": "Agent not found"})
+#         await websocket.close()
+#         return
+#
+#     try:
+#         # Update agent status to processing
+#         crud.update_agent(db, agent_id=agent_id, status="processing")
+#
+#         # Broadcast status change
+#         await broadcast_event(
+#             EventType.AGENT_STATUS_CHANGED,
+#             {"agent_id": agent_id, "name": db_agent.name, "status": "processing", "action": "websocket_connected"},
+#         )
+#
+#         # Get user message
+#         data = await websocket.receive_text()
+#         json_data = json.loads(data)
+#
+#         # Create message in DB
+#         _ = crud.create_agent_message(db=db, agent_id=agent_id, role="user", content=json_data.get("text", ""))
+#
+#         # Prepare messages for OpenAI
+#         messages = []
+#         if db_agent.system_instructions:
+#             messages.append({"role": "system", "content": db_agent.system_instructions})
+#
+#         # Add the user message
+#         messages.append({"role": "user", "content": json_data.get("text", "")})
+#
+#         # Stream response from OpenAI
+#         response = client.chat.completions.create(
+#             model=db_agent.model or "gpt-4o",
+#             messages=messages,
+#             stream=True,
+#         )
+#
+#         # Return message_id if provided
+#         if "message_id" in json_data:
+#             await websocket.send_json({"type": "message_id", "message_id": json_data["message_id"]})
+#
+#         # Collection for full response
+#         full_response = ""
+#
+#         # Stream the response
+#         for chunk in response:
+#             if chunk.choices and chunk.choices[0].delta.content:
+#                 content = chunk.choices[0].delta.content
+#                 full_response += content
+#                 await websocket.send_json({"type": "chunk", "chunk": content})
+#
+#         # Create assistant message in DB
+#         _ = crud.create_agent_message(db=db, agent_id=agent_id, role="assistant", content=full_response)
+#
+#         # Update agent status back to idle
+#         crud.update_agent(db, agent_id=agent_id, status="idle")
+#
+#         # Broadcast status change back to idle
+#         await broadcast_event(
+#             EventType.AGENT_STATUS_CHANGED,
+#             {"agent_id": agent_id, "name": db_agent.name, "status": "idle", "action": "processing_complete"},
+#         )
+#
+#         # Signal end of response
+#         await websocket.send_json({"type": "done"})
+#
+#     except Exception as e:
+#         logger.error(f"Agent WebSocket error: {str(e)}")
+#
+#         # Update agent status on error
+#         crud.update_agent(db, agent_id=agent_id, status="error")
+#
+#         # Broadcast error status
+#         await broadcast_event(
+#             EventType.AGENT_STATUS_CHANGED,
+#             {
+#                 "agent_id": agent_id,
+#                 "name": db_agent.name if db_agent else "Unknown",
+#                 "status": "error",
+#                 "error": str(e),
+#                 "action": "websocket_error",
+#             },
+#         )
+#
+#         await websocket.send_json({"type": "error", "error": str(e)})
+#
+#         # Try to close WebSocket gracefully
+#         try:
+#             await websocket.close()
+#         except Exception:
+#             pass
