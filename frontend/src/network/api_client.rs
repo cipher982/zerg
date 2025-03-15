@@ -1,10 +1,8 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{RequestInit, Request, RequestMode};
-use crate::state::APP_STATE;
+use web_sys::{RequestMode};
 use super::ui_updates::flash_activity;
 use crate::constants::{DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT};
-use js_sys::Array;
 
 // REST API Client for Agent operations
 pub struct ApiClient;
@@ -69,6 +67,52 @@ impl ApiClient {
     pub async fn reset_database() -> Result<String, JsValue> {
         let url = format!("{}/api/reset-database", Self::api_base_url());
         Self::fetch_json(&url, "POST", None).await
+    }
+
+    // Thread management
+    pub async fn get_threads(agent_id: Option<u32>) -> Result<String, JsValue> {
+        let url = if let Some(id) = agent_id {
+            format!("{}/api/threads?agent_id={}", Self::api_base_url(), id)
+        } else {
+            format!("{}/api/threads", Self::api_base_url())
+        };
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    pub async fn get_thread(thread_id: u32) -> Result<String, JsValue> {
+        let url = format!("{}/api/threads/{}", Self::api_base_url(), thread_id);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    pub async fn create_thread(agent_id: u32, title: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/threads", Self::api_base_url());
+        let thread_data = format!("{{\"agent_id\": {}, \"title\": \"{}\", \"active\": true}}", agent_id, title);
+        Self::fetch_json(&url, "POST", Some(&thread_data)).await
+    }
+
+    pub async fn update_thread(thread_id: u32, title: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/threads/{}", Self::api_base_url(), thread_id);
+        let thread_data = format!("{{\"title\": \"{}\"}}", title);
+        Self::fetch_json(&url, "PUT", Some(&thread_data)).await
+    }
+
+    pub async fn delete_thread(thread_id: u32) -> Result<(), JsValue> {
+        let url = format!("{}/api/threads/{}", Self::api_base_url(), thread_id);
+        let _ = Self::fetch_json(&url, "DELETE", None).await?;
+        Ok(())
+    }
+
+    // Thread messages
+    pub async fn get_thread_messages(thread_id: u32, skip: u32, limit: u32) -> Result<String, JsValue> {
+        let url = format!("{}/api/threads/{}/messages?skip={}&limit={}", 
+                       Self::api_base_url(), thread_id, skip, limit);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    pub async fn create_thread_message(thread_id: u32, content: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/threads/{}/messages", Self::api_base_url(), thread_id);
+        let message_data = format!("{{\"role\": \"user\", \"content\": \"{}\"}}", content);
+        Self::fetch_json(&url, "POST", Some(&message_data)).await
     }
 
     // Helper function to make fetch requests

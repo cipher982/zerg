@@ -2,7 +2,6 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, HtmlElement};
 use crate::state::APP_STATE;
-use crate::models::NodeType;
 use crate::constants::{
     DEFAULT_AGENT_NAME, 
     DEFAULT_SYSTEM_INSTRUCTIONS, 
@@ -511,7 +510,35 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         .add_event_listener_with_callback("click", edit_callback.as_ref().unchecked_ref())?;
     edit_callback.forget();
     
+    // Chat button
+    let chat_btn = document.create_element("button")?;
+    chat_btn.set_class_name("action-btn chat-btn");
+    chat_btn.set_inner_html("💬");
+    chat_btn.set_attribute("title", "Chat with Agent")?;
+    
+    // Chat button click handler
+    let agent_id = agent.id.clone();
+    let chat_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+        web_sys::console::log_1(&format!("Chat with agent: {}", agent_id).into());
+        
+        // Check if this is an API agent (with agent-{id} format)
+        if let Some(api_agent_id_str) = agent_id.strip_prefix("agent-") {
+            if let Ok(api_agent_id) = api_agent_id_str.parse::<u32>() {
+                // Navigate to the chat view with this agent
+                crate::state::dispatch_global_message(crate::messages::Message::NavigateToChatView(api_agent_id));
+            } else {
+                web_sys::console::error_1(&format!("Invalid agent ID format: {}", agent_id).into());
+            }
+        }
+    }) as Box<dyn FnMut(_)>);
+    
+    chat_btn.dyn_ref::<HtmlElement>()
+        .unwrap()
+        .add_event_listener_with_callback("click", chat_callback.as_ref().unchecked_ref())?;
+    chat_callback.forget();
+    
     actions_cell.append_child(&edit_btn)?;
+    actions_cell.append_child(&chat_btn)?;
     
     // More options button
     let more_btn = document.create_element("button")?;

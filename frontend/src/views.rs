@@ -11,10 +11,43 @@ use wasm_bindgen::JsCast;
 use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
 
 // Render the appropriate view based on the active view in the state
-pub fn render_active_view(state: &AppState, document: &Document) -> Result<(), JsValue> {
+pub fn render_active_view(state: &mut AppState, document: &Document) -> Result<(), JsValue> {
     match state.active_view {
         ActiveView::Dashboard => render_dashboard_view(state, document)?,
         ActiveView::Canvas => render_canvas_view(state, document)?,
+        ActiveView::ChatView => {
+            // Hide other views
+            if let Some(dashboard) = document.get_element_by_id("dashboard-container") {
+                dashboard.set_attribute("style", "display: none;")?;
+            }
+            
+            if let Some(canvas) = document.get_element_by_id("canvas-container") {
+                canvas.set_attribute("style", "display: none;")?;
+            }
+            
+            // Setup the chat view if not already done
+            crate::components::chat_view::setup_chat_view(document)?;
+            
+            // Get the agent ID from the current thread
+            let agent_id = if let Some(thread_id) = state.current_thread_id {
+                if let Some(thread) = state.threads.get(&thread_id) {
+                    Some(thread.agent_id)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            
+            // If we have an agent ID, show the chat view for that agent
+            if let Some(agent_id) = agent_id {
+                crate::components::chat_view::show_chat_view(document, agent_id)?;
+            } else {
+                // If no agent ID, go back to dashboard
+                state.active_view = ActiveView::Dashboard;
+                return render_dashboard_view(state, document);
+            }
+        }
     }
     
     Ok(())
@@ -294,6 +327,10 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
             if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
                 canvas_tab.set_class_name("tab-button active");
             }
+        },
+        ActiveView::ChatView => {
+            // Setup the chat view if needed
+            crate::components::chat_view::setup_chat_view(document)?;
         }
     }
     

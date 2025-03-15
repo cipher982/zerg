@@ -410,4 +410,74 @@ pub async fn fetch_available_models() -> Result<(), JsValue> {
     }
     
     Ok(())
+}
+
+pub fn setup_thread_websocket(thread_id: u32) -> Result<(), JsValue> {
+    flash_activity(); // Flash activity indicator
+    
+    // Get the API base URL
+    let protocol = if crate::network::get_api_base_url()?.starts_with("https") {
+        "wss"
+    } else {
+        "ws"
+    };
+    
+    let base_url = crate::network::get_api_base_url()?
+        .replace("http://", "")
+        .replace("https://", "");
+    
+    let ws_url = format!("{}://{}/api/threads/{}/ws", protocol, base_url, thread_id);
+    
+    web_sys::console::log_1(&format!("Connecting to WebSocket at {}", ws_url).into());
+    
+    // Create a new WebSocket connection
+    let ws = WebSocket::new(&ws_url)?;
+    
+    // Create onopen handler
+    let onopen_callback = Closure::wrap(Box::new(move |_| {
+        web_sys::console::log_1(&"Thread WebSocket connection opened".into());
+        update_connection_status("connected", "green");
+    }) as Box<dyn FnMut(JsValue)>);
+    ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
+    onopen_callback.forget();
+    
+    // Create onmessage handler
+    let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
+        // Process incoming message
+        if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
+            let message_str = String::from(text);
+            
+            web_sys::console::log_1(&format!("Thread WS received: {}", message_str).into());
+            
+            // Dispatch the message to update the UI
+            crate::state::dispatch_global_message(crate::messages::Message::ThreadMessageReceived(message_str));
+        }
+    }) as Box<dyn FnMut(MessageEvent)>);
+    ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
+    onmessage_callback.forget();
+    
+    // Create onclose handler
+    let onclose_callback = Closure::wrap(Box::new(move |_| {
+        web_sys::console::log_1(&"Thread WebSocket connection closed".into());
+        update_connection_status("disconnected", "red");
+    }) as Box<dyn FnMut(JsValue)>);
+    ws.set_onclose(Some(onclose_callback.as_ref().unchecked_ref()));
+    onclose_callback.forget();
+    
+    // Create onerror handler
+    let onerror_callback = Closure::wrap(Box::new(move |e: web_sys::ErrorEvent| {
+        web_sys::console::error_1(&format!("Thread WebSocket error: {:?}", e).into());
+        update_connection_status("error", "red");
+    }) as Box<dyn FnMut(web_sys::ErrorEvent)>);
+    ws.set_onerror(Some(onerror_callback.as_ref().unchecked_ref()));
+    onerror_callback.forget();
+    
+    // Store WebSocket instance and thread ID in the app state
+    crate::state::APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state.websocket = Some(ws);
+        state.current_thread_id = Some(thread_id);
+    });
+    
+    Ok(())
 } 

@@ -1,15 +1,16 @@
 // frontend/src/update.rs
 //
 use crate::messages::Message;
-use crate::state::AppState;
-use crate::models::NodeType;
-use crate::storage::ActiveView;
+use crate::state::{AppState, APP_STATE};
+use crate::models::{NodeType, ApiThread, ApiThreadMessage};
 use crate::constants::{
     DEFAULT_NODE_WIDTH, 
     DEFAULT_NODE_HEIGHT, 
     DEFAULT_AGENT_NODE_COLOR,
-    DEFAULT_MODEL
 };
+use web_sys::Document;
+use wasm_bindgen::JsValue;
+use crate::components::chat_view::{update_thread_title, update_thread_list_ui, update_conversation_ui};
 
 pub fn update(state: &mut AppState, msg: Message) {
     match msg {
@@ -799,5 +800,441 @@ pub fn update(state: &mut AppState, msg: Message) {
                 }
             });
         },
+        
+        // Thread-related messages
+        Message::LoadThreads(agent_id) => {
+            state.is_chat_loading = true;
+            
+            // Start an async task to load threads
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::network::api_client::ApiClient::get_threads(Some(agent_id)).await {
+                    Ok(response) => {
+                        // Dispatch a message with the loaded threads
+                        crate::state::dispatch_global_message(Message::ThreadsLoaded(response));
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to load threads: {:?}", e).into());
+                        // Update loading state
+                        crate::state::APP_STATE.with(|state| {
+                            let mut state = state.borrow_mut();
+                            state.is_chat_loading = false;
+                        });
+                    }
+                }
+            });
+        },
+        
+        Message::ThreadsLoaded(response) => {
+            state.is_chat_loading = false;
+            
+            // Parse the threads from the response
+            if let Ok(threads_value) = serde_json::from_str::<serde_json::Value>(&response) {
+                if let Some(threads_array) = threads_value.get("threads").and_then(|v| v.as_array()) {
+                    // Clear existing threads for this agent
+                    let agent_id = threads_array.first()
+                        .and_then(|t| t.get("agent_id"))
+                        .and_then(|a| a.as_u64())
+                        .map(|a| a as u32);
+                    
+                    if let Some(agent_id) = agent_id {
+                        state.threads.retain(|_, thread| thread.agent_id != agent_id);
+                    }
+                    
+                    // Parse and store the threads
+                    for thread_value in threads_array {
+                        if let Ok(thread) = serde_json::from_value::<crate::models::ApiThread>(thread_value.clone()) {
+                            if let Some(thread_id) = thread.id {
+                                state.threads.insert(thread_id, thread);
+                                
+                                // If we don't have a selected thread yet, select this one
+                                if state.current_thread_id.is_none() {
+                                    state.current_thread_id = Some(thread_id);
+                                    
+                                    // Load messages for this thread
+                                    crate::state::dispatch_global_message(Message::LoadThreadMessages(thread_id));
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Update the UI
+                    if let Some(document) = web_sys::window().unwrap().document() {
+                        let _ = update_thread_list(&document);
+                        let _ = update_thread_title(&document);
+                    }
+                }
+            }
+        },
+        
+        Message::CreateThread(agent_id, title) => {
+            // Create a new thread
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::network::api_client::ApiClient::create_thread(agent_id, &title).await {
+                    Ok(response) => {
+                        // Dispatch a message with the created thread
+                        crate::state::dispatch_global_message(Message::ThreadCreated(response));
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to create thread: {:?}", e).into());
+                    }
+                }
+            });
+        },
+        
+        Message::ThreadCreated(response) => {
+            // Parse the created thread from the response
+            if let Ok(thread_value) = serde_json::from_str::<serde_json::Value>(&response) {
+                if let Ok(thread) = serde_json::from_value::<crate::models::ApiThread>(thread_value) {
+                    if let Some(thread_id) = thread.id {
+                        // Store the thread
+                        state.threads.insert(thread_id, thread);
+                        
+                        // Select the new thread
+                        state.current_thread_id = Some(thread_id);
+                        
+                        // Update the UI
+                        if let Some(document) = web_sys::window().unwrap().document() {
+                            let _ = update_thread_list(&document);
+                            let _ = update_thread_title(&document);
+                        }
+                    }
+                }
+            }
+        },
+        
+        Message::SelectThread(thread_id) => {
+            // Set the current thread
+            state.current_thread_id = Some(thread_id);
+            
+            // Load messages for this thread if we don't have them yet
+            if !state.thread_messages.contains_key(&thread_id) {
+                crate::state::dispatch_global_message(Message::LoadThreadMessages(thread_id));
+            }
+            
+            // Update the thread title and conversation
+            if let Some(document) = web_sys::window().unwrap().document() {
+                let _ = update_thread_list(&document);
+                let _ = update_thread_title(&document);
+                let _ = update_conversation(&document);
+            }
+            
+            // Setup WebSocket for the thread
+            let _ = crate::network::ws_client::setup_thread_websocket(thread_id);
+        },
+        
+        Message::LoadThreadMessages(thread_id) => {
+            state.is_chat_loading = true;
+            
+            // Start an async task to load messages
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::network::api_client::ApiClient::get_thread_messages(thread_id, 0, 100).await {
+                    Ok(response) => {
+                        // Dispatch a message with the loaded messages
+                        crate::state::dispatch_global_message(Message::ThreadMessagesLoaded(response));
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to load thread messages: {:?}", e).into());
+                        // Update loading state
+                        crate::state::APP_STATE.with(|state| {
+                            let mut state = state.borrow_mut();
+                            state.is_chat_loading = false;
+                        });
+                    }
+                }
+            });
+        },
+        
+        Message::ThreadMessagesLoaded(response) => {
+            state.is_chat_loading = false;
+            
+            // Parse the messages from the response
+            if let Ok(messages_value) = serde_json::from_str::<serde_json::Value>(&response) {
+                if let Some(messages_array) = messages_value.get("messages").and_then(|v| v.as_array()) {
+                    // Get the thread ID from the first message
+                    let thread_id = messages_array.first()
+                        .and_then(|m| m.get("thread_id"))
+                        .and_then(|t| t.as_u64())
+                        .map(|t| t as u32);
+                    
+                    if let Some(thread_id) = thread_id {
+                        // Parse and store the messages
+                        let mut thread_messages = Vec::new();
+                        
+                        for message_value in messages_array {
+                            if let Ok(message) = serde_json::from_value::<crate::models::ApiThreadMessage>(message_value.clone()) {
+                                thread_messages.push(message);
+                            }
+                        }
+                        
+                        // Sort messages by creation time (oldest first)
+                        thread_messages.sort_by(|a, b| {
+                            a.created_at.as_ref().unwrap_or(&"".to_string())
+                                .cmp(b.created_at.as_ref().unwrap_or(&"".to_string()))
+                        });
+                        
+                        // Store the messages
+                        state.thread_messages.insert(thread_id, thread_messages);
+                        
+                        // Update the conversation if this is the current thread
+                        if state.current_thread_id == Some(thread_id) {
+                            if let Some(document) = web_sys::window().unwrap().document() {
+                                let _ = update_conversation(&document);
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        
+        Message::SendThreadMessage(thread_id, content) => {
+            // Add an optimistic message to the UI
+            let user_message = crate::models::ApiThreadMessage {
+                id: None,
+                thread_id,
+                role: "user".to_string(),
+                content: content.clone(),
+                created_at: Some(format!("{}", chrono::Utc::now())),
+            };
+            
+            // Add to state
+            if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
+                messages.push(user_message);
+            } else {
+                state.thread_messages.insert(thread_id, vec![user_message]);
+            }
+            
+            // Update the UI
+            if let Some(document) = web_sys::window().unwrap().document() {
+                let _ = update_conversation(&document);
+                let _ = update_thread_list(&document);
+            }
+            
+            // Send the message to the backend
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::network::api_client::ApiClient::create_thread_message(thread_id, &content).await {
+                    Ok(response) => {
+                        // Dispatch a message with the sent message
+                        crate::state::dispatch_global_message(Message::ThreadMessageSent(response));
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to send thread message: {:?}", e).into());
+                    }
+                }
+            });
+        },
+        
+        Message::ThreadMessageSent(response) => {
+            // Parse the sent message from the response
+            if let Ok(message_value) = serde_json::from_str::<serde_json::Value>(&response) {
+                if let Ok(message) = serde_json::from_value::<crate::models::ApiThreadMessage>(message_value) {
+                    let thread_id = message.thread_id;
+                    
+                    // Remove the optimistic message and add the confirmed one
+                    if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
+                        // Replace the optimistic message with the confirmed one
+                        // For simplicity, we'll just add it to the end, assuming order is fine
+                        messages.push(message);
+                    }
+                    
+                    // Update the UI
+                    if let Some(document) = web_sys::window().unwrap().document() {
+                        let _ = update_conversation(&document);
+                    }
+                }
+            }
+        },
+        
+        Message::ThreadMessageReceived(message_str) => {
+            // Parse the received message
+            if let Ok(message_value) = serde_json::from_str::<serde_json::Value>(&message_str) {
+                if let Ok(message) = serde_json::from_value::<crate::models::ApiThreadMessage>(message_value) {
+                    let thread_id = message.thread_id;
+                    
+                    // Add the message to the thread
+                    if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
+                        messages.push(message);
+                    } else {
+                        state.thread_messages.insert(thread_id, vec![message]);
+                    }
+                    
+                    // Update the UI
+                    if let Some(document) = web_sys::window().unwrap().document() {
+                        let _ = update_conversation(&document);
+                        let _ = update_thread_list(&document);
+                    }
+                }
+            }
+        },
+        
+        Message::UpdateThreadTitle(thread_id, title) => {
+            // Update the thread title optimistically
+            if let Some(thread) = state.threads.get_mut(&thread_id) {
+                thread.title = title.clone();
+            }
+            
+            // Update the UI
+            if let Some(document) = web_sys::window().unwrap().document() {
+                let _ = update_thread_list(&document);
+                let _ = update_thread_title(&document);
+            }
+            
+            // Send the update to the backend
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::network::api_client::ApiClient::update_thread(thread_id, &title).await {
+                    Ok(_) => {
+                        // No need for a message here, we already updated the UI optimistically
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to update thread title: {:?}", e).into());
+                    }
+                }
+            });
+        },
+        
+        Message::DeleteThread(thread_id) => {
+            // Delete the thread optimistically
+            state.threads.remove(&thread_id);
+            state.thread_messages.remove(&thread_id);
+            
+            // If this was the current thread, clear the current thread
+            if state.current_thread_id == Some(thread_id) {
+                state.current_thread_id = None;
+            }
+            
+            // Update the UI
+            if let Some(document) = web_sys::window().unwrap().document() {
+                let _ = update_thread_list(&document);
+                let _ = update_conversation(&document);
+            }
+            
+            // Send the delete request to the backend
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::network::api_client::ApiClient::delete_thread(thread_id).await {
+                    Ok(_) => {
+                        // No need for a message here, we already updated the UI optimistically
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to delete thread: {:?}", e).into());
+                    }
+                }
+            });
+        },
+        
+        // Navigation messages
+        Message::NavigateToChatView(agent_id) => {
+            // Set the active view to ChatView
+            state.active_view = crate::storage::ActiveView::ChatView;
+            
+            // Show the chat view
+            if let Some(document) = web_sys::window().unwrap().document() {
+                let _ = crate::components::chat_view::setup_chat_view(&document);
+                let _ = crate::components::chat_view::show_chat_view(&document, agent_id);
+            }
+        },
+        
+        Message::NavigateToThreadView(thread_id) => {
+            // Set the current thread and navigate to chat view
+            state.current_thread_id = Some(thread_id);
+            
+            // Get the agent ID from the thread
+            if let Some(thread) = state.threads.get(&thread_id) {
+                let agent_id = thread.agent_id;
+                crate::state::dispatch_global_message(Message::NavigateToChatView(agent_id));
+            }
+        },
+        
+        Message::NavigateToDashboard => {
+            // Set the active view to Dashboard
+            state.active_view = crate::storage::ActiveView::Dashboard;
+            
+            // Show the dashboard
+            if let Some(document) = web_sys::window().unwrap().document() {
+                crate::views::render_active_view_by_type(&crate::storage::ActiveView::Dashboard, &document).unwrap();
+            }
+        },
+
+        Message::LoadAgentInfo(agent_id) => {
+            // Start an async task to load agent info
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::network::api_client::ApiClient::get_agent(agent_id).await {
+                    Ok(response) => {
+                        crate::state::dispatch_global_message(Message::AgentInfoLoaded(response));
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to load agent info: {:?}", e).into());
+                    }
+                }
+            });
+        },
+
+        Message::AgentInfoLoaded(response) => {
+            // Parse and update agent info in state
+            if let Ok(agent) = serde_json::from_str::<crate::models::ApiAgent>(&response) {
+                if let Some(id) = agent.id {
+                    state.agents.insert(id, agent);
+                }
+            }
+        },
+
+        Message::RequestNewThread => {
+            // Get current agent ID from state
+            if let Some(thread) = state.current_thread_id.and_then(|id| state.threads.get(&id)) {
+                let agent_id = thread.agent_id;
+                let title = "New Thread".to_string();
+                crate::state::dispatch_global_message(Message::CreateThread(agent_id, title));
+            }
+        },
+
+        Message::RequestSendMessage(content) => {
+            // Send message to current thread
+            if let Some(thread_id) = state.current_thread_id {
+                crate::state::dispatch_global_message(Message::SendThreadMessage(thread_id, content));
+            }
+        },
+
+        Message::RequestUpdateThreadTitle(title) => {
+            // Update current thread title
+            if let Some(thread_id) = state.current_thread_id {
+                crate::state::dispatch_global_message(Message::UpdateThreadTitle(thread_id, title));
+            }
+        },
+
+        Message::UpdateThreadList(threads, current_thread_id, thread_messages) => {
+            // Update the UI with the provided thread data
+            if let Some(document) = web_sys::window().unwrap().document() {
+                let _ = update_thread_list_ui(&document, &threads, current_thread_id, &thread_messages);
+            }
+        },
+
+        Message::UpdateConversation(messages) => {
+            // Update the UI with the provided conversation messages
+            if let Some(document) = web_sys::window().unwrap().document() {
+                let _ = update_conversation_ui(&document, &messages);
+            }
+        },
     }
+}
+
+// Update thread list UI
+pub fn update_thread_list(document: &Document) -> Result<(), JsValue> {
+    APP_STATE.with(|state| {
+        let state = state.borrow();
+        let threads: Vec<ApiThread> = state.threads.values().cloned().collect();
+        let current_thread_id = state.current_thread_id;
+        let thread_messages = state.thread_messages.clone();
+        update_thread_list_ui(document, &threads, current_thread_id, &thread_messages)
+    })
+}
+
+// Update conversation UI
+pub fn update_conversation(document: &Document) -> Result<(), JsValue> {
+    APP_STATE.with(|state| {
+        let state = state.borrow();
+        if let Some(thread_id) = state.current_thread_id {
+            if let Some(messages) = state.thread_messages.get(&thread_id) {
+                return update_conversation_ui(document, messages);
+            }
+        }
+        Ok(())
+    })
 } 
