@@ -243,17 +243,25 @@ fn handle_websocket_message(event: web_sys::MessageEvent) -> Result<(), JsValue>
                 if let Some(text) = json.get("text").and_then(|t| t.as_str()) {
                     let is_first_chunk = json.get("first_chunk").and_then(|f| f.as_bool()).unwrap_or(false);
                     
-                    crate::state::APP_STATE.with(|state| {
+                    // Don't dispatch directly while holding the state borrow
+                    let message_id_clone = message_id.to_string();
+                    let text_clone = text.to_string();
+                    
+                    // Use a two-step approach: first check if we need to update a node
+                    let node_id_opt = crate::state::APP_STATE.with(|state| {
                         let state = state.borrow();
-                        if let Some(node_id) = state.get_node_id_for_message(message_id) {
-                            // Dispatch a message to update the node text
-                            crate::state::dispatch_global_message(crate::messages::Message::UpdateNodeText {
-                                node_id,
-                                text: text.to_string(),
-                                is_first_chunk,
-                            });
-                        }
+                        state.get_node_id_for_message(message_id_clone.as_str()).map(String::from)
                     });
+                    
+                    // If we have a node to update, schedule the update separately
+                    if let Some(node_id) = node_id_opt {
+                        // This dispatch happens outside of any borrowing
+                        crate::state::dispatch_global_message(crate::messages::Message::UpdateNodeText {
+                            node_id,
+                            text: text_clone,
+                            is_first_chunk,
+                        });
+                    }
                 }
             }
         },
@@ -449,8 +457,22 @@ pub fn setup_thread_websocket(thread_id: u32) -> Result<(), JsValue> {
             
             web_sys::console::log_1(&format!("Thread WS received: {}", message_str).into());
             
-            // Dispatch the message to update the UI
-            crate::state::dispatch_global_message(crate::messages::Message::ThreadMessageReceived(message_str));
+            // Use a setTimeout to ensure we're not dispatching while inside another dispatch
+            let message_str_clone = message_str.clone();
+            let cb = Closure::once(Box::new(move || {
+                // This dispatch happens outside of any borrowing
+                crate::state::dispatch_global_message(crate::messages::Message::ThreadMessageReceived(message_str_clone));
+            }) as Box<dyn FnOnce()>);
+            
+            web_sys::window()
+                .expect("no global window exists")
+                .set_timeout_with_callback_and_timeout_and_arguments_0(
+                    cb.as_ref().unchecked_ref(),
+                    0
+                )
+                .expect("failed to set timeout");
+                
+            cb.forget();
         }
     }) as Box<dyn FnMut(MessageEvent)>);
     ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));

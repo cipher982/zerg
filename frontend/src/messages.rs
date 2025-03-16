@@ -186,6 +186,8 @@ pub enum Message {
     RequestNewThread,                      // Request to create new thread
     RequestSendMessage(String),            // Request to send message
     RequestUpdateThreadTitle(String),      // Request to update thread title
+    RequestThreadTitleUpdate,              // Request to refresh thread title UI
     UpdateThreadList(Vec<ApiThread>, Option<u32>, HashMap<u32, Vec<ApiThreadMessage>>),  // Update thread list UI
     UpdateConversation(Vec<ApiThreadMessage>),  // Update conversation UI
+    UpdateThreadTitleUI(String),           // Update thread title UI with provided title
 } 
