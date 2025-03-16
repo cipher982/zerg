@@ -6,6 +6,7 @@ use crate::models::{ApiThread, ApiThreadMessage};
 use wasm_bindgen::JsCast;
 use crate::storage::ActiveView;
 use std::collections::HashMap;
+use js_sys::Function as JsFunction;
 
 // Main function to setup the chat view
 pub fn setup_chat_view(document: &Document) -> Result<(), JsValue> {
@@ -162,9 +163,37 @@ pub fn show_chat_view(document: &Document, agent_id: u32) -> Result<(), JsValue>
         chat_view.set_attribute("style", "display: flex;")?;
     }
     
-    // Dispatch messages to load necessary data
-    dispatch_global_message(Message::LoadAgentInfo(agent_id));
-    dispatch_global_message(Message::LoadThreads(agent_id));
+    // IMPORTANT: Instead of directly dispatching messages here, which would cause
+    // a recursive borrow of APP_STATE, use setTimeout to schedule these dispatches
+    // to occur after the current message handler has completed
+    let agent_id_clone = agent_id;
+    let load_agent_info = Closure::once(Box::new(move || {
+        dispatch_global_message(Message::LoadAgentInfo(agent_id_clone));
+    }) as Box<dyn FnOnce()>);
+    
+    let agent_id_clone = agent_id;
+    let load_threads = Closure::once(Box::new(move || {
+        dispatch_global_message(Message::LoadThreads(agent_id_clone));
+    }) as Box<dyn FnOnce()>);
+    
+    // Schedule the dispatches to occur after the current function returns
+    web_sys::window()
+        .expect("no global window exists")
+        .set_timeout_with_callback_and_timeout_and_arguments_0(
+            load_agent_info.as_ref().unchecked_ref(),
+            0
+        )?;
+    
+    web_sys::window()
+        .expect("no global window exists")
+        .set_timeout_with_callback_and_timeout_and_arguments_0(
+            load_threads.as_ref().unchecked_ref(),
+            0
+        )?;
+    
+    // Prevent these closures from being garbage collected
+    load_agent_info.forget();
+    load_threads.forget();
     
     Ok(())
 }
@@ -312,17 +341,35 @@ pub fn update_conversation_ui(
 
 // Update the thread title in the header
 pub fn update_thread_title(document: &Document) -> Result<(), JsValue> {
-    APP_STATE.with(|state| {
-        let state = state.borrow();
-        
-        if let Some(thread_id) = state.current_thread_id {
-            if let Some(thread) = state.threads.get(&thread_id) {
-                if let Some(title_el) = document.query_selector(".thread-title").ok().flatten() {
-                    title_el.set_text_content(Some(&thread.title));
-                }
-            }
-        }
-    });
+    // Instead of accessing APP_STATE directly, dispatch a message to get the current title
+    // This prevents borrowing conflicts since state access will happen in update()
+    
+    // First, try to extract the thread ID from the document if possible
+    // This is an optional improvement - if not feasible, we can remove this part
+    let thread_id_opt = document
+        .query_selector(".thread-title")
+        .ok()
+        .flatten()
+        .and_then(|el| el.get_attribute("data-thread-id"))
+        .and_then(|id_str| id_str.parse::<u32>().ok());
+    
+    // Request a title update via the message system instead of accessing state directly
+    if thread_id_opt.is_some() {
+        // If we have a thread ID, we could use it, but for now we'll just dispatch a simpler message
+    }
+    
+    // This message will cause the update() function to get the current thread title 
+    // and then dispatch an UpdateThreadTitleUI message
+    dispatch_global_message(Message::RequestThreadTitleUpdate);
+    
+    Ok(())
+}
+
+// New version that accepts the title directly - no APP_STATE access needed
+pub fn update_thread_title_with_data(document: &Document, title: &str) -> Result<(), JsValue> {
+    if let Some(title_el) = document.query_selector(".thread-title").ok().flatten() {
+        title_el.set_text_content(Some(title));
+    }
     
     Ok(())
 }

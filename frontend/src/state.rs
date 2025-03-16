@@ -78,6 +78,8 @@ pub struct AppState {
     pub threads: HashMap<u32, ApiThread>,
     pub thread_messages: HashMap<u32, Vec<ApiThreadMessage>>,
     pub is_chat_loading: bool,
+    // Pending UI updates to avoid recursive borrow issues
+    pub pending_ui_updates: Option<Box<dyn FnOnce()>>,
 }
 
 impl AppState {
@@ -127,6 +129,8 @@ impl AppState {
             threads: HashMap::new(),
             thread_messages: HashMap::new(),
             is_chat_loading: false,
+            // Initialize pending UI updates
+            pending_ui_updates: None,
         }
     }
 
@@ -870,12 +874,20 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
         // Store pending network call data for processing outside of this borrow
         let network_data = pending_network_call.clone();
         
+        // Store and take ownership of any pending UI updates
+        let ui_updates = state.pending_ui_updates.take();
+        
         // Drop the mutable borrow before any additional operations
         drop(state);
         
         // Process any pending network calls
         if let Some((text, message_id)) = network_data {
             crate::network::send_text_to_backend(&text, message_id);
+        }
+        
+        // Execute any pending UI updates
+        if let Some(update_fn) = ui_updates {
+            update_fn();
         }
         
         // Refresh UI after state changes if needed
