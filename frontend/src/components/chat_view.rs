@@ -1,12 +1,11 @@
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, HtmlElement, Event, HtmlInputElement};
-use crate::state::{APP_STATE, dispatch_global_message};
+use crate::state::dispatch_global_message;
 use crate::messages::Message;
 use crate::models::{ApiThread, ApiThreadMessage};
 use wasm_bindgen::JsCast;
 use crate::storage::ActiveView;
 use std::collections::HashMap;
-use js_sys::Function as JsFunction;
 
 // Main function to setup the chat view
 pub fn setup_chat_view(document: &Document) -> Result<(), JsValue> {
