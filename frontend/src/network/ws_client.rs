@@ -469,6 +469,15 @@ pub async fn fetch_available_models() -> Result<(), JsValue> {
 pub fn setup_thread_websocket(thread_id: u32) -> Result<(), JsValue> {
     flash_activity(); // Flash activity indicator
     
+    // Close any existing thread WebSocket connection first
+    crate::state::APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        if let Some(ws) = state.websocket.take() {
+            web_sys::console::log_1(&"Closing existing WebSocket connection".into());
+            let _ = ws.close();
+        }
+    });
+    
     // Get the API base URL
     let protocol = if crate::network::get_api_base_url()?.starts_with("https") {
         "wss"
