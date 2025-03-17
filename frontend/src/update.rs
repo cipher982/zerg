@@ -927,7 +927,7 @@ pub fn update(state: &mut AppState, msg: Message) {
                         // Store the thread
                         state.threads.insert(thread_id, thread);
                        
-                        // Select the new thread
+                        // Select the new thread and close any previous WebSocket
                         state.current_thread_id = Some(thread_id);
                        
                         // Collect data for UI updates
@@ -939,15 +939,21 @@ pub fn update(state: &mut AppState, msg: Message) {
                         // Clone the data for the closure
                         let threads_clone = threads.clone();
                         let thread_messages_clone = thread_messages.clone();
+                        let thread_id_clone = thread_id;
                         
                         // Store for updates to be executed after the borrow is released
                         state.pending_ui_updates = Some(Box::new(move || {
                             web_sys::console::log_1(&format!("Now updating UI with new thread: {}", thread_id).into());
+                            
+                            // Update thread list UI
                             dispatch_global_message(Message::UpdateThreadList(
                                 threads_clone,
                                 current_thread_id,
                                 thread_messages_clone
                             ));
+                            
+                            // Set up WebSocket for the new thread
+                            let _ = crate::network::ws_client::setup_thread_websocket(thread_id_clone);
                         }));
                     } else {
                         web_sys::console::error_1(&"Thread created but ID is missing".into());
@@ -993,7 +999,7 @@ pub fn update(state: &mut AppState, msg: Message) {
                     dispatch_global_message(Message::LoadThreadMessages(thread_id));
                 }
                 
-                // Setup WebSocket for the thread
+                // Setup WebSocket for the thread (existing connections will be closed in setup_thread_websocket)
                 let _ = crate::network::ws_client::setup_thread_websocket(thread_id_clone);
             }));
         },
