@@ -11,7 +11,7 @@ use crate::constants::{
 use web_sys::Document;
 use wasm_bindgen::JsValue;
 use std::collections::HashMap;
-use crate::components::chat_view::{update_thread_title, update_thread_list_ui, update_conversation_ui};
+use crate::components::chat_view::{update_thread_list_ui, update_conversation_ui};
 
 pub fn update(state: &mut AppState, msg: Message) {
     match msg {
@@ -64,18 +64,16 @@ pub fn update(state: &mut AppState, msg: Message) {
            
             // IMPORTANT: We intentionally don't set state_modified = true here
             // This prevents the auto-save mechanism from making redundant API calls
-            // Since we just created this agent through a direct API call,
-            // there's no need to immediately update it again
-            // state.state_modified = true;
-           
-            // IMPORTANT: Don't call refresh_ui_after_state_change() directly here
-            // as it would try to borrow APP_STATE while it's already mutably borrowed.
-            // Instead, dispatch_global_message will handle the UI refresh after the update completes.
-            // This is why we return a tuple (bool, Option<...>) from dispatch() where the bool
-            // indicates if we need a UI refresh.
-           
-            // Return true to indicate UI refresh is needed
-            // The actual refresh will be handled by dispatch_global_message after this borrow is released
+            
+            // Auto-create a default thread for this agent
+            let agent_id_clone = agent_id;
+            // We need to drop the mutable reference to state before dispatching another message
+            {
+                // End of borrow scope
+            }
+            
+            // Create a default thread for this agent
+            dispatch_global_message(Message::CreateThread(agent_id_clone, "Default Thread".to_string()));
         },
        
         Message::EditAgent(agent_id) => {

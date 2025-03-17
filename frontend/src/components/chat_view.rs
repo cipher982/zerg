@@ -250,40 +250,65 @@ pub fn update_thread_list_ui(
                     &format_timestamp(thread.updated_at.as_ref().unwrap_or(&thread.created_at.clone().unwrap_or_default()))
                 ));
                 
-                // Get the last message in this thread to display as preview
+                // Add preview of last message if available
                 let preview = document.create_element("div")?;
                 preview.set_class_name("thread-item-preview");
                 
                 if let Some(messages) = thread_messages.get(&thread_id) {
-                    if let Some(last_message) = messages.last() {
-                        let preview_text = truncate_text(&last_message.content, 50);
-                        preview.set_text_content(Some(&preview_text));
+                    if !messages.is_empty() {
+                        let last_message = messages.last().unwrap();
+                        preview.set_text_content(Some(&truncate_text(&last_message.content, 50)));
                     } else {
-                        preview.set_text_content(Some("No messages yet"));
+                        preview.set_text_content(Some("No messages"));
                     }
                 } else {
-                    preview.set_text_content(Some("Loading..."));
+                    preview.set_text_content(Some("No messages"));
                 }
                 
-                // Add all elements to the thread item
+                // Add elements to thread item
                 thread_item.append_child(&title)?;
                 thread_item.append_child(&timestamp)?;
                 thread_item.append_child(&preview)?;
                 
-                // Add click event to select thread
+                // Add click handler for thread selection
                 let thread_id_clone = thread_id;
-                let thread_click = Closure::wrap(Box::new(move |_: Event| {
+                let click_handler = Closure::wrap(Box::new(move |_: Event| {
                     dispatch_global_message(Message::SelectThread(thread_id_clone));
                 }) as Box<dyn FnMut(_)>);
                 
-                thread_item.add_event_listener_with_callback(
-                    "click", 
-                    thread_click.as_ref().unchecked_ref()
-                )?;
-                thread_click.forget();
+                thread_item.add_event_listener_with_callback("click", click_handler.as_ref().unchecked_ref())?;
+                click_handler.forget();
                 
                 // Add the thread item to the list
                 thread_list.append_child(&thread_item)?;
+            }
+        }
+        
+        // Enable or disable chat input based on whether a thread is selected
+        if let (Some(input), Some(button)) = (
+            document.query_selector(".chat-input").ok().flatten(), 
+            document.query_selector(".send-button").ok().flatten()
+        ) {
+            if current_thread_id.is_none() {
+                // No thread selected, disable input
+                if let Some(html_input) = input.dyn_ref::<web_sys::HtmlInputElement>() {
+                    html_input.set_disabled(true);
+                    html_input.set_placeholder("Create a thread before chatting...");
+                }
+                if let Some(btn_el) = button.dyn_ref::<web_sys::HtmlElement>() {
+                    btn_el.set_attribute("disabled", "true")?;
+                    btn_el.set_class_name("send-button disabled");
+                }
+            } else {
+                // Thread is selected, enable input
+                if let Some(html_input) = input.dyn_ref::<web_sys::HtmlInputElement>() {
+                    html_input.set_disabled(false);
+                    html_input.set_placeholder("Type your message...");
+                }
+                if let Some(btn_el) = button.dyn_ref::<web_sys::HtmlElement>() {
+                    btn_el.remove_attribute("disabled")?;
+                    btn_el.set_class_name("send-button");
+                }
             }
         }
     }
