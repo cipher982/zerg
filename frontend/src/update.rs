@@ -65,15 +65,9 @@ pub fn update(state: &mut AppState, msg: Message) {
             // IMPORTANT: We intentionally don't set state_modified = true here
             // This prevents the auto-save mechanism from making redundant API calls
             
-            // Auto-create a default thread for this agent
-            let agent_id_clone = agent_id;
-            // We need to drop the mutable reference to state before dispatching another message
-            {
-                // End of borrow scope
-            }
-            
-            // Create a default thread for this agent
-            dispatch_global_message(Message::CreateThread(agent_id_clone, "Default Thread".to_string()));
+            // NOTE: We intentionally don't create a thread here.
+            // The backend automatically creates a thread when an agent is created,
+            // and we'll receive a thread_created WebSocket message.
         },
        
         Message::EditAgent(agent_id) => {
@@ -899,10 +893,15 @@ pub fn update(state: &mut AppState, msg: Message) {
         },
        
         Message::CreateThread(agent_id, title) => {
+            // Log for debugging
+            web_sys::console::log_1(&format!("Creating thread for agent {} with title: {}", agent_id, title).into());
+            
             // Create a new thread
             wasm_bindgen_futures::spawn_local(async move {
+                web_sys::console::log_1(&format!("Making API call to create thread for agent: {}", agent_id).into());
                 match crate::network::api_client::ApiClient::create_thread(agent_id, &title).await {
                     Ok(response) => {
+                        web_sys::console::log_1(&format!("Thread created successfully: {}", response).into());
                         // Dispatch a message with the created thread
                         crate::state::dispatch_global_message(Message::ThreadCreated(response));
                     },
@@ -914,9 +913,16 @@ pub fn update(state: &mut AppState, msg: Message) {
         },
        
         Message::ThreadCreated(response) => {
+            // Log the raw response for debugging
+            web_sys::console::log_1(&format!("Thread created response: {}", response).into());
+            
             // Parse the created thread from the response
             if let Ok(thread_value) = serde_json::from_str::<serde_json::Value>(&response) {
-                if let Ok(thread) = serde_json::from_value::<crate::models::ApiThread>(thread_value) {
+                web_sys::console::log_1(&format!("Parsed thread value: {:?}", thread_value).into());
+                
+                if let Ok(thread) = serde_json::from_value::<crate::models::ApiThread>(thread_value.clone()) {
+                    web_sys::console::log_1(&format!("Thread deserialized: id={:?}, title={:?}", thread.id, thread.title).into());
+                    
                     if let Some(thread_id) = thread.id {
                         // Store the thread
                         state.threads.insert(thread_id, thread);
@@ -929,17 +935,28 @@ pub fn update(state: &mut AppState, msg: Message) {
                         let current_thread_id = state.current_thread_id;
                         let thread_messages = state.thread_messages.clone();
                        
-                        // Drop the borrow before any UI updates
-                        {
-                            // End of borrow scope
-                        }
-                       
-                        // Update the UI with a message dispatch
-                        if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-                            dispatch_global_message(Message::UpdateThreadList(threads, current_thread_id, thread_messages));
-                        }
+                        // Use pending_ui_updates to avoid nested borrows
+                        // Clone the data for the closure
+                        let threads_clone = threads.clone();
+                        let thread_messages_clone = thread_messages.clone();
+                        
+                        // Store for updates to be executed after the borrow is released
+                        state.pending_ui_updates = Some(Box::new(move || {
+                            web_sys::console::log_1(&format!("Now updating UI with new thread: {}", thread_id).into());
+                            dispatch_global_message(Message::UpdateThreadList(
+                                threads_clone,
+                                current_thread_id,
+                                thread_messages_clone
+                            ));
+                        }));
+                    } else {
+                        web_sys::console::error_1(&"Thread created but ID is missing".into());
                     }
+                } else {
+                    web_sys::console::error_1(&format!("Failed to deserialize thread from JSON: {}", response).into());
                 }
+            } else {
+                web_sys::console::error_1(&format!("Invalid JSON in thread response: {}", response).into());
             }
         },
        
@@ -1278,15 +1295,39 @@ pub fn update(state: &mut AppState, msg: Message) {
         Message::NavigateToChatView(agent_id) => {
             // Set the active view to ChatView
             state.active_view = crate::storage::ActiveView::ChatView;
+            
+            // Check if the agent has any threads
+            let needs_default_thread = {
+                // Check if this agent has any threads
+                let has_threads = state.threads.values().any(|thread| thread.agent_id == agent_id);
+                !has_threads
+            };
            
             // Get reference to document before leaving this scope
             let document_opt = web_sys::window().and_then(|w| w.document());
+            
+            // Store agent_id for pending updates after we release the borrow
+            let agent_id_for_thread = agent_id;
+            
+            // Use the pending_ui_updates mechanism to queue the thread creation
+            // This avoids recursive borrowing of the state
+            if needs_default_thread {
+                web_sys::console::log_1(&format!("Will auto-create default thread for agent: {}", agent_id).into());
+                
+                // Queue the thread creation for after this update completes
+                state.pending_ui_updates = Some(Box::new(move || {
+                    web_sys::console::log_1(&format!("Now creating default thread for agent: {}", agent_id_for_thread).into());
+                    dispatch_global_message(Message::CreateThread(agent_id_for_thread, "Default Thread".to_string()));
+                }));
+            } else {
+                web_sys::console::log_1(&format!("Agent {} already has threads, skipping auto-creation", agent_id).into());
+            }
            
             // End of the state borrow
             {
                 // End of borrow scope
             }
-           
+            
             // Show the chat view
             if let Some(document) = document_opt {
                 let _ = crate::components::chat_view::setup_chat_view(&document);
@@ -1339,50 +1380,56 @@ pub fn update(state: &mut AppState, msg: Message) {
         },
 
         Message::RequestNewThread => {
-            // Get current agent ID from state, without dispatching in the borrow scope
+            // Get current agent ID from the current thread
             let agent_id_opt = state.current_thread_id
-                .and_then(|id| state.threads.get(&id))
+                .and_then(|thread_id| state.threads.get(&thread_id))
                 .map(|thread| thread.agent_id);
+            
+            // Log for debugging
+            web_sys::console::log_1(&format!("RequestNewThread - agent_id: {:?}", agent_id_opt).into());
            
-            // Drop the borrow before dispatching
-            {
-                // End of borrow scope
-            }
-           
-            // Now it's safe to dispatch
+            // Queue the thread creation for after this update completes to avoid nested borrows
             if let Some(agent_id) = agent_id_opt {
                 let title = "New Thread".to_string();
-                dispatch_global_message(Message::CreateThread(agent_id, title));
+                let agent_id_clone = agent_id;
+                
+                // Store the pending update to be executed after the borrow is released
+                state.pending_ui_updates = Some(Box::new(move || {
+                    web_sys::console::log_1(&format!("Creating new thread for agent: {}", agent_id_clone).into());
+                    dispatch_global_message(Message::CreateThread(agent_id_clone, title));
+                }));
+            } else {
+                web_sys::console::error_1(&"Cannot create thread: No agent selected".into());
             }
         },
 
         Message::RequestSendMessage(content) => {
             // Store thread_id locally
             let thread_id_opt = state.current_thread_id;
-           
-            // Drop the borrow before dispatching
-            {
-                // End of borrow scope
-            }
-           
-            // Now it's safe to dispatch
+            
+            // Use pending_ui_updates to avoid nested borrows
             if let Some(thread_id) = thread_id_opt {
-                dispatch_global_message(Message::SendThreadMessage(thread_id, content));
+                let content_clone = content.clone();
+                
+                // Store updates to be executed after the borrow is released
+                state.pending_ui_updates = Some(Box::new(move || {
+                    dispatch_global_message(Message::SendThreadMessage(thread_id, content_clone));
+                }));
             }
         },
 
         Message::RequestUpdateThreadTitle(title) => {
             // Store thread_id locally before ending the borrow
             let thread_id_opt = state.current_thread_id;
-           
-            // End of the state borrow
-            {
-                // End of borrow scope
-            }
-           
-            // Now it's safe to dispatch
+            
+            // Use pending_ui_updates to avoid nested borrows
             if let Some(thread_id) = thread_id_opt {
-                dispatch_global_message(Message::UpdateThreadTitle(thread_id, title));
+                let title_clone = title.clone();
+                
+                // Store updates to be executed after the borrow is released
+                state.pending_ui_updates = Some(Box::new(move || {
+                    dispatch_global_message(Message::UpdateThreadTitle(thread_id, title_clone));
+                }));
             }
         },
 
