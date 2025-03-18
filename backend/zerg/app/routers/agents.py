@@ -16,8 +16,9 @@ from zerg.app.schemas.schemas import AgentCreate
 from zerg.app.schemas.schemas import AgentUpdate
 from zerg.app.schemas.schemas import MessageCreate
 from zerg.app.schemas.schemas import MessageResponse
-from zerg.app.websocket import EventType
-from zerg.app.websocket import broadcast_event
+
+# from zerg.app.websocket import EventType
+# from zerg.app.websocket import broadcast_event
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -56,15 +57,6 @@ async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
         schedule=agent.schedule,
         config=agent.config,
     )
-
-    # Broadcast about new agent creation
-    try:
-        await broadcast_event(
-            EventType.AGENT_CREATED, {"agent_id": new_agent.id, "name": new_agent.name, "model": new_agent.model}
-        )
-    except Exception as e:
-        logger.error(f"Error broadcasting agent creation: {str(e)}")
-
     return new_agent
 
 
@@ -105,14 +97,6 @@ async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(
     if db_agent is None:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    # Broadcast about agent update
-    try:
-        await broadcast_event(
-            EventType.AGENT_UPDATED, {"agent_id": db_agent.id, "name": db_agent.name, "status": db_agent.status}
-        )
-    except Exception as e:
-        logger.error(f"Error broadcasting agent update: {str(e)}")
-
     return db_agent
 
 
@@ -122,12 +106,6 @@ async def delete_agent(agent_id: int, db: Session = Depends(get_db)):
     success = crud.delete_agent(db, agent_id=agent_id)
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")
-
-    # Broadcast about agent deletion
-    try:
-        await broadcast_event(EventType.AGENT_DELETED, {"agent_id": agent_id})
-    except Exception as e:
-        logger.error(f"Error broadcasting agent deletion: {str(e)}")
 
     return None
 
