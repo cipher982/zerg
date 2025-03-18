@@ -15,6 +15,7 @@ mod messages;  // New module for Message enum
 mod update;    // New module for update function
 mod views;     // New module for view functions
 mod constants; // Module for constants and default values
+pub mod thread_handlers; // Add the new module
 
 // Main entry point for the WASM application
 #[wasm_bindgen(start)]

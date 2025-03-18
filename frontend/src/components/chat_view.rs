@@ -329,12 +329,20 @@ pub fn update_conversation_ui(
             let message_element = document.create_element("div")?;
             
             // Set class based on message role
-            let class_name = if message.role == "user" {
-                "message user-message"
+            let mut class_name = if message.role == "user" {
+                "message user-message".to_string()
             } else {
-                "message assistant-message"
+                "message assistant-message".to_string()
             };
-            message_element.set_class_name(class_name);
+            
+            // Check for optimistic messages (they have IDs close to u32::MAX)
+            if let Some(id) = &message.id {
+                if *id > 4_000_000_000 { // Close to u32::MAX (4,294,967,295)
+                    class_name = format!("{} pending", class_name);
+                }
+            }
+            
+            message_element.set_class_name(&class_name);
             
             // Create content element
             let content = document.create_element("div")?;
@@ -344,9 +352,18 @@ pub fn update_conversation_ui(
             // Create timestamp element
             let timestamp = document.create_element("div")?;
             timestamp.set_class_name("message-time");
-            timestamp.set_text_content(Some(&format_timestamp(
-                &message.created_at.clone().unwrap_or_default()
-            )));
+            
+            let time_text = if let Some(id) = &message.id {
+                if *id > 4_000_000_000 { // Close to u32::MAX
+                    "Sending...".to_string()
+                } else {
+                    format_timestamp(&message.created_at.clone().unwrap_or_default())
+                }
+            } else {
+                format_timestamp(&message.created_at.clone().unwrap_or_default())
+            };
+            
+            timestamp.set_text_content(Some(&time_text));
             
             // Add content and timestamp to message element
             message_element.append_child(&content)?;
