@@ -1084,135 +1084,49 @@ pub fn update(state: &mut AppState, msg: Message) {
         },
        
         Message::SendThreadMessage(thread_id, content) => {
-            // Add an optimistic message to the UI
-            let user_message = crate::models::ApiThreadMessage {
-                id: None,
-                thread_id,
-                role: "user".to_string(),
-                content: content.clone(),
-                created_at: Some(format!("{}", chrono::Utc::now())),
-            };
-           
-            // Prepare data for UI updates
-            let mut conversation_messages = Vec::new();
-            let current_thread_id_opt = state.current_thread_id;
-            let mut thread_messages_map = state.thread_messages.clone();
-            let threads_data: Vec<ApiThread>;
-           
-            // Add to state
-            if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
-                messages.push(user_message.clone());
-                conversation_messages = messages.clone();
-            } else {
-                state.thread_messages.insert(thread_id, vec![user_message.clone()]);
-                conversation_messages = vec![user_message.clone()];
-            }
-           
-            // Get thread list data
-            threads_data = state.threads.values().cloned().collect();
-           
-            // Store content for API call
-            let content_clone = content.clone();
-            
-            // Store updates to be executed after the borrow is released
-            state.pending_ui_updates = Some(Box::new(move || {
-                // Now update the UI
-                if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-                    dispatch_global_message(Message::UpdateConversation(conversation_messages));
-                    dispatch_global_message(Message::UpdateThreadList(
-                        threads_data,
-                        current_thread_id_opt,
-                        thread_messages_map
-                    ));
-                }
-                
-                // Send the message to the backend
-                wasm_bindgen_futures::spawn_local(async move {
-                    match crate::network::api_client::ApiClient::create_thread_message(thread_id, &content_clone).await {
-                        Ok(response) => {
-                            // Dispatch a message with the sent message
-                            crate::state::dispatch_global_message(Message::ThreadMessageSent(response));
-                        },
-                        Err(e) => {
-                            web_sys::console::error_1(&format!("Failed to send thread message: {:?}", e).into());
-                        }
-                    }
-                });
-            }));
+            // Use the modular thread handler instead of inline logic
+            state.pending_ui_updates = Some(
+                crate::thread_handlers::handle_send_thread_message(
+                    thread_id, 
+                    content,
+                    &mut state.thread_messages,
+                    &state.threads,
+                    state.current_thread_id
+                )
+            );
         },
        
-        Message::ThreadMessageSent(response) => {
-            // Parse the sent message from the response
-            if let Ok(message_value) = serde_json::from_str::<serde_json::Value>(&response) {
-                if let Ok(message) = serde_json::from_value::<crate::models::ApiThreadMessage>(message_value) {
-                    let thread_id = message.thread_id;
-                   
-                    // Variables to collect data for UI updates
-                    let mut conversation_messages = Vec::new();
-                   
-                    // Remove the optimistic message and add the confirmed one
-                    if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
-                        // Replace the optimistic message with the confirmed one
-                        // For simplicity, we'll just add it to the end, assuming order is fine
-                        messages.push(message);
-                       
-                        // Clone the messages for UI update
-                        conversation_messages = messages.clone();
-                    }
-                   
-                    // Store updates to be executed after the borrow is released
-                    let conversation_messages_clone = conversation_messages.clone();
-                    state.pending_ui_updates = Some(Box::new(move || {
-                        // Update the UI using message dispatch
-                        if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-                            dispatch_global_message(Message::UpdateConversation(conversation_messages_clone));
-                        }
-                    }));
-                }
+        Message::ThreadMessageSent(response, client_id) => {
+            // Use the modular thread handler
+            if let Some(update_fn) = crate::thread_handlers::handle_thread_message_sent(
+                response,
+                client_id,
+                &mut state.thread_messages
+            ) {
+                state.pending_ui_updates = Some(update_fn);
+            }
+        },
+        
+        Message::ThreadMessageFailed(thread_id, client_id) => {
+            // Use the modular thread handler
+            if let Some(update_fn) = crate::thread_handlers::handle_thread_message_failed(
+                thread_id,
+                client_id,
+                &mut state.thread_messages
+            ) {
+                state.pending_ui_updates = Some(update_fn);
             }
         },
        
         Message::ThreadMessageReceived(message_str) => {
-            // Parse the received message
-            if let Ok(message_value) = serde_json::from_str::<serde_json::Value>(&message_str) {
-                if let Ok(message) = serde_json::from_value::<crate::models::ApiThreadMessage>(message_value) {
-                    let thread_id = message.thread_id;
-                   
-                    // Variables to collect data for UI updates
-                    let mut conversation_messages = Vec::new();
-                    let threads_data: Vec<ApiThread>;
-                    let current_thread_id_opt = state.current_thread_id;
-                    let mut thread_messages_map = state.thread_messages.clone();
-                   
-                    // Add the message to the thread
-                    if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
-                        messages.push(message.clone());
-                        conversation_messages = messages.clone();
-                    } else {
-                        state.thread_messages.insert(thread_id, vec![message.clone()]);
-                        conversation_messages = vec![message.clone()];
-                       
-                        // Update our thread_messages_map clone with the new message
-                        thread_messages_map.insert(thread_id, vec![message.clone()]);
-                    }
-                   
-                    // Get thread list data
-                    threads_data = state.threads.values().cloned().collect();
-                   
-                    // Store updates to be executed after the borrow is released
-                    let conversation_messages_clone = conversation_messages.clone();
-                    state.pending_ui_updates = Some(Box::new(move || {
-                        // Update the UI using message dispatch
-                        if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-                            dispatch_global_message(Message::UpdateConversation(conversation_messages_clone));
-                            dispatch_global_message(Message::UpdateThreadList(
-                                threads_data,
-                                current_thread_id_opt,
-                                thread_messages_map
-                            ));
-                        }
-                    }));
-                }
+            // Use the modular thread handler
+            if let Some(update_fn) = crate::thread_handlers::handle_thread_message_received(
+                message_str,
+                &mut state.thread_messages,
+                &state.threads,
+                state.current_thread_id
+            ) {
+                state.pending_ui_updates = Some(update_fn);
             }
         },
        

@@ -170,7 +170,8 @@ pub enum Message {
     LoadThreadMessages(u32),         // Load messages for a thread
     ThreadMessagesLoaded(String),    // Thread messages loaded
     SendThreadMessage(u32, String),  // Send a message to a thread
-    ThreadMessageSent(String),       // Message sent response
+    ThreadMessageSent(String, String),  // Message sent response with client_id
+    ThreadMessageFailed(u32, String), // Message failed to send with client_id
     ThreadMessageReceived(String),   // Message received from websocket
     UpdateThreadTitle(u32, String),  // Update thread title
     DeleteThread(u32),               // Delete thread
