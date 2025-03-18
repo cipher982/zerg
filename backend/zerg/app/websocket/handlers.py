@@ -22,12 +22,13 @@ from zerg.app.websocket.manager import manager
 logger = logging.getLogger(__name__)
 
 
-async def handle_ping(client_id: str, message: Dict[str, Any]) -> None:
+async def handle_ping(client_id: str, message: Dict[str, Any], db: Session = None) -> None:
     """Handle ping messages to keep connections alive.
 
     Args:
         client_id: The client ID that sent the message
         message: The ping message
+        db: Database session (not used for ping)
     """
     try:
         ping_msg = PingMessage(**message)
@@ -69,7 +70,17 @@ async def handle_subscribe_thread(client_id: str, message: Dict[str, Any], db: S
         # Send thread history to client
         history_msg = ThreadHistoryMessage(
             thread_id=thread_id,
-            messages=[message.to_dict() for message in messages],
+            messages=[
+                {
+                    "id": msg.id,
+                    "thread_id": msg.thread_id,
+                    "role": msg.role,
+                    "content": msg.content,
+                    "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+                    "processed": msg.processed,
+                }
+                for msg in messages
+            ],
             message_id=subscribe_msg.message_id,
         )
 
@@ -120,7 +131,14 @@ async def handle_send_message(client_id: str, message: Dict[str, Any], db: Sessi
             {
                 "type": MessageType.THREAD_MESSAGE,
                 "thread_id": thread_id,
-                "message": thread_message.to_dict(),
+                "message": {
+                    "id": thread_message.id,
+                    "thread_id": thread_message.thread_id,
+                    "role": thread_message.role,
+                    "content": thread_message.content,
+                    "timestamp": thread_message.timestamp.isoformat() if thread_message.timestamp else None,
+                    "processed": thread_message.processed,
+                },
                 "message_id": send_msg.message_id,
             },
         )
