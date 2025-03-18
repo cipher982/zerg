@@ -57,10 +57,11 @@ pub fn setup_websocket() -> Result<(), JsValue> {
     
     // Create URL based on agent ID
     let ws_url = if let Some(id) = agent_id {
-        format!("ws://localhost:8001/api/agents/{}/ws", id)
+        // Use the global WebSocket endpoint with agent_id as a query parameter
+        format!("ws://localhost:8001/api/ws?agent_id={}", id.replace("agent-", ""))
     } else {
         // Fall back to global endpoint if no agent is selected
-        "ws://localhost:8001/ws".to_string()
+        "ws://localhost:8001/api/ws".to_string()
     };
     
     // Create a new WebSocket connection
@@ -489,7 +490,8 @@ pub fn setup_thread_websocket(thread_id: u32) -> Result<(), JsValue> {
         .replace("http://", "")
         .replace("https://", "");
     
-    let ws_url = format!("{}://{}/api/threads/{}/ws", protocol, base_url, thread_id);
+    // Use the global WebSocket endpoint with thread_id as a query parameter
+    let ws_url = format!("{}://{}/api/ws?thread_id={}", protocol, base_url, thread_id);
     
     web_sys::console::log_1(&format!("Connecting to WebSocket at {}", ws_url).into());
     

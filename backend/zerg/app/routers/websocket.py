@@ -23,11 +23,17 @@ logger = logging.getLogger(__name__)
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(get_db)):
+async def websocket_endpoint(
+    websocket: WebSocket, thread_id: int = None, agent_id: str = None, db: Session = Depends(get_db)
+):
     """Main WebSocket endpoint for all real-time communication.
 
     This endpoint handles all WebSocket connections and routes messages
     to the appropriate handlers based on message type.
+
+    Query Parameters:
+        thread_id: Optional thread ID to automatically subscribe to
+        agent_id: Optional agent ID for agent-specific connections
     """
     client_id = str(uuid.uuid4())
 
@@ -35,6 +41,22 @@ async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(get_db)
         # Accept the connection and register the client
         await manager.connect(client_id, websocket)
         logger.info(f"WebSocket connection established for client {client_id}")
+
+        # If thread_id is provided, automatically subscribe the client to that thread
+        if thread_id is not None:
+            logger.info(f"Auto-subscribing client {client_id} to thread {thread_id}")
+            # Create a subscribe message to handle through the normal dispatch flow
+            subscribe_msg = {
+                "type": "subscribe_thread",
+                "thread_id": thread_id,
+                "message_id": f"auto-subscribe-{uuid.uuid4()}",
+            }
+            await dispatch_message(client_id, subscribe_msg, db)
+
+        # If agent_id is provided, log it for potential future use
+        if agent_id is not None:
+            logger.info(f"Client {client_id} connected for agent {agent_id}")
+            # For now we just log this, but we could use it for agent-specific logic
 
         # Main message loop
         while True:
