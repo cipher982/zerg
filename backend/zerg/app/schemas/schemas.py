@@ -39,7 +39,7 @@ class AgentMessage(BaseModel):
     timestamp: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Thread Message schemas
@@ -62,7 +62,7 @@ class ThreadMessageResponse(ThreadMessageBase):
     processed: bool = False
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Thread schemas
@@ -92,7 +92,7 @@ class Thread(ThreadBase):
     messages: List[ThreadMessageResponse] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class Agent(AgentBase):
@@ -103,7 +103,7 @@ class Agent(AgentBase):
     messages: List[AgentMessage] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Message schemas
@@ -120,4 +120,4 @@ class MessageResponse(BaseModel):
     timestamp: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True

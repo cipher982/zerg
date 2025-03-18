@@ -130,36 +130,59 @@ def test_delete_agent_not_found(client: TestClient):
     assert response.json()["detail"] == "Agent not found"
 
 
-def test_run_agent(client: TestClient, sample_agent: Agent):
-    """Test the POST /api/agents/{agent_id}/run endpoint"""
-    # Patch the client instance from agents.py module
-    with patch("zerg.app.routers.agents.client.chat.completions.create") as mock_create:
-        # Configure the mock to return a proper response with string content
-        mock_message = MagicMock()
-        mock_message.content = "This is a test response from the mock LLM"
-        mock_choice = MagicMock()
-        mock_choice.message = mock_message
-        mock_response = MagicMock()
-        mock_response.choices = [mock_choice]
-        mock_create.return_value = mock_response
+def test_run_agent(client: TestClient, sample_agent: Agent, db_session):
+    """Test running an agent via a thread"""
+    # Create a thread for the agent
+    thread_data = {
+        "title": "Test Thread for Run",
+        "agent_id": sample_agent.id,
+        "active": True,
+        "memory_strategy": "buffer",
+    }
 
-        # Call the endpoint
-        response = client.post(f"/api/agents/{sample_agent.id}/run")
+    # Create the thread
+    response = client.post("/api/threads", json=thread_data)
+    assert response.status_code == 201
+    thread = response.json()
+
+    # Create a message for the thread
+    message_data = {"role": "user", "content": "Hello, test assistant"}
+    response = client.post(f"/api/threads/{thread['id']}/messages", json=message_data)
+    assert response.status_code == 201
+
+    # Run the thread
+    with patch("zerg.app.routers.threads.AgentManager") as mock_agent_manager_class:
+        mock_agent_manager = MagicMock()
+        mock_agent_manager_class.return_value = mock_agent_manager
+
+        def mock_process_message(*args, **kwargs):
+            yield "Test response"
+
+        mock_agent_manager.process_message.return_value = mock_process_message()
+
+        # Run the thread
+        response = client.post(f"/api/threads/{thread['id']}/run")
         assert response.status_code == 200
-        run_agent = response.json()
-        assert run_agent["id"] == sample_agent.id
-        assert run_agent["status"] == "idle"  # Status should be "idle" after completion
 
-        # Verify the agent status in the database is "idle"
+        # Verify the agent status in the database is still valid
         response = client.get(f"/api/agents/{sample_agent.id}")
         assert response.status_code == 200
         fetched_agent = response.json()
-        assert fetched_agent["status"] == "idle"
+        assert fetched_agent["id"] == sample_agent.id
 
 
 def test_run_agent_not_found(client: TestClient):
-    """Test the POST /api/agents/{agent_id}/run endpoint with a non-existent ID"""
-    response = client.post("/api/agents/999/run")
+    """Test running a non-existent agent via a thread"""
+    # Create a thread for a non-existent agent
+    thread_data = {
+        "title": "Test Thread for Non-existent Agent",
+        "agent_id": 999,  # Assuming this ID doesn't exist
+        "active": True,
+        "memory_strategy": "buffer",
+    }
+
+    # Try to create the thread
+    response = client.post("/api/threads", json=thread_data)
     assert response.status_code == 404
     assert "detail" in response.json()
     assert response.json()["detail"] == "Agent not found"

@@ -1,10 +1,7 @@
-import json
 import logging
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from fastapi import WebSocket
-from fastapi import WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
@@ -15,8 +12,10 @@ from zerg.app.database import Base
 from zerg.app.database import engine
 from zerg.app.routers.agents import router as agents_router
 from zerg.app.routers.threads import router as threads_router
-from zerg.app.websocket import EventType
-from zerg.app.websocket import connected_clients
+from zerg.app.routers.websocket import router as websocket_router
+
+# from zerg.app.websocket import EventType
+# from zerg.app.websocket import connected_clients
 
 # Load environment variables
 load_dotenv()
@@ -81,9 +80,10 @@ async def options_handler(rest_of_path: str):
     return response
 
 
-# Include the routers
-app.include_router(agents_router)
-app.include_router(threads_router)
+# Include our API routers
+app.include_router(agents_router)  # Already has /api/agents prefix
+app.include_router(threads_router)  # Already has /api/threads prefix
+app.include_router(websocket_router)  # Already has /api prefix
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -126,50 +126,3 @@ async def reset_database():
     except Exception as e:
         logger.error(f"Error resetting database: {str(e)}")
         return JSONResponse(status_code=500, content={"detail": f"Failed to reset database: {str(e)}"})
-
-
-# WebSocket endpoint
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """Global WebSocket endpoint for system-wide events.
-
-    This endpoint is used ONLY for broadcasting system-wide events,
-    not for data operations. REST API endpoints handle all data manipulation.
-    """
-    await websocket.accept()
-    logger.info("New client connected to global WebSocket")
-
-    # Add client to the connected list
-    connected_clients.append(websocket)
-
-    try:
-        # Send welcome message
-        await websocket.send_json(
-            {"type": EventType.SYSTEM_STATUS, "event": "connected", "message": "Connected to global event stream"}
-        )
-
-        # Listen for messages - primarily for ping/pong and health checks
-        while True:
-            data = await websocket.receive_text()
-            message = json.loads(data)
-
-            # We only support ping messages on the global socket
-            if message.get("type") == "ping":
-                await websocket.send_json({"type": "pong", "timestamp": message.get("timestamp", 0)})
-
-    except WebSocketDisconnect:
-        logger.info("Client disconnected from global WebSocket")
-    except json.JSONDecodeError:
-        logger.warning("Received invalid JSON payload")
-        await websocket.send_json({"type": EventType.ERROR, "error": "Invalid JSON payload"})
-    except Exception as e:
-        logger.error(f"WebSocket error: {str(e)}")
-        try:
-            await websocket.send_json({"type": EventType.ERROR, "error": "Internal server error"})
-        except Exception:
-            pass
-    finally:
-        # Remove client from connected list
-        if websocket in connected_clients:
-            connected_clients.remove(websocket)
-            logger.info("Removed client from connected list")
