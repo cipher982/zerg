@@ -55,11 +55,9 @@ Here's the minimal set of commands to get Agent Platform running locally:
 1. cd backend  
 2. Copy the example environment file:  
    » cp .env.example .env  
-   (Insert your OPENAI_API_KEY in the .env file to enable AI calls.)  
-3. Install dependencies:  
-   » pip install -r requirements.txt  
-4. Run backend server:  
-   » uvicorn main:app --host 0.0.0.0 --port 8001  
+   (Insert your OPENAI_API_KEY in the .env file to enable AI calls.)   
+3. Run backend server:  
+   » uv run python -m uvicorn zerg.main:app --reload --port 8001
 
 ### Frontend
 1. cd frontend  
