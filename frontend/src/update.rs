@@ -1161,25 +1161,32 @@ pub fn update(state: &mut AppState, msg: Message) {
             // Create clones for the closure
             let threads_clone = threads.clone();
             let thread_messages_clone = thread_messages.clone();
+            let title_clone = title.clone();
+            let thread_id_clone = thread_id;
             
             // Store updates to be executed after the borrow is released
             state.pending_ui_updates = Some(Box::new(move || {
                 // Update the UI using message passing
                 if let Some(_document) = web_sys::window().expect("no global window exists").document() {
-                    // Use message dispatch for UI updates
+                    // Update thread list UI
                     dispatch_global_message(Message::UpdateThreadList(
                         threads_clone, 
                         current_thread_id, 
                         thread_messages_clone
                     ));
+                    
+                    // Also update the thread title in the header if this is the current thread
+                    if current_thread_id == Some(thread_id_clone) {
+                        dispatch_global_message(Message::UpdateThreadTitleUI(title_clone));
+                    }
                 }
             }));
            
             // Send the update to the backend
-            let thread_id_clone = thread_id;
-            let title_clone = title;
+            let thread_id_for_api = thread_id;
+            let title_for_api = title;
             wasm_bindgen_futures::spawn_local(async move {
-                match crate::network::api_client::ApiClient::update_thread(thread_id_clone, &title_clone).await {
+                match crate::network::api_client::ApiClient::update_thread(thread_id_for_api, &title_for_api).await {
                     Ok(_) => {
                         // No need for a message here, we already updated the UI optimistically
                     },
