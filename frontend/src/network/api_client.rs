@@ -115,6 +115,12 @@ impl ApiClient {
         Self::fetch_json(&url, "POST", Some(&message_data)).await
     }
 
+    // Run a thread (process unprocessed messages)
+    pub async fn run_thread(thread_id: u32) -> Result<String, JsValue> {
+        let url = format!("{}/api/threads/{}/run", Self::api_base_url(), thread_id);
+        Self::fetch_json(&url, "POST", None).await
+    }
+
     // Helper function to make fetch requests
     async fn fetch_json(url: &str, method: &str, body: Option<&str>) -> Result<String, JsValue> {
         use web_sys::{Request, RequestInit, RequestMode, Response};
