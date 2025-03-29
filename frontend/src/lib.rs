@@ -66,14 +66,18 @@ pub fn start() -> Result<(), JsValue> {
             }
         }); // The borrow is dropped when this block ends
         
-        // We don't need to call load_agents() here as it's already called by load_state_from_api
-        // network::load_agents();
-        
         // Create a default workflow if none exists
         state::APP_STATE.with(|state| {
             let mut state = state.borrow_mut();
             if state.workflows.is_empty() {
                 state.create_workflow("Default Workflow".to_string());
+            }
+            
+            // If we have an agent selected in chat view, load their threads
+            if state.active_view == storage::ActiveView::ChatView {
+                if let Some(agent_id) = state.agents.keys().next().cloned() {
+                    crate::state::dispatch_global_message(crate::messages::Message::LoadThreads(agent_id));
+                }
             }
         });
         

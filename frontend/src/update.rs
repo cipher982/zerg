@@ -822,77 +822,48 @@ pub fn update(state: &mut AppState, msg: Message) {
         },
        
         Message::ThreadsLoaded(response) => {
-            state.is_chat_loading = false;
-           
             // Parse the threads from the response
-            if let Ok(threads_value) = serde_json::from_str::<serde_json::Value>(&response) {
-                if let Some(threads_array) = threads_value.get("threads").and_then(|v| v.as_array()) {
-                    // Clear existing threads for this agent
-                    let agent_id = threads_array.first()
-                        .and_then(|t| t.get("agent_id"))
-                        .and_then(|a| a.as_u64())
-                        .map(|a| a as u32);
-                   
-                    if let Some(agent_id) = agent_id {
-                        state.threads.retain(|_, thread| thread.agent_id != agent_id);
-                    }
-                   
-                    // Parse and store the threads
-                    for thread_value in threads_array {
-                        if let Ok(thread) = serde_json::from_value::<crate::models::ApiThread>(thread_value.clone()) {
-                            if let Some(thread_id) = thread.id {
-                                state.threads.insert(thread_id, thread.clone());
-                               
-                                // If we don't have a selected thread yet, select this one
-                                if state.current_thread_id.is_none() {
-                                    state.current_thread_id = Some(thread_id);
-                                   
-                                    // IMPORTANT: Don't dispatch here, store for later
-                                    // We'll dispatch this after releasing the borrow
-                                    let load_messages_for_thread_id = thread_id;
-                                    state.pending_ui_updates = Some(Box::new(move || {
-                                        dispatch_global_message(Message::LoadThreadMessages(load_messages_for_thread_id));
-                                    }));
-                                }
-                            }
-                        }
-                    }
-                   
-                    // Get thread title and thread list data before releasing the borrow
-                    let current_title = state.current_thread_id
-                        .and_then(|thread_id| state.threads.get(&thread_id))
-                        .map(|thread| thread.title.clone());
-                    
-                    let threads: Vec<ApiThread> = state.threads.values().cloned().collect();
-                    let current_thread_id = state.current_thread_id;
-                    let thread_messages = state.thread_messages.clone();
-                   
-                    // Store UI update actions to run after the update() function completes
-                    // This ensures we don't try to borrow APP_STATE again while it's already borrowed
-                    let current_title_clone = current_title.clone();
-                    let threads_clone = threads.clone();
-                    let thread_messages_clone = thread_messages.clone();
-                    
-                    // Add UI updates to the pending updates queue
-                    let existing_updates = state.pending_ui_updates.take();
-                    state.pending_ui_updates = Some(Box::new(move || {
-                        // First run any existing updates
-                        if let Some(existing_fn) = existing_updates {
-                            existing_fn();
-                        }
-                        
-                        // Now run our new updates
-                        if let Some(title) = current_title_clone {
-                            dispatch_global_message(Message::UpdateThreadTitleUI(title));
-                        }
-                        
-                        dispatch_global_message(Message::UpdateThreadList(
-                            threads_clone,
-                            current_thread_id,
-                            thread_messages_clone
-                        ));
-                    }));
+            if let Ok(threads_value) = serde_json::from_str::<Vec<ApiThread>>(&response) {
+                // Clear existing threads for this agent
+                if let Some(first_thread) = threads_value.first() {
+                    let agent_id = first_thread.agent_id;
+                    state.threads.retain(|_, thread| thread.agent_id != agent_id);
                 }
+                
+                // Parse and store the threads
+                for thread in threads_value {
+                    if let Some(thread_id) = thread.id {
+                        state.threads.insert(thread_id, thread.clone());
+                        
+                        // If we don't have a selected thread yet, select this one
+                        if state.current_thread_id.is_none() {
+                            state.current_thread_id = Some(thread_id);
+                            
+                            // Store for later dispatch after borrow ends
+                            let load_messages_for_thread_id = thread_id;
+                            state.pending_ui_updates = Some(Box::new(move || {
+                                dispatch_global_message(Message::LoadThreadMessages(load_messages_for_thread_id));
+                            }));
+                        }
+                    }
+                }
+
+                // Get data for UI updates
+                let threads: Vec<ApiThread> = state.threads.values().cloned().collect();
+                let current_thread_id = state.current_thread_id;
+                let thread_messages = state.thread_messages.clone();
+                
+                // Clear loading state and update UI
+                state.is_chat_loading = false;
+                state.pending_ui_updates = Some(Box::new(move || {
+                    if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+                        dispatch_global_message(Message::UpdateThreadList(threads, current_thread_id, thread_messages));
+                    }
+                }));
+            } else {
+                // Failed to parse threads
+                state.is_chat_loading = false;
+                web_sys::console::error_1(&"Failed to parse threads response".into());
             }
         },
        
@@ -1249,38 +1220,18 @@ pub fn update(state: &mut AppState, msg: Message) {
             // Set the active view to ChatView
             state.active_view = crate::storage::ActiveView::ChatView;
             
-            // Check if the agent has any threads
-            let needs_default_thread = {
-                // Check if this agent has any threads
-                let has_threads = state.threads.values().any(|thread| thread.agent_id == agent_id);
-                !has_threads
-            };
-           
             // Get reference to document before leaving this scope
             let document_opt = web_sys::window().and_then(|w| w.document());
             
-            // Store agent_id for pending updates after we release the borrow
-            let agent_id_for_thread = agent_id;
-            
-            // Use the pending_ui_updates mechanism to queue the thread creation
-            // This avoids recursive borrowing of the state
-            if needs_default_thread {
-                web_sys::console::log_1(&format!("Will auto-create default thread for agent: {}", agent_id).into());
-                
-                // Queue the thread creation for after this update completes
-                state.pending_ui_updates = Some(Box::new(move || {
-                    web_sys::console::log_1(&format!("Now creating default thread for agent: {}", agent_id_for_thread).into());
-                    dispatch_global_message(Message::CreateThread(agent_id_for_thread, DEFAULT_THREAD_TITLE.to_string()));
-                }));
-            } else {
-                web_sys::console::log_1(&format!("Agent {} already has threads, skipping auto-creation", agent_id).into());
-            }
+            // Load threads for this agent first
+            let agent_id_for_load = agent_id;
+            state.pending_ui_updates = Some(Box::new(move || {
+                // Show loading state first
+                dispatch_global_message(Message::UpdateLoadingState(true));
+                // Then load threads
+                dispatch_global_message(Message::LoadThreads(agent_id_for_load));
+            }));
            
-            // End of the state borrow
-            {
-                // End of borrow scope
-            }
-            
             // Show the chat view
             if let Some(document) = document_opt {
                 let _ = crate::components::chat_view::setup_chat_view(&document);
@@ -1428,6 +1379,15 @@ pub fn update(state: &mut AppState, msg: Message) {
                 // Dispatch a message to update the thread title UI
                 dispatch_global_message(Message::UpdateThreadTitleUI(title_to_update));
             }));
+        },
+
+        Message::UpdateLoadingState(is_loading) => {
+            state.is_chat_loading = is_loading;
+            
+            // Update the UI
+            if let Some(document) = web_sys::window().expect("no global window exists").document() {
+                let _ = crate::components::chat_view::update_loading_state(&document, is_loading);
+            }
         },
     }
 }

@@ -199,7 +199,16 @@ pub fn update_thread_list_ui(
     if let Some(thread_list) = document.query_selector(".thread-list").ok().flatten() {
         // Clear existing threads
         thread_list.set_inner_html("");
-        
+
+        // If no threads, show a message
+        if threads.is_empty() {
+            let empty_message = document.create_element("div")?;
+            empty_message.set_class_name("thread-list-empty");
+            empty_message.set_text_content(Some("No threads found"));
+            thread_list.append_child(&empty_message)?;
+            return Ok(());
+        }
+
         // Sort threads by updated_at (newest first)
         let mut threads = threads.to_vec();
         threads.sort_by(|a, b| {
@@ -460,4 +469,18 @@ fn truncate_text(text: &str, max_length: usize) -> String {
     } else {
         format!("{}...", &text[0..max_length])
     }
+}
+
+// Update loading state in the UI
+pub fn update_loading_state(document: &Document, is_loading: bool) -> Result<(), JsValue> {
+    if let Some(thread_list) = document.query_selector(".thread-list").ok().flatten() {
+        if is_loading {
+            thread_list.set_inner_html("");
+            let loading_el = document.create_element("div")?;
+            loading_el.set_class_name("thread-loading");
+            loading_el.set_text_content(Some("Loading threads..."));
+            thread_list.append_child(&loading_el)?;
+        }
+    }
+    Ok(())
 } 

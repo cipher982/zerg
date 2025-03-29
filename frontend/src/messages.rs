@@ -191,4 +191,5 @@ pub enum Message {
     UpdateThreadList(Vec<ApiThread>, Option<u32>, HashMap<u32, Vec<ApiThreadMessage>>),  // Update thread list UI
     UpdateConversation(Vec<ApiThreadMessage>),  // Update conversation UI
     UpdateThreadTitleUI(String),           // Update thread title UI with provided title
+    UpdateLoadingState(bool),              // Update loading state in UI
 } 
