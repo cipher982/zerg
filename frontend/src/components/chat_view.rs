@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{Document, HtmlElement, Event, HtmlInputElement};
+use web_sys::{Document, Event, HtmlInputElement};
 use crate::state::dispatch_global_message;
 use crate::messages::Message;
 use crate::models::{ApiThread, ApiThreadMessage};
@@ -24,7 +24,7 @@ pub fn setup_chat_view(document: &Document) -> Result<(), JsValue> {
                 <div class="back-button">←</div>
                 <div class="agent-info">
                     <div class="agent-name"></div>
-                    <div class="thread-title" contenteditable="true"></div>
+                    <span class="thread-title-label">Thread: </span><span class="thread-title-text"></span>
                 </div>
             </div>
             <div class="chat-body">
@@ -100,22 +100,6 @@ fn setup_chat_event_handlers(document: &Document) -> Result<(), JsValue> {
         
         send_button.add_event_listener_with_callback("click", send_handler.as_ref().unchecked_ref())?;
         send_handler.forget();
-    }
-    
-    // Thread title edit handler
-    if let Some(thread_title) = document.query_selector(".thread-title")? {
-        let thread_title_handler = Closure::wrap(Box::new(move |e: Event| {
-            if let Some(target) = e.target() {
-                if let Ok(element) = target.dyn_into::<HtmlElement>() {
-                    let new_title = element.inner_text();
-                    // Request to update current thread title
-                    dispatch_global_message(Message::RequestUpdateThreadTitle(new_title));
-                }
-            }
-        }) as Box<dyn FnMut(_)>);
-        
-        thread_title.add_event_listener_with_callback("blur", thread_title_handler.as_ref().unchecked_ref())?;
-        thread_title_handler.forget();
     }
     
     // Chat input key press handler
@@ -249,6 +233,11 @@ pub fn update_thread_list_ui(
                     &format_timestamp(thread.updated_at.as_ref().unwrap_or(&thread.created_at.clone().unwrap_or_default()))
                 ));
                 
+                // Add edit button for thread title
+                let edit_button = document.create_element("div")?;
+                edit_button.set_class_name("thread-edit-button");
+                edit_button.set_text_content(Some("✎"));
+                
                 // Add preview of last message if available
                 let preview = document.create_element("div")?;
                 preview.set_class_name("thread-item-preview");
@@ -267,6 +256,7 @@ pub fn update_thread_list_ui(
                 // Add elements to thread item
                 thread_item.append_child(&title)?;
                 thread_item.append_child(&timestamp)?;
+                thread_item.append_child(&edit_button)?;
                 thread_item.append_child(&preview)?;
                 
                 // Add click handler for thread selection
@@ -277,6 +267,30 @@ pub fn update_thread_list_ui(
                 
                 thread_item.add_event_listener_with_callback("click", click_handler.as_ref().unchecked_ref())?;
                 click_handler.forget();
+                
+                // Add edit button click handler
+                let thread_id_for_edit = thread_id;
+                let title_for_edit = thread.title.clone();
+                let edit_handler = Closure::wrap(Box::new(move |e: Event| {
+                    e.stop_propagation();
+                    
+                    // Fix the type mismatch by properly handling the Result before the Option
+                    let new_title = web_sys::window()
+                        .and_then(|w| {
+                            match w.prompt_with_message_and_default("Edit thread title:", &title_for_edit) {
+                                Ok(Some(title)) => Some(title),
+                                _ => Some(title_for_edit.clone()), // Fall back to original title on error or cancel
+                            }
+                        })
+                        .unwrap_or_else(|| title_for_edit.clone());
+                    
+                    if !new_title.is_empty() {
+                        dispatch_global_message(Message::UpdateThreadTitle(thread_id_for_edit, new_title));
+                    }
+                }) as Box<dyn FnMut(_)>);
+                
+                edit_button.add_event_listener_with_callback("click", edit_handler.as_ref().unchecked_ref())?;
+                edit_handler.forget();
                 
                 // Add the thread item to the list
                 thread_list.append_child(&thread_item)?;
@@ -385,20 +399,6 @@ pub fn update_thread_title(document: &Document) -> Result<(), JsValue> {
     // Instead of accessing APP_STATE directly, dispatch a message to get the current title
     // This prevents borrowing conflicts since state access will happen in update()
     
-    // First, try to extract the thread ID from the document if possible
-    // This is an optional improvement - if not feasible, we can remove this part
-    let thread_id_opt = document
-        .query_selector(".thread-title")
-        .ok()
-        .flatten()
-        .and_then(|el| el.get_attribute("data-thread-id"))
-        .and_then(|id_str| id_str.parse::<u32>().ok());
-    
-    // Request a title update via the message system instead of accessing state directly
-    if thread_id_opt.is_some() {
-        // If we have a thread ID, we could use it, but for now we'll just dispatch a simpler message
-    }
-    
     // This message will cause the update() function to get the current thread title 
     // and then dispatch an UpdateThreadTitleUI message
     dispatch_global_message(Message::RequestThreadTitleUpdate);
@@ -408,7 +408,7 @@ pub fn update_thread_title(document: &Document) -> Result<(), JsValue> {
 
 // New version that accepts the title directly - no APP_STATE access needed
 pub fn update_thread_title_with_data(document: &Document, title: &str) -> Result<(), JsValue> {
-    if let Some(title_el) = document.query_selector(".thread-title").ok().flatten() {
+    if let Some(title_el) = document.query_selector(".thread-title-text").ok().flatten() {
         title_el.set_text_content(Some(title));
     }
     
