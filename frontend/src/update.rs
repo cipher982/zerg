@@ -13,6 +13,10 @@ use wasm_bindgen::JsValue;
 use std::collections::HashMap;
 use crate::components::chat_view::{update_thread_list_ui, update_conversation_ui};
 
+// Thread title constants
+pub const DEFAULT_THREAD_TITLE: &str = "Default Thread";
+pub const NEW_THREAD_TITLE: &str = "New Thread";
+
 pub fn update(state: &mut AppState, msg: Message) {
     match msg {
         Message::ToggleView(view) => {
@@ -837,7 +841,7 @@ pub fn update(state: &mut AppState, msg: Message) {
                     for thread_value in threads_array {
                         if let Ok(thread) = serde_json::from_value::<crate::models::ApiThread>(thread_value.clone()) {
                             if let Some(thread_id) = thread.id {
-                                state.threads.insert(thread_id, thread);
+                                state.threads.insert(thread_id, thread.clone());
                                
                                 // If we don't have a selected thread yet, select this one
                                 if state.current_thread_id.is_none() {
@@ -924,8 +928,8 @@ pub fn update(state: &mut AppState, msg: Message) {
                     web_sys::console::log_1(&format!("Thread deserialized: id={:?}, title={:?}", thread.id, thread.title).into());
                     
                     if let Some(thread_id) = thread.id {
-                        // Store the thread
-                        state.threads.insert(thread_id, thread);
+                        // Store the thread (clone it first)
+                        state.threads.insert(thread_id, thread.clone());
                        
                         // Select the new thread and close any previous WebSocket
                         state.current_thread_id = Some(thread_id);
@@ -934,12 +938,16 @@ pub fn update(state: &mut AppState, msg: Message) {
                         let threads: Vec<ApiThread> = state.threads.values().cloned().collect();
                         let current_thread_id = state.current_thread_id;
                         let thread_messages = state.thread_messages.clone();
+                        
+                        // Get the thread title to update the header
+                        let thread_title = thread.title.clone();
                        
                         // Use pending_ui_updates to avoid nested borrows
                         // Clone the data for the closure
                         let threads_clone = threads.clone();
                         let thread_messages_clone = thread_messages.clone();
                         let thread_id_clone = thread_id;
+                        let thread_title_clone = thread_title.clone();
                         
                         // Store for updates to be executed after the borrow is released
                         state.pending_ui_updates = Some(Box::new(move || {
@@ -951,6 +959,9 @@ pub fn update(state: &mut AppState, msg: Message) {
                                 current_thread_id,
                                 thread_messages_clone
                             ));
+                            
+                            // Update the thread title in the header
+                            dispatch_global_message(Message::UpdateThreadTitleUI(thread_title_clone));
                             
                             // Set up WebSocket for the new thread
                             let _ = crate::network::ws_client::setup_thread_websocket(thread_id_clone);
@@ -977,7 +988,12 @@ pub fn update(state: &mut AppState, msg: Message) {
             let threads: Vec<ApiThread> = state.threads.values().cloned().collect();
             let current_thread_id = state.current_thread_id;
             let thread_messages = state.thread_messages.clone();
-           
+            
+            // Get the thread title to update the header
+            let thread_title = state.threads.get(&thread_id)
+                .map(|thread| thread.title.clone())
+                .unwrap_or_default();
+            
             // Get conversation messages if they exist
             let conversation_messages = state.thread_messages.get(&thread_id)
                 .cloned()
@@ -992,6 +1008,7 @@ pub fn update(state: &mut AppState, msg: Message) {
                 if let Some(document) = web_sys::window().and_then(|w| w.document()) {
                     dispatch_global_message(Message::UpdateThreadList(threads, current_thread_id, thread_messages));
                     dispatch_global_message(Message::UpdateConversation(conversation_messages));
+                    dispatch_global_message(Message::UpdateThreadTitleUI(thread_title));
                 }
                 
                 // Load messages if needed
@@ -1147,7 +1164,7 @@ pub fn update(state: &mut AppState, msg: Message) {
             }
            
             // Update the UI using the UpdateThreadList message
-            if let Some(_document) = web_sys::window().and_then(|w| w.document()) {
+            if let Some(_document) = web_sys::window().expect("no global window exists").document() {
                 dispatch_global_message(Message::UpdateThreadList(threads, current_thread_id, thread_messages));
             }
            
@@ -1186,7 +1203,7 @@ pub fn update(state: &mut AppState, msg: Message) {
             // Store updates to be executed after the borrow is released
             state.pending_ui_updates = Some(Box::new(move || {
                 // Update the UI using message passing instead of direct function calls
-                if let Some(document) = web_sys::window().expect("no global window exists").document() {
+                if let Some(_document) = web_sys::window().expect("no global window exists").document() {
                     // Use message dispatch for UI updates
                     dispatch_global_message(Message::UpdateThreadList(threads_clone, current_thread_id, thread_messages_clone));
                     
@@ -1237,7 +1254,7 @@ pub fn update(state: &mut AppState, msg: Message) {
                 // Queue the thread creation for after this update completes
                 state.pending_ui_updates = Some(Box::new(move || {
                     web_sys::console::log_1(&format!("Now creating default thread for agent: {}", agent_id_for_thread).into());
-                    dispatch_global_message(Message::CreateThread(agent_id_for_thread, "Default Thread".to_string()));
+                    dispatch_global_message(Message::CreateThread(agent_id_for_thread, DEFAULT_THREAD_TITLE.to_string()));
                 }));
             } else {
                 web_sys::console::log_1(&format!("Agent {} already has threads, skipping auto-creation", agent_id).into());
@@ -1270,10 +1287,15 @@ pub fn update(state: &mut AppState, msg: Message) {
             // Set the active view to Dashboard
             state.active_view = crate::storage::ActiveView::Dashboard;
            
-            // Show the dashboard
-            if let Some(document) = web_sys::window().unwrap().document() {
-                crate::views::render_active_view_by_type(&crate::storage::ActiveView::Dashboard, &document).unwrap();
-            }
+            // Instead of directly rendering the view,
+            // which would cause a nested borrow, use pending_ui_updates
+            state.pending_ui_updates = Some(Box::new(move || {
+                if let Some(document) = web_sys::window().unwrap().document() {
+                    if let Err(e) = crate::views::render_active_view_by_type(&crate::storage::ActiveView::Dashboard, &document) {
+                        web_sys::console::error_1(&format!("Failed to render dashboard: {:?}", e).into());
+                    }
+                }
+            }));
         },
 
         Message::LoadAgentInfo(agent_id) => {
@@ -1310,7 +1332,7 @@ pub fn update(state: &mut AppState, msg: Message) {
            
             // Queue the thread creation for after this update completes to avoid nested borrows
             if let Some(agent_id) = agent_id_opt {
-                let title = "New Thread".to_string();
+                let title = NEW_THREAD_TITLE.to_string();
                 let agent_id_clone = agent_id;
                 
                 // Store the pending update to be executed after the borrow is released
