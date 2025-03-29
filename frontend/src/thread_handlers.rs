@@ -77,6 +77,17 @@ pub fn handle_send_thread_message(
                 Ok(response) => {
                     // Dispatch a message with the sent message and the client ID for tracking
                     dispatch_global_message(Message::ThreadMessageSent(response, client_id.to_string()));
+                    
+                    // Now trigger the thread to run and process the message
+                    web_sys::console::log_1(&format!("Now running thread {} to process the message", thread_id).into());
+                    match crate::network::api_client::ApiClient::run_thread(thread_id).await {
+                        Ok(_) => {
+                            web_sys::console::log_1(&format!("Successfully triggered thread {} to process message", thread_id).into());
+                        },
+                        Err(e) => {
+                            web_sys::console::error_1(&format!("Failed to run thread: {:?}", e).into());
+                        }
+                    }
                 },
                 Err(e) => {
                     web_sys::console::error_1(&format!("Failed to send thread message: {:?}", e).into());
