@@ -1258,6 +1258,11 @@ pub fn update(state: &mut AppState, msg: Message) {
             // which would cause a nested borrow, use pending_ui_updates
             state.pending_ui_updates = Some(Box::new(move || {
                 if let Some(document) = web_sys::window().unwrap().document() {
+                    // First hide the chat view container
+                    if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
+                        let _ = chat_container.set_attribute("style", "display: none;");
+                    }
+                    
                     if let Err(e) = crate::views::render_active_view_by_type(&crate::storage::ActiveView::Dashboard, &document) {
                         web_sys::console::error_1(&format!("Failed to render dashboard: {:?}", e).into());
                     }
