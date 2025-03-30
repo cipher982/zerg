@@ -279,14 +279,18 @@ pub fn show_agent_modal(state: &AppState, document: &Document) -> Result<(), JsV
 // Render the appropriate view based on the explicit view type
 // This avoids requiring a reference to AppState, preventing potential borrow issues
 pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -> Result<(), JsValue> {
+    // First hide all view containers
+    let containers = ["dashboard-container", "canvas-container", "chat-view-container"];
+    for container_id in containers.iter() {
+        if let Some(container) = document.get_element_by_id(container_id) {
+            container.set_attribute("style", "display: none;")?;
+        }
+    }
+
     match view_type {
         ActiveView::Dashboard => render_dashboard_view(&AppState::new(), document)?,
         ActiveView::Canvas => {
             // For canvas, we'll just toggle the visibility without relying on state
-            if let Some(dashboard) = document.get_element_by_id("dashboard-container") {
-                dashboard.set_attribute("style", "display: none;")?;
-            }
-            
             // Create canvas container if needed
             if document.get_element_by_id("canvas-container").is_none() {
                 let canvas_container = document.create_element("div")?;
@@ -331,6 +335,11 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
         ActiveView::ChatView => {
             // Setup the chat view if needed
             crate::components::chat_view::setup_chat_view(document)?;
+            
+            // Show chat view container
+            if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
+                chat_container.set_attribute("style", "display: flex;")?;
+            }
         }
     }
     
