@@ -210,15 +210,17 @@ pub fn handle_thread_message_received(
                         
                         // Return a closure to update the UI
                         return Some(Box::new(move || {
-                            // Only update the conversation if this is the currently selected thread
-                            if current_thread_id_opt == Some(thread_id) {
-                                if let Some(_document) = web_sys::window().and_then(|w| w.document()) {
+                            if let Some(_document) = web_sys::window().and_then(|w| w.document()) {
+                                // Always update the thread list
+                                dispatch_global_message(Message::UpdateThreadList(
+                                    threads_data,
+                                    current_thread_id_opt,
+                                    thread_messages_map
+                                ));
+                                
+                                // Only update conversation if this is the current thread
+                                if current_thread_id_opt == Some(thread_id) {
                                     dispatch_global_message(Message::UpdateConversation(conversation_messages));
-                                    dispatch_global_message(Message::UpdateThreadList(
-                                        threads_data,
-                                        current_thread_id_opt,
-                                        thread_messages_map
-                                    ));
                                 }
                             }
                         }));
