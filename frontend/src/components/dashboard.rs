@@ -6,7 +6,8 @@ use crate::constants::{
     DEFAULT_AGENT_NAME, 
     DEFAULT_SYSTEM_INSTRUCTIONS, 
     DEFAULT_TASK_INSTRUCTIONS,
-    DEFAULT_MODEL
+    DEFAULT_MODEL,
+    DEFAULT_THREAD_TITLE
 };
 
 // Agent status for displaying in the dashboard
@@ -160,6 +161,16 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                         {
                             let agent_id = id as u32;
                             web_sys::console::log_1(&format!("Successfully created agent with ID: {}", agent_id).into());
+                            
+                            // Create default thread for the new agent
+                            match crate::network::ApiClient::create_thread(agent_id, DEFAULT_THREAD_TITLE).await {
+                                Ok(_) => {
+                                    web_sys::console::log_1(&format!("Created default thread for agent: {}", agent_id).into());
+                                },
+                                Err(e) => {
+                                    web_sys::console::error_1(&format!("Failed to create default thread: {:?}", e).into());
+                                }
+                            }
                             
                             // Now that we have the ID from API, add to state with the proper node ID format
                             crate::state::dispatch_global_message(crate::messages::Message::CreateAgentWithDetails {

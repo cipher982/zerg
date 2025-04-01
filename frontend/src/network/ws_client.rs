@@ -5,7 +5,7 @@ use wasm_bindgen_futures::JsFuture;
 use js_sys::Array;
 use std::cell::RefCell;
 use super::ui_updates::{update_connection_status, flash_activity};
-use crate::update::{DEFAULT_THREAD_TITLE, NEW_THREAD_TITLE};
+use crate::constants::DEFAULT_THREAD_TITLE;
 
 // Track reconnection attempts
 thread_local! {
@@ -236,7 +236,7 @@ fn handle_websocket_message(event: web_sys::MessageEvent) -> Result<(), JsValue>
                         // Extract thread ID and agent ID from the message
                         let thread_id = json.get("thread_id").and_then(|t| t.as_u64()).map(|t| t as u32);
                         let agent_id = json.get("agent_id").and_then(|a| a.as_u64()).map(|a| a as u32);
-                        let title = json.get("title").and_then(|t| t.as_str()).unwrap_or(NEW_THREAD_TITLE).to_string();
+                        let title = json.get("title").and_then(|t| t.as_str()).unwrap_or(DEFAULT_THREAD_TITLE).to_string();
                         
                         if let (Some(thread_id), Some(agent_id)) = (thread_id, agent_id) {
                             // Create a scheduled operation to avoid nested borrowing
