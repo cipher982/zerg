@@ -6,6 +6,7 @@ use js_sys::Array;
 use std::cell::RefCell;
 use super::ui_updates::{update_connection_status, flash_activity};
 use crate::constants::DEFAULT_THREAD_TITLE;
+use uuid;
 
 // Track reconnection attempts
 thread_local! {
@@ -66,7 +67,15 @@ pub fn setup_websocket() -> Result<(), JsValue> {
     };
     
     // Create a new WebSocket connection
-    let ws = WebSocket::new(&ws_url)?;
+    let ws = match WebSocket::new(&ws_url) {
+        Ok(ws) => ws,
+        Err(e) => {
+            let error_msg = format!("Failed to create WebSocket connection: {:?}", e);
+            web_sys::console::error_1(&error_msg.clone().into());
+            update_connection_status("error", "red");
+            return Err(JsValue::from_str(&error_msg));
+        }
+    };
     
     // Set initial status
     update_connection_status("Connecting", "yellow");
@@ -469,7 +478,7 @@ pub async fn fetch_available_models() -> Result<(), JsValue> {
 }
 
 pub fn setup_thread_websocket(thread_id: u32) -> Result<(), JsValue> {
-    flash_activity(); // Flash activity indicator
+    flash_activity();
     
     // Close any existing thread WebSocket connection first
     crate::state::APP_STATE.with(|state| {
@@ -480,24 +489,23 @@ pub fn setup_thread_websocket(thread_id: u32) -> Result<(), JsValue> {
         }
     });
     
-    // Get the API base URL
-    let protocol = if crate::network::get_api_base_url()?.starts_with("https") {
-        "wss"
-    } else {
-        "ws"
-    };
-    
-    let base_url = crate::network::get_api_base_url()?
-        .replace("http://", "")
-        .replace("https://", "");
-    
-    // Use the global WebSocket endpoint with thread_id as a query parameter
-    let ws_url = format!("{}://{}/api/ws?thread_id={}", protocol, base_url, thread_id);
+    // Get the API base URL and convert to WebSocket URL
+    let api_base = crate::network::get_api_base_url()?;
+    let ws_url = api_base.replace("http://", "ws://").replace("https://", "wss://");
+    let ws_url = format!("{}/api/ws?thread_id={}", ws_url, thread_id);
     
     web_sys::console::log_1(&format!("Connecting to WebSocket at {}", ws_url).into());
     
     // Create a new WebSocket connection
-    let ws = WebSocket::new(&ws_url)?;
+    let ws = match WebSocket::new(&ws_url) {
+        Ok(ws) => ws,
+        Err(e) => {
+            let error_msg = format!("Failed to create WebSocket connection: {:?}", e);
+            web_sys::console::error_1(&error_msg.clone().into());
+            update_connection_status("error", "red");
+            return Err(JsValue::from_str(&error_msg));
+        }
+    };
     
     // Create onopen handler
     let onopen_callback = Closure::wrap(Box::new(move |_| {
