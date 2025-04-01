@@ -226,43 +226,47 @@ pub fn handle_thread_message_received(
                 }
             },
             
-            // Handle individual thread messages (original implementation)
-            _ => {
-                if let Ok(message) = serde_json::from_value::<ApiThreadMessage>(message_value) {
-                    let thread_id = message.thread_id;
-                    
-                    // Variables to collect data for UI updates
-                    let mut conversation_messages = Vec::new();
-                    let threads_data: Vec<ApiThread> = threads.values().cloned().collect();
-                    let current_thread_id_opt = current_thread_id;
-                    let mut thread_messages_map = thread_messages.clone();
-                    
-                    // Add the message to the thread
-                    if let Some(messages) = thread_messages.get_mut(&thread_id) {
-                        messages.push(message.clone());
-                        conversation_messages = messages.clone();
-                    } else {
-                        thread_messages.insert(thread_id, vec![message.clone()]);
-                        conversation_messages = vec![message.clone()];
+            // Handle individual thread messages
+            Some("thread_message") => {
+                // Extract the message from the "message" field
+                if let Some(message_data) = message_value.get("message") {
+                    if let Ok(message) = serde_json::from_value::<ApiThreadMessage>(message_data.clone()) {
+                        let thread_id = message.thread_id;
                         
-                        // Update our thread_messages_map clone with the new message
-                        thread_messages_map.insert(thread_id, vec![message.clone()]);
-                    }
-                    
-                    // Return a closure to update the UI
-                    return Some(Box::new(move || {
-                        // Update the UI using message dispatch
-                        if let Some(_document) = web_sys::window().and_then(|w| w.document()) {
-                            dispatch_global_message(Message::UpdateConversation(conversation_messages));
-                            dispatch_global_message(Message::UpdateThreadList(
-                                threads_data,
-                                current_thread_id_opt,
-                                thread_messages_map
-                            ));
+                        // Variables to collect data for UI updates
+                        let mut conversation_messages = Vec::new();
+                        let threads_data: Vec<ApiThread> = threads.values().cloned().collect();
+                        let current_thread_id_opt = current_thread_id;
+                        let mut thread_messages_map = thread_messages.clone();
+                        
+                        // Add the message to the thread
+                        if let Some(messages) = thread_messages.get_mut(&thread_id) {
+                            messages.push(message.clone());
+                            conversation_messages = messages.clone();
+                        } else {
+                            thread_messages.insert(thread_id, vec![message.clone()]);
+                            conversation_messages = vec![message.clone()];
+                            
+                            // Update our thread_messages_map clone with the new message
+                            thread_messages_map.insert(thread_id, vec![message.clone()]);
                         }
-                    }));
+                        
+                        // Return a closure to update the UI
+                        return Some(Box::new(move || {
+                            // Update the UI using message dispatch
+                            if let Some(_document) = web_sys::window().and_then(|w| w.document()) {
+                                dispatch_global_message(Message::UpdateConversation(conversation_messages));
+                                dispatch_global_message(Message::UpdateThreadList(
+                                    threads_data,
+                                    current_thread_id_opt,
+                                    thread_messages_map
+                                ));
+                            }
+                        }));
+                    }
                 }
-            }
+            },
+            _ => {}
         }
     }
     None
