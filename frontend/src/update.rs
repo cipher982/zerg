@@ -7,15 +7,13 @@ use crate::constants::{
     DEFAULT_NODE_WIDTH,
     DEFAULT_NODE_HEIGHT,
     DEFAULT_AGENT_NODE_COLOR,
+    DEFAULT_THREAD_TITLE,
 };
 use web_sys::Document;
 use wasm_bindgen::JsValue;
 use std::collections::HashMap;
 use crate::components::chat_view::{update_thread_list_ui, update_conversation_ui};
 
-// Thread title constants
-pub const DEFAULT_THREAD_TITLE: &str = "Default Thread";
-pub const NEW_THREAD_TITLE: &str = "New Thread";
 
 pub fn update(state: &mut AppState, msg: Message) {
     match msg {
@@ -1304,7 +1302,7 @@ pub fn update(state: &mut AppState, msg: Message) {
            
             // Queue the thread creation for after this update completes to avoid nested borrows
             if let Some(agent_id) = agent_id_opt {
-                let title = NEW_THREAD_TITLE.to_string();
+                let title = DEFAULT_THREAD_TITLE.to_string();
                 let agent_id_clone = agent_id;
                 
                 // Store the pending update to be executed after the borrow is released
