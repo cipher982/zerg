@@ -345,9 +345,14 @@ pub fn send_text_to_backend(text: &str, message_id: String) {
             let state = state.borrow();
             if let Some(ws) = &state.websocket {
                 if ws.ready_state() == 1 { // OPEN
-                    // Create message body
+                    // Get current thread ID
+                    let thread_id = state.current_thread_id.unwrap_or(1);
+                    
+                    // Create message body with correct format
                     let body_obj = js_sys::Object::new();
-                    js_sys::Reflect::set(&body_obj, &"text".into(), &text.into()).unwrap();
+                    js_sys::Reflect::set(&body_obj, &"type".into(), &"send_message".into()).unwrap();
+                    js_sys::Reflect::set(&body_obj, &"thread_id".into(), &thread_id.into()).unwrap();
+                    js_sys::Reflect::set(&body_obj, &"content".into(), &text.into()).unwrap();
                     js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into()).unwrap();
                     
                     // Get selected model if any
@@ -360,6 +365,7 @@ pub fn send_text_to_backend(text: &str, message_id: String) {
                     // Convert JsString to String before sending
                     if let Some(string_data) = body_string.as_string() {
                         // Send through WebSocket
+                        web_sys::console::log_1(&format!("Sending message: {}", string_data).into());
                         let _ = ws.send_with_str(&string_data);
                     } else {
                         web_sys::console::error_1(&"Failed to convert JSON to string".into());
@@ -507,10 +513,25 @@ pub fn setup_thread_websocket(thread_id: u32) -> Result<(), JsValue> {
         }
     };
     
-    // Create onopen handler
+    // Create onopen handler with thread subscription
+    let thread_id_clone = thread_id;
+    let ws_clone = ws.clone();
     let onopen_callback = Closure::wrap(Box::new(move |_| {
         web_sys::console::log_1(&"Thread WebSocket connection opened".into());
         update_connection_status("connected", "green");
+        
+        // Send subscribe message
+        let subscribe_msg = js_sys::Object::new();
+        js_sys::Reflect::set(&subscribe_msg, &"type".into(), &"subscribe_thread".into()).unwrap();
+        js_sys::Reflect::set(&subscribe_msg, &"thread_id".into(), &thread_id_clone.into()).unwrap();
+        js_sys::Reflect::set(&subscribe_msg, &"message_id".into(), &uuid::Uuid::new_v4().to_string().into()).unwrap();
+        
+        if let Ok(msg_str) = js_sys::JSON::stringify(&subscribe_msg) {
+            if let Some(msg_str) = msg_str.as_string() {
+                web_sys::console::log_1(&format!("Sending subscribe message: {}", msg_str).into());
+                let _ = ws_clone.send_with_str(&msg_str);
+            }
+        }
     }) as Box<dyn FnMut(JsValue)>);
     ws.set_onopen(Some(onopen_callback.as_ref().unchecked_ref()));
     onopen_callback.forget();

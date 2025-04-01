@@ -118,7 +118,40 @@ impl ApiClient {
     // Run a thread (process unprocessed messages)
     pub async fn run_thread(thread_id: u32) -> Result<String, JsValue> {
         let url = format!("{}/api/threads/{}/run", Self::api_base_url(), thread_id);
-        Self::fetch_json(&url, "POST", None).await
+        
+        // Create request with no-transform to handle streaming
+        let mut opts = web_sys::RequestInit::new();
+        opts.method("POST");
+        
+        let request = web_sys::Request::new_with_str_and_init(&url, &opts)?;
+        
+        let window = web_sys::window().expect("no global window exists");
+        let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
+        let resp: web_sys::Response = resp_value.dyn_into()?;
+        
+        // Get the response text directly
+        let text = JsFuture::from(resp.text()?).await?;
+        let content = text.as_string().unwrap_or_default();
+        
+        // Format as a thread message
+        let message = serde_json::json!({
+            "type": "thread_message",
+            "thread_id": thread_id,
+            "message": {
+                "thread_id": thread_id,
+                "role": "assistant",
+                "content": content,
+                "processed": true,
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            }
+        });
+        
+        // Convert to string and dispatch as a thread message
+        let message_str = message.to_string();
+        web_sys::console::log_1(&format!("Dispatching thread message: {}", message_str).into());
+        crate::state::dispatch_global_message(crate::messages::Message::ThreadMessageReceived(message_str.clone()));
+        
+        Ok(content)
     }
 
     // Helper function to make fetch requests
