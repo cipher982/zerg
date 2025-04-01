@@ -820,7 +820,6 @@ pub fn update(state: &mut AppState, msg: Message) {
         },
        
         Message::ThreadsLoaded(response) => {
-            // Parse the threads from the response
             if let Ok(threads_value) = serde_json::from_str::<Vec<ApiThread>>(&response) {
                 // Clear existing threads for this agent
                 if let Some(first_thread) = threads_value.first() {
@@ -832,36 +831,25 @@ pub fn update(state: &mut AppState, msg: Message) {
                 for thread in threads_value {
                     if let Some(thread_id) = thread.id {
                         state.threads.insert(thread_id, thread.clone());
-                        
-                        // If we don't have a selected thread yet, select this one
-                        if state.current_thread_id.is_none() {
-                            state.current_thread_id = Some(thread_id);
-                            
-                            // Store for later dispatch after borrow ends
-                            let load_messages_for_thread_id = thread_id;
-                            state.pending_ui_updates = Some(Box::new(move || {
-                                dispatch_global_message(Message::LoadThreadMessages(load_messages_for_thread_id));
-                            }));
-                        }
                     }
                 }
 
-                // Get data for UI updates
-                let threads: Vec<ApiThread> = state.threads.values().cloned().collect();
-                let current_thread_id = state.current_thread_id;
-                let thread_messages = state.thread_messages.clone();
+                // Clear loading state
+                state.is_chat_loading = false;
                 
-                // Clear loading state and update UI
-                state.is_chat_loading = false;
-                state.pending_ui_updates = Some(Box::new(move || {
-                    if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-                        dispatch_global_message(Message::UpdateThreadList(threads, current_thread_id, thread_messages));
+                // If we have threads, queue selection of the first one
+                if let Some(first_thread) = state.threads.values().next() {
+                    if let Some(thread_id) = first_thread.id {
+                        // Store thread_id for selection after this borrow ends
+                        let thread_id_to_select = thread_id;
+                        state.pending_ui_updates = Some(Box::new(move || {
+                            // Now we can safely dispatch
+                            dispatch_global_message(Message::SelectThread(thread_id_to_select));
+                        }));
                     }
-                }));
+                }
             } else {
-                // Failed to parse threads
-                state.is_chat_loading = false;
-                web_sys::console::error_1(&"Failed to parse threads response".into());
+                web_sys::console::error_1(&format!("Invalid JSON in thread response: {}", response).into());
             }
         },
        
