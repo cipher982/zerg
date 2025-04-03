@@ -9,6 +9,17 @@ use serde_json::Value;
 use super::event_types::{MessageType, EventType};
 use super::messages::{self, WsMessage, PingMessage, builders};
 
+/// Trait defining the WebSocket client interface
+pub trait IWsClient {
+    fn connect(&mut self) -> Result<(), JsValue>;
+    fn send_serialized_message(&self, message_json: &str) -> Result<(), JsValue>;
+    fn connection_state(&self) -> ConnectionState;
+    fn close(&mut self) -> Result<(), JsValue>;
+    fn set_on_connect(&mut self, callback: Box<dyn FnMut() + 'static>);
+    fn set_on_message(&mut self, callback: Box<dyn FnMut(Value) + 'static>);
+    fn set_on_disconnect(&mut self, callback: Box<dyn FnMut() + 'static>);
+}
+
 /// Represents the current state of the WebSocket connection
 #[derive(Debug, Clone, PartialEq)]
 pub enum ConnectionState {
@@ -103,7 +114,7 @@ impl WsClientV2 {
     where
         F: FnMut() + 'static,
     {
-        self.on_connect_callback = Some(Rc::new(RefCell::new(callback)));
+        self.on_connect_callback = Some(Rc::new(RefCell::new(Box::new(callback))));
     }
 
     /// Set a handler for incoming messages.
@@ -112,7 +123,7 @@ impl WsClientV2 {
     where
         F: FnMut(Value) + 'static,
     {
-        self.on_message_callback = Some(Rc::new(RefCell::new(callback)));
+        self.on_message_callback = Some(Rc::new(RefCell::new(Box::new(callback))));
     }
 
     /// Set a handler to be called when the connection is closed or fails to reconnect.
@@ -120,7 +131,7 @@ impl WsClientV2 {
     where
         F: FnMut() + 'static,
     {
-        self.on_disconnect_callback = Some(Rc::new(RefCell::new(callback)));
+        self.on_disconnect_callback = Some(Rc::new(RefCell::new(Box::new(callback))));
     }
 
     /// Get the current connection state
@@ -353,14 +364,11 @@ impl WsClientV2 {
         Ok(())
     }
 
-    /// Send a message to the WebSocket server
-    pub fn send_message<T: WsMessage + serde::Serialize>(&self, message: &T) -> Result<(), JsValue> {
+    /// Send a pre-serialized message to the WebSocket server
+    pub fn send_serialized_message(&self, message_json: &str) -> Result<(), JsValue> {
         if let Some(ws) = &self.websocket {
-            // Check state via the Rc<RefCell<>>
             if *self.state.borrow() == ConnectionState::Connected {
-                let json = serde_json::to_string(message)
-                    .map_err(|e| JsValue::from_str(&format!("Failed to serialize message: {:?}", e)))?;
-                ws.send_with_str(&json)?;
+                ws.send_with_str(message_json)?;
                 Ok(())
             } else {
                 web_sys::console::warn_1(&"Attempted to send message while WebSocket is not connected".into());
@@ -388,6 +396,37 @@ impl WsClientV2 {
         }
         // Note: The onclose handler will likely fire after this, potentially calling on_disconnect again.
         Ok(())
+    }
+}
+
+// Implement IWsClient trait for WsClientV2
+impl IWsClient for WsClientV2 {
+    fn connect(&mut self) -> Result<(), JsValue> {
+        self.connect()
+    }
+
+    fn send_serialized_message(&self, message_json: &str) -> Result<(), JsValue> {
+        self.send_serialized_message(message_json)
+    }
+
+    fn connection_state(&self) -> ConnectionState {
+        self.connection_state()
+    }
+
+    fn close(&mut self) -> Result<(), JsValue> {
+        self.close()
+    }
+
+    fn set_on_connect(&mut self, callback: Box<dyn FnMut() + 'static>) {
+        self.on_connect_callback = Some(Rc::new(RefCell::new(callback)));
+    }
+
+    fn set_on_message(&mut self, callback: Box<dyn FnMut(Value) + 'static>) {
+        self.on_message_callback = Some(Rc::new(RefCell::new(callback)));
+    }
+
+    fn set_on_disconnect(&mut self, callback: Box<dyn FnMut() + 'static>) {
+        self.on_disconnect_callback = Some(Rc::new(RefCell::new(callback)));
     }
 }
 
