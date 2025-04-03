@@ -25,6 +25,12 @@ pub enum MessageType {
     
     // System events
     SystemStatus,
+    
+    // Agent messages
+    AgentState,
+    
+    // Special cases
+    Unknown,
 }
 
 /// Represents all possible event types that can be received from the backend
@@ -64,6 +70,8 @@ impl fmt::Display for MessageType {
             MessageType::StreamChunk => "stream_chunk",
             MessageType::StreamEnd => "stream_end",
             MessageType::SystemStatus => "system_status",
+            MessageType::AgentState => "agent_state",
+            MessageType::Unknown => "unknown",
         };
         write!(f, "{}", s)
     }

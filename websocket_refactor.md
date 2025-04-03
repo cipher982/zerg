@@ -1,7 +1,7 @@
 # WebSocket Refactoring Plan: Single Connection + Event-Driven Architecture
 
-## Status: Backend Complete ✓, Frontend Infrastructure Complete ✓, View Integration Starting 🚀
-Last Updated: April 5, 2024
+## Status: Backend Complete ✓, Frontend Infrastructure Complete ✓, View Integration In Progress 🚀
+Last Updated: April 8, 2024
 
 ## 1. Original Problem & Goals [✓]
 
@@ -45,7 +45,7 @@ Last Updated: April 5, 2024
    - Maintains backward compatibility (old endpoint still works)
    - Added integration tests in `test_new_websocket.py`
 
-### Frontend Implementation Progress ✓
+### Frontend Implementation Progress
 
 #### Completed Core Infrastructure ✓
 1. **Event Types Module** (`event_types.rs`):
@@ -82,42 +82,51 @@ Last Updated: April 5, 2024
    - Initialized instances and connected WebSocket in `lib.rs::start()`.
    - Linked `WsClientV2` callbacks to `TopicManager` methods.
 
-#### Key Learnings & Decisions
-1. **Type Safety**:
-   - Using Rust's type system to prevent message format errors
-   - Trait-based approach for message handling (`WsMessage` trait)
-   - Macro-based implementation to reduce boilerplate
+#### View Integration Progress [NEW] 🚀
 
-2. **State Management**:
-   - Using `Rc<RefCell<>>` for shared state
-   - Clear separation between connection and message handling
-   - Proper cleanup of resources (ping intervals, handlers)
-   - Confirmed `Rc<RefCell<>>` is effective for sharing WS client and topic manager instances.
+1. **Dashboard Component** [In Progress]:
+   - Created `DashboardWsManager` to handle WebSocket lifecycle and subscriptions
+   - Implemented proper cleanup on component unmount
+   - Added real-time agent event handling (`agent_created`, `agent_updated`, `agent_deleted`)
+   - Integrated with existing state management via `dispatch_global_message`
 
-3. **Testing Strategy**:
-   - Unit tests with `wasm-bindgen-test`
-   - Test helpers for message creation and validation
-   - Mocking considerations for WebSocket interactions
+2. **Key Implementation Decisions**:
+   - Component-specific WebSocket managers for better separation of concerns
+   - Thread-local singleton pattern for manager instances
+   - Automatic cleanup on component unmount
+   - Reuse of existing API refresh mechanisms for state updates
 
-4. **Callback Pattern** [NEW]: Adopted `on_connect`, `on_message`, `on_disconnect` callbacks in `WsClientV2` for decoupling and reacting to connection state changes.
-
-5. **Topic Routing** [NEW]: `TopicManager` infers topic from incoming message `type`/`data`, aligning with backend broadcast logic, rather than requiring topic in message payload.
+3. **Learnings from Dashboard Integration**:
+   - Keeping WebSocket logic separate from UI components improves maintainability
+   - Using existing state update mechanisms (`load_agents`) maintains consistency
+   - Component-specific managers provide better lifecycle control
+   - Thread-local storage works well for component-scoped instances
 
 #### Current Challenges Addressed / Resolved ✓
 1. **Message Handler Lifetime**: Addressed by using `Rc<RefCell<dyn FnMut(...)>>` for handlers in `TopicManager`. Components subscribing will need to manage their subscription lifecycle (e.g., unsubscribe on drop/unmount).
 
 2. **Reconnection Edge Cases**: Addressed automatic topic resubscription via `TopicManager::resubscribe_all_topics` triggered by `WsClientV2`'s `on_connect` callback. State recovery within components will be handled during view integration.
 
-## 3. Next Immediate Steps [Revised]
+3. **Component Integration Pattern** [NEW]: Established pattern using component-specific WebSocket managers that handle:
+   - Connection lifecycle (`initialize`/`cleanup`)
+   - Topic subscriptions
+   - Event handling and state updates
+   - Proper cleanup of resources
 
-1. **View Integration** [Next Priority]:
-   - Identify components needing real-time updates (Dashboard, Chat View, etc.).
-   - Update components to use the global `TopicManager` instance (via `AppState`).
-   - Implement `subscribe`/`unsubscribe` calls within component lifecycles.
-   - Add handlers within components to process event data (using `messages.rs` structs) and dispatch `AppState` updates.
+## 3. Next Immediate Steps [Updated]
 
-2. **Cleanup**:
-   - Gradually remove old WebSocket client (`ws_client.rs`) and related code as views are migrated.
+1. **View Integration** [In Progress]:
+   - ✓ Create component-specific WebSocket manager pattern
+   - ✓ Implement Dashboard real-time updates
+   - Next: Chat View Integration
+     - Create `ChatViewWsManager` following established pattern
+     - Handle thread-specific subscriptions
+     - Implement real-time message updates
+
+2. **Cleanup** [Updated]:
+   - Begin removing old WebSocket code from Dashboard component
+   - Identify shared code that can be moved to common utilities
+   - Plan Chat View migration
 
 ## 4. Testing Requirements
 
@@ -165,26 +174,23 @@ Last Updated: April 5, 2024
    - Error handling completeness
    - Documentation quality
 
-## 7. Next Actions [Revised Timeline]
+## 7. Next Actions [Updated Timeline]
 
 1. **Immediate (Next 1-2 Days)**:
-   - Start view migration with the **Dashboard** component.
-     - Subscribe to relevant agent topics (e.g., `agent:*` or a general "all agents" topic if backend supports).
-     - Handle `agent_created`, `agent_updated`, `agent_deleted` events to refresh the dashboard list.
+   - ✓ Completed initial Dashboard WebSocket integration
+   - Test Dashboard real-time updates in various scenarios
+   - Begin Chat View migration planning
 
 2. **Short Term (1 Week)**:
-   - Complete Dashboard migration.
-   - Begin migration of the **Chat View**.
-     - Subscribe to specific `thread:*` topics when a thread is opened.
-     - Handle `thread_message_created` events.
-     - Handle `thread_updated`, `thread_deleted` events.
-   - Refine integration tests for migrated views.
+   - Complete Dashboard testing and refinements
+   - Implement Chat View WebSocket integration
+   - Add comprehensive tests for both components
 
 3. **Medium Term (2-3 Weeks)**:
-   - Complete Chat View migration.
-   - Migrate any other necessary components (e.g., Canvas if it needs real-time updates).
-   - Complete removal of old WebSocket code (`ws_client.rs`).
-   - Performance optimization and documentation updates.
+   - Complete all view migrations
+   - Remove old WebSocket code
+   - Performance optimization
+   - Documentation updates
 
 ## 8. Open Questions [Partially Addressed]
 

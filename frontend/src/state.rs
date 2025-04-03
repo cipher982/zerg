@@ -19,6 +19,7 @@ use crate::constants::{
     DEFAULT_MODEL
 };
 use crate::network::{WsClientV2, TopicManager};
+use crate::network::ws_client::send_text_to_backend;
 
 // Store global application state
 pub struct AppState {
@@ -891,7 +892,7 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
         
         // Process any pending network calls
         if let Some((text, message_id)) = network_data {
-            crate::network::send_text_to_backend(&text, message_id);
+            send_text_to_backend(&text, message_id);
         }
         
         // Execute any pending UI updates
