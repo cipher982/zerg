@@ -9,16 +9,33 @@ import pytest
 import requests
 import uvicorn
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from zerg.app.database import Base
 from zerg.app.database import get_db
-from zerg.app.models.models import Agent
-from zerg.app.models.models import AgentMessage
-from zerg.app.models.models import Thread
-from zerg.app.models.models import ThreadMessage
+
+# Create a test database - using in-memory SQLite for tests
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,  # Use StaticPool for in-memory database
+)
+
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Initialize models
+Base.metadata.create_all(bind=engine)
+
+# Import models after SQLAlchemy is initialized
+from zerg.app.models.models import Agent  # noqa: E402
+from zerg.app.models.models import AgentMessage  # noqa: E402
+from zerg.app.models.models import Thread  # noqa: E402
+from zerg.app.models.models import ThreadMessage  # noqa: E402
 
 # Mock the OpenAI module before importing main app
 mock_openai = MagicMock()
@@ -49,18 +66,8 @@ sys.modules["langgraph.graph"] = MagicMock()
 sys.modules["langgraph.graph.message"] = MagicMock()
 sys.modules["langchain_openai"] = MagicMock()
 
+# Import app after all mocks and models are set up
 from zerg.main import app  # noqa: E402
-
-# Create a test database - using in-memory SQLite for tests
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,  # Use StaticPool for in-memory database
-)
-
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 @pytest.fixture
@@ -146,6 +153,26 @@ def client(db_session):
     test_client.stop_server()
 
     # Clean up the overrides
+    app.dependency_overrides = {}
+
+
+@pytest.fixture
+def test_client(db_session):
+    """
+    Create a FastAPI TestClient with WebSocket support
+    """
+
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    client = TestClient(app, backend="asyncio")
+    yield client
+
     app.dependency_overrides = {}
 
 
@@ -248,28 +275,15 @@ def mock_langgraph_state_graph():
         compiled_graph = MagicMock()
         mock_graph.compile.return_value = compiled_graph
 
-        # Set up streaming response
-        compiled_graph.stream.return_value = [{"chatbot": {"messages": [MagicMock(content="Test response")]}}]
-
-        # Set up non-streaming response
-        compiled_graph.invoke.return_value = {"messages": [MagicMock(content="Test response")]}
-
         yield mock_state_graph
 
 
 @pytest.fixture
 def mock_langchain_openai():
     """
-    Mock the ChatOpenAI class from LangChain
+    Mock the LangChain OpenAI integration
     """
-    with patch("zerg.app.agents.ChatOpenAI") as mock_chat_openai:
-        # Create a mock ChatOpenAI instance
-        mock_llm = MagicMock()
-        mock_chat_openai.return_value = mock_llm
-
-        # Mock the invoke method
-        response = MagicMock()
-        response.content = "This is a test response"
-        mock_llm.invoke.return_value = response
-
+    with patch("langchain_openai.ChatOpenAI") as mock_chat_openai:
+        mock_chat = MagicMock()
+        mock_chat_openai.return_value = mock_chat
         yield mock_chat_openai

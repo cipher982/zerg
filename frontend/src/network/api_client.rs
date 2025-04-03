@@ -121,7 +121,7 @@ impl ApiClient {
         
         // Create request with no-transform to handle streaming
         let mut opts = web_sys::RequestInit::new();
-        opts.method("POST");
+        opts.set_method("POST");
         
         let request = web_sys::Request::new_with_str_and_init(&url, &opts)?;
         

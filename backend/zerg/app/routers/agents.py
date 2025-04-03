@@ -1,7 +1,13 @@
+"""Agent routes module."""
+
 import logging
 import os
 from typing import List
 
+# from zerg.app.websocket import EventType
+# from zerg.app.websocket import broadcast_event
+# dotenv
+from dotenv import load_dotenv
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
@@ -11,14 +17,15 @@ from sqlalchemy.orm import Session
 
 from zerg.app.crud import crud
 from zerg.app.database import get_db
+from zerg.app.events import EventType
+from zerg.app.events.decorators import publish_event
 from zerg.app.schemas.schemas import Agent
 from zerg.app.schemas.schemas import AgentCreate
 from zerg.app.schemas.schemas import AgentUpdate
 from zerg.app.schemas.schemas import MessageCreate
 from zerg.app.schemas.schemas import MessageResponse
 
-# from zerg.app.websocket import EventType
-# from zerg.app.websocket import broadcast_event
+load_dotenv()
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -45,6 +52,7 @@ def read_agents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=Agent, status_code=status.HTTP_201_CREATED)
 @router.post("", response_model=Agent, status_code=status.HTTP_201_CREATED)
+@publish_event(EventType.AGENT_CREATED)
 async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
     """Create a new agent"""
     # No default handling, require complete data from API calls
@@ -70,6 +78,7 @@ def read_agent(agent_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/{agent_id}", response_model=Agent)
+@publish_event(EventType.AGENT_UPDATED)
 async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(get_db)):
     """Update an agent"""
     # Explicit validation
@@ -101,13 +110,20 @@ async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(
 
 
 @router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+@publish_event(EventType.AGENT_DELETED)
 async def delete_agent(agent_id: int, db: Session = Depends(get_db)):
     """Delete an agent"""
+    # Get the agent first so we can include it in the event
+    db_agent = crud.get_agent(db, agent_id=agent_id)
+    if db_agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
     success = crud.delete_agent(db, agent_id=agent_id)
     if not success:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    return None
+    # Return the deleted agent data for the event
+    return {"id": agent_id, "name": db_agent.name}
 
 
 # Agent messages endpoints

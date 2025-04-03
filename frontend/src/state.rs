@@ -18,6 +18,8 @@ use crate::constants::{
     DEFAULT_AGENT_NODE_COLOR,
     DEFAULT_MODEL
 };
+use crate::network::{WsClientV2, TopicManager};
+use crate::network::ws_client::send_text_to_backend;
 
 // Store global application state
 pub struct AppState {
@@ -80,10 +82,19 @@ pub struct AppState {
     pub is_chat_loading: bool,
     // Pending UI updates to avoid recursive borrow issues
     pub pending_ui_updates: Option<Box<dyn FnOnce()>>,
+    // --- WebSocket v2 and Topic Manager --- 
+    pub ws_client: Rc<RefCell<WsClientV2>>,
+    pub topic_manager: Rc<RefCell<TopicManager>>,
 }
 
 impl AppState {
     pub fn new() -> Self {
+        // --- Initialize WsClientV2 and TopicManager ---
+        // Create the WebSocket client first
+        let ws_client_rc = Rc::new(RefCell::new(WsClientV2::new_default()));
+        // Create the TopicManager, giving it a reference to the client
+        let topic_manager_rc = Rc::new(RefCell::new(TopicManager::new(ws_client_rc.clone())));
+
         Self {
             agents: HashMap::new(),
             nodes: HashMap::new(),
@@ -101,17 +112,16 @@ impl AppState {
             drag_last_x: 0.0,
             drag_last_y: 0.0,
             websocket: None,
-            canvas_width: 800.0, // Default width
-            canvas_height: 600.0, // Default height
+            canvas_width: 800.0,
+            canvas_height: 600.0,
             viewport_x: 0.0,
             viewport_y: 0.0,
             zoom_level: 1.0,
-            auto_fit: true, // Enable auto-fit by default
+            auto_fit: true,
             latest_user_input_id: None,
             message_id_to_node_id: HashMap::new(),
-            selected_model: DEFAULT_MODEL.to_string(), // Default model - use constant
+            selected_model: DEFAULT_MODEL.to_string(),
             available_models: vec![
-                // Default models until we fetch from the server
                 ("gpt-4o".to_string(), "GPT-4o".to_string()),
                 ("gpt-4-turbo".to_string(), "GPT-4 Turbo".to_string()),
                 ("gpt-3.5-turbo".to_string(), "GPT-3.5 Turbo".to_string()),
@@ -119,18 +129,18 @@ impl AppState {
             state_modified: false,
             selected_node_id: None,
             is_dragging_agent: false,
-            active_view: ActiveView::Dashboard, // Default to Dashboard view
+            active_view: ActiveView::Dashboard,
             pending_network_call: None,
             is_loading: true,
             data_loaded: false,
             api_load_attempted: false,
-            // Initialize thread-related state
             current_thread_id: None,
             threads: HashMap::new(),
             thread_messages: HashMap::new(),
             is_chat_loading: false,
-            // Initialize pending UI updates
             pending_ui_updates: None,
+            ws_client: ws_client_rc,
+            topic_manager: topic_manager_rc,
         }
     }
 
@@ -882,7 +892,7 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
         
         // Process any pending network calls
         if let Some((text, message_id)) = network_data {
-            crate::network::send_text_to_backend(&text, message_id);
+            send_text_to_backend(&text, message_id);
         }
         
         // Execute any pending UI updates
