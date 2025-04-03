@@ -1,7 +1,7 @@
 # WebSocket Refactoring Plan: Single Connection + Event-Driven Architecture
 
-## Status: Backend Complete ✓, Frontend Migration Starting
-Last Updated: April 3, 2024
+## Status: Backend Complete ✓, Frontend Infrastructure Complete ✓, View Integration Starting 🚀
+Last Updated: April 5, 2024
 
 ## 1. Original Problem & Goals [✓]
 
@@ -45,104 +45,175 @@ Last Updated: April 3, 2024
    - Maintains backward compatibility (old endpoint still works)
    - Added integration tests in `test_new_websocket.py`
 
-### Frontend Migration Starting 🔄
-1. Planning phase:
-   - Review existing `ws_client.rs` implementation
-   - Design topic subscription management
-   - Plan view-by-view migration strategy
+### Frontend Implementation Progress ✓
 
-### To Do 📋
-1. Frontend Implementation:
-   - Update `ws_client.rs` to use `/api/ws/v2` endpoint
-   - Add topic subscription management
-   - Migrate views one at a time:
-     a) Agent list view (dashboard)
-     b) Agent detail view
-     c) Thread views
-     d) Chat interface
+#### Completed Core Infrastructure ✓
+1. **Event Types Module** (`event_types.rs`):
+   - Mirrors backend's event and message types
+   - Provides type-safe enums for all message types
+   - Includes topic formatting helpers
+   - Full test coverage
 
-2. Testing & Verification:
-   - Add frontend integration tests
-   - Test view migrations individually
-   - Verify no message loss during transition
-   - Monitor performance impacts
+2. **Message System** (`messages.rs`):
+   - Structured message types matching backend schema
+   - Serialization/deserialization support
+   - Message builders for common operations
+   - Message parsing and type inference
+   - Comprehensive test suite
+   - Added structs for backend event data payloads (e.g., `AgentEventData`, `ThreadCreatedEventData`).
 
-3. Clean up phase:
-   - Remove old WebSocket code once migration is complete
-   - Update documentation
-   - Add performance monitoring
-   - Final integration testing
+3. **WebSocket Client v2** (`ws_client_v2.rs`):
+   - Single connection management
+   - Automatic reconnection with exponential backoff
+   - Ping/pong keep-alive mechanism
+   - Type-safe message handling
+   - Connection state management
+   - Error handling and logging
+   - Refactored to use a callback pattern (`on_connect`, `on_message`, `on_disconnect`) for better integration.
 
-## 3. Next Immediate Steps
+4. **Topic Manager** (`topic_manager.rs`) [NEW ✓]:
+   - Manages topic subscriptions (`agent:*`, `thread:*`).
+   - Sends `subscribe`/`unsubscribe` messages to backend.
+   - Handles automatic resubscription on reconnect (`resubscribe_all_topics`).
+   - Routes incoming messages based on inferred topic to registered handlers.
 
-1. Frontend Client Implementation:
-   - Review current `ws_client.rs` structure
-   - Plan changes needed for topic-based system
-   - Design subscription management interface
-   - Create migration plan for each view
+5. **Global Instance Management** [NEW ✓]:
+   - Integrated `WsClientV2` and `TopicManager` into global `AppState` using `Rc<RefCell<>>`.
+   - Initialized instances and connected WebSocket in `lib.rs::start()`.
+   - Linked `WsClientV2` callbacks to `TopicManager` methods.
 
-2. View Migration Planning:
-   - Document current WebSocket usage in each view
-   - Plan subscription topics needed for each view
-   - Design gradual rollout strategy
+#### Key Learnings & Decisions
+1. **Type Safety**:
+   - Using Rust's type system to prevent message format errors
+   - Trait-based approach for message handling (`WsMessage` trait)
+   - Macro-based implementation to reduce boilerplate
 
-3. Testing Strategy:
-   - Define test cases for new client
-   - Plan view-specific integration tests
-   - Set up performance monitoring
+2. **State Management**:
+   - Using `Rc<RefCell<>>` for shared state
+   - Clear separation between connection and message handling
+   - Proper cleanup of resources (ping intervals, handlers)
+   - Confirmed `Rc<RefCell<>>` is effective for sharing WS client and topic manager instances.
 
-## 4. Migration Strategy
+3. **Testing Strategy**:
+   - Unit tests with `wasm-bindgen-test`
+   - Test helpers for message creation and validation
+   - Mocking considerations for WebSocket interactions
 
-1. **Phase 1 - Frontend Preparation** [Next]
-   - Create new WebSocket client implementation
-   - Add topic subscription management
-   - Keep old client functional during transition
+4. **Callback Pattern** [NEW]: Adopted `on_connect`, `on_message`, `on_disconnect` callbacks in `WsClientV2` for decoupling and reacting to connection state changes.
 
-2. **Phase 2 - Gradual Migration**
-   - Start with agent events (already implemented)
-   - Move thread events next
-   - Monitor for any issues or performance impacts
+5. **Topic Routing** [NEW]: `TopicManager` infers topic from incoming message `type`/`data`, aligning with backend broadcast logic, rather than requiring topic in message payload.
 
-3. **Phase 3 - Clean Up**
-   - Remove old connection manager
-   - Clean up deprecated code
-   - Update documentation
+#### Current Challenges Addressed / Resolved ✓
+1. **Message Handler Lifetime**: Addressed by using `Rc<RefCell<dyn FnMut(...)>>` for handlers in `TopicManager`. Components subscribing will need to manage their subscription lifecycle (e.g., unsubscribe on drop/unmount).
 
-## 5. Testing Status
+2. **Reconnection Edge Cases**: Addressed automatic topic resubscription via `TopicManager::resubscribe_all_topics` triggered by `WsClientV2`'s `on_connect` callback. State recovery within components will be handled during view integration.
 
-### Completed ✓
-- Event bus unit tests
-- Topic manager unit tests
-- WebSocket integration tests
-- Error handling tests
-- Connection management tests
+## 3. Next Immediate Steps [Revised]
 
-### Remaining
-- Frontend integration tests
-- Load testing
-- Migration tests
-- Performance benchmarks
+1. **View Integration** [Next Priority]:
+   - Identify components needing real-time updates (Dashboard, Chat View, etc.).
+   - Update components to use the global `TopicManager` instance (via `AppState`).
+   - Implement `subscribe`/`unsubscribe` calls within component lifecycles.
+   - Add handlers within components to process event data (using `messages.rs` structs) and dispatch `AppState` updates.
 
-## 6. Notes & Considerations
+2. **Cleanup**:
+   - Gradually remove old WebSocket client (`ws_client.rs`) and related code as views are migrated.
 
-- Keep both old and new systems running in parallel during migration
-- Monitor for any performance impacts
-- Document all changes for other developers
-- Consider adding metrics/monitoring for event flow
+## 4. Testing Requirements
 
-## 7. Open Questions
+1. **Unit Tests**:
+   - Message serialization/deserialization
+   - Topic subscription logic
+   - Reconnection behavior
+   - State management
 
-- How to handle existing connections during the migration?
-- What metrics should we collect to verify the new system's performance?
-- Should we implement any circuit breakers or fallback mechanisms?
+2. **Integration Tests**:
+   - Connection lifecycle
+   - Message flow
+   - Topic subscription/unsubscription
+   - View-specific behaviors
+   - Add tests for view-specific event handling and state updates.
 
-## 8. Benefits Achieved So Far
+3. **End-to-End Tests**:
+   - Full user workflows
+   - Error scenarios
+   - Performance metrics
 
-- ✓ Decoupled event handling from WebSocket management
-- ✓ Cleaner subscription management with topics
-- ✓ Better error handling and resource cleanup
-- ✓ Improved testability with comprehensive test suite
-- ✓ Complete backend implementation with topic-based system
-- ✓ Backward compatibility maintained during migration
+## 5. Risk Assessment
 
-The backend implementation is now complete and well-tested. The focus shifts to the frontend migration, which will be done gradually to ensure stability and minimize disruption. Each view will be migrated individually, starting with the agent dashboard view.
+1. **Technical Risks**:
+   - Message ordering during reconnection
+   - Memory leaks in long-running connections
+   - Browser compatibility issues
+   - Performance impact of single connection
+
+2. **Migration Risks**:
+   - Data loss during transition
+   - Backward compatibility issues
+   - User experience disruption
+
+## 6. Success Metrics
+
+1. **Connection Metrics**:
+   - Number of active connections
+   - Connection lifetime
+   - Reconnection frequency
+   - Message latency
+
+2. **Code Quality**:
+   - Test coverage
+   - Error handling completeness
+   - Documentation quality
+
+## 7. Next Actions [Revised Timeline]
+
+1. **Immediate (Next 1-2 Days)**:
+   - Start view migration with the **Dashboard** component.
+     - Subscribe to relevant agent topics (e.g., `agent:*` or a general "all agents" topic if backend supports).
+     - Handle `agent_created`, `agent_updated`, `agent_deleted` events to refresh the dashboard list.
+
+2. **Short Term (1 Week)**:
+   - Complete Dashboard migration.
+   - Begin migration of the **Chat View**.
+     - Subscribe to specific `thread:*` topics when a thread is opened.
+     - Handle `thread_message_created` events.
+     - Handle `thread_updated`, `thread_deleted` events.
+   - Refine integration tests for migrated views.
+
+3. **Medium Term (2-3 Weeks)**:
+   - Complete Chat View migration.
+   - Migrate any other necessary components (e.g., Canvas if it needs real-time updates).
+   - Complete removal of old WebSocket code (`ws_client.rs`).
+   - Performance optimization and documentation updates.
+
+## 8. Open Questions [Partially Addressed]
+
+1. **Architecture**:
+   - How to handle view-specific message processing? -> *Addressed: Via `TopicManager` handlers within components dispatching `AppState` messages.*
+   - Best approach for global state updates? -> *Addressed: Confirmed `Rc<RefCell<AppState>>` with `dispatch_global_message` pattern.*
+   - Strategy for handling offline mode? -> *Remains Open: Current focus is online mode.*
+
+2. **Performance**:
+   - Impact of single connection on memory usage?
+   - Message queuing strategy during disconnection?
+   - Optimal ping interval for different network conditions?
+
+3. **Testing**:
+   - How to properly test WebSocket in Rust/WASM environment?
+   - Best approach for mocking WebSocket in tests?
+   - Performance testing methodology?
+
+## 9. Dependencies
+
+1. **Required Crate Updates**:
+   - serde for serialization
+   - uuid for message IDs
+   - wasm-bindgen-test for testing
+   - web-sys for browser APIs
+
+2. **Browser Requirements**:
+   - WebSocket support
+   - JSON parsing capabilities
+   - Local storage for state persistence
+
+The focus now shifts to **integrating views** with the new topic-based WebSocket system, starting with the Dashboard.
