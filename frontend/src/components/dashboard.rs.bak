@@ -655,6 +655,9 @@ pub fn refresh_dashboard(document: &Document) -> Result<(), JsValue> {
 
 // Function to set up the dashboard in the application
 pub fn setup_dashboard(document: &Document) -> Result<(), JsValue> {
+    // Initialize WebSocket manager first
+    super::dashboard::init_dashboard_ws()?;
+
     // Check if there's already a dashboard container
     if document.get_element_by_id("dashboard-container").is_none() {
         // Create a container for the dashboard
@@ -690,6 +693,23 @@ pub fn setup_dashboard(document: &Document) -> Result<(), JsValue> {
     
     // Now render the dashboard content
     render_dashboard(document)?;
+    
+    Ok(())
+}
+
+// Function to clean up the dashboard
+pub fn cleanup_dashboard() -> Result<(), JsValue> {
+    // Clean up WebSocket manager
+    super::dashboard::cleanup_dashboard_ws()?;
+    
+    // Clean up DOM elements if needed
+    if let Some(window) = web_sys::window() {
+        if let Some(document) = window.document() {
+            if let Some(container) = document.get_element_by_id("dashboard-container") {
+                container.set_inner_html("");
+            }
+        }
+    }
     
     Ok(())
 } 

@@ -1,26 +1,39 @@
 // Re-export network modules
-pub mod ws_client;
 pub mod api_client;
+pub mod event_types;
+pub mod messages;
 pub mod ui_updates;
+pub mod ws_client;
+pub mod ws_client_v2;
 
-// Re-export commonly used functions for backwards compatibility
-pub use ws_client::{setup_websocket, send_text_to_backend, fetch_available_models};
+// Re-export commonly used items
 pub use api_client::ApiClient;
+pub use ws_client::setup_websocket;
+pub use ws_client_v2::WsClientV2;
+pub use event_types::{EventType, MessageType};
+pub use messages::{WsMessage, builders as message_builders};
+
+// Add TopicManager
+pub mod topic_manager;
+pub use topic_manager::TopicManager;
 
 use wasm_bindgen::JsValue;
 
-// Shared utility functions
-pub fn get_api_base_url() -> Result<String, JsValue> {
-    let window = web_sys::window().expect("no global window exists");
-    let location = window.location();
-    
-    // If we're in local development, use a fixed port of 8001
-    let hostname = location.hostname()?;
-    if hostname == "localhost" || hostname == "127.0.0.1" {
+// Helper function to get API base URL
+pub(crate) fn get_api_base_url() -> Result<String, &'static str> {
+    #[cfg(debug_assertions)]
+    {
         Ok("http://localhost:8001".to_string())
-    } else {
-        // For production, use same hostname with :8001
-        let protocol = location.protocol()?;
-        Ok(format!("{}//{}:8001", protocol, hostname))
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        if let Some(window) = web_sys::window() {
+            if let Ok(location) = window.location().href() {
+                let url = url::Url::parse(&location)
+                    .map_err(|_| "Failed to parse window location")?;
+                return Ok(format!("{}://{}", url.scheme(), url.host_str().unwrap_or("localhost")));
+            }
+        }
+        Err("Could not determine API base URL")
     }
 } 

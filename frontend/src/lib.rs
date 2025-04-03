@@ -2,6 +2,8 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{window, Document};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 mod models;
 mod state;
@@ -30,8 +32,51 @@ pub fn start() -> Result<(), JsValue> {
     // Create base UI elements (header and status bar)
     ui::setup::create_base_ui(&document)?;
     
-    // Set up the WebSocket connection
-    network::setup_websocket()?;
+    // --- NEW: Initialize and Connect WebSocket v2 ---
+    // Access the globally initialized WS client and Topic Manager
+    let (ws_client_rc, topic_manager_rc) = state::APP_STATE.with(|state_ref| {
+        let state = state_ref.borrow();
+        (state.ws_client.clone(), state.topic_manager.clone())
+    });
+
+    // Setup callbacks
+    {
+        let topic_manager_clone = topic_manager_rc.clone();
+        let ws_client_clone = ws_client_rc.clone();
+
+        // Borrow mutably to set callbacks
+        let mut ws_client = ws_client_clone.borrow_mut();
+
+        // Set on_connect: Call topic_manager.resubscribe_all_topics
+        let tm_on_connect = topic_manager_clone.clone();
+        ws_client.set_on_connect(move || {
+            web_sys::console::log_1(&"on_connect callback triggered".into());
+            if let Err(e) = tm_on_connect.borrow().resubscribe_all_topics() {
+                web_sys::console::error_1(&format!("Failed to resubscribe topics: {:?}", e).into());
+            }
+        });
+
+        // Set on_message: Call topic_manager.route_incoming_message
+        let tm_on_message = topic_manager_clone.clone();
+        ws_client.set_on_message(move |json_value| {
+            // Route the message using the topic manager
+            tm_on_message.borrow().route_incoming_message(json_value);
+        });
+
+        // Set on_disconnect (optional, e.g., update UI status)
+        ws_client.set_on_disconnect(|| {
+            web_sys::console::warn_1(&"WebSocket disconnected (on_disconnect callback)".into());
+            // TODO: Maybe update some global UI indicator if needed
+        });
+        
+        // Initiate the connection
+        if let Err(e) = ws_client.connect() {
+             web_sys::console::error_1(&format!("Initial WebSocket connect failed: {:?}", e).into());
+             // Handle initial connection failure if necessary
+        }
+    } // Mutable borrow of ws_client ends here
+    
+    // OLD: network::setup_websocket()?;
     
     // Create the tab navigation
     create_tab_navigation(&document)?;
