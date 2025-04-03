@@ -5,12 +5,13 @@ use std::rc::Rc;
 use wasm_bindgen_futures::JsFuture;
 use js_sys::Array;
 use serde_json::Value;
+use std::any::Any;
 
 use super::event_types::{MessageType, EventType};
 use super::messages::{self, WsMessage, PingMessage, builders};
 
 /// Trait defining the WebSocket client interface
-pub trait IWsClient {
+pub trait IWsClient: Any {
     fn connect(&mut self) -> Result<(), JsValue>;
     fn send_serialized_message(&self, message_json: &str) -> Result<(), JsValue>;
     fn connection_state(&self) -> ConnectionState;
@@ -18,6 +19,7 @@ pub trait IWsClient {
     fn set_on_connect(&mut self, callback: Box<dyn FnMut() + 'static>);
     fn set_on_message(&mut self, callback: Box<dyn FnMut(Value) + 'static>);
     fn set_on_disconnect(&mut self, callback: Box<dyn FnMut() + 'static>);
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// Represents the current state of the WebSocket connection
@@ -418,15 +420,19 @@ impl IWsClient for WsClientV2 {
     }
 
     fn set_on_connect(&mut self, callback: Box<dyn FnMut() + 'static>) {
-        self.on_connect_callback = Some(Rc::new(RefCell::new(callback)));
+        self.set_on_connect(callback);
     }
 
     fn set_on_message(&mut self, callback: Box<dyn FnMut(Value) + 'static>) {
-        self.on_message_callback = Some(Rc::new(RefCell::new(callback)));
+        self.set_on_message(callback);
     }
 
     fn set_on_disconnect(&mut self, callback: Box<dyn FnMut() + 'static>) {
-        self.on_disconnect_callback = Some(Rc::new(RefCell::new(callback)));
+        self.set_on_disconnect(callback);
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

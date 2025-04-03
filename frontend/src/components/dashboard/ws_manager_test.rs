@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use crate::network::ws_client_v2::{ConnectionState, WsClientV2, IWsClient};
 use crate::network::messages::WsMessage;
 use serde_json::Value;
+use std::any::Any;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -64,6 +65,10 @@ impl IWsClient for MockWsClient {
     fn set_on_disconnect(&mut self, callback: Box<dyn FnMut() + 'static>) {
         self.on_disconnect = Some(Rc::new(RefCell::new(callback)));
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl MockWsClient {
@@ -77,6 +82,10 @@ impl MockWsClient {
         }
     }
 
+    fn get_sent_messages(&self) -> Vec<String> {
+        self.sent_messages.borrow().clone()
+    }
+
     fn simulate_receive_message(&self, message: Value) {
         if let Some(callback_rc) = &self.on_message {
             if let Ok(mut cb) = callback_rc.try_borrow_mut() {
@@ -87,24 +96,24 @@ impl MockWsClient {
 }
 
 // Helper function to create a DashboardWsManager with mocked dependencies
-fn create_mock_manager() -> (DashboardWsManager, Rc<RefCell<dyn IWsClient>>) {
-    let mock_client = MockWsClient::new();
-    let ws_client = Rc::new(RefCell::new(mock_client)) as Rc<RefCell<dyn IWsClient>>;
-    let topic_manager = TopicManager::new(ws_client.clone());
+fn create_mock_manager() -> (DashboardWsManager, Rc<RefCell<MockWsClient>>) {
+    let mock_client_rc = Rc::new(RefCell::new(MockWsClient::new()));
+    // Create trait object for TopicManager by cloning and upcasting
+    let ws_client_trait = mock_client_rc.clone() as Rc<RefCell<dyn IWsClient>>;
+    let topic_manager = TopicManager::new(ws_client_trait.clone());
     
-    let manager = DashboardWsManager::new();
-    // Replace the default WsClientV2 with our mock
+    // Create manager with the trait object
     let manager = DashboardWsManager {
         topic_manager: RefCell::new(topic_manager),
-        ws_client: ws_client.clone(),
+        ws_client: ws_client_trait,
     };
     
-    (manager, ws_client)
+    (manager, mock_client_rc)
 }
 
 #[wasm_bindgen_test]
 async fn test_dashboard_ws_initialization() {
-    let (manager, ws_client) = create_mock_manager();
+    let (manager, mock_client) = create_mock_manager();
     
     // Test initialization
     let result = manager.initialize();
@@ -112,21 +121,20 @@ async fn test_dashboard_ws_initialization() {
     
     // Verify the client is connected
     assert_eq!(
-        ws_client.borrow().connection_state(),
+        mock_client.borrow().connection_state(),
         ConnectionState::Connected,
         "WebSocket should be connected after initialization"
     );
     
     // Verify subscription message was sent
-    let client_ref = ws_client.borrow();
-    let sent_messages = client_ref.sent_messages.borrow();
+    let sent_messages = mock_client.borrow().get_sent_messages();
     assert!(!sent_messages.is_empty(), "No messages were sent during initialization");
     assert!(sent_messages[0].contains("agent:*"), "First message should be an agent subscription");
 }
 
 #[wasm_bindgen_test]
 async fn test_dashboard_ws_cleanup() {
-    let (manager, ws_client) = create_mock_manager();
+    let (manager, mock_client) = create_mock_manager();
     
     // Initialize first
     let init_result = manager.initialize();
@@ -138,7 +146,7 @@ async fn test_dashboard_ws_cleanup() {
     
     // Verify the client is disconnected
     assert_eq!(
-        ws_client.borrow().connection_state(),
+        mock_client.borrow().connection_state(),
         ConnectionState::Disconnected,
         "WebSocket should be disconnected after cleanup"
     );
@@ -146,14 +154,13 @@ async fn test_dashboard_ws_cleanup() {
 
 #[wasm_bindgen_test]
 async fn test_subscription_management() {
-    let (manager, ws_client) = create_mock_manager();
+    let (manager, mock_client) = create_mock_manager();
     
     // Initialize the manager
     manager.initialize().expect("Failed to initialize manager");
     
     // Verify that we're subscribed to agent events
-    let client_ref = ws_client.borrow();
-    let sent_messages = client_ref.sent_messages.borrow();
+    let sent_messages = mock_client.borrow().get_sent_messages();
     assert!(
         sent_messages.iter().any(|msg| msg.contains("agent:*")),
         "Should be subscribed to agent events"
@@ -162,14 +169,14 @@ async fn test_subscription_management() {
 
 #[wasm_bindgen_test]
 async fn test_reconnection_handling() {
-    let (manager, ws_client) = create_mock_manager();
+    let (manager, mock_client) = create_mock_manager();
     
     // Set up a flag to track if on_connect was called
     let reconnected = Rc::new(RefCell::new(false));
     let reconnected_clone = reconnected.clone();
     
     // Set up the on_connect callback
-    ws_client.borrow_mut().set_on_connect(Box::new(move || {
+    mock_client.borrow_mut().set_on_connect(Box::new(move || {
         *reconnected_clone.borrow_mut() = true;
     }));
     
@@ -178,7 +185,7 @@ async fn test_reconnection_handling() {
     
     // Verify connection state
     assert_eq!(
-        ws_client.borrow().connection_state(),
+        mock_client.borrow().connection_state(),
         ConnectionState::Connected,
         "WebSocket should be connected initially"
     );
@@ -187,10 +194,10 @@ async fn test_reconnection_handling() {
     assert!(*reconnected.borrow(), "on_connect callback should have been called");
     
     // Simulate disconnect
-    ws_client.borrow_mut().close().expect("Failed to close connection");
+    mock_client.borrow_mut().close().expect("Failed to close connection");
     
     assert_eq!(
-        ws_client.borrow().connection_state(),
+        mock_client.borrow().connection_state(),
         ConnectionState::Disconnected,
         "WebSocket should be disconnected after close"
     );
@@ -198,7 +205,7 @@ async fn test_reconnection_handling() {
 
 #[wasm_bindgen_test]
 async fn test_agent_event_handling() {
-    let (manager, ws_client) = create_mock_manager();
+    let (manager, mock_client) = create_mock_manager();
     manager.initialize().expect("Failed to initialize manager");
     
     // Create a flag to track if the handler was called
@@ -215,14 +222,18 @@ async fn test_agent_event_handling() {
     });
     
     // Simulate receiving the event through the WebSocket
-    ws_client.borrow().simulate_receive_message(test_event);
-    
-    if let Some(on_message) = &ws_client.borrow().on_message {
-        if let Ok(mut callback) = on_message.try_borrow_mut() {
-            (*callback)(test_event);
-        }
-    }
+    mock_client.borrow().simulate_receive_message(test_event.clone());
     
     // Verify the handler was called
     assert!(*handler_called.borrow(), "Agent event handler should have been called");
+}
+
+fn test_manager_cleanup() {
+    let (manager, mock_client) = create_mock_manager();
+    manager.initialize().expect("Failed to initialize manager");
+    manager.cleanup().expect("Failed to cleanup manager");
+
+    // Get the mock client to check its state
+    let state = mock_client.borrow().connection_state();
+    assert_eq!(state, ConnectionState::Disconnected);
 } 
