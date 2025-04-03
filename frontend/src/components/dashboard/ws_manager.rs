@@ -65,6 +65,16 @@ impl DashboardWsManager {
         self.ws_client.borrow_mut().close()?;
         Ok(())
     }
+
+    #[cfg(test)]
+    pub fn get_connection_state(&self) -> String {
+        self.ws_client.borrow().connection_state().to_string()
+    }
+
+    #[cfg(test)]
+    pub fn is_subscribed_to_topic(&self, topic: &str) -> bool {
+        self.topic_manager.borrow().has_subscription(topic)
+    }
 }
 
 // Create a singleton instance of the DashboardWsManager

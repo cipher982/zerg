@@ -18,6 +18,17 @@ pub enum ConnectionState {
     Error(String),
 }
 
+impl std::fmt::Display for ConnectionState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConnectionState::Disconnected => write!(f, "Disconnected"),
+            ConnectionState::Connecting => write!(f, "Connecting"),
+            ConnectionState::Connected => write!(f, "Connected"),
+            ConnectionState::Error(msg) => write!(f, "Error: {}", msg),
+        }
+    }
+}
+
 /// Configuration for the WebSocket client
 #[derive(Debug, Clone)]
 pub struct WsConfig {
@@ -439,7 +450,10 @@ mod tests {
         let received_clone = received_messages.clone();
         
         client.set_on_message(move |msg| {
-            received_clone.borrow_mut().push(msg.message_type());
+            // Store the message type from the JSON if it exists
+            if let Some(msg_type) = msg.get("type").and_then(|t| t.as_str()) {
+                received_clone.borrow_mut().push(msg_type.to_string());
+            }
         });
         
         // TODO: Add more message handler tests when we implement the full
