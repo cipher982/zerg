@@ -120,14 +120,9 @@ async fn test_reconnection_handling() {
     let manager = DashboardWsManager::new();
     manager.initialize().expect("Failed to initialize manager");
     
-    // Get the WebSocket client
-    let ws_client = manager.ws_client.borrow();
-    
-    // Simulate a disconnection
-    // In a real test, you'd use the WebSocket infrastructure
-    // For now, we're just verifying the state changes
+    // Verify connection state using the new method
     assert_eq!(
-        ws_client.connection_state().to_string(),
+        manager.get_connection_state(),
         "Connected",
         "WebSocket should be connected initially"
     );
@@ -149,9 +144,11 @@ async fn test_subscription_management() {
     let manager = DashboardWsManager::new();
     manager.initialize().expect("Failed to initialize manager");
     
-    // Verify that we're subscribed to agent events
-    // This is a basic check - in a real test, you'd verify the subscription message was sent
-    let topic_manager = manager.topic_manager.borrow();
+    // Verify that we're subscribed to agent events using the new method
+    assert!(
+        manager.is_subscribed_to_topic("agent:*"),
+        "Should be subscribed to agent events"
+    );
     
     // Cleanup
     manager.cleanup().expect("Failed to cleanup manager");

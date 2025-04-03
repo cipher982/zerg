@@ -181,4 +181,9 @@ impl TopicManager {
              }
         }
     }
+
+    #[cfg(test)]
+    pub fn has_subscription(&self, topic: &str) -> bool {
+        self.subscribed_topics.contains(topic)
+    }
 } 
