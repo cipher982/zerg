@@ -12,6 +12,7 @@ use crate::{
         DEFAULT_AGENT_NODE_COLOR,
         DEFAULT_MODEL
     },
+    network::ws_client::send_text_to_backend,
 };
 
 // This will contain event handlers that we'll extract from ui.rs
@@ -49,7 +50,7 @@ pub fn setup_auto_fit_button_handler(document: &Document) -> Result<(), JsValue>
             
             // Handle any pending network calls (shouldn't be any for ToggleAutoFit)
             if let Some((task_text, message_id)) = pending_call {
-                crate::network::send_text_to_backend(&task_text, message_id);
+                send_text_to_backend(&task_text, message_id);
             }
         }) as Box<dyn FnMut(_)>);
         
@@ -85,7 +86,7 @@ pub fn setup_center_view_handler(document: &Document) -> Result<(), JsValue> {
             
             // Handle any pending network calls (shouldn't be any for CenterView)
             if let Some((task_text, message_id)) = pending_call {
-                crate::network::send_text_to_backend(&task_text, message_id);
+                send_text_to_backend(&task_text, message_id);
             }
         }) as Box<dyn FnMut(_)>);
         
@@ -132,7 +133,7 @@ pub fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
                 
                 // Handle any pending network calls (shouldn't be any for ClearCanvas)
                 if let Some((task_text, message_id)) = pending_call {
-                    crate::network::send_text_to_backend(&task_text, message_id);
+                    send_text_to_backend(&task_text, message_id);
                 }
             }
         }) as Box<dyn FnMut(_)>);
@@ -194,7 +195,7 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
         
         // Handle any pending network calls (shouldn't be any for CloseAgentModal)
         if let Some((task_text, message_id)) = pending_call {
-            crate::network::send_text_to_backend(&task_text, message_id);
+            send_text_to_backend(&task_text, message_id);
         }
     }) as Box<dyn FnMut(_)>);
     
@@ -265,7 +266,7 @@ pub fn setup_modal_handlers(document: &Document) -> Result<(), JsValue> {
             
             // Handle any pending network calls (shouldn't be any for SaveAgentDetails)
             if let Some((task_text, message_id)) = pending_call {
-                crate::network::send_text_to_backend(&task_text, message_id);
+                send_text_to_backend(&task_text, message_id);
             }
             
             // Show a visual feedback that the save was successful
@@ -327,7 +328,7 @@ fn setup_tab_handlers(document: &Document) -> Result<(), JsValue> {
         
         // Handle any pending network calls (shouldn't be any for SwitchToMainTab)
         if let Some((task_text, message_id)) = pending_call {
-            crate::network::send_text_to_backend(&task_text, message_id);
+            send_text_to_backend(&task_text, message_id);
         }
     }) as Box<dyn FnMut(_)>);
     
@@ -354,7 +355,7 @@ fn setup_tab_handlers(document: &Document) -> Result<(), JsValue> {
         
         // Handle any pending network calls (shouldn't be any for SwitchToHistoryTab)
         if let Some((task_text, message_id)) = pending_call {
-            crate::network::send_text_to_backend(&task_text, message_id);
+            send_text_to_backend(&task_text, message_id);
         }
     }) as Box<dyn FnMut(_)>);
     
@@ -481,7 +482,7 @@ pub fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
             
             // Handle any pending network calls (shouldn't be any for CloseAgentModal)
             if let Some((task_text, message_id)) = pending_call {
-                crate::network::send_text_to_backend(&task_text, message_id);
+                send_text_to_backend(&task_text, message_id);
             }
         }) as Box<dyn FnMut(_)>);
         
@@ -541,7 +542,7 @@ pub fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
             
             // Handle any pending network calls (shouldn't be any for SaveAgentDetails)
             if let Some((task_text, message_id)) = pending_call {
-                crate::network::send_text_to_backend(&task_text, message_id);
+                send_text_to_backend(&task_text, message_id);
             }
             
             // Show a temporary "Saved!" message

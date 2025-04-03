@@ -143,7 +143,7 @@ pub type ThreadMessageCreatedEventData = ThreadMessageData;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentStateMessage {
     #[serde(rename = "type")]
-    pub message_type: String,
+    pub message_type: MessageType,
     pub data: AgentEventData,
     pub message_id: Option<String>,
 }
@@ -181,6 +181,7 @@ pub mod builders {
 pub mod handlers {
     use super::*;
     use web_sys::console;
+    use serde::de::Error;
 
     /// Parse a raw JSON message into the appropriate message type
     pub fn parse_message(json: &str) -> Result<Box<dyn WsMessage>, serde_json::Error> {
@@ -319,7 +320,7 @@ mod tests {
             status: Some("idle".to_string()),
         };
         let msg = AgentStateMessage {
-            message_type: "agent_state".to_string(),
+            message_type: MessageType::AgentState,
             data: agent_data,
             message_id: Some("msg-1".to_string()),
         };

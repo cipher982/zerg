@@ -6,6 +6,8 @@ use wasm_bindgen::JsValue;
 use uuid; // Ensure uuid crate is added to Cargo.toml
 
 use super::ws_client_v2::WsClientV2; // Assuming ws_client_v2 is in the same module
+use super::messages::{SubscribeMessage, UnsubscribeMessage};
+use super::messages::builders::{create_subscribe, create_unsubscribe};
 
 /// Represents a topic string like "agent:123" or "thread:45"
 pub type Topic = String;
@@ -22,24 +24,6 @@ pub struct TopicManager {
     subscribed_topics: HashSet<Topic>,
     /// Reference to the WebSocket client for sending messages
     ws_client: Rc<RefCell<WsClientV2>>,
-}
-
-// --- Message Types for Sending ---
-
-#[derive(Serialize)]
-struct SubscribeMessage {
-    #[serde(rename = "type")]
-    type_: String,
-    topics: Vec<Topic>,
-    message_id: String,
-}
-
-#[derive(Serialize)]
-struct UnsubscribeMessage {
-    #[serde(rename = "type")]
-    type_: String,
-    topics: Vec<Topic>,
-    message_id: String,
 }
 
 // --- Implementation ---
@@ -71,11 +55,7 @@ impl TopicManager {
             self.subscribed_topics.insert(topic.clone());
             web_sys::console::log_1(&format!("Sending subscribe request for topic: {}", topic).into());
 
-            let msg = SubscribeMessage {
-                type_: "subscribe".to_string(),
-                topics: vec![topic],
-                message_id: uuid::Uuid::new_v4().to_string(),
-            };
+            let msg = create_subscribe(vec![topic]);
 
             // Borrow the client to send the message
             match self.ws_client.try_borrow() {
@@ -101,11 +81,7 @@ impl TopicManager {
             if self.subscribed_topics.remove(topic) {
                 web_sys::console::log_1(&format!("Sending unsubscribe request for topic: {}", topic).into());
 
-                let msg = UnsubscribeMessage {
-                    type_: "unsubscribe".to_string(),
-                    topics: vec![topic.clone()],
-                    message_id: uuid::Uuid::new_v4().to_string(),
-                };
+                let msg = create_unsubscribe(vec![topic.clone()]);
 
                 // Borrow the client to send the message
                 match self.ws_client.try_borrow() {
@@ -119,7 +95,6 @@ impl TopicManager {
             web_sys::console::log_1(&format!("Attempted to unsubscribe from topic {} with no handlers.", topic).into());
         }
 
-
         Ok(())
     }
 
@@ -131,11 +106,7 @@ impl TopicManager {
 
         if !topics_to_resubscribe.is_empty() {
             web_sys::console::log_1(&format!("Sending resubscribe request for topics: {:?}", topics_to_resubscribe).into());
-            let msg = SubscribeMessage {
-                type_: "subscribe".to_string(),
-                topics: topics_to_resubscribe,
-                message_id: uuid::Uuid::new_v4().to_string(),
-            };
+            let msg = create_subscribe(topics_to_resubscribe);
 
             match self.ws_client.try_borrow() {
                 Ok(client) => client.send_message(&msg)?,
