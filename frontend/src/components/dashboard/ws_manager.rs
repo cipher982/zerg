@@ -7,8 +7,8 @@ use crate::state::APP_STATE;
 
 /// Manages WebSocket subscriptions and message handling for the Dashboard
 pub struct DashboardWsManager {
-    topic_manager: RefCell<TopicManager>,
-    ws_client: Rc<RefCell<dyn IWsClient>>,
+    pub topic_manager: RefCell<TopicManager>,
+    pub ws_client: Rc<RefCell<dyn IWsClient>>,
 }
 
 impl DashboardWsManager {
