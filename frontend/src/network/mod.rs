@@ -9,7 +9,7 @@ pub mod ws_client_v2;
 // Re-export commonly used items
 pub use api_client::ApiClient;
 pub use ws_client::setup_websocket;
-pub use ws_client_v2::WsClientV2;
+pub use ws_client_v2::{WsClientV2, IWsClient};
 pub use event_types::{EventType, MessageType};
 pub use messages::{WsMessage, builders as message_builders};
 

@@ -2,12 +2,13 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use wasm_bindgen::JsValue;
 use crate::network::{WsClientV2, TopicManager};
+use crate::network::ws_client_v2::IWsClient;
 use crate::state::APP_STATE;
 
 /// Manages WebSocket subscriptions and message handling for the Dashboard
 pub struct DashboardWsManager {
     topic_manager: RefCell<TopicManager>,
-    ws_client: Rc<RefCell<WsClientV2>>,
+    ws_client: Rc<RefCell<dyn IWsClient>>,
 }
 
 impl DashboardWsManager {

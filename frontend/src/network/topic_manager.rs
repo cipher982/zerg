@@ -4,8 +4,9 @@ use std::cell::RefCell;
 use serde::{Serialize};
 use wasm_bindgen::JsValue;
 use uuid; // Ensure uuid crate is added to Cargo.toml
+use serde_json::Value;
 
-use super::ws_client_v2::WsClientV2; // Assuming ws_client_v2 is in the same module
+use super::ws_client_v2::{WsClientV2, IWsClient}; // Update import
 use super::messages::{SubscribeMessage, UnsubscribeMessage};
 use super::messages::builders::{create_subscribe, create_unsubscribe};
 
@@ -23,14 +24,14 @@ pub struct TopicManager {
     /// Set of currently subscribed topics (sent to backend)
     subscribed_topics: HashSet<Topic>,
     /// Reference to the WebSocket client for sending messages
-    ws_client: Rc<RefCell<WsClientV2>>,
+    ws_client: Rc<RefCell<dyn IWsClient>>,
 }
 
 // --- Implementation ---
 
 impl TopicManager {
     /// Creates a new TopicManager linked to a WsClientV2 instance.
-    pub fn new(ws_client: Rc<RefCell<WsClientV2>>) -> Self {
+    pub fn new(ws_client: Rc<RefCell<dyn IWsClient>>) -> Self {
         Self {
             topic_handlers: HashMap::new(),
             subscribed_topics: HashSet::new(),
@@ -56,11 +57,11 @@ impl TopicManager {
             web_sys::console::log_1(&format!("Sending subscribe request for topic: {}", topic).into());
 
             let msg = create_subscribe(vec![topic]);
+            let msg_json = serde_json::to_string(&msg).map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
 
-            // Borrow the client to send the message
             match self.ws_client.try_borrow() {
-                Ok(client) => client.send_message(&msg)?,
-                Err(_) => return Err(JsValue::from_str("Failed to borrow WsClientV2 for subscribe")),
+                Ok(client) => client.send_serialized_message(&msg_json)?,
+                Err(_) => return Err(JsValue::from_str("Failed to borrow WsClient for subscribe")),
             }
         } else {
             web_sys::console::log_1(&format!("Adding additional handler for already subscribed topic: {}", topic).into());
@@ -82,11 +83,11 @@ impl TopicManager {
                 web_sys::console::log_1(&format!("Sending unsubscribe request for topic: {}", topic).into());
 
                 let msg = create_unsubscribe(vec![topic.clone()]);
+                let msg_json = serde_json::to_string(&msg).map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
 
-                // Borrow the client to send the message
                 match self.ws_client.try_borrow() {
-                     Ok(client) => client.send_message(&msg)?,
-                     Err(_) => return Err(JsValue::from_str("Failed to borrow WsClientV2 for unsubscribe")),
+                     Ok(client) => client.send_serialized_message(&msg_json)?,
+                     Err(_) => return Err(JsValue::from_str("Failed to borrow WsClient for unsubscribe")),
                 }
             } else {
                  web_sys::console::log_1(&format!("Removed local handlers for topic {} but was not subscribed on backend.", topic).into());
@@ -107,10 +108,11 @@ impl TopicManager {
         if !topics_to_resubscribe.is_empty() {
             web_sys::console::log_1(&format!("Sending resubscribe request for topics: {:?}", topics_to_resubscribe).into());
             let msg = create_subscribe(topics_to_resubscribe);
+            let msg_json = serde_json::to_string(&msg).map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
 
             match self.ws_client.try_borrow() {
-                Ok(client) => client.send_message(&msg)?,
-                Err(_) => return Err(JsValue::from_str("Failed to borrow WsClientV2 for resubscribe")),
+                Ok(client) => client.send_serialized_message(&msg_json)?,
+                Err(_) => return Err(JsValue::from_str("Failed to borrow WsClient for resubscribe")),
             }
         } else {
             web_sys::console::log_1(&"No topics to resubscribe.".into());
