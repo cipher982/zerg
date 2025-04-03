@@ -26,9 +26,17 @@ def publish_event(event_type: EventType):
 
             if result is not None:
                 # Convert result to dict if it's a model
-                if hasattr(result, "__dict__"):
+                if hasattr(result, "__table__"):
+                    # For SQLAlchemy models
+                    event_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
+                elif hasattr(result, "dict"):
+                    # For Pydantic models
+                    event_data = result.dict()
+                elif hasattr(result, "__dict__"):
+                    # For regular objects
                     event_data = result.__dict__
                 else:
+                    # For dictionaries or other types
                     event_data = result
 
                 # Remove SQLAlchemy internal state if present

@@ -17,6 +17,8 @@ from zerg.app.database import get_db
 from zerg.app.schemas.ws_messages import ErrorMessage
 from zerg.app.websocket.handlers import dispatch_message
 from zerg.app.websocket.manager import manager
+from zerg.app.websocket.new_handlers import dispatch_message_v2
+from zerg.app.websocket.new_manager import topic_manager
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
@@ -88,3 +90,63 @@ async def websocket_endpoint(
             pass
         finally:
             await manager.disconnect(client_id)
+
+
+@router.websocket("/ws/v2")
+async def websocket_endpoint_v2(websocket: WebSocket, initial_topics: str = None, db: Session = Depends(get_db)):
+    """WebSocket endpoint for topic-based subscriptions.
+
+    This endpoint handles all WebSocket connections using the new topic-based system.
+    Clients can subscribe to multiple topics (agents, threads) and receive events
+    for those topics.
+
+    Query Parameters:
+        initial_topics: Optional comma-separated list of topics to subscribe to on connect
+    """
+    client_id = str(uuid.uuid4())
+
+    try:
+        # Accept the connection and register the client
+        await topic_manager.connect(client_id, websocket)
+        logger.info(f"WebSocket v2 connection established for client {client_id}")
+
+        # Handle initial topics if provided
+        if initial_topics:
+            topics = [t.strip() for t in initial_topics.split(",")]
+            subscribe_msg = {
+                "type": "subscribe",
+                "topics": topics,
+                "message_id": f"auto-subscribe-{uuid.uuid4()}",
+            }
+            await dispatch_message_v2(client_id, subscribe_msg, db)
+
+        # Main message loop
+        while True:
+            try:
+                # Receive JSON data from the client
+                raw_data = await websocket.receive_text()
+                data = json.loads(raw_data)
+
+                # Dispatch the message to the appropriate handler
+                await dispatch_message_v2(client_id, data, db)
+
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid JSON from client {client_id}")
+                error_msg = ErrorMessage(error="Invalid JSON payload")
+                await websocket.send_json(error_msg.model_dump())
+
+    except WebSocketDisconnect:
+        # Handle client disconnect
+        logger.info(f"WebSocket v2 connection closed for client {client_id}")
+        await topic_manager.disconnect(client_id)
+
+    except Exception as e:
+        # Handle other exceptions
+        logger.error(f"WebSocket v2 error: {str(e)}")
+        try:
+            error_msg = ErrorMessage(error="Internal server error")
+            await websocket.send_json(error_msg.model_dump())
+        except Exception:
+            pass
+        finally:
+            await topic_manager.disconnect(client_id)
