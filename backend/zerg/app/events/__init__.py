@@ -2,5 +2,6 @@
 
 from .event_bus import EventBus
 from .event_bus import EventType
+from .event_bus import event_bus
 
-__all__ = ["EventBus", "EventType"]
+__all__ = ["EventBus", "EventType", "event_bus"]
