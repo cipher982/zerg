@@ -1091,26 +1091,44 @@ pub fn update(state: &mut AppState, msg: Message) {
        
         // Navigation messages
         Message::NavigateToChatView(agent_id) => {
-            // Set the active view to ChatView
+            // 1. Pure state updates first
             state.active_view = crate::storage::ActiveView::ChatView;
+            state.is_chat_loading = true;
             
-            // Get reference to document before leaving this scope
-            let document_opt = web_sys::window().and_then(|w| w.document());
+            // 2. Collect data needed for side effects
+            let agent_id_for_effects = agent_id;
             
-            // Load threads for this agent first
-            let agent_id_for_load = agent_id;
+            // 3. Schedule side effects to run after state mutation is complete
             state.pending_ui_updates = Some(Box::new(move || {
-                // Show loading state first
-                dispatch_global_message(Message::UpdateLoadingState(true));
-                // Then load threads
-                dispatch_global_message(Message::LoadThreads(agent_id_for_load));
+                // UI updates
+                if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::chat_view::setup_chat_view(&document);
+                    let _ = crate::components::chat_view::show_chat_view(&document, agent_id_for_effects);
+                }
+                
+                // Data fetching - use API directly instead of dispatching
+                wasm_bindgen_futures::spawn_local(async move {
+                    // Pass agent_id as Some(agent_id) to match the API expectation
+                    match crate::network::api_client::ApiClient::get_threads(Some(agent_id_for_effects)).await {
+                        Ok(response) => {
+                            match serde_json::from_str::<Vec<ApiThread>>(&response) {
+                                Ok(threads) => {
+                                    // Single dispatch after data is ready
+                                    dispatch_global_message(Message::ThreadsLoaded(threads));
+                                },
+                                Err(e) => {
+                                    web_sys::console::error_1(&format!("Failed to parse threads: {:?}", e).into());
+                                    dispatch_global_message(Message::UpdateLoadingState(false));
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            web_sys::console::error_1(&format!("Failed to load threads: {:?}", e).into());
+                            dispatch_global_message(Message::UpdateLoadingState(false));
+                        }
+                    }
+                });
             }));
-           
-            // Show the chat view
-            if let Some(document) = document_opt {
-                let _ = crate::components::chat_view::setup_chat_view(&document);
-                let _ = crate::components::chat_view::show_chat_view(&document, agent_id);
-            }
         },
        
         Message::NavigateToThreadView(thread_id) => {
