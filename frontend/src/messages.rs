@@ -3,7 +3,7 @@
 // The events that can occur in your UI. Expand as needed.
 //
 use crate::storage::ActiveView;
-use crate::models::{NodeType, ApiThread, ApiThreadMessage};
+use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent};
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -163,19 +163,33 @@ pub enum Message {
     
     // Thread-related messages
     LoadThreads(u32),                // Load threads for an agent
-    ThreadsLoaded(String),           // Threads loaded from API
+    ThreadsLoaded(Vec<ApiThread>), // Changed String to Vec<ApiThread> for direct use
     CreateThread(u32, String),       // Create a new thread for an agent
-    ThreadCreated(String),           // Thread created response
+    ThreadCreated(ApiThread),        // Changed String to ApiThread for direct use
     SelectThread(u32),               // Select a thread
     LoadThreadMessages(u32),         // Load messages for a thread
-    ThreadMessagesLoaded(String),    // Thread messages loaded
+    ThreadMessagesLoaded(u32, Vec<ApiThreadMessage>), // Changed String to Vec<ApiThreadMessage> + thread_id
     SendThreadMessage(u32, String),  // Send a message to a thread
     ThreadMessageSent(String, String),  // Message sent response with client_id
     ThreadMessageFailed(u32, String), // Message failed to send with client_id
-    ThreadMessageReceived(String),   // Message received from websocket
-    UpdateThreadTitle(u32, String),  // Update thread title
+    UpdateThreadTitle(u32, String),  // Update thread title (request)
     DeleteThread(u32),               // Delete thread
     
+    // --- NEW WebSocket Received Messages ---
+    ReceiveNewMessage(ApiThreadMessage), // New message received via WebSocket
+    ReceiveThreadUpdate {              // Thread metadata updated via WebSocket
+        thread_id: u32,
+        title: Option<String>,
+    },
+    ReceiveStreamStart(u32),          // Start of streaming response for thread_id
+    ReceiveStreamChunk {               // Chunk of streaming response
+        thread_id: u32,
+        content: String,
+    },
+    ReceiveStreamEnd(u32),            // End of streaming response for thread_id
+    // Using UpdateConversation for thread history
+    // --- END NEW WebSocket Received Messages ---
+
     // Navigation messages
     NavigateToChatView(u32),         // Navigate to chat view with agent
     NavigateToThreadView(u32),       // Navigate to specific thread
@@ -183,7 +197,7 @@ pub enum Message {
     
     // Chat view messages
     LoadAgentInfo(u32),                    // Request to load agent info
-    AgentInfoLoaded(String),               // Agent info loaded
+    AgentInfoLoaded(Box<ApiAgent>),        // Changed String to Box<ApiAgent>
     RequestNewThread,                      // Request to create new thread
     RequestSendMessage(String),            // Request to send message
     RequestUpdateThreadTitle(String),      // Request to update thread title
