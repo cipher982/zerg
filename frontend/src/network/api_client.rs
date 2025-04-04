@@ -149,7 +149,8 @@ impl ApiClient {
         // Convert to string and dispatch as a thread message
         let message_str = message.to_string();
         web_sys::console::log_1(&format!("Dispatching thread message: {}", message_str).into());
-        crate::state::dispatch_global_message(crate::messages::Message::ThreadMessageReceived(message_str.clone()));
+        // OLD SYSTEM - Replaced by WebSocket push:
+        // crate::state::dispatch_global_message(crate::messages::Message::ThreadMessageReceived(message_str.clone()));
         
         Ok(content)
     }
