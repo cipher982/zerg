@@ -240,47 +240,12 @@ fn handle_websocket_message(event: web_sys::MessageEvent) -> Result<(), JsValue>
                     
                     // Handle thread-related events
                     Some("thread_created") => {
-                        web_sys::console::log_1(&"Received thread_created event".into());
-                        
-                        // Extract thread ID and agent ID from the message
-                        let thread_id = json.get("thread_id").and_then(|t| t.as_u64()).map(|t| t as u32);
-                        let agent_id = json.get("agent_id").and_then(|a| a.as_u64()).map(|a| a as u32);
-                        let title = json.get("title").and_then(|t| t.as_str()).unwrap_or(DEFAULT_THREAD_TITLE).to_string();
-                        
-                        if let (Some(thread_id), Some(agent_id)) = (thread_id, agent_id) {
-                            // Create a scheduled operation to avoid nested borrowing
-                            let cb = Closure::once(Box::new(move || {
-                                // Create a thread object
-                                let thread = crate::models::ApiThread {
-                                    id: Some(thread_id),
-                                    agent_id,
-                                    title,
-                                    active: true,
-                                    created_at: Some(format!("{}", chrono::Utc::now())),
-                                    updated_at: Some(format!("{}", chrono::Utc::now())),
-                                };
-                                
-                                // Serialize the thread to JSON
-                                if let Ok(thread_json) = serde_json::to_string(&thread) {
-                                    // Dispatch as if the thread was created through the API
-                                    crate::state::dispatch_global_message(
-                                        crate::messages::Message::ThreadCreated(thread_json)
-                                    );
-                                } else {
-                                    web_sys::console::error_1(&"Failed to serialize thread in thread_created event".into());
-                                }
-                            }) as Box<dyn FnOnce()>);
-                            
-                            // Schedule this to run outside of this message handler
-                            web_sys::window()
-                                .expect("no global window exists")
-                                .set_timeout_with_callback_and_timeout_and_arguments_0(
-                                    cb.as_ref().unchecked_ref(),
-                                    0
-                                )?;
-                            cb.forget();
+                        if let Some(thread_json_val) = json.get("thread") {
+                            if let Ok(thread_json) = serde_json::to_string(thread_json_val) {
+                                // OLD DISPATCH - Now handled by direct state update:
+                                // crate::state::dispatch_global_message(crate::messages::Message::ThreadCreated(thread_json));
+                            }
                         }
-                        
                         return Ok(());
                     },
                     
@@ -547,10 +512,19 @@ pub fn setup_thread_websocket(thread_id: u32) -> Result<(), JsValue> {
             // Use a setTimeout to ensure we're not dispatching while inside another dispatch
             let message_str_clone = message_str.clone();
             let cb = Closure::once(Box::new(move || {
-                // This dispatch happens outside of any borrowing
-                crate::state::dispatch_global_message(crate::messages::Message::ThreadMessageReceived(message_str_clone));
+                // Attempt to parse the incoming message string as an ApiThreadMessage
+                match serde_json::from_str::<crate::models::ApiThreadMessage>(&message_str_clone) {
+                    Ok(parsed_message) => {
+                        // Dispatch the new message variant with the parsed data
+                        crate::state::dispatch_global_message(crate::messages::Message::ReceiveNewMessage(parsed_message));
+                    }
+                    Err(e) => {
+                        // Log an error if parsing fails
+                        web_sys::console::error_1(&format!("Failed to parse incoming WS message as ApiThreadMessage: {}, Error: {}", message_str_clone, e).into());
+                    }
+                }
             }) as Box<dyn FnOnce()>);
-            
+
             web_sys::window()
                 .expect("no global window exists")
                 .set_timeout_with_callback_and_timeout_and_arguments_0(

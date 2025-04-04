@@ -14,7 +14,9 @@ use crate::network::messages::{ // Import relevant message structs
     StreamEndMessage,
 };
 use crate::messages::Message; // Import main Message enum
-use crate::models::ApiThreadMessage; // Import the target model type
+use crate::models::{ApiThreadMessage, ApiThread}; // Added ApiThread here
+use crate::network::TopicManager;
+use crate::network::ws_client_v2::IWsClient;
 
 /// Helper to convert network message data to the application model
 fn convert_network_message_to_model(network_msg: ThreadMessageData) -> ApiThreadMessage {
@@ -29,10 +31,8 @@ fn convert_network_message_to_model(network_msg: ThreadMessageData) -> ApiThread
 
 /// Manages WebSocket subscriptions and message handling for the Chat View lifecycle.
 pub struct ChatViewWsManager {
-    // Store the handler Rc to allow unsubscribing later.
-    thread_subscription_handler: Option<TopicHandler>,
-    // Store the topic we are subscribed to for cleanup
-    subscribed_topic: Option<String>,
+    pub(crate) thread_subscription_handler: Option<TopicHandler>,
+    current_thread_id: Option<u32>,
 }
 
 impl ChatViewWsManager {
@@ -40,13 +40,15 @@ impl ChatViewWsManager {
     pub fn new() -> Self {
         Self {
             thread_subscription_handler: None,
-            subscribed_topic: None,
+            current_thread_id: None,
         }
     }
 
-    /// Initialize subscriptions for the chat view for a specific thread.
-    /// Assumes global WebSocket is already connected or will connect.
-    pub fn initialize(&mut self, thread_id: u64) -> Result<(), JsValue> {
+    /// Initialize subscriptions for the chat view with a specific thread ID.
+    pub fn initialize(&mut self, thread_id: u32) -> Result<(), JsValue> {
+        // Store the thread ID we're subscribing to
+        self.current_thread_id = Some(thread_id);
+
         // Get the global TopicManager from AppState
         let topic_manager_rc = APP_STATE.with(|state_ref| {
             state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>
@@ -55,121 +57,65 @@ impl ChatViewWsManager {
         Ok(())
     }
 
-    /// Subscribe to thread-specific events using the provided ITopicManager.
+    /// Subscribe to thread-related events using the provided ITopicManager.
     pub(crate) fn subscribe_to_thread_events(
         &mut self,
         topic_manager_rc: Rc<RefCell<dyn ITopicManager>>,
-        thread_id: u64
+        thread_id: u32
     ) -> Result<(), JsValue> {
         let mut topic_manager = topic_manager_rc.borrow_mut();
-        let topic = format!("thread:{}", thread_id);
 
-        // --- Define Handler ---
-        let handler_topic = topic.clone(); // Clone topic for use inside the handler closure
+        // Create a handler for thread events
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
-            web_sys::console::log_1(&format!("ChatView handler received event for topic {}: {:?}", handler_topic, data).into());
-            
-            // Attempt to deserialize based on "type" field
+            web_sys::console::log_1(&format!("Chat handler received thread event: {:?}", data).into());
+
             if let Some(event_type) = data.get("type").and_then(|t| t.as_str()) {
                 match event_type {
-                    "thread_history" => {
-                        match serde_json::from_value::<ThreadHistoryMessage>(data) {
-                            Ok(history_msg) => {
-                                web_sys::console::log_1(&format!("Parsed ThreadHistoryMessage for thread {}", history_msg.thread_id).into());
-                                // Convert Vec<ThreadMessageData> to Vec<ApiThreadMessage>
-                                let model_messages: Vec<ApiThreadMessage> = history_msg.messages.into_iter()
-                                    .map(convert_network_message_to_model)
-                                    .collect();
-                                dispatch_global_message(Message::UpdateConversation(model_messages));
-                            },
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse ThreadHistoryMessage: {}", e).into()),
-                        }
-                    },
                     "thread_message_created" => {
-                         // Note: The backend sends the data payload nested under "data" for this event type.
-                         match serde_json::from_value::<ThreadMessageData>(data.get("data").cloned().unwrap_or_default()) {
-                            Ok(network_msg_data) => {
-                                web_sys::console::log_1(&format!("Parsed ThreadMessageData for thread {}", network_msg_data.thread_id).into());
-                                // Convert before dispatching
-                                let model_message = convert_network_message_to_model(network_msg_data);
-                                dispatch_global_message(Message::ReceiveNewMessage(model_message)); 
-                            },
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse ThreadMessageData from event: {}", e).into()),
+                        // Parse the message data and dispatch to update UI
+                        if let Ok(message_data) = serde_json::from_value::<ApiThreadMessage>(data["data"].clone()) {
+                            dispatch_global_message(Message::ReceiveNewMessage(message_data));
                         }
                     },
                     "thread_updated" => {
-                         // Note: The backend sends the data payload nested under "data" for this event type.
-                         match serde_json::from_value::<ThreadUpdatedEventData>(data.get("data").cloned().unwrap_or_default()) {
-                            Ok(update_data) => {
-                                web_sys::console::log_1(&format!("Parsed ThreadUpdatedEventData for thread {}", update_data.thread_id).into());
-                                // Dispatch using the new variant
-                                dispatch_global_message(Message::ReceiveThreadUpdate {
-                                     thread_id: update_data.thread_id as u32,
-                                     title: update_data.title,
-                                });
-                            },
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse ThreadUpdatedEventData: {}", e).into()),
-                        }
-                    },
-                    "stream_start" => {
-                         match serde_json::from_value::<StreamStartMessage>(data) {
-                            Ok(start_msg) => {
-                                web_sys::console::log_1(&format!("Parsed StreamStartMessage for thread {}", start_msg.thread_id).into());
-                                dispatch_global_message(Message::ReceiveStreamStart(start_msg.thread_id as u32));
-                            },
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse StreamStartMessage: {}", e).into()),
-                        }
-                    },
-                     "stream_chunk" => {
-                         match serde_json::from_value::<StreamChunkMessage>(data) {
-                            Ok(chunk_msg) => {
-                                dispatch_global_message(Message::ReceiveStreamChunk {
-                                    thread_id: chunk_msg.thread_id as u32,
-                                    content: chunk_msg.content,
-                                });
-                            },
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse StreamChunkMessage: {}", e).into()),
-                        }
-                    },
-                     "stream_end" => {
-                         match serde_json::from_value::<StreamEndMessage>(data) {
-                            Ok(end_msg) => {
-                                web_sys::console::log_1(&format!("Parsed StreamEndMessage for thread {}", end_msg.thread_id).into());
-                                dispatch_global_message(Message::ReceiveStreamEnd(end_msg.thread_id as u32));
-                            },
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse StreamEndMessage: {}", e).into()),
+                        // Handle thread updates (title changes, etc.)
+                        if let Ok(thread_data) = serde_json::from_value::<ApiThread>(data["data"].clone()) {
+                            // Assuming the "data" field for thread_updated contains the full ApiThread object
+                            dispatch_global_message(Message::ReceiveThreadUpdate {
+                                thread_id: thread_data.id.unwrap_or(0), // Need thread_id here
+                                title: Some(thread_data.title),
+                            });
                         }
                     },
                     _ => {
-                         web_sys::console::warn_1(&format!("ChatView handler: Unhandled event type: {}", event_type).into());
+                        web_sys::console::warn_1(&format!("Chat handler: Unhandled thread event type: {}", event_type).into());
                     }
                 }
-            } else {
-                 web_sys::console::warn_1(&format!("ChatView handler: Received message without 'type' field: {:?}", data).into());
             }
         }));
 
+        // Subscribe to thread-specific events
+        let topic = format!("thread:{}:*", thread_id);
         self.thread_subscription_handler = Some(handler.clone());
-        self.subscribed_topic = Some(topic.clone());
-        
         topic_manager.subscribe(topic, handler)?;
         Ok(())
     }
 
     /// Clean up WebSocket subscriptions for the chat view.
-    pub fn cleanup(&mut self) -> Result<(), JsValue> {
-        // Get the global TopicManager from AppState
-        let topic_manager_rc = APP_STATE.with(|state_ref| {
-             state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>
-        });
+    pub fn cleanup(&mut self, topic_manager_rc: Rc<RefCell<dyn ITopicManager>>) -> Result<(), JsValue> {
         let mut topic_manager = topic_manager_rc.borrow_mut();
         
-        if let (Some(handler), Some(topic)) = (self.thread_subscription_handler.take(), self.subscribed_topic.take()) {
-             web_sys::console::log_1(&format!("ChatViewWsManager: Cleaning up subscription handler for topic {}", topic).into());
-             topic_manager.unsubscribe_handler(&topic, &handler)?;
+        if let Some(handler) = self.thread_subscription_handler.take() {
+            if let Some(thread_id) = self.current_thread_id {
+                web_sys::console::log_1(&format!("ChatViewWsManager: Cleaning up thread subscription handler for thread {}", thread_id).into());
+                let topic = format!("thread:{}:*", thread_id);
+                topic_manager.unsubscribe_handler(&topic, &handler)?;
+            }
         } else {
-            web_sys::console::warn_1(&"ChatViewWsManager cleanup: No handler or topic found to unsubscribe.".into());
+            web_sys::console::warn_1(&"ChatViewWsManager cleanup: No handler found to unsubscribe.".into());
         }
+        
+        self.current_thread_id = None;
         Ok(())
     }
 }
@@ -179,8 +125,8 @@ thread_local! {
     pub static CHAT_VIEW_WS: RefCell<Option<ChatViewWsManager>> = RefCell::new(None);
 }
 
-/// Initialize the chat view WebSocket manager singleton for a specific thread
-pub fn init_chat_view_ws(thread_id: u64) -> Result<(), JsValue> {
+/// Initialize the chat view WebSocket manager singleton
+pub fn init_chat_view_ws(thread_id: u32) -> Result<(), JsValue> {
     CHAT_VIEW_WS.with(|cell| {
         let mut manager_opt = cell.borrow_mut();
         if manager_opt.is_none() {
@@ -189,20 +135,19 @@ pub fn init_chat_view_ws(thread_id: u64) -> Result<(), JsValue> {
             manager.initialize(thread_id)?;
             *manager_opt = Some(manager);
         } else {
-            // If already initialized, maybe re-initialize if thread_id changed?
-            // Or assume component logic handles ensuring cleanup before new init.
-            // For now, just warn if initializing again without cleanup.
-            web_sys::console::warn_1(&"ChatViewWsManager singleton already initialized. Call cleanup first if changing threads.".into());
-            // Optional: Re-initialize if needed
-            // Need to handle potential errors from cleanup/initialize if re-initializing
-            // let mut current_manager = manager_opt.as_mut().unwrap();
-            // let current_topic = current_manager.subscribed_topic.clone();
-            // let new_topic = format!("thread:{}", thread_id);
-            // if current_topic.as_deref() != Some(&new_topic) {
-            //     web_sys::console::log_1(&format!("Re-initializing ChatViewWsManager for new thread {}...", thread_id).into());
-            //     current_manager.cleanup()?;
-            //     current_manager.initialize(thread_id)?;
-            // }
+            // If manager exists but thread changed, reinitialize
+            if let Some(manager) = manager_opt.as_mut() {
+                if manager.current_thread_id != Some(thread_id) {
+                    web_sys::console::log_1(&format!("Reinitializing ChatViewWsManager for new thread {}...", thread_id).into());
+                    // Clean up existing subscriptions
+                    let topic_manager_rc = APP_STATE.with(|state_ref| {
+                        state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>
+                    });
+                    manager.cleanup(topic_manager_rc)?;
+                    // Initialize for new thread
+                    manager.initialize(thread_id)?;
+                }
+            }
         }
         Ok(())
     })
@@ -214,10 +159,11 @@ pub fn cleanup_chat_view_ws() -> Result<(), JsValue> {
         let mut manager_opt = cell.borrow_mut();
         if let Some(manager) = manager_opt.as_mut() {
             web_sys::console::log_1(&"Cleaning up ChatViewWsManager singleton...".into());
-            manager.cleanup()?;
+            let topic_manager_trait_rc = APP_STATE.with(|state_ref| {
+                state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>
+            });
+            manager.cleanup(topic_manager_trait_rc)?;
         }
-        // Remove the manager instance itself after cleanup
-        *manager_opt = None; 
         Ok(())
     })
 } 

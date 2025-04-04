@@ -1,21 +1,18 @@
 // Re-export network modules
 pub mod api_client;
-pub mod event_types;
-pub mod messages;
-pub mod ui_updates;
 pub mod ws_client;
 pub mod ws_client_v2;
+pub mod event_types;
+pub mod messages;
+pub mod topic_manager;
+pub mod ui_updates;
 
 // Re-export commonly used items
 pub use api_client::ApiClient;
-pub use ws_client::setup_websocket;
 pub use ws_client_v2::{WsClientV2, IWsClient};
 pub use event_types::{EventType, MessageType};
 pub use messages::{WsMessage, builders as message_builders};
-
-// Add TopicManager
-pub mod topic_manager;
-pub use topic_manager::TopicManager;
+pub use topic_manager::{TopicManager, ITopicManager};
 
 use wasm_bindgen::JsValue;
 

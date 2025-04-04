@@ -1,13 +1,11 @@
-use std::collections::HashMap;
 use std::cell::RefCell;
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
 use crate::models::{Node, NodeType, Workflow, Edge, ApiAgent, ApiThread, ApiThreadMessage};
 use crate::canvas::renderer;
 use crate::storage::ActiveView;
-use js_sys::Date;
-use wasm_bindgen::JsValue;
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
+use crate::network::{WsClientV2, TopicManager};
+use crate::network::ws_client::send_text_to_backend;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use crate::messages::Message;
 use crate::update::update;
@@ -18,9 +16,11 @@ use crate::constants::{
     DEFAULT_AGENT_NODE_COLOR,
     DEFAULT_MODEL
 };
-use crate::network::{WsClientV2, TopicManager};
-use crate::network::ws_client::send_text_to_backend;
-use crate::components::chat::ws_manager::{init_chat_view_ws, cleanup_chat_view_ws};
+use crate::components::chat;
+use js_sys::Date;
+use wasm_bindgen::JsValue;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
 
 // Store global application state
 pub struct AppState {
@@ -88,6 +88,7 @@ pub struct AppState {
     // --- WebSocket v2 and Topic Manager --- 
     pub ws_client: Rc<RefCell<WsClientV2>>,
     pub topic_manager: Rc<RefCell<TopicManager>>,
+    pub streaming_threads: HashSet<u32>,
 }
 
 impl AppState {
@@ -145,6 +146,7 @@ impl AppState {
             pending_ui_updates: None,
             ws_client: ws_client_rc,
             topic_manager: topic_manager_rc,
+            streaming_threads: HashSet::new(),
         }
     }
 
@@ -782,7 +784,7 @@ impl AppState {
                     // Cleanup WS manager for the *previous* thread (if one was active)
                     if previous_thread_id.is_some() {
                          web_sys::console::log_1(&"Cleaning up chat ws manager for previous thread...".into());
-                         cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
+                         chat::cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
                     }
                     
                     self.current_thread_id = Some(thread_id);
@@ -792,7 +794,7 @@ impl AppState {
 
                     // Initialize WS manager for the new thread
                     web_sys::console::log_1(&format!("Initializing chat ws manager for thread {}...", thread_id).into());
-                    init_chat_view_ws(thread_id as u64).unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to init chat ws: {:?}", e).into()));
+                    chat::init_chat_view_ws(thread_id).unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to init chat ws: {:?}", e).into()));
 
                     // Request messages for this thread via API (maybe replaced by WS history? Check `thread_history` handler)
                     // Consider if LoadThreadMessages is still needed or if WS handles history now.
@@ -811,7 +813,7 @@ impl AppState {
                      // If we were already in chat view for a *different* thread, clean up.
                      // Check if the agent_id matches the agent of prev_thread if possible.
                       web_sys::console::log_1(&"Cleaning up chat ws manager from previous chat navigation...".into());
-                      cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
+                      chat::cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
                  }
                  self.current_thread_id = None; // Clear thread selection until one is chosen
                  dispatch_global_message(Message::LoadThreads(agent_id));
@@ -823,14 +825,25 @@ impl AppState {
                 // Cleanup WS manager if leaving chat view
                  if self.active_view == ActiveView::ChatView || previous_thread_id.is_some() {
                      web_sys::console::log_1(&"Cleaning up chat ws manager due to dashboard navigation...".into());
-                     cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
+                     chat::cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
                  }
                 self.active_view = ActiveView::Dashboard;
                 self.current_thread_id = None; 
                 needs_redraw = true;
             }
 
-            // ... other existing message handlers ...
+            Message::AgentInfoLoaded(agent) => {
+                // Store the loaded agent info in the state
+                if let Some(id) = agent.id {
+                    web_sys::console::log_1(&format!("State: Storing loaded info for agent {}", id).into());
+                    self.agents.insert(id, *agent); // Dereference Box<ApiAgent>
+                    needs_redraw = true; // Signal that UI should refresh based on new agent data
+                } else {
+                    web_sys::console::warn_1(&"State: Received AgentInfoLoaded with no agent ID".into());
+                }
+            },
+
+            _ => {}
         }
 
         (needs_redraw, network_call_needed)
