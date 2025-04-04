@@ -45,15 +45,16 @@ impl ChatViewWsManager {
     }
 
     /// Initialize subscriptions for the chat view with a specific thread ID.
-    pub fn initialize(&mut self, thread_id: u32) -> Result<(), JsValue> {
+    pub fn initialize(
+        &mut self,
+        thread_id: u32,
+        topic_manager: Rc<RefCell<dyn ITopicManager>>
+    ) -> Result<(), JsValue> {
         // Store the thread ID we're subscribing to
         self.current_thread_id = Some(thread_id);
-
-        // Get the global TopicManager from AppState
-        let topic_manager_rc = APP_STATE.with(|state_ref| {
-            state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>
-        });
-        self.subscribe_to_thread_events(topic_manager_rc, thread_id)?;
+        
+        // Use the passed topic manager instead of accessing APP_STATE
+        self.subscribe_to_thread_events(topic_manager, thread_id)?;
         Ok(())
     }
 
@@ -126,13 +127,13 @@ thread_local! {
 }
 
 /// Initialize the chat view WebSocket manager singleton
-pub fn init_chat_view_ws(thread_id: u32) -> Result<(), JsValue> {
+pub fn init_chat_view_ws(thread_id: u32, topic_manager: Rc<RefCell<dyn ITopicManager>>) -> Result<(), JsValue> {
     CHAT_VIEW_WS.with(|cell| {
         let mut manager_opt = cell.borrow_mut();
         if manager_opt.is_none() {
             web_sys::console::log_1(&format!("Initializing ChatViewWsManager singleton for thread {}...", thread_id).into());
             let mut manager = ChatViewWsManager::new();
-            manager.initialize(thread_id)?;
+            manager.initialize(thread_id, topic_manager)?;
             *manager_opt = Some(manager);
         } else {
             // If manager exists but thread changed, reinitialize
@@ -140,12 +141,9 @@ pub fn init_chat_view_ws(thread_id: u32) -> Result<(), JsValue> {
                 if manager.current_thread_id != Some(thread_id) {
                     web_sys::console::log_1(&format!("Reinitializing ChatViewWsManager for new thread {}...", thread_id).into());
                     // Clean up existing subscriptions
-                    let topic_manager_rc = APP_STATE.with(|state_ref| {
-                        state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>
-                    });
-                    manager.cleanup(topic_manager_rc)?;
+                    manager.cleanup(topic_manager.clone())?;
                     // Initialize for new thread
-                    manager.initialize(thread_id)?;
+                    manager.initialize(thread_id, topic_manager)?;
                 }
             }
         }
@@ -154,15 +152,12 @@ pub fn init_chat_view_ws(thread_id: u32) -> Result<(), JsValue> {
 }
 
 /// Cleanup the chat view WebSocket manager singleton subscriptions
-pub fn cleanup_chat_view_ws() -> Result<(), JsValue> {
+pub fn cleanup_chat_view_ws(topic_manager: Rc<RefCell<dyn ITopicManager>>) -> Result<(), JsValue> {
     CHAT_VIEW_WS.with(|cell| {
         let mut manager_opt = cell.borrow_mut();
         if let Some(manager) = manager_opt.as_mut() {
             web_sys::console::log_1(&"Cleaning up ChatViewWsManager singleton...".into());
-            let topic_manager_trait_rc = APP_STATE.with(|state_ref| {
-                state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>
-            });
-            manager.cleanup(topic_manager_trait_rc)?;
+            manager.cleanup(topic_manager)?;
         }
         Ok(())
     })

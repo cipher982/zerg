@@ -21,6 +21,8 @@ use js_sys::Date;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
+use wasm_bindgen_futures;
+use serde_json;
 
 // Store global application state
 pub struct AppState {
@@ -781,10 +783,15 @@ impl AppState {
                 
                 // Only proceed if the thread is actually changing or wasn't set
                 if self.current_thread_id != Some(thread_id) {
+                    // Store topic manager for side effects
+                    let topic_manager_for_cleanup = self.topic_manager.clone();
+                    let topic_manager_for_init = self.topic_manager.clone();
+                    
                     // Cleanup WS manager for the *previous* thread (if one was active)
                     if previous_thread_id.is_some() {
                          web_sys::console::log_1(&"Cleaning up chat ws manager for previous thread...".into());
-                         chat::cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
+                         // Pass the topic manager
+                         chat::cleanup_chat_view_ws(topic_manager_for_cleanup).unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
                     }
                     
                     self.current_thread_id = Some(thread_id);
@@ -794,7 +801,8 @@ impl AppState {
 
                     // Initialize WS manager for the new thread
                     web_sys::console::log_1(&format!("Initializing chat ws manager for thread {}...", thread_id).into());
-                    chat::init_chat_view_ws(thread_id).unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to init chat ws: {:?}", e).into()));
+                    // Pass the topic manager
+                    chat::init_chat_view_ws(thread_id, topic_manager_for_init).unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to init chat ws: {:?}", e).into()));
 
                     // Request messages for this thread via API (maybe replaced by WS history? Check `thread_history` handler)
                     // Consider if LoadThreadMessages is still needed or if WS handles history now.
@@ -805,27 +813,63 @@ impl AppState {
 
              Message::NavigateToChatView(agent_id) => {
                  web_sys::console::log_1(&format!("State: Navigating to Chat View for agent {}", agent_id).into());
+                 
+                 // 1. Store state we need for side effects
+                 let topic_manager = self.topic_manager.clone();
+                 let prev_thread = previous_thread_id;
+                 
+                 // 2. Update state
                  self.active_view = ActiveView::ChatView;
-                 // Potentially select the first/last active thread for this agent or trigger LoadThreads
-                 // If a thread is selected immediately, init_chat_view_ws will be called via SelectThread.
-                 // Otherwise, cleanup might be needed if navigating from another chat.
-                 if let Some(prev_thread) = previous_thread_id {
-                     // If we were already in chat view for a *different* thread, clean up.
-                     // Check if the agent_id matches the agent of prev_thread if possible.
-                      web_sys::console::log_1(&"Cleaning up chat ws manager from previous chat navigation...".into());
-                      chat::cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
-                 }
+                 self.is_chat_loading = true;
                  self.current_thread_id = None; // Clear thread selection until one is chosen
-                 dispatch_global_message(Message::LoadThreads(agent_id));
+                 
+                 // 3. Schedule side effects to run after state update
+                 let agent_id_clone = agent_id;
+                 self.pending_ui_updates = Some(Box::new(move || {
+                     // First cleanup any existing chat view if needed
+                     if let Some(prev_thread) = prev_thread {
+                         web_sys::console::log_1(&"Cleaning up chat ws manager from previous chat navigation...".into());
+                         if let Err(e) = chat::cleanup_chat_view_ws(topic_manager.clone()) {
+                             web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into());
+                         }
+                     }
+                     
+                     // Then start loading threads
+                     wasm_bindgen_futures::spawn_local(async move {
+                         match crate::network::api_client::ApiClient::get_threads(Some(agent_id_clone)).await {
+                             Ok(response) => {
+                                 match serde_json::from_str::<Vec<ApiThread>>(&response) {
+                                     Ok(threads) => {
+                                         dispatch_global_message(Message::ThreadsLoaded(threads));
+                                     },
+                                     Err(e) => {
+                                         web_sys::console::error_1(&format!("Failed to parse threads: {:?}", e).into());
+                                         dispatch_global_message(Message::UpdateLoadingState(false));
+                                     }
+                                 }
+                             },
+                             Err(e) => {
+                                 web_sys::console::error_1(&format!("Failed to load threads: {:?}", e).into());
+                                 dispatch_global_message(Message::UpdateLoadingState(false));
+                             }
+                         }
+                     });
+                 }));
+                 
                  needs_redraw = true;
              }
 
             Message::NavigateToDashboard => {
                 web_sys::console::log_1(&"State: Navigating to Dashboard".into());
+                
+                // Store topic manager for side effects
+                let topic_manager_for_cleanup = self.topic_manager.clone();
+                
                 // Cleanup WS manager if leaving chat view
                  if self.active_view == ActiveView::ChatView || previous_thread_id.is_some() {
                      web_sys::console::log_1(&"Cleaning up chat ws manager due to dashboard navigation...".into());
-                     chat::cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
+                     // Pass the topic manager
+                     chat::cleanup_chat_view_ws(topic_manager_for_cleanup).unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
                  }
                 self.active_view = ActiveView::Dashboard;
                 self.current_thread_id = None; 
@@ -840,6 +884,44 @@ impl AppState {
                     needs_redraw = true; // Signal that UI should refresh based on new agent data
                 } else {
                     web_sys::console::warn_1(&"State: Received AgentInfoLoaded with no agent ID".into());
+                }
+            },
+
+            Message::ThreadsLoaded(threads) => {
+                // Data is already Vec<ApiThread>
+                if self.active_view == crate::storage::ActiveView::ChatView {
+                    web_sys::console::log_1(&format!("Update: Handling ThreadsLoaded with {} threads", threads.len()).into());
+                    
+                    // Store state needed for side effects
+                    let topic_manager = self.topic_manager.clone();
+                    let threads_clone = threads.clone();
+                    
+                    // Update state
+                    self.threads = threads.iter().filter_map(|t| t.id.map(|id| (id, t.clone()))).collect();
+                    self.is_chat_loading = false;
+                    
+                    // If no thread selected, select first thread
+                    let selected_thread_id = if self.current_thread_id.is_none() {
+                        threads.first().and_then(|t| t.id)
+                    } else {
+                        None
+                    };
+                    
+                    // Schedule side effects
+                    if let Some(thread_id) = selected_thread_id {
+                        self.pending_ui_updates = Some(Box::new(move || {
+                            // Initialize WebSocket for the thread
+                            if let Err(e) = chat::init_chat_view_ws(thread_id, topic_manager) {
+                                web_sys::console::error_1(&format!("Failed to init chat ws: {:?}", e).into());
+                            }
+                            // Select the thread in UI
+                            dispatch_global_message(Message::SelectThread(thread_id));
+                        }));
+                    }
+                    
+                    needs_redraw = true;
+                } else {
+                    web_sys::console::warn_1(&"Received ThreadsLoaded outside of ChatView".into());
                 }
             },
 
@@ -1033,35 +1115,32 @@ pub fn update_node_id(old_id: &str, new_id: &str) {
 
 // Global helper function for dispatching messages with proper UI refresh handling
 pub fn dispatch_global_message(msg: crate::messages::Message) {
-    // Dispatch the message to update state
-    APP_STATE.with(|state| {
+    // 1. Perform state updates and collect side effects
+    let (pending_updates, network_data, needs_refresh) = APP_STATE.with(|state| {
         let mut state = state.borrow_mut();
         let (refresh_needed, pending_network_call) = state.dispatch(msg);
         
-        // Store pending network call data for processing outside of this borrow
-        let network_data = pending_network_call.clone();
+        // Take ownership of pending updates and network data
+        let updates = state.pending_ui_updates.take();
+        let network = pending_network_call.clone();
         
-        // Store and take ownership of any pending UI updates
-        let ui_updates = state.pending_ui_updates.take();
-        
-        // Drop the mutable borrow before any additional operations
-        drop(state);
-        
-        // Process any pending network calls
-        if let Some((text, message_id)) = network_data {
-            send_text_to_backend(&text, message_id);
-        }
-        
-        // Execute any pending UI updates
-        if let Some(update_fn) = ui_updates {
-            update_fn();
-        }
-        
-        // Refresh UI after state changes if needed
-        if refresh_needed {
-            if let Err(e) = AppState::refresh_ui_after_state_change() {
-                web_sys::console::warn_1(&format!("Failed to refresh UI after action: {:?}", e).into());
-            }
-        }
+        (updates, network, refresh_needed)
     });
+    
+    // 2. Execute side effects after state borrow is dropped
+    if needs_refresh {
+        if let Err(e) = AppState::refresh_ui_after_state_change() {
+            web_sys::console::warn_1(&format!("Failed to refresh UI after state change: {:?}", e).into());
+        }
+    }
+    
+    // 3. Execute any pending UI updates
+    if let Some(updates) = pending_updates {
+        updates();
+    }
+    
+    // 4. Process any pending network calls
+    if let Some((text, message_id)) = network_data {
+        send_text_to_backend(&text, message_id);
+    }
 } 
