@@ -1,7 +1,7 @@
 # WebSocket Refactoring Plan: Single Connection + Event-Driven Architecture
 
 ## Status: Backend Complete ✓, Frontend Infrastructure Complete ✓, View Integration In Progress 🚀
-Last Updated: April 8, 2024
+Last Updated: April 9, 2024
 
 ## 1. Original Problem & Goals [✓]
 
@@ -84,34 +84,37 @@ Last Updated: April 8, 2024
 
 #### View Integration Progress [NEW] 🚀
 
-1. **Dashboard Component** [In Progress]:
+1. **Dashboard Component** [Completed ✓]:
    - Created `DashboardWsManager` to handle WebSocket lifecycle and subscriptions
    - Implemented proper cleanup on component unmount
    - Added real-time agent event handling (`agent_created`, `agent_updated`, `agent_deleted`)
    - Integrated with existing state management via `dispatch_global_message`
+   - Correctly uses global `WsClientV2` and `TopicManager` instances from `AppState`
 
 2. **Key Implementation Decisions**:
-   - Component-specific WebSocket managers for better separation of concerns
-   - Thread-local singleton pattern for manager instances
-   - Automatic cleanup on component unmount
+   - Component-specific WebSocket managers focus purely on subscription lifecycle management
+   - Managers use global `WsClientV2` and `TopicManager` instances from `AppState`
+   - Thread-local singleton pattern for manager instances (`DASHBOARD_WS`)
+   - Automatic cleanup with specific handler unsubscription
    - Reuse of existing API refresh mechanisms for state updates
 
 3. **Learnings from Dashboard Integration**:
-   - Keeping WebSocket logic separate from UI components improves maintainability
-   - Using existing state update mechanisms (`load_agents`) maintains consistency
-   - Component-specific managers provide better lifecycle control
+   - Global instances in `AppState` (`WsClientV2`, `TopicManager`) are central to the architecture
+   - Component managers should not create their own WebSocket connections
+   - Specific handler unsubscription via `unsubscribe_handler` prevents resource leaks
+   - Using traits (`ITopicManager`) enables effective testing with mocks
    - Thread-local storage works well for component-scoped instances
 
 #### Current Challenges Addressed / Resolved ✓
-1. **Message Handler Lifetime**: Addressed by using `Rc<RefCell<dyn FnMut(...)>>` for handlers in `TopicManager`. Components subscribing will need to manage their subscription lifecycle (e.g., unsubscribe on drop/unmount).
+1. **Message Handler Lifetime**: Addressed by using `Rc<RefCell<dyn FnMut(...)>>` for handlers in `TopicManager` and proper unsubscription in component cleanup. Components manage their subscription lifecycle through their manager's `initialize` and `cleanup` methods.
 
 2. **Reconnection Edge Cases**: Addressed automatic topic resubscription via `TopicManager::resubscribe_all_topics` triggered by `WsClientV2`'s `on_connect` callback. State recovery within components will be handled during view integration.
 
 3. **Component Integration Pattern** [NEW]: Established pattern using component-specific WebSocket managers that handle:
-   - Connection lifecycle (`initialize`/`cleanup`)
-   - Topic subscriptions
+   - Subscription lifecycle with global `TopicManager` (`initialize`/`cleanup`)
+   - Topic-specific message handling
    - Event handling and state updates
-   - Proper cleanup of resources
+   - Proper cleanup with specific handler unsubscription
 
 ## 3. Next Immediate Steps [Updated]
 
@@ -135,6 +138,8 @@ Last Updated: April 8, 2024
    - Topic subscription logic
    - Reconnection behavior
    - State management
+   - Component manager testing using trait-based mocks (`ITopicManager`)
+   - Handler lifecycle and cleanup verification
 
 2. **Integration Tests**:
    - Connection lifecycle
@@ -198,6 +203,7 @@ Last Updated: April 8, 2024
    - How to handle view-specific message processing? -> *Addressed: Via `TopicManager` handlers within components dispatching `AppState` messages.*
    - Best approach for global state updates? -> *Addressed: Confirmed `Rc<RefCell<AppState>>` with `dispatch_global_message` pattern.*
    - Strategy for handling offline mode? -> *Remains Open: Current focus is online mode.*
+   - Testing global state interactions? -> *Partially Addressed: Using traits for mocking, but singleton initialization testing needs further exploration.*
 
 2. **Performance**:
    - Impact of single connection on memory usage?
