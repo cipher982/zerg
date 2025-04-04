@@ -20,6 +20,7 @@ use crate::constants::{
 };
 use crate::network::{WsClientV2, TopicManager};
 use crate::network::ws_client::send_text_to_backend;
+use crate::components::chat::ws_manager::{init_chat_view_ws, cleanup_chat_view_ws};
 
 // Store global application state
 pub struct AppState {
@@ -80,6 +81,8 @@ pub struct AppState {
     pub threads: HashMap<u32, ApiThread>,
     pub thread_messages: HashMap<u32, Vec<ApiThreadMessage>>,
     pub is_chat_loading: bool,
+    // New field for handling streaming responses
+    pub active_streams: HashMap<u32, String>,
     // Pending UI updates to avoid recursive borrow issues
     pub pending_ui_updates: Option<Box<dyn FnOnce()>>,
     // --- WebSocket v2 and Topic Manager --- 
@@ -138,6 +141,7 @@ impl AppState {
             threads: HashMap::new(),
             thread_messages: HashMap::new(),
             is_chat_loading: false,
+            active_streams: HashMap::new(),
             pending_ui_updates: None,
             ws_client: ws_client_rc,
             topic_manager: topic_manager_rc,
@@ -676,20 +680,160 @@ impl AppState {
 
     // New dispatch method to handle messages
     pub fn dispatch(&mut self, msg: Message) -> (bool, Option<(String, String)>) {
-        update(self, msg);
-        
-        // Check if there's a pending network call
-        let pending_call = self.pending_network_call.take();
-        
-        // Save state if it was modified
-        if self.state_modified {
-            if let Err(e) = self.save_if_modified() {
-                web_sys::console::warn_1(&format!("Failed to save state: {:?}", e).into());
+        let mut needs_redraw = false;
+        let mut network_call_needed: Option<(String, String)> = None;
+
+        // Store previous thread ID before potential change
+        let previous_thread_id = self.current_thread_id;
+
+        match msg {
+            // ... existing message handlers ...
+
+            // --- Handlers for NEW WebSocket Messages ---
+            Message::UpdateConversation(messages) => {
+                if let Some(first_message) = messages.first() {
+                    let thread_id = first_message.thread_id as u32;
+                    web_sys::console::log_1(&format!("State: Updating conversation for thread {}", thread_id).into());
+                    // Only update if it's the currently viewed thread or if we want background updates
+                    if self.current_thread_id == Some(thread_id) {
+                        self.thread_messages.insert(thread_id, messages);
+                        needs_redraw = true;
+                    }
+                } else {
+                    web_sys::console::warn_1(&"State: Received UpdateConversation with empty message list".into());
+                }
             }
+
+            Message::ReceiveNewMessage(message) => {
+                let thread_id = message.thread_id;
+                web_sys::console::log_1(&format!("State: Received new message for thread {}", thread_id).into());
+                 // Only add if it's the currently viewed thread or if we want background updates
+                if self.current_thread_id == Some(thread_id) {
+                    self.thread_messages
+                        .entry(thread_id)
+                        .or_default()
+                        .push(message);
+                    needs_redraw = true; 
+                }
+            }
+
+            Message::ReceiveThreadUpdate { thread_id, title } => {
+                web_sys::console::log_1(&format!("State: Received thread update for thread {}", thread_id).into());
+                if let Some(thread) = self.threads.get_mut(&thread_id) {
+                    if let Some(new_title) = title {
+                        thread.title = new_title;
+                        // Potentially update UI here (e.g., thread list, chat header)
+                        needs_redraw = true;
+                    }
+                }
+            }
+
+            Message::ReceiveStreamStart(thread_id) => {
+                web_sys::console::log_1(&format!("State: Received stream start for thread {}", thread_id).into());
+                // Initialize or clear the buffer for this stream
+                self.active_streams.insert(thread_id, String::new());
+                // Optionally: Add a temporary placeholder message to the UI?
+                // self.thread_messages.entry(thread_id).or_default().push(ApiThreadMessage { role: "assistant".to_string(), content: "...".to_string(), ... });
+                needs_redraw = true; // Redraw to show placeholder if added
+            }
+
+            Message::ReceiveStreamChunk { thread_id, content } => {
+                // web_sys::console::log_1(&format!("State: Received stream chunk for thread {}", thread_id).into());
+                if let Some(stream_buffer) = self.active_streams.get_mut(&thread_id) {
+                    stream_buffer.push_str(&content);
+                    // Optionally: Update the placeholder message in UI with stream_buffer content
+                    // Find the last message for thread_id, assume it's the placeholder, update its content.
+                    needs_redraw = true; // Redraw frequently to show stream progress
+                } else {
+                    web_sys::console::warn_1(&format!("State: Received stream chunk for unknown stream (thread {}). Discarding.", thread_id).into());
+                }
+            }
+
+            Message::ReceiveStreamEnd(thread_id) => {
+                 web_sys::console::log_1(&format!("State: Received stream end for thread {}", thread_id).into());
+                 // Only process if it's the currently viewed thread
+                 if self.current_thread_id == Some(thread_id) {
+                    if let Some(final_content) = self.active_streams.remove(&thread_id) {
+                        let final_message = ApiThreadMessage {
+                            id: None, 
+                            thread_id: thread_id as u32, // Model uses u32
+                            role: "assistant".to_string(), 
+                            content: final_content,
+                            created_at: Some(js_sys::Date::new_0().to_iso_string().into()),
+                        };
+                        self.thread_messages
+                            .entry(thread_id)
+                            .or_default()
+                            .push(final_message);
+                        needs_redraw = true;
+                    } else {
+                        web_sys::console::warn_1(&format!("State: Received stream end for stream not found (thread {}).", thread_id).into());
+                    }
+                 }
+            }
+
+            // --- End Handlers for NEW WebSocket Messages ---
+
+            Message::SelectThread(thread_id) => {
+                web_sys::console::log_1(&format!("State: Selecting thread {}", thread_id).into());
+                
+                // Only proceed if the thread is actually changing or wasn't set
+                if self.current_thread_id != Some(thread_id) {
+                    // Cleanup WS manager for the *previous* thread (if one was active)
+                    if previous_thread_id.is_some() {
+                         web_sys::console::log_1(&"Cleaning up chat ws manager for previous thread...".into());
+                         cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
+                    }
+                    
+                    self.current_thread_id = Some(thread_id);
+                    self.is_chat_loading = true; // Set loading flag for the new thread
+                    self.thread_messages.remove(&thread_id); // Clear stale messages for the new thread
+                    self.active_streams.remove(&thread_id); // Clear stale streams
+
+                    // Initialize WS manager for the new thread
+                    web_sys::console::log_1(&format!("Initializing chat ws manager for thread {}...", thread_id).into());
+                    init_chat_view_ws(thread_id as u64).unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to init chat ws: {:?}", e).into()));
+
+                    // Request messages for this thread via API (maybe replaced by WS history? Check `thread_history` handler)
+                    // Consider if LoadThreadMessages is still needed or if WS handles history now.
+                    // dispatch_global_message(Message::LoadThreadMessages(thread_id)); 
+                }
+                needs_redraw = true;
+            }
+
+             Message::NavigateToChatView(agent_id) => {
+                 web_sys::console::log_1(&format!("State: Navigating to Chat View for agent {}", agent_id).into());
+                 self.active_view = ActiveView::ChatView;
+                 // Potentially select the first/last active thread for this agent or trigger LoadThreads
+                 // If a thread is selected immediately, init_chat_view_ws will be called via SelectThread.
+                 // Otherwise, cleanup might be needed if navigating from another chat.
+                 if let Some(prev_thread) = previous_thread_id {
+                     // If we were already in chat view for a *different* thread, clean up.
+                     // Check if the agent_id matches the agent of prev_thread if possible.
+                      web_sys::console::log_1(&"Cleaning up chat ws manager from previous chat navigation...".into());
+                      cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
+                 }
+                 self.current_thread_id = None; // Clear thread selection until one is chosen
+                 dispatch_global_message(Message::LoadThreads(agent_id));
+                 needs_redraw = true;
+             }
+
+            Message::NavigateToDashboard => {
+                web_sys::console::log_1(&"State: Navigating to Dashboard".into());
+                // Cleanup WS manager if leaving chat view
+                 if self.active_view == ActiveView::ChatView || previous_thread_id.is_some() {
+                     web_sys::console::log_1(&"Cleaning up chat ws manager due to dashboard navigation...".into());
+                     cleanup_chat_view_ws().unwrap_or_else(|e| web_sys::console::error_1(&format!("Failed to cleanup chat ws: {:?}", e).into()));
+                 }
+                self.active_view = ActiveView::Dashboard;
+                self.current_thread_id = None; 
+                needs_redraw = true;
+            }
+
+            // ... other existing message handlers ...
         }
-        
-        // Return true to indicate that UI refresh is needed, along with any pending network call
-        (true, pending_call)
+
+        (needs_redraw, network_call_needed)
     }
 
     // Update to set the selected node ID and load messages if it's an agent
