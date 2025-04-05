@@ -17,7 +17,9 @@ use crate::storage;
 use serde_json;
 
 
-pub fn update(state: &mut AppState, msg: Message) {
+pub fn update(state: &mut AppState, msg: Message) -> bool {
+    let mut needs_refresh = true; // Default to true, set false if no UI change needed
+
     match msg {
         Message::ToggleView(view) => {
             state.active_view = view;
@@ -1367,7 +1369,44 @@ pub fn update(state: &mut AppState, msg: Message) {
             // Optionally dispatch UI update if needed to hide spinner
             web_sys::console::log_1(&format!("Stream ended for thread {}", thread_id).into());
         },
+
+        // --- NEW WebSocket Event Handlers ---
+        Message::ReceiveAgentUpdate(agent_data) => {
+            web_sys::console::log_1(&format!("Update handler: Received agent update: {:?}", agent_data).into());
+            // TODO: Update agent list/details in AppState if needed
+            // state.agents.insert(agent_data.id as u32, agent_data.into()); // Example update
+            needs_refresh = true; // Assume agent list UI might need refresh
+        },
+        Message::ReceiveAgentDelete(agent_id) => {
+            web_sys::console::log_1(&format!("Update handler: Received agent delete: {}", agent_id).into());
+            // TODO: Remove agent from AppState if needed
+            // state.agents.remove(&(agent_id as u32)); // Example removal
+            needs_refresh = true; // Assume agent list UI might need refresh
+        },
+        Message::ReceiveThreadHistory(messages) => {
+            web_sys::console::log_1(&format!("Update handler: Received thread history ({} messages)", messages.len()).into());
+            // Use the correct field name: current_thread_id
+            if let Some(active_thread_id) = state.current_thread_id {
+                // Store the received history messages in the correct cache: thread_messages
+                // Clone messages here before the insert
+                let messages_clone_for_dispatch = messages.clone(); 
+                state.thread_messages.insert(active_thread_id, messages);
+                
+                // Dispatch a message to update the UI instead of calling render directly
+                // This keeps the update flow consistent
+                state.pending_ui_updates = Some(Box::new(move || {
+                    dispatch_global_message(Message::UpdateConversation(messages_clone_for_dispatch));
+                }));
+
+                needs_refresh = false; // UI update handled by UpdateConversation
+            } else {
+                web_sys::console::warn_1(&"Received thread history but no active thread selected in state.".into());
+                needs_refresh = false;
+            }
+        },
     }
+
+    needs_refresh // Return whether a general UI refresh might be needed
 }
 
 // Update thread list UI
