@@ -4,6 +4,7 @@
 //
 use crate::storage::ActiveView;
 use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent};
+use crate::network::messages::AgentEventData;
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -206,4 +207,8 @@ pub enum Message {
     UpdateConversation(Vec<ApiThreadMessage>),  // Update conversation UI
     UpdateThreadTitleUI(String),           // Update thread title UI with provided title
     UpdateLoadingState(bool),              // Update loading state in UI
+
+    ReceiveAgentUpdate(AgentEventData),
+    ReceiveAgentDelete(i32),
+    ReceiveThreadHistory(Vec<ApiThreadMessage>),
 } 

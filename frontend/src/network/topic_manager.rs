@@ -186,10 +186,10 @@ impl TopicManager {
             (Some(mt), Some(d)) if mt.starts_with("thread_") => {
                 d.get("thread_id").and_then(|id| id.as_u64()).map(|id| format!("thread:{}", id))
             }
-             // Handle specific message types that might not follow the event_type/data pattern, if any
-             // e.g., maybe a direct thread history message?
-             (Some("thread_history"), Some(d)) => { // Check schema ws_messages.py ThreadHistoryMessage
-                 d.get("thread_id").and_then(|id| id.as_u64()).map(|id| format!("thread:{}", id))
+             // Handle specific message types that might not follow the event_type/data pattern
+             (Some("thread_history"), _) => { // Check schema ws_messages.py ThreadHistoryMessage
+                 // Extract thread_id from top level for thread_history
+                 message.get("thread_id").and_then(|id| id.as_u64()).map(|id| format!("thread:{}", id))
              }
               (Some("agent_state"), Some(d)) => { // Check schema new_handlers.py agent_state
                  d.get("id").and_then(|id| id.as_u64()).map(|id| format!("agent:{}", id))
@@ -204,8 +204,9 @@ impl TopicManager {
         if let Some(topic_str) = topic_str_option {
              web_sys::console::log_1(&format!("Routing message to handlers for topic: {}", topic_str).into());
             if let Some(handlers) = self.topic_handlers.get(&topic_str) {
-                // Extract the "data" part to pass to handlers, or the whole message if no "data" field
-                 let payload_to_handlers = data.cloned().unwrap_or(message);
+                // Pass the entire original message Value to the handlers
+                // The handler itself will decide how to parse based on message type
+                 let payload_to_handlers = message; // Pass the whole message
 
                 for handler_rc in handlers {
                      if let Ok(mut handler) = handler_rc.try_borrow_mut() {

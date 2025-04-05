@@ -162,7 +162,7 @@ pub mod builders {
 
     pub fn create_subscribe(topics: Vec<String>) -> SubscribeMessage {
         SubscribeMessage {
-            message_type: MessageType::SubscribeThread,
+            message_type: MessageType::Subscribe,
             message_id: Some(Uuid::new_v4().to_string()),
             topics,
         }
@@ -170,7 +170,7 @@ pub mod builders {
 
     pub fn create_unsubscribe(topics: Vec<String>) -> UnsubscribeMessage {
         UnsubscribeMessage {
-            message_type: MessageType::Disconnect,
+            message_type: MessageType::Unsubscribe,
             message_id: Some(Uuid::new_v4().to_string()),
             topics,
         }
@@ -267,7 +267,7 @@ mod tests {
         let topics = vec!["thread:123".to_string(), "agent:456".to_string()];
         let msg = builders::create_subscribe(topics.clone());
         
-        assert_eq!(msg.message_type, MessageType::SubscribeThread);
+        assert_eq!(msg.message_type, MessageType::Subscribe);
         assert!(msg.message_id.is_some());
         assert_eq!(msg.topics, topics);
     }

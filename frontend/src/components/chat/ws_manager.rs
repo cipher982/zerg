@@ -68,35 +68,59 @@ impl ChatViewWsManager {
 
         // Create a handler for thread events
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
-            web_sys::console::log_1(&format!("Chat handler received thread event: {:?}", data).into());
+            web_sys::console::log_1(&format!("Chat handler received message: {:?}", data).into()); // Renamed log for clarity
 
             if let Some(event_type) = data.get("type").and_then(|t| t.as_str()) {
                 match event_type {
+                    "thread_history" => {
+                        // Parse the messages array from the history message
+                        if let Some(messages_val) = data.get("messages") {
+                            if let Ok(messages) = serde_json::from_value::<Vec<ApiThreadMessage>>(messages_val.clone()) {
+                                dispatch_global_message(Message::ReceiveThreadHistory(messages));
+                            } else {
+                                web_sys::console::error_1(&"Failed to parse messages array from thread_history".into());
+                            }
+                        } else {
+                            web_sys::console::error_1(&"thread_history message missing 'messages' field".into());
+                        }
+                    },
                     "thread_message_created" => {
                         // Parse the message data and dispatch to update UI
-                        if let Ok(message_data) = serde_json::from_value::<ApiThreadMessage>(data["data"].clone()) {
-                            dispatch_global_message(Message::ReceiveNewMessage(message_data));
+                        // Assuming data field for this event contains ApiThreadMessage
+                        if let Some(message_data_val) = data.get("data") { // Look inside "data" for this event type
+                            if let Ok(message_data) = serde_json::from_value::<ApiThreadMessage>(message_data_val.clone()) {
+                                dispatch_global_message(Message::ReceiveNewMessage(message_data));
+                            } else {
+                                web_sys::console::error_1(&"Failed to parse message_data from thread_message_created".into());
+                            }
+                        } else {
+                             web_sys::console::error_1(&"thread_message_created event missing 'data' field".into());
                         }
                     },
                     "thread_updated" => {
                         // Handle thread updates (title changes, etc.)
-                        if let Ok(thread_data) = serde_json::from_value::<ApiThread>(data["data"].clone()) {
-                            // Assuming the "data" field for thread_updated contains the full ApiThread object
-                            dispatch_global_message(Message::ReceiveThreadUpdate {
-                                thread_id: thread_data.id.unwrap_or(0), // Need thread_id here
-                                title: Some(thread_data.title),
-                            });
-                        }
+                         if let Some(thread_data_val) = data.get("data") { // Look inside "data" for this event type
+                            if let Ok(thread_data) = serde_json::from_value::<ApiThread>(thread_data_val.clone()) {
+                                dispatch_global_message(Message::ReceiveThreadUpdate {
+                                    thread_id: thread_data.id.unwrap_or(0), 
+                                    title: Some(thread_data.title),
+                                });
+                            } else {
+                                web_sys::console::error_1(&"Failed to parse thread_data from thread_updated".into());
+                            }
+                         } else {
+                              web_sys::console::error_1(&"thread_updated event missing 'data' field".into());
+                         }
                     },
                     _ => {
-                        web_sys::console::warn_1(&format!("Chat handler: Unhandled thread event type: {}", event_type).into());
+                        web_sys::console::warn_1(&format!("Chat handler: Unhandled message type: {}", event_type).into());
                     }
                 }
             }
         }));
 
         // Subscribe to thread-specific events
-        let topic = format!("thread:{}:*", thread_id);
+        let topic = format!("thread:{}", thread_id);
         self.thread_subscription_handler = Some(handler.clone());
         topic_manager.subscribe(topic, handler)?;
         Ok(())
@@ -109,7 +133,7 @@ impl ChatViewWsManager {
         if let Some(handler) = self.thread_subscription_handler.take() {
             if let Some(thread_id) = self.current_thread_id {
                 web_sys::console::log_1(&format!("ChatViewWsManager: Cleaning up thread subscription handler for thread {}", thread_id).into());
-                let topic = format!("thread:{}:*", thread_id);
+                let topic = format!("thread:{}", thread_id);
                 topic_manager.unsubscribe_handler(&topic, &handler)?;
             }
         } else {

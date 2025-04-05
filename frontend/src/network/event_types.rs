@@ -12,6 +12,10 @@ pub enum MessageType {
     Ping,
     Pong,
     
+    // Generic Subscriptions (NEW)
+    Subscribe,
+    Unsubscribe,
+    
     // Thread messages
     SubscribeThread,
     ThreadHistory,
@@ -62,6 +66,8 @@ impl fmt::Display for MessageType {
             MessageType::Error => "error",
             MessageType::Ping => "ping",
             MessageType::Pong => "pong",
+            MessageType::Subscribe => "subscribe",
+            MessageType::Unsubscribe => "unsubscribe",
             MessageType::SubscribeThread => "subscribe_thread",
             MessageType::ThreadHistory => "thread_history",
             MessageType::ThreadMessage => "thread_message",
