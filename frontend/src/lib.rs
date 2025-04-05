@@ -4,6 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::{window, Document};
 use std::rc::Rc;
 use std::cell::RefCell;
+use network::ui_updates; // Added import
 
 mod models;
 mod state;
@@ -54,6 +55,8 @@ pub fn start() -> Result<(), JsValue> {
             if let Err(e) = tm_on_connect.borrow().resubscribe_all_topics() {
                 web_sys::console::error_1(&format!("Failed to resubscribe topics: {:?}", e).into());
             }
+            // Update UI status
+            ui_updates::update_connection_status("Connected", "green");
         });
 
         // Set on_message: Call topic_manager.route_incoming_message
@@ -66,12 +69,18 @@ pub fn start() -> Result<(), JsValue> {
         // Set on_disconnect (optional, e.g., update UI status)
         ws_client.set_on_disconnect(|| {
             web_sys::console::warn_1(&"WebSocket disconnected (on_disconnect callback)".into());
-            // TODO: Maybe update some global UI indicator if needed
+            // Update UI status
+            ui_updates::update_connection_status("Disconnected", "red");
         });
         
+        // Set initial status before attempting connection
+        ui_updates::update_connection_status("Connecting", "yellow");
+
         // Initiate the connection
         if let Err(e) = ws_client.connect() {
              web_sys::console::error_1(&format!("Initial WebSocket connect failed: {:?}", e).into());
+             // Update UI status on initial connection error
+             ui_updates::update_connection_status("Error", "red");
              // Handle initial connection failure if necessary
         }
     } // Mutable borrow of ws_client ends here
