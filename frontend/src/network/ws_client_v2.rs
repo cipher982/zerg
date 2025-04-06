@@ -502,4 +502,103 @@ mod tests {
         // TODO: Add more message handler tests when we implement the full
         // message processing system
     }
+}
+
+pub fn send_text_to_backend(text: &str, message_id: String) {
+    super::ui_updates::flash_activity(); // Flash on send
+    
+    // Check if we have a selected agent and a websocket connection
+    let has_agent_and_websocket = crate::state::APP_STATE.with(|state| {
+        let state = state.borrow();
+        state.selected_node_id.is_some() && state.websocket.is_some()
+    });
+    
+    if has_agent_and_websocket {
+        // Use WebSocket for agent communication
+        crate::state::APP_STATE.with(|state| {
+            let state = state.borrow();
+            if let Some(ws) = &state.websocket {
+                if ws.ready_state() == 1 { // OPEN
+                    // Get current thread ID
+                    let thread_id = state.current_thread_id.unwrap_or(1);
+                    
+                    // Create message body with correct format
+                    let body_obj = js_sys::Object::new();
+                    js_sys::Reflect::set(&body_obj, &"type".into(), &"send_message".into()).unwrap();
+                    js_sys::Reflect::set(&body_obj, &"thread_id".into(), &thread_id.into()).unwrap();
+                    js_sys::Reflect::set(&body_obj, &"content".into(), &text.into()).unwrap();
+                    js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into()).unwrap();
+                    
+                    // Get selected model if any
+                    if !state.selected_model.is_empty() {
+                        js_sys::Reflect::set(&body_obj, &"model".into(), &state.selected_model.clone().into()).unwrap();
+                    }
+                    
+                    let body_string = js_sys::JSON::stringify(&body_obj).unwrap();
+                    
+                    // Convert JsString to String before sending
+                    if let Some(string_data) = body_string.as_string() {
+                        // Send through WebSocket
+                        web_sys::console::log_1(&format!("Sending message: {}", string_data).into());
+                        let _ = ws.send_with_str(&string_data);
+                    } else {
+                        web_sys::console::error_1(&"Failed to convert JSON to string".into());
+                    }
+                } else {
+                    // WebSocket not connected, try to reconnect
+                    web_sys::console::warn_1(&"WebSocket not connected, reconnecting...".into());
+                    let _ = super::ws_client_v2::setup_websocket();
+                }
+            }
+        });
+    } else {
+        // Use the Fetch API for non-agent communication or as fallback
+        let window = web_sys::window().expect("no global window exists");
+        
+        // Get the selected model and system instructions
+        let (selected_model, system_instructions) = crate::state::APP_STATE.with(|state| {
+            let state = state.borrow();
+            let model = state.selected_model.clone();
+            
+            // Get system instructions if any
+            let instructions = if let Some(agent_id) = &state.selected_node_id {
+                if let Some(agent) = state.nodes.get(agent_id) {
+                    agent.system_instructions().clone().unwrap_or_default()
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+            
+            (model, instructions)
+        });
+        
+        // Create headers
+        let headers = web_sys::Headers::new().unwrap();
+        headers.append("Content-Type", "application/json").unwrap();
+        
+        // Create request body
+        let body_obj = js_sys::Object::new();
+        js_sys::Reflect::set(&body_obj, &"text".into(), &text.into()).unwrap();
+        js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into()).unwrap();
+        js_sys::Reflect::set(&body_obj, &"model".into(), &selected_model.into()).unwrap();
+        js_sys::Reflect::set(&body_obj, &"system".into(), &system_instructions.into()).unwrap();
+        let body_string = js_sys::JSON::stringify(&body_obj).unwrap();
+        
+        // Create request init object
+        let opts = web_sys::RequestInit::new();
+        opts.set_method("POST");
+        opts.set_headers(&headers.into());
+        opts.set_body(&body_string.into());
+        
+        // Create request
+        let request = web_sys::Request::new_with_str_and_init(
+            "http://localhost:8001/api/process-text", 
+            &opts
+        ).unwrap();
+        
+        // Send the fetch request
+        let _ = window.fetch_with_request(&request);
+    }
 } 
