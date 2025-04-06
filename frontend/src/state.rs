@@ -8,7 +8,6 @@ use crate::network::ws_client::send_text_to_backend;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use crate::messages::Message;
-use crate::update::update;
 use crate::constants::{
     DEFAULT_TASK_INSTRUCTIONS,
     DEFAULT_NODE_WIDTH,
@@ -685,7 +684,7 @@ impl AppState {
     // New dispatch method to handle messages
     pub fn dispatch(&mut self, msg: Message) -> (bool, Option<(String, String)>) {
         let mut needs_redraw = false;
-        let mut network_call_needed: Option<(String, String)> = None;
+        let network_call_needed: Option<(String, String)> = None;
 
         // Store previous thread ID before potential change
         let previous_thread_id = self.current_thread_id;

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use super::event_types::{MessageType, EventType};
+use super::event_types::MessageType;
 
 /// Base message structure that all WebSocket messages must implement
 #[derive(Debug, Clone, Serialize, Deserialize)]

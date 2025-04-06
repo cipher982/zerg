@@ -5,7 +5,6 @@ use wasm_bindgen_futures::JsFuture;
 use js_sys::Array;
 use std::cell::RefCell;
 use super::ui_updates::{update_connection_status, flash_activity};
-use crate::constants::DEFAULT_THREAD_TITLE;
 use uuid;
 
 // Track reconnection attempts

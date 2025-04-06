@@ -9,12 +9,9 @@ pub mod ui_updates;
 
 // Re-export commonly used items
 pub use api_client::ApiClient;
-pub use ws_client_v2::{WsClientV2, IWsClient};
-pub use event_types::{EventType, MessageType};
-pub use messages::{WsMessage, builders as message_builders};
-pub use topic_manager::{TopicManager, ITopicManager};
+pub use ws_client_v2::WsClientV2;
+pub use topic_manager::TopicManager;
 
-use wasm_bindgen::JsValue;
 
 // Helper function to get API base URL
 pub(crate) fn get_api_base_url() -> Result<String, &'static str> {

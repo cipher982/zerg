@@ -44,7 +44,7 @@ pub fn handle_send_thread_message(
     // Prepare data for UI updates
     let mut conversation_messages = Vec::new();
     let current_thread_id_opt = current_thread_id;
-    let mut thread_messages_map = thread_messages.clone();
+    let thread_messages_map = thread_messages.clone();
     let threads_data: Vec<ApiThread> = threads.values().cloned().collect();
     
     // Add optimistic message to state
