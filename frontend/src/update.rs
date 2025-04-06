@@ -13,7 +13,6 @@ use web_sys::Document;
 use wasm_bindgen::JsValue;
 use std::collections::HashMap;
 use crate::components::chat_view::{update_thread_list_ui, update_conversation_ui};
-use crate::storage;
 use serde_json;
 
 

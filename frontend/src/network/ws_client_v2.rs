@@ -2,13 +2,11 @@ use wasm_bindgen::prelude::*;
 use web_sys::{WebSocket, MessageEvent};
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasm_bindgen_futures::JsFuture;
 use js_sys::Array;
 use serde_json::Value;
 use std::any::Any;
 
-use super::event_types::{MessageType, EventType};
-use super::messages::{self, WsMessage, PingMessage, builders};
+use super::messages::{builders};
 
 /// Trait defining the WebSocket client interface
 pub trait IWsClient: Any {

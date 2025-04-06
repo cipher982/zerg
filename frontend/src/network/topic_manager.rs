@@ -1,13 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use std::cell::RefCell;
-use serde::{Serialize};
 use wasm_bindgen::JsValue;
-use uuid; // Ensure uuid crate is added to Cargo.toml
-use serde_json::Value;
+ // Ensure uuid crate is added to Cargo.toml
 
-use super::ws_client_v2::{WsClientV2, IWsClient}; // Update import
-use super::messages::{SubscribeMessage, UnsubscribeMessage};
+use super::ws_client_v2::IWsClient; // Update import
 use super::messages::builders::{create_subscribe, create_unsubscribe};
 
 /// Represents a topic string like "agent:123" or "thread:45"

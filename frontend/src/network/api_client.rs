@@ -120,7 +120,7 @@ impl ApiClient {
         let url = format!("{}/api/threads/{}/run", Self::api_base_url(), thread_id);
         
         // Create request with no-transform to handle streaming
-        let mut opts = web_sys::RequestInit::new();
+        let opts = web_sys::RequestInit::new();
         opts.set_method("POST");
         
         let request = web_sys::Request::new_with_str_and_init(&url, &opts)?;

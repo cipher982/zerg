@@ -3,20 +3,11 @@ use std::cell::RefCell;
 use wasm_bindgen::JsValue;
 use web_sys;
 
-use crate::state::{APP_STATE, dispatch_global_message}; // Import dispatch_global_message
+use crate::state::dispatch_global_message; // Import dispatch_global_message
 use crate::network::topic_manager::{TopicHandler, ITopicManager}; // Import Trait
-use crate::network::messages::{ // Import relevant message structs
-    ThreadHistoryMessage, 
-    ThreadMessageData, // Use the specific type name
-    ThreadUpdatedEventData,
-    StreamStartMessage,
-    StreamChunkMessage,
-    StreamEndMessage,
-};
+use crate::network::messages::ThreadMessageData;
 use crate::messages::Message; // Import main Message enum
 use crate::models::{ApiThreadMessage, ApiThread}; // Added ApiThread here
-use crate::network::TopicManager;
-use crate::network::ws_client_v2::IWsClient;
 
 /// Helper to convert network message data to the application model
 fn convert_network_message_to_model(network_msg: ThreadMessageData) -> ApiThreadMessage {
