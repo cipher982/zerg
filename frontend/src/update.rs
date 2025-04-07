@@ -1,6 +1,6 @@
 // frontend/src/update.rs
 //
-use crate::messages::Message;
+use crate::messages::{Message, Command};
 use crate::state::{AppState, APP_STATE, dispatch_global_message};
 use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent};
 use crate::constants::{
@@ -16,8 +16,9 @@ use crate::components::chat_view::{update_thread_list_ui, update_conversation_ui
 use serde_json;
 
 
-pub fn update(state: &mut AppState, msg: Message) -> bool {
-    let mut needs_refresh = true; // Default to true, set false if no UI change needed
+pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
+    let mut needs_refresh = true; // We'll still track this internally for now
+    let mut commands = Vec::new(); // Collect commands to return
 
     match msg {
         Message::ToggleView(view) => {
@@ -828,19 +829,27 @@ pub fn update(state: &mut AppState, msg: Message) -> bool {
         },
        
         Message::ThreadsLoaded(threads) => {
-            // Data is already Vec<ApiThread>
+            // Only process if we're in ChatView
             if state.active_view == crate::storage::ActiveView::ChatView {
                 web_sys::console::log_1(&format!("Update: Handling ThreadsLoaded with {} threads", threads.len()).into());
-                state.threads = threads.iter().filter_map(|t| t.id.map(|id| (id, t.clone()))).collect();
+                
+                // Update state
+                state.threads = threads.iter()
+                    .filter_map(|t| t.id.map(|id| (id, t.clone())))
+                    .collect();
                 state.is_chat_loading = false;
-                if state.current_thread_id.is_none() {
-                    if let Some(first_thread) = threads.first() {
-                        if let Some(id) = first_thread.id {
-                            dispatch_global_message(Message::SelectThread(id));
-                        }
-                    }
+                
+                // If no thread selected, select first thread
+                let selected_thread_id = if state.current_thread_id.is_none() {
+                    threads.first().and_then(|t| t.id)
+                } else {
+                    None
+                };
+                
+                // Instead of scheduling side effects directly, return commands
+                if let Some(thread_id) = selected_thread_id {
+                    commands.push(Command::SendMessage(Message::SelectThread(thread_id)));
                 }
-                // Trigger UI update for thread list implicitly via state change
             } else {
                 web_sys::console::warn_1(&"Received ThreadsLoaded outside of ChatView".into());
             }
@@ -883,44 +892,31 @@ pub fn update(state: &mut AppState, msg: Message) -> bool {
         },
        
         Message::SelectThread(thread_id) => {
-            // Set the current thread
-            state.current_thread_id = Some(thread_id);
-           
-            // Check if we need to load messages, but don't dispatch while borrowed
-            let needs_to_load_messages = !state.thread_messages.contains_key(&thread_id);
-           
-            // Collect the data we need before ending the borrow
-            let threads: Vec<ApiThread> = state.threads.values().cloned().collect();
-            let current_thread_id = state.current_thread_id;
-            let thread_messages = state.thread_messages.clone();
+            web_sys::console::log_1(&format!("State: Selecting thread {}", thread_id).into());
             
-            // Get the thread title to update the header
-            let thread_title = state.threads.get(&thread_id)
-                .map(|thread| thread.title.clone())
-                .unwrap_or_default();
-            
-            // Get conversation messages if they exist
-            let conversation_messages = state.thread_messages.get(&thread_id)
-                .cloned()
-                .unwrap_or_default();
-            
-            // Setup WebSocket for the thread after we return
-            let thread_id_clone = thread_id;
-            
-            // These operations will be performed by the caller after this borrow ends
-            state.pending_ui_updates = Some(Box::new(move || {
-                // After the borrow ends, these actions will be executed
-                if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-                    dispatch_global_message(Message::UpdateThreadList(threads, current_thread_id, thread_messages));
-                    dispatch_global_message(Message::UpdateConversation(conversation_messages));
-                    dispatch_global_message(Message::UpdateThreadTitleUI(thread_title));
-                }
+            // Only proceed if the thread is actually changing or wasn't set
+            if state.current_thread_id != Some(thread_id) {
+                // Update state
+                state.current_thread_id = Some(thread_id);
+                state.is_chat_loading = true;
+                state.thread_messages.remove(&thread_id); // Clear stale messages
+                state.active_streams.remove(&thread_id); // Clear stale streams
+
+                // Return commands for side effects
+                commands.push(Command::SendMessage(Message::LoadThreadMessages(thread_id)));
                 
-                // Load messages if needed
-                if needs_to_load_messages {
-                    dispatch_global_message(Message::LoadThreadMessages(thread_id));
-                }
-            }));
+                // Collect data needed for UI updates
+                let threads: Vec<ApiThread> = state.threads.values().cloned().collect();
+                let current_thread_id = state.current_thread_id;
+                let thread_messages = state.thread_messages.clone();
+                
+                // Update thread list UI
+                commands.push(Command::SendMessage(Message::UpdateThreadList(
+                    threads,
+                    current_thread_id,
+                    thread_messages
+                )));
+            }
         },
        
         Message::LoadThreadMessages(thread_id) => {
@@ -1405,7 +1401,13 @@ pub fn update(state: &mut AppState, msg: Message) -> bool {
         },
     }
 
-    needs_refresh // Return whether a general UI refresh might be needed
+    // For now, if needs_refresh is true, add a NoOp command
+    // We'll replace this with proper UI refresh commands later
+    if needs_refresh {
+        commands.push(Command::NoOp);
+    }
+
+    commands
 }
 
 // Update thread list UI

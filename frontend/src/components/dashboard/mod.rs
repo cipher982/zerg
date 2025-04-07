@@ -6,8 +6,10 @@ pub use ws_manager::{init_dashboard_ws, cleanup_dashboard_ws};
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{Document, Element, HtmlElement};
+use web_sys::{Document, Element, HtmlElement, Event};
 use crate::state::APP_STATE;
+use crate::messages::Message;
+use crate::models::{ApiAgent, NodeType};
 use crate::constants::{
     DEFAULT_AGENT_NAME, 
     DEFAULT_SYSTEM_INSTRUCTIONS, 
@@ -15,7 +17,11 @@ use crate::constants::{
     DEFAULT_MODEL,
     DEFAULT_THREAD_TITLE
 };
-use crate::network::ws_client::send_text_to_backend;
+use crate::network::api_client;
+use crate::network::ws_client_v2::send_text_to_backend;
+use crate::storage::ActiveView;
+use wasm_bindgen::closure::Closure;
+use uuid;
 
 // Agent status for displaying in the dashboard
 #[derive(Clone, Debug, PartialEq)]

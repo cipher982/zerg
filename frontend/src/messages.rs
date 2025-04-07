@@ -7,7 +7,7 @@ use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent};
 use crate::network::messages::AgentEventData;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)] // Suppress warnings about unused variants
 pub enum Message {
     // View switching
@@ -211,4 +211,26 @@ pub enum Message {
     ReceiveAgentUpdate(AgentEventData),
     ReceiveAgentDelete(i32),
     ReceiveThreadHistory(Vec<ApiThreadMessage>),
+}
+
+/// Commands represent side effects that should be executed after state updates.
+/// This separates pure state changes from effects like UI updates, API calls, etc.
+#[derive(Debug, Clone)]
+pub enum Command {
+    /// Chain another message to be processed
+    SendMessage(Message),
+    /// Represents no side effect
+    NoOp,
+}
+
+impl Command {
+    /// Helper to create a SendMessage command
+    pub fn send(msg: Message) -> Self {
+        Command::SendMessage(msg)
+    }
+
+    /// Helper to create a NoOp command
+    pub fn none() -> Self {
+        Command::NoOp
+    }
 } 

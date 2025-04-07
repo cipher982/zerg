@@ -93,3 +93,83 @@ pub enum Command {
 This refactoring represents a significant improvement to the frontend architecture and will provide a more robust foundation moving forward.
 
 ---
+
+## Progress Update (Phase 1)
+
+**Initial Implementation Steps Completed:**
+
+1. Added basic `Command` enum with initial variants:
+```rust
+#[derive(Debug, Clone)]
+pub enum Command {
+    SendMessage(Message),  // For chaining messages
+    NoOp,                 // For no-op cases
+}
+```
+
+2. Fixed core type issues:
+   - Added `Clone` derive to `Message` enum
+   - Fixed `str` size errors by ensuring proper ownership with `String`
+   - Changed `pending_network_call.clone()` to `pending_network_call.take()` to properly handle ownership
+
+3. Updated `dispatch_global_message` to handle commands:
+```rust
+pub fn dispatch_global_message(msg: Message) {
+    let (commands, pending_updates, network_data) = APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        let commands = state.dispatch(msg);
+        
+        // Take ownership of pending updates and network data
+        let updates = state.pending_ui_updates.take();
+        let network = state.pending_network_call.take();
+        
+        (commands, updates, network)
+    });
+    
+    // Execute commands after state borrow is dropped
+    for cmd in commands {
+        match cmd {
+            Command::SendMessage(msg) => dispatch_global_message(msg),
+            Command::NoOp => {},
+        }
+    }
+    
+    // Execute legacy side effects (to be migrated to commands)
+    if let Some(updates) = pending_updates {
+        updates();
+    }
+    
+    if let Some((text, message_id)) = network_data {
+        send_text_to_backend(&text, message_id);
+    }
+}
+```
+
+**Key Learnings:**
+
+1. **Gradual Migration:** Rather than replacing all side effects at once, we're keeping the existing `pending_ui_updates` and `pending_network_call` temporarily. This allows us to migrate handlers one at a time while keeping the application functional.
+
+2. **Ownership Matters:** The initial `str` size errors highlighted the importance of proper ownership in Rust. Using `take()` instead of `clone()` ensures we properly transfer ownership of `String` values.
+
+3. **Event Handler Simplification:** The UI event handlers became much simpler after switching to `dispatch_global_message`. They no longer need to handle UI updates or network calls directly, as these are managed by the command system.
+
+**Next Steps:**
+
+1. Begin migrating specific message handlers in `update.rs` to return commands:
+   - Start with `ThreadsLoaded` and `SelectThread` to fix the original bug
+   - Add appropriate command variants for UI updates and network calls
+   - Test each migration thoroughly before moving to the next
+
+2. Add more command variants as needed:
+```rust
+pub enum Command {
+    SendMessage(Message),
+    UpdateUI(Box<dyn FnOnce()>),
+    NetworkCall { text: String, message_id: String },
+    NoOp,
+}
+```
+
+3. Once all handlers are migrated, remove the legacy `pending_*` fields from `AppState`.
+
+---
