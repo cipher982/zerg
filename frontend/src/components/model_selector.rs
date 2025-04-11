@@ -2,7 +2,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Document, Event};
 use crate::state::APP_STATE;
 use wasm_bindgen_futures::spawn_local;
-use crate::network::ws_client::fetch_available_models;
+use crate::network::ws_client_v2::fetch_available_models;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 

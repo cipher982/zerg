@@ -7,8 +7,8 @@ pub use ws_manager::{init_dashboard_ws, cleanup_dashboard_ws};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, HtmlElement, Event};
-use crate::state::APP_STATE;
-use crate::messages::Message;
+use crate::state::{APP_STATE, dispatch_global_message};
+use crate::messages::{Message, Command};
 use crate::models::{ApiAgent, NodeType};
 use crate::constants::{
     DEFAULT_AGENT_NAME, 
