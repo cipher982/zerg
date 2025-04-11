@@ -37,13 +37,3 @@ src/ui/modals.rs: Contains functions specifically for controlling the agent moda
 src/ui/setup.rs: Creates the initial, static parts of the UI structure like the header, status bar, and the basic modal structure.
 src/update.rs: Contains the core update function, which acts as the state reducer, handling incoming Messages, modifying the AppState, and returning Commands for side effects.
 src/views.rs: Provides functions (render_active_view, render_dashboard_view, render_canvas_view) to manage which major UI view (Dashboard, Canvas, Chat) is currently displayed by showing/hiding the relevant containers.
-
-## Potential Unused/Deprecated Files
-
-Based on the analysis and the likely direction indicated by ws_client_v2, TopicManager, and the components structure:
-src/components/dashboard.rs.bak: Definitely unused (backup file).
-src/network/ws_client.rs: Highly likely deprecated. The application setup in lib.rs and state.rs clearly initializes and uses WsClientV2 and TopicManager. The older client's direct message handling and state coupling seem replaced by the V2 callback/topic manager approach.
-src/canvas_editor.rs (Top-level): Likely unused. The core canvas logic seems to reside in src/components/canvas_editor.rs, which is consistent with a component-based structure. lib.rs imports from the components path.
-src/renderer.rs (Top-level): Likely unused. The canvas drawing logic appears to be handled by src/canvas/renderer.rs, which is referenced from state.rs.
-src/shapes.rs (Top-level): Likely unused. The canvas shape drawing logic appears to be handled by src/canvas/shapes.rs, used by the active renderer.
-src/mod.rs: Currently empty and unused. It could be removed or populated if needed for root-level module organization, but as is, it serves no function.
