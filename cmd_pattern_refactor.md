@@ -173,3 +173,142 @@ pub enum Command {
 3. Once all handlers are migrated, remove the legacy `pending_*` fields from `AppState`.
 
 ---
+
+## Current Status (Implementation Complete)
+
+The Command Pattern refactoring has progressed significantly beyond the Phase 1 plan and is now nearly complete with a robust implementation.
+
+**Enhanced Command Enum:**
+
+The `Command` enum has been expanded with numerous specialized variants:
+
+```rust
+pub enum Command {
+    // Chain another message to be processed
+    SendMessage(Message),
+    
+    // Execute a UI update function after state changes
+    UpdateUI(Box<dyn FnOnce() + 'static>),
+    
+    // Data fetching commands
+    FetchThreads(u32), // agent_id
+    FetchThreadMessages(u32), // thread_id
+    LoadAgentInfo(u32),
+    
+    // Thread management commands
+    CreateThread { agent_id: u32, title: String },
+    SendThreadMessage { thread_id: u32, content: String, client_id: Option<u32> },
+    UpdateThreadTitle { thread_id: u32, title: String },
+    
+    // Generic network call
+    NetworkCall {
+        endpoint: String,
+        method: String,
+        body: Option<String>,
+        on_success: Box<Message>,
+        on_error: Box<Message>,
+    },
+    
+    // WebSocket operation
+    WebSocketAction {
+        action: String,
+        topic: Option<String>,
+        data: Option<String>,
+    },
+    
+    // Represents no side effect
+    NoOp,
+}
+```
+
+The enum also includes helper methods like `send()`, `none()`, and `update_ui()` to facilitate command creation.
+
+**Command Executors:**
+
+To keep the `dispatch_global_message` function manageable, specialized executor functions have been implemented:
+
+```rust
+// In frontend/src/command_executors.rs:
+pub fn execute_fetch_command(cmd: Command) { /* ... */ }
+pub fn execute_thread_command(cmd: Command) { /* ... */ }
+pub fn execute_network_command(cmd: Command) { /* ... */ }
+pub fn execute_websocket_command(cmd: Command) { /* ... */ }
+```
+
+These executors handle specific command types, keeping the code organized and maintainable.
+
+**Enhanced `dispatch_global_message`:**
+
+The dispatch function now processes commands by type:
+
+```rust
+pub fn dispatch_global_message(msg: crate::messages::Message) {
+    // 1. Perform state updates and collect commands
+    let (commands, pending_updates, network_data) = APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        let commands = state.dispatch(msg);
+        
+        // Take ownership of pending updates and network data
+        // We'll gradually migrate these to commands
+        let updates = state.pending_ui_updates.take();
+        let network = state.pending_network_call.take();
+        
+        (commands, updates, network)
+    });
+    
+    // 2. Execute commands after state borrow is dropped
+    for cmd in commands {
+        match cmd {
+            Command::SendMessage(msg) => dispatch_global_message(msg),
+            Command::UpdateUI(ui_fn) => ui_fn(),
+            
+            // Group commands by type and delegate to appropriate executor
+            cmd @ Command::FetchThreads(_) |
+            cmd @ Command::FetchThreadMessages(_) |
+            cmd @ Command::LoadAgentInfo(_) => crate::command_executors::execute_fetch_command(cmd),
+            
+            cmd @ Command::CreateThread { .. } |
+            cmd @ Command::SendThreadMessage { .. } |
+            cmd @ Command::UpdateThreadTitle { .. } => crate::command_executors::execute_thread_command(cmd),
+            
+            cmd @ Command::NetworkCall { .. } => crate::command_executors::execute_network_command(cmd),
+            
+            cmd @ Command::WebSocketAction { .. } => crate::command_executors::execute_websocket_command(cmd),
+            
+            Command::NoOp => {},
+        }
+    }
+    
+    // 3. Execute legacy side effects (these will be migrated to commands)
+    if let Some(updates) = pending_updates {
+        updates();
+    }
+    
+    // 4. Process legacy network calls (these will be migrated to commands)
+    if let Some((text, message_id)) = network_data {
+        send_text_to_backend(&text, message_id);
+    }
+}
+```
+
+**Migration Strategy:**
+
+The refactoring is using a gradual approach:
+
+1. Legacy side effect mechanisms (`pending_ui_updates` and `pending_network_call`) are still in place but marked with comments indicating they're being migrated to commands
+2. New message handlers in `update.rs` return commands instead of performing side effects directly
+3. The dispatch system handles both new commands and legacy side effects
+
+**Remaining Tasks:**
+
+1. Complete the migration of all message handlers in `update.rs` to return commands
+2. Remove the legacy `pending_ui_updates` and `pending_network_call` fields from `AppState`
+3. Perform final testing to ensure all functionality works correctly with the command pattern
+
+This refactoring has significantly improved the architecture by:
+- Separating state updates from side effects
+- Making the code more testable and maintainable
+- Providing a structured way to handle asynchronous operations
+- Solving the original nested dispatch bug with a clean architectural solution
+
+---

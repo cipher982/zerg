@@ -841,23 +841,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // Log for debugging
             web_sys::console::log_1(&format!("Creating thread for agent {} with title: {}", agent_id, title).into());
             
-            // Create a new thread
-            wasm_bindgen_futures::spawn_local(async move {
-                let result = crate::network::api_client::ApiClient::create_thread(agent_id, &title)
-                    .await
-                    .and_then(|response| {
-                        serde_json::from_str::<ApiThread>(&response)
-                            .map_err(|e| e.to_string().into())
-                    });
-
-                match result {
-                    Ok(thread) => {
-                        crate::state::dispatch_global_message(Message::ThreadCreated(thread));
-                    },
-                    Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to create/parse thread: {:?}", e).into());
-                    }
-                }
+            // Instead of spawning directly, return a command that will be executed after state update
+            commands.push(Command::CreateThread { 
+                agent_id, 
+                title 
             });
         },
        
@@ -866,8 +853,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             web_sys::console::log_1(&format!("Update: Handling ThreadCreated: {:?}", thread).into()); // Use {:?}
             if let Some(thread_id) = thread.id {
                 state.threads.insert(thread_id, thread.clone());
-                dispatch_global_message(Message::SelectThread(thread_id));
-                // Trigger UI update for thread list implicitly via state change
+                
+                // Return SelectThread as a command instead of dispatching directly
+                commands.push(Command::SendMessage(Message::SelectThread(thread_id)));
             } else {
                  web_sys::console::error_1(&format!("ThreadCreated message missing thread ID: {:?}", thread).into()); // Use {:?}
             }
@@ -994,7 +982,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 }
             }
         },
-        
+       
         Message::ThreadMessageFailed(thread_id, client_id) => {
             // Try to parse the client_id string back to u32
             if let Ok(client_id_num) = client_id.parse::<u32>() {
@@ -1224,16 +1212,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // Log for debugging
             web_sys::console::log_1(&format!("RequestNewThread - agent_id: {:?}", agent_id_opt).into());
            
-            // Queue the thread creation for after this update completes to avoid nested borrows
+            // If we have an agent ID, return a command to create a thread
             if let Some(agent_id) = agent_id_opt {
                 let title = DEFAULT_THREAD_TITLE.to_string();
-                let agent_id_clone = agent_id;
-                
-                // Store the pending update to be executed after the borrow is released
-                state.pending_ui_updates = Some(Box::new(move || {
-                    web_sys::console::log_1(&format!("Creating new thread for agent: {}", agent_id_clone).into());
-                    dispatch_global_message(Message::CreateThread(agent_id_clone, title));
-                }));
+                web_sys::console::log_1(&format!("Creating new thread for agent: {}", agent_id).into());
+                commands.push(Command::SendMessage(Message::CreateThread(agent_id, title)));
             } else {
                 web_sys::console::error_1(&"Cannot create thread: No agent selected".into());
             }
@@ -1243,14 +1226,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // Store thread_id locally
             let thread_id_opt = state.current_thread_id;
             
-            // Use pending_ui_updates to avoid nested borrows
+            // Return a command instead of using pending_ui_updates
             if let Some(thread_id) = thread_id_opt {
                 let content_clone = content.clone();
-                
-                // Store updates to be executed after the borrow is released
-                state.pending_ui_updates = Some(Box::new(move || {
-                    dispatch_global_message(Message::SendThreadMessage(thread_id, content_clone));
-                }));
+                commands.push(Command::SendMessage(Message::SendThreadMessage(thread_id, content_clone)));
             }
         },
 
