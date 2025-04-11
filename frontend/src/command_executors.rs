@@ -68,7 +68,7 @@ pub fn execute_thread_command(cmd: Command) {
         },
         Command::SendThreadMessage { thread_id, content, client_id } => {
             wasm_bindgen_futures::spawn_local(async move {
-                match ApiClient::send_thread_message(thread_id, &content).await {
+                match ApiClient::create_thread_message(thread_id, &content).await {
                     Ok(response) => {
                         if let Some(id) = client_id {
                             dispatch_global_message(Message::ThreadMessageSent(response, id.to_string()));
