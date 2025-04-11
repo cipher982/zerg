@@ -22,6 +22,8 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures;
 use serde_json;
+use crate::messages::Command;
+use crate::update;
 
 // Store global application state
 pub struct AppState {
@@ -899,7 +901,7 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
     }
     
     // 4. Process any pending network calls (these will be migrated to commands)
-    if let Some((text, message_id)) = network_data {
-        send_text_to_backend(&text, message_id);
+    if let Some((ref text, message_id)) = network_data {
+        send_text_to_backend(text, message_id);
     }
 } 

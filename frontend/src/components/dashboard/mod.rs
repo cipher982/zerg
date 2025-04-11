@@ -635,8 +635,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
             }
             
             // Now that we've completely dropped the borrow, we can execute the network call
-            if let Some((task_text, message_id)) = pending_call {
-                send_text_to_backend(&task_text, message_id);
+            if let Some((ref task_text, message_id)) = pending_call {
+                send_text_to_backend(task_text, message_id);
             }
         }
     }) as Box<dyn FnMut(_)>);

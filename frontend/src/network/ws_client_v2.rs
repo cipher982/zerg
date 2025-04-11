@@ -547,7 +547,9 @@ pub fn send_text_to_backend(text: &str, message_id: String) {
                 } else {
                     // WebSocket not connected, try to reconnect
                     web_sys::console::warn_1(&"WebSocket not connected, reconnecting...".into());
-                    let _ = super::ws_client_v2::setup_websocket();
+                    // Create a new client and connect
+                    let mut client = WsClientV2::new_default();
+                    let _ = client.connect();
                 }
             }
         });
