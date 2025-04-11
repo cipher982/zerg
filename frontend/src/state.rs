@@ -24,6 +24,7 @@ use wasm_bindgen_futures;
 use serde_json;
 use crate::messages::Command;
 use crate::update;
+use crate::command_executors;
 
 // Store global application state
 pub struct AppState {
@@ -881,7 +882,7 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
         // Take ownership of pending updates and network data
         // We'll gradually migrate these to commands
         let updates = state.pending_ui_updates.take();
-        let network = state.pending_network_call.take();  // Take ownership here
+        let network = state.pending_network_call.take();
         
         (commands, updates, network)
     });
@@ -890,8 +891,22 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
     for cmd in commands {
         match cmd {
             Command::SendMessage(msg) => dispatch_global_message(msg),
+            Command::UpdateUI(ui_fn) => ui_fn(),
+            
+            // Group commands by type and delegate to appropriate executor
+            cmd @ Command::FetchThreads(_) |
+            cmd @ Command::FetchThreadMessages(_) |
+            cmd @ Command::LoadAgentInfo(_) => crate::command_executors::execute_fetch_command(cmd),
+            
+            cmd @ Command::CreateThread { .. } |
+            cmd @ Command::SendThreadMessage { .. } |
+            cmd @ Command::UpdateThreadTitle { .. } => crate::command_executors::execute_thread_command(cmd),
+            
+            cmd @ Command::NetworkCall { .. } => crate::command_executors::execute_network_command(cmd),
+            
+            cmd @ Command::WebSocketAction { .. } => crate::command_executors::execute_websocket_command(cmd),
+            
             Command::NoOp => {},
-            // We'll add more command handlers here as we add them
         }
     }
     
@@ -900,8 +915,8 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
         updates();
     }
     
-    // 4. Process any pending network calls (these will be migrated to commands)
-    if let Some((ref text, message_id)) = network_data {
-        send_text_to_backend(text, message_id);
+    // 4. Process legacy network calls (these will be migrated to commands)
+    if let Some((text, message_id)) = network_data {
+        send_text_to_backend(&text, message_id);
     }
 } 
