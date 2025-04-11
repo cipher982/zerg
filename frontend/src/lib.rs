@@ -169,15 +169,16 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     {
         let dashboard_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
             // Use the new dispatch method with ToggleView message
-            let (need_refresh, _) = state::APP_STATE.with(|state| {
+            let commands = state::APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(messages::Message::ToggleView(storage::ActiveView::Dashboard))
             });
             
-            // After borrowing mutably, we can refresh UI if needed in a separate borrow
-            if need_refresh {
-                if let Err(e) = state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            // Execute commands
+            for cmd in commands {
+                match cmd {
+                    messages::Command::SendMessage(msg) => state::dispatch_global_message(msg),
+                    messages::Command::NoOp => {},
                 }
             }
         }) as Box<dyn FnMut(_)>);
@@ -190,15 +191,16 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     {
         let canvas_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
             // Use the new dispatch method with ToggleView message
-            let (need_refresh, _) = state::APP_STATE.with(|state| {
+            let commands = state::APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(messages::Message::ToggleView(storage::ActiveView::Canvas))
             });
             
-            // After borrowing mutably, we can refresh UI if needed in a separate borrow
-            if need_refresh {
-                if let Err(e) = state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            // Execute commands
+            for cmd in commands {
+                match cmd {
+                    messages::Command::SendMessage(msg) => state::dispatch_global_message(msg),
+                    messages::Command::NoOp => {},
                 }
             }
         }) as Box<dyn FnMut(_)>);
