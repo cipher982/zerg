@@ -219,6 +219,54 @@ pub enum Message {
 pub enum Command {
     /// Chain another message to be processed
     SendMessage(Message),
+    
+    /// Execute a UI update function after state changes
+    UpdateUI(Box<dyn FnOnce()>),
+    
+    /// Fetch threads for an agent
+    FetchThreads(u32), // agent_id
+    
+    /// Fetch messages for a thread
+    FetchThreadMessages(u32), // thread_id
+    
+    /// Create a new thread
+    CreateThread {
+        agent_id: u32,
+        title: String,
+    },
+    
+    /// Send a message to a thread
+    SendThreadMessage {
+        thread_id: u32,
+        content: String,
+        client_id: Option<u32>,
+    },
+    
+    /// Update thread title
+    UpdateThreadTitle {
+        thread_id: u32,
+        title: String,
+    },
+    
+    /// Load agent info
+    LoadAgentInfo(u32),
+    
+    /// Generic network call
+    NetworkCall {
+        endpoint: String,
+        method: String,
+        body: Option<String>,
+        on_success: Box<Message>,
+        on_error: Box<Message>,
+    },
+    
+    /// WebSocket operation
+    WebSocketAction {
+        action: String,
+        topic: Option<String>,
+        data: Option<String>,
+    },
+    
     /// Represents no side effect
     NoOp,
 }
@@ -232,5 +280,30 @@ impl Command {
     /// Helper to create a NoOp command
     pub fn none() -> Self {
         Command::NoOp
+    }
+    
+    /// Helper to create an UpdateUI command
+    pub fn update_ui<F>(f: F) -> Self 
+    where 
+        F: FnOnce() + 'static 
+    {
+        Command::UpdateUI(Box::new(f))
+    }
+    
+    /// Helper to create a NetworkCall command
+    pub fn network_call(
+        endpoint: String,
+        method: String,
+        body: Option<String>,
+        on_success: Message,
+        on_error: Message
+    ) -> Self {
+        Command::NetworkCall {
+            endpoint,
+            method,
+            body,
+            on_success: Box::new(on_success),
+            on_error: Box::new(on_error),
+        }
     }
 } 
