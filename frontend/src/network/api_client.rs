@@ -162,7 +162,7 @@ impl ApiClient {
     }
 
     // Helper function to make fetch requests
-    async fn fetch_json(url: &str, method: &str, body: Option<&str>) -> Result<String, JsValue> {
+    pub async fn fetch_json(url: &str, method: &str, body: Option<&str>) -> Result<String, JsValue> {
         use web_sys::{Request, RequestInit, RequestMode, Response};
         
         let opts = RequestInit::new();

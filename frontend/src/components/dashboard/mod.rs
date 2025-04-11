@@ -632,7 +632,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
                 match cmd {
                     Command::SendMessage(msg) => dispatch_global_message(msg),
                     Command::NoOp => {},
-                    // Add other command handlers as needed
+                    _ => {},  // Ignore other commands in this context
                 }
             }
         }
