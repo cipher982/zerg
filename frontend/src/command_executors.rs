@@ -142,9 +142,9 @@ pub fn execute_websocket_command(cmd: Command) {
                 match action.as_str() {
                     "subscribe" => {
                         if let Some(topic_str) = topic {
-                            let dummy_handler = Rc::new(RefCell::new(|_: serde_json::Value| {}));
+                            let handler = Box::new(|_: serde_json::Value| {}) as Box<dyn FnMut(serde_json::Value)>;
                             if let Ok(mut manager) = topic_manager.try_borrow_mut() {
-                                let _ = manager.subscribe(topic_str, Rc::new(RefCell::new(dummy_handler)));
+                                let _ = manager.subscribe(topic_str, Rc::new(RefCell::new(handler)));
                             } else {
                                 web_sys::console::error_1(&"Failed to borrow topic manager".into());
                             }
