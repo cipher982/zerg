@@ -2,7 +2,7 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Document, Event};
 use crate::state::APP_STATE;
 use wasm_bindgen_futures::spawn_local;
-use crate::network::ws_client_v2::fetch_available_models;
+use crate::network::api_client::ApiClient;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
@@ -46,9 +46,25 @@ pub fn fetch_models_from_backend(document: &Document) -> Result<(), JsValue> {
     
     // Fetch models asynchronously
     spawn_local(async move {
-        if let Ok(()) = fetch_available_models().await {
-            // Update the dropdown with fetched models
-            let _ = update_model_dropdown(&document_clone);
+        if let Ok(response) = ApiClient::fetch_available_models().await {
+            // Parse the response and update state
+            if let Ok(models_json) = serde_json::from_str::<serde_json::Value>(&response) {
+                if let Some(models) = models_json.get("models").and_then(|m| m.as_array()) {
+                    let models: Vec<(String, String)> = models.iter()
+                        .filter_map(|m| m.as_str())
+                        .map(|m| (m.to_string(), m.to_string()))
+                        .collect();
+                    
+                    // Update state with available models
+                    APP_STATE.with(|state| {
+                        let mut state = state.borrow_mut();
+                        state.available_models = models;
+                    });
+                    
+                    // Update the dropdown with fetched models
+                    let _ = update_model_dropdown(&document_clone);
+                }
+            }
         }
     });
     

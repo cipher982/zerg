@@ -14,6 +14,12 @@ impl ApiClient {
         super::get_api_base_url().unwrap_or_else(|_| "http://localhost:8001".to_string())
     }
 
+    // Get available models
+    pub async fn fetch_available_models() -> Result<String, JsValue> {
+        let url = format!("{}/api/models", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
     // Get all agents
     pub async fn get_agents() -> Result<String, JsValue> {
         let url = format!("{}/api/agents", Self::api_base_url());
