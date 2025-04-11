@@ -9,6 +9,8 @@ use crate::state::{APP_STATE, AppState};
 use crate::models::NodeType;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
+use crate::messages::Command;
+use crate::state::dispatch_global_message;
 
 // New type to represent either a mutable or immutable reference to AppState
 pub enum AppStateRef<'a> {
@@ -213,35 +215,37 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             
             // If auto-fit is enabled, toggle it off
             if auto_fit_enabled {
-                let (need_refresh, _) = APP_STATE.with(|state| {
+                let commands = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::ToggleAutoFit)
                 });
                 
-                // Update the UI after dropping the mutable borrow
-                if need_refresh {
-                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                        web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                // Execute commands
+                for cmd in commands {
+                    match cmd {
+                        Command::SendMessage(msg) => dispatch_global_message(msg),
+                        Command::NoOp => {},
+                        // Add other command handlers as needed
                     }
-                    
-                    // Update the auto-fit toggle button
-                    let auto_fit_toggle = window.document()
-                        .expect("should have a document")
-                        .get_element_by_id("auto-fit-toggle");
-                    
-                    if let Some(toggle) = auto_fit_toggle {
-                        // Cast to HTMLInputElement to set checked property directly
-                        if let Some(toggle_input) = toggle.dyn_ref::<web_sys::HtmlInputElement>() {
-                            toggle_input.set_checked(false);
-                        }
+                }
+
+                // Update the auto-fit toggle button
+                let auto_fit_toggle = window.document()
+                    .expect("should have a document")
+                    .get_element_by_id("auto-fit-toggle");
+                
+                if let Some(toggle) = auto_fit_toggle {
+                    // Cast to HTMLInputElement to set checked property directly
+                    if let Some(toggle_input) = toggle.dyn_ref::<web_sys::HtmlInputElement>() {
+                        toggle_input.set_checked(false);
                     }
                 }
             }
             
             // Dispatch StartDragging message
-            let (need_refresh, _) = APP_STATE.with(|state| {
+            let commands = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                let result = state.dispatch(crate::messages::Message::StartDragging {
+                let commands = state.dispatch(crate::messages::Message::StartDragging {
                     node_id: node_id.clone(),
                     offset_x,
                     offset_y,
@@ -254,25 +258,36 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                     state.drag_start_y = y;
                 }
                 
-                result
+                commands
             });
             
-            // Refresh UI if needed
-            if need_refresh {
-                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            // Execute commands
+            for cmd in commands {
+                match cmd {
+                    Command::SendMessage(msg) => dispatch_global_message(msg),
+                    Command::NoOp => {},
+                    // Add other command handlers as needed
                 }
             }
         } else {
             // Nothing was clicked - prepare for canvas dragging
             // Dispatch StartCanvasDrag message
-            let (need_refresh, _) = APP_STATE.with(|state| {
+            let commands = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(crate::messages::Message::StartCanvasDrag {
                     start_x: x,
                     start_y: y,
                 })
             });
+            
+            // Execute commands
+            for cmd in commands {
+                match cmd {
+                    Command::SendMessage(msg) => dispatch_global_message(msg),
+                    Command::NoOp => {},
+                    // Add other command handlers as needed
+                }
+            }
             
             // After dispatching StartCanvasDrag, check if we need to toggle auto-fit
             let auto_fit_enabled = APP_STATE.with(|state| {
@@ -282,33 +297,30 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             
             // If in Auto Layout Mode, automatically switch to Manual Layout Mode
             if auto_fit_enabled {
-                let (need_refresh_toggle, _) = APP_STATE.with(|state| {
+                let commands = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::ToggleAutoFit)
                 });
                 
-                // Refresh UI if needed
-                if need_refresh_toggle {
-                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                        web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
-                    }
-                    
-                    // Update the auto-fit toggle button
-                    let auto_fit_toggle = window.document()
-                        .expect("should have a document")
-                        .get_element_by_id("auto-fit-toggle");
-                    
-                    if let Some(toggle) = auto_fit_toggle {
-                        // Cast to HTMLInputElement to set checked property directly
-                        if let Some(toggle_input) = toggle.dyn_ref::<web_sys::HtmlInputElement>() {
-                            toggle_input.set_checked(false);
-                        }
+                // Execute commands
+                for cmd in commands {
+                    match cmd {
+                        Command::SendMessage(msg) => dispatch_global_message(msg),
+                        Command::NoOp => {},
+                        // Add other command handlers as needed
                     }
                 }
-            } else if need_refresh {
-                // Refresh UI if needed from the StartCanvasDrag
-                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                
+                // Update the auto-fit toggle button
+                let auto_fit_toggle = window.document()
+                    .expect("should have a document")
+                    .get_element_by_id("auto-fit-toggle");
+                
+                if let Some(toggle) = auto_fit_toggle {
+                    // Cast to HTMLInputElement to set checked property directly
+                    if let Some(toggle_input) = toggle.dyn_ref::<web_sys::HtmlInputElement>() {
+                        toggle_input.set_checked(false);
+                    }
                 }
             }
         }
@@ -359,7 +371,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 let world_y = y / zoom_level + viewport_y;
                 
                 // Dispatch UpdateNodePosition message
-                let (need_refresh, _) = APP_STATE.with(|state| {
+                let commands = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::UpdateNodePosition {
                         node_id: node_id,
@@ -368,19 +380,18 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                     })
                 });
                 
-                // After borrowing mutably, we can refresh UI if needed in a separate borrow
-                if need_refresh {
-                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                        web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                // Execute commands
+                for cmd in commands {
+                    match cmd {
+                        Command::SendMessage(msg) => dispatch_global_message(msg),
+                        Command::NoOp => {},
+                        // Add other command handlers as needed
                     }
                 }
-                
-                // Refresh dashboard after node position update
-                let _ = refresh_dashboard_after_change();
             },
             "canvas" => {
                 // Dispatch UpdateCanvasDrag message
-                let (need_refresh, _) = APP_STATE.with(|state| {
+                let commands = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::UpdateCanvasDrag {
                         current_x: x,
@@ -388,10 +399,12 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                     })
                 });
                 
-                // After borrowing mutably, we can refresh UI if needed in a separate borrow
-                if need_refresh {
-                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                        web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+                // Execute commands
+                for cmd in commands {
+                    match cmd {
+                        Command::SendMessage(msg) => dispatch_global_message(msg),
+                        Command::NoOp => {},
+                        // Add other command handlers as needed
                     }
                 }
             },
@@ -438,28 +451,32 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         // Stop any dragging operation
         if APP_STATE.with(|state| { state.borrow().dragging.is_some() }) {
             // We were dragging a node, stop dragging
-            let (need_refresh, _) = APP_STATE.with(|state| {
+            let commands = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(crate::messages::Message::StopDragging)
             });
             
-            // After borrowing mutably, we can refresh UI if needed in a separate borrow
-            if need_refresh {
-                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            // Execute commands
+            for cmd in commands {
+                match cmd {
+                    Command::SendMessage(msg) => dispatch_global_message(msg),
+                    Command::NoOp => {},
+                    // Add other command handlers as needed
                 }
             }
         } else if APP_STATE.with(|state| { state.borrow().canvas_dragging }) {
             // We were dragging the canvas, stop canvas drag
-            let (need_refresh, _) = APP_STATE.with(|state| {
+            let commands = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(crate::messages::Message::StopCanvasDrag)
             });
             
-            // After borrowing mutably, we can refresh UI if needed in a separate borrow
-            if need_refresh {
-                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            // Execute commands
+            for cmd in commands {
+                match cmd {
+                    Command::SendMessage(msg) => dispatch_global_message(msg),
+                    Command::NoOp => {},
+                    // Add other command handlers as needed
                 }
             }
         }
@@ -543,7 +560,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             let new_viewport_y = world_y - y / new_zoom;
             
             // Dispatch ZoomCanvas message
-            let (need_refresh, _) = APP_STATE.with(|state| {
+            let commands = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.dispatch(crate::messages::Message::ZoomCanvas {
                     new_zoom,
@@ -552,10 +569,12 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 })
             });
             
-            // After borrowing mutably, we can refresh UI if needed in a separate borrow
-            if need_refresh {
-                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            // Execute commands
+            for cmd in commands {
+                match cmd {
+                    Command::SendMessage(msg) => dispatch_global_message(msg),
+                    Command::NoOp => {},
+                    // Add other command handlers as needed
                 }
             }
         }

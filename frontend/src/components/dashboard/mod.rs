@@ -614,7 +614,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         } else {
             // For legacy nodes without the agent- prefix, use the old approach
             // Dispatch SendTaskToAgent message and capture both the need_refresh flag and any pending network call
-            let (need_refresh, pending_call) = {
+            let commands = {
                 // Scope the mutable borrow so it's dropped before refresh_ui_after_state_change
                 APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
@@ -627,16 +627,13 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
                 })
             };
             
-            // After borrowing mutably, we can refresh UI if needed in a separate borrow
-            if need_refresh {
-                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::warn_1(&format!("Failed to refresh UI: {:?}", e).into());
+            // Execute commands
+            for cmd in commands {
+                match cmd {
+                    Command::SendMessage(msg) => dispatch_global_message(msg),
+                    Command::NoOp => {},
+                    // Add other command handlers as needed
                 }
-            }
-            
-            // Now that we've completely dropped the borrow, we can execute the network call
-            if let Some((ref task_text, message_id)) = pending_call {
-                send_text_to_backend(task_text, message_id);
             }
         }
     }) as Box<dyn FnMut(_)>);
