@@ -178,8 +178,9 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
             // Execute commands
             for cmd in commands {
                 match cmd {
-                    messages::Command::SendMessage(msg) => state::dispatch_global_message(msg),
+                    messages::Command::SendMessage(msg) => dispatch_global_message(msg),
                     messages::Command::NoOp => {},
+                    _ => {},  // Ignore other commands in this context
                 }
             }
         }) as Box<dyn FnMut(_)>);
@@ -200,8 +201,9 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
             // Execute commands
             for cmd in commands {
                 match cmd {
-                    messages::Command::SendMessage(msg) => state::dispatch_global_message(msg),
+                    messages::Command::SendMessage(msg) => dispatch_global_message(msg),
                     messages::Command::NoOp => {},
+                    _ => {},  // Ignore other commands in this context
                 }
             }
         }) as Box<dyn FnMut(_)>);

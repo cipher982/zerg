@@ -221,7 +221,7 @@ pub enum Command {
     SendMessage(Message),
     
     /// Execute a UI update function after state changes
-    UpdateUI(Box<dyn FnOnce()>),
+    UpdateUI(Box<dyn FnOnce() + 'static>),
     
     /// Fetch threads for an agent
     FetchThreads(u32), // agent_id

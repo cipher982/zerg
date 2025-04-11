@@ -225,7 +225,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                     match cmd {
                         Command::SendMessage(msg) => dispatch_global_message(msg),
                         Command::NoOp => {},
-                        // Add other command handlers as needed
+                        _ => {},  // Ignore other commands in this context
                     }
                 }
 
@@ -266,7 +266,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 match cmd {
                     Command::SendMessage(msg) => dispatch_global_message(msg),
                     Command::NoOp => {},
-                    // Add other command handlers as needed
+                    _ => {},  // Ignore other commands in this context
                 }
             }
         } else {
@@ -285,7 +285,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 match cmd {
                     Command::SendMessage(msg) => dispatch_global_message(msg),
                     Command::NoOp => {},
-                    // Add other command handlers as needed
+                    _ => {},  // Ignore other commands in this context
                 }
             }
             
@@ -307,7 +307,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                     match cmd {
                         Command::SendMessage(msg) => dispatch_global_message(msg),
                         Command::NoOp => {},
-                        // Add other command handlers as needed
+                        _ => {},  // Ignore other commands in this context
                     }
                 }
                 
@@ -385,7 +385,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                     match cmd {
                         Command::SendMessage(msg) => dispatch_global_message(msg),
                         Command::NoOp => {},
-                        // Add other command handlers as needed
+                        _ => {},  // Ignore other commands in this context
                     }
                 }
             },
@@ -404,7 +404,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                     match cmd {
                         Command::SendMessage(msg) => dispatch_global_message(msg),
                         Command::NoOp => {},
-                        // Add other command handlers as needed
+                        _ => {},  // Ignore other commands in this context
                     }
                 }
             },
@@ -461,7 +461,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 match cmd {
                     Command::SendMessage(msg) => dispatch_global_message(msg),
                     Command::NoOp => {},
-                    // Add other command handlers as needed
+                    _ => {},  // Ignore other commands in this context
                 }
             }
         } else if APP_STATE.with(|state| { state.borrow().canvas_dragging }) {
@@ -476,7 +476,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 match cmd {
                     Command::SendMessage(msg) => dispatch_global_message(msg),
                     Command::NoOp => {},
-                    // Add other command handlers as needed
+                    _ => {},  // Ignore other commands in this context
                 }
             }
         }
@@ -574,7 +574,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 match cmd {
                     Command::SendMessage(msg) => dispatch_global_message(msg),
                     Command::NoOp => {},
-                    // Add other command handlers as needed
+                    _ => {},  // Ignore other commands in this context
                 }
             }
         }

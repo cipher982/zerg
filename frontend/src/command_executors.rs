@@ -25,12 +25,10 @@ pub fn execute_fetch_command(cmd: Command) {
         },
         Command::FetchThreadMessages(thread_id) => {
             wasm_bindgen_futures::spawn_local(async move {
-                match ApiClient::get_thread_messages(thread_id).await {
-                    Ok(response) => {
-                        match serde_json::from_str::<Vec<ApiThreadMessage>>(&response) {
-                            Ok(messages) => dispatch_global_message(Message::ThreadMessagesLoaded(messages)),
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse messages: {:?}", e).into())
-                        }
+                match ApiClient::get_thread_messages(thread_id, 0, 100).await {
+                    Ok(messages) => match serde_json::from_str::<Vec<ApiThreadMessage>>(&messages) {
+                        Ok(messages) => dispatch_global_message(Message::ThreadMessagesLoaded(thread_id, messages)),
+                        Err(e) => web_sys::console::error_1(&format!("Failed to parse messages: {:?}", e).into())
                     },
                     Err(e) => web_sys::console::error_1(&format!("Failed to fetch messages: {:?}", e).into())
                 }
