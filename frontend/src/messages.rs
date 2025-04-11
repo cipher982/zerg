@@ -215,7 +215,6 @@ pub enum Message {
 
 /// Commands represent side effects that should be executed after state updates.
 /// This separates pure state changes from effects like UI updates, API calls, etc.
-#[derive(Debug, Clone)]
 pub enum Command {
     /// Chain another message to be processed
     SendMessage(Message),
