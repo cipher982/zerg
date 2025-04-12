@@ -241,6 +241,9 @@ pub enum Command {
         client_id: Option<u32>,
     },
     
+    /// Run a thread to process messages
+    RunThread(u32), // thread_id
+    
     /// Update thread title
     UpdateThreadTitle {
         thread_id: u32,

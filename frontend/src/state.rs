@@ -900,7 +900,8 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             
             cmd @ Command::CreateThread { .. } |
             cmd @ Command::SendThreadMessage { .. } |
-            cmd @ Command::UpdateThreadTitle { .. } => crate::command_executors::execute_thread_command(cmd),
+            cmd @ Command::UpdateThreadTitle { .. } |
+            cmd @ Command::RunThread(_) => crate::command_executors::execute_thread_command(cmd),
             
             cmd @ Command::NetworkCall { .. } => crate::command_executors::execute_network_command(cmd),
             

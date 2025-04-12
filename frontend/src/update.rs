@@ -980,6 +980,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         }
                     }
                 }
+                
+                // Trigger the thread to run and process the message
+                commands.push(Command::RunThread(thread_id));
             }
         },
        
