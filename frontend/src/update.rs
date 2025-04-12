@@ -906,6 +906,8 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
        
         Message::SendThreadMessage(thread_id, content) => {
+            web_sys::console::log_1(&format!("Update: Handling SendThreadMessage for thread {}: '{}'", thread_id, content).into());
+
             // Generate a client ID for tracking this message
             let client_id = u32::MAX - rand::random::<u32>() % 1000;
             
@@ -945,6 +947,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 }
             })));
             
+            web_sys::console::log_1(&format!("Update: Pushing Command::SendThreadMessage for thread {} with client_id {}", thread_id, client_id).into());
             // Add network operation command
             commands.push(Command::SendThreadMessage {
                 thread_id,
