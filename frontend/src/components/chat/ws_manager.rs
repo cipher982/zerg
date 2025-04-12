@@ -59,9 +59,11 @@ impl ChatViewWsManager {
 
         // Create a handler for thread events
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
-            web_sys::console::log_1(&format!("Chat handler received message: {:?}", data).into()); // Renamed log for clarity
+            web_sys::console::log_1(&format!("WS Handler (Thread {}): Received data: {:?}", thread_id, data).into()); 
 
             if let Some(event_type) = data.get("type").and_then(|t| t.as_str()) {
+                web_sys::console::log_1(&format!("WS Handler (Thread {}): Processing type: '{}'", thread_id, event_type).into()); 
+
                 match event_type {
                     "thread_history" => {
                         // Parse the messages array from the history message
@@ -112,6 +114,26 @@ impl ChatViewWsManager {
                          } else {
                               web_sys::console::error_1(&"thread_updated event missing 'data' field".into());
                          }
+                    },
+                    "stream_start" => {
+                        web_sys::console::log_1(&format!("WS Handler (Thread {}): Stream Start received.", thread_id).into());
+                        dispatch_global_message(Message::ReceiveStreamStart(thread_id));
+                    },
+                    "stream_chunk" => {
+                        if let Some(content_val) = data.get("content") {
+                            if let Some(content) = content_val.as_str() {
+                                web_sys::console::log_1(&format!("WS Handler (Thread {}): Stream Chunk received: '{}'", thread_id, content).into());
+                                dispatch_global_message(Message::ReceiveStreamChunk { thread_id, content: content.to_string() });
+                            } else {
+                                web_sys::console::error_1(&"Stream chunk content is not a string".into());
+                            }
+                        } else {
+                             web_sys::console::error_1(&"Stream chunk missing 'content' field".into());
+                        }
+                    },
+                    "stream_end" => {
+                        web_sys::console::log_1(&format!("WS Handler (Thread {}): Stream End received.", thread_id).into());
+                        dispatch_global_message(Message::ReceiveStreamEnd(thread_id));
                     },
                     _ => {
                         web_sys::console::warn_1(&format!("Chat handler: Unhandled message type: {}", event_type).into());
