@@ -121,30 +121,12 @@ impl ApiClient {
         Self::fetch_json(&url, "POST", Some(&message_data)).await
     }
 
-    // Run a thread (process unprocessed messages)
-    pub async fn run_thread(thread_id: u32) -> Result<(), JsValue> {
+    // Run a thread (create user message, process, stream response via WS)
+    pub async fn run_thread(thread_id: u32, request_body: &str) -> Result<String, JsValue> {
         let url = format!("{}/api/threads/{}/run", Self::api_base_url(), thread_id);
-        
-        // Create request
-        let opts = web_sys::RequestInit::new();
-        opts.set_method("POST");
-        
-        let request = web_sys::Request::new_with_str_and_init(&url, &opts)?;
-        
-        let window = web_sys::window().expect("no global window exists");
-        let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
-        let resp: web_sys::Response = resp_value.dyn_into()?;
-        
-        // Check if the request was successful (e.g., 200 OK)
-        if resp.ok() {
-            Ok(())
-        } else {
-            let status = resp.status();
-            let status_text = resp.status_text();
-            let error_message = format!("Failed to run thread: {} {}", status, status_text);
-            web_sys::console::error_1(&error_message.clone().into());
-            Err(JsValue::from_str(&error_message))
-        }
+        // Call fetch_json helper which handles POST with body and returns response text
+        // The response text will be the confirmation like {"detail": "Processing started..."}
+        Self::fetch_json(&url, "POST", Some(request_body)).await 
     }
 
     // Helper function to make fetch requests

@@ -80,7 +80,7 @@ pub fn handle_send_thread_message(
                     
                     // Now trigger the thread to run and process the message
                     web_sys::console::log_1(&format!("Now running thread {} to process the message", thread_id).into());
-                    match crate::network::api_client::ApiClient::run_thread(thread_id).await {
+                    match crate::network::api_client::ApiClient::run_thread(thread_id, "{}").await {
                         Ok(_) => {
                             web_sys::console::log_1(&format!("Successfully triggered thread {} to process message", thread_id).into());
                         },
