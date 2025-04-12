@@ -88,6 +88,7 @@ pub fn execute_thread_command(cmd: Command) {
                 web_sys::console::log_1(&format!("Now running thread {} to process the message", thread_id).into());
                 match ApiClient::run_thread(thread_id).await {
                     Ok(_) => {
+                        // The response will come via WebSocket, no further action needed here.
                         web_sys::console::log_1(&format!("Successfully triggered thread {} to process message", thread_id).into());
                     },
                     Err(e) => {
