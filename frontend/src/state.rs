@@ -891,7 +891,10 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
     for cmd in commands {
         match cmd {
             Command::SendMessage(msg) => dispatch_global_message(msg),
-            Command::UpdateUI(ui_fn) => ui_fn(),
+            Command::UpdateUI(ui_fn) => {
+                web_sys::console::log_1(&"Executing UI update function".into());
+                ui_fn();
+            },
             
             // Group commands by type and delegate to appropriate executor
             cmd @ Command::FetchThreads(_) |
