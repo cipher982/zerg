@@ -189,7 +189,7 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
     full_response = ""
     try:
         # Process the message stream and broadcast chunks
-        async for chunk in agent_manager.process_message(db=db, thread=db_thread, content=None, stream=True):
+        for chunk in agent_manager.process_message(db=db, thread=db_thread, content=None, stream=True):
             if isinstance(chunk, str):  # Assuming chunks are strings
                 full_response += chunk
                 await topic_manager.broadcast_to_topic(
