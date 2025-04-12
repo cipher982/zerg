@@ -83,6 +83,19 @@ pub fn execute_thread_command(cmd: Command) {
                 }
             });
         },
+        Command::RunThread(thread_id) => {
+            wasm_bindgen_futures::spawn_local(async move {
+                web_sys::console::log_1(&format!("Now running thread {} to process the message", thread_id).into());
+                match ApiClient::run_thread(thread_id).await {
+                    Ok(_) => {
+                        web_sys::console::log_1(&format!("Successfully triggered thread {} to process message", thread_id).into());
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to run thread: {:?}", e).into());
+                    }
+                }
+            });
+        },
         Command::UpdateThreadTitle { thread_id, title } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::update_thread(thread_id, &title).await {
