@@ -13,7 +13,6 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import status
-from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from zerg.app.agents import AgentManager
@@ -24,6 +23,9 @@ from zerg.app.schemas.schemas import ThreadCreate
 from zerg.app.schemas.schemas import ThreadMessageCreate
 from zerg.app.schemas.schemas import ThreadMessageResponse
 from zerg.app.schemas.schemas import ThreadUpdate
+
+# Import the new topic manager
+from zerg.app.websocket.new_manager import topic_manager
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -159,7 +161,7 @@ async def create_thread_message(thread_id: int, message: ThreadMessageCreate, db
 
 @router.post("/{thread_id}/run")
 async def run_thread(thread_id: int, db: Session = Depends(get_db)):
-    """Process unprocessed messages in a thread and get a streaming response"""
+    """Process unprocessed messages in a thread and broadcast the response via WebSocket."""
     # Check if the thread exists
     db_thread = crud.get_thread(db, thread_id=thread_id)
     if db_thread is None:
@@ -178,13 +180,37 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
     if not unprocessed_messages:
         return {"detail": "No unprocessed messages to run"}
 
-    # Process the unprocessed messages and stream the response
-    async def stream_response():
-        try:
-            for chunk in agent_manager.process_message(db=db, thread=db_thread, content=None, stream=True):
-                yield chunk
-        except Exception as e:
-            logger.error(f"Error processing message: {str(e)}")
-            yield f"Error: {str(e)}"
+    # Define the WebSocket topic for this thread
+    topic = f"thread:{thread_id}"
 
-    return StreamingResponse(stream_response(), media_type="text/plain")
+    # Send stream_start event
+    await topic_manager.broadcast_to_topic(topic, {"type": "stream_start", "thread_id": thread_id})
+
+    full_response = ""
+    try:
+        # Process the message stream and broadcast chunks
+        async for chunk in agent_manager.process_message(db=db, thread=db_thread, content=None, stream=True):
+            if isinstance(chunk, str):  # Assuming chunks are strings
+                full_response += chunk
+                await topic_manager.broadcast_to_topic(
+                    topic, {"type": "stream_chunk", "thread_id": thread_id, "content": chunk}
+                )
+            else:
+                # Handle potential non-string chunks if necessary (e.g., tool calls)
+                logger.warning(f"Received non-string chunk: {type(chunk)}")
+
+        # Update the last assistant message with the full content (optional, depending on logic)
+        # crud.update_last_assistant_message(db, thread_id, full_response)
+
+        # Send stream_end event
+        await topic_manager.broadcast_to_topic(topic, {"type": "stream_end", "thread_id": thread_id})
+
+        logger.info(f"Successfully processed and streamed response for thread {thread_id}")
+        return {"detail": f"Successfully triggered run for thread {thread_id}"}
+
+    except Exception as e:
+        logger.error(f"Error processing message for thread {thread_id}: {str(e)}")
+        # Send error over WebSocket if possible
+        await topic_manager.broadcast_to_topic(topic, {"type": "stream_error", "thread_id": thread_id, "error": str(e)})
+        # Also raise HTTP exception for the initial request
+        raise HTTPException(status_code=500, detail=f"Error processing message: {str(e)}")

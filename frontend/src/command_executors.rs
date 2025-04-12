@@ -67,18 +67,17 @@ pub fn execute_thread_command(cmd: Command) {
             });
         },
         Command::SendThreadMessage { thread_id, content, client_id } => {
+            web_sys::console::log_1(&format!("Executor: Handling Command::SendThreadMessage for thread {}: '{}'", thread_id, content).into());
+            let client_id_str = client_id.map(|id| id.to_string()).unwrap_or_default();
+            
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::create_thread_message(thread_id, &content).await {
                     Ok(response) => {
-                        if let Some(id) = client_id {
-                            dispatch_global_message(Message::ThreadMessageSent(response, id.to_string()));
-                        }
+                        dispatch_global_message(Message::ThreadMessageSent(response, client_id_str));
                     },
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to send message: {:?}", e).into());
-                        if let Some(id) = client_id {
-                            dispatch_global_message(Message::ThreadMessageFailed(thread_id, id.to_string()));
-                        }
+                        web_sys::console::error_1(&format!("Failed to send message via API: {:?}", e).into());
+                        dispatch_global_message(Message::ThreadMessageFailed(thread_id, client_id_str));
                     }
                 }
             });

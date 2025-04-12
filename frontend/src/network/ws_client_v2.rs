@@ -505,6 +505,8 @@ mod tests {
 }
 
 pub fn send_text_to_backend(text: &str, message_id: String) {
+    web_sys::console::log_1(&format!("Network: Attempting to send text to backend: '{}', message_id: {}", text, message_id).into());
+
     super::ui_updates::flash_activity(); // Flash on send
     
     // Check if we have a selected agent and a websocket connection
