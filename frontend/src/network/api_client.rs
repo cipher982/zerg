@@ -122,10 +122,10 @@ impl ApiClient {
     }
 
     // Run a thread (process unprocessed messages)
-    pub async fn run_thread(thread_id: u32) -> Result<String, JsValue> {
+    pub async fn run_thread(thread_id: u32) -> Result<(), JsValue> {
         let url = format!("{}/api/threads/{}/run", Self::api_base_url(), thread_id);
         
-        // Create request with no-transform to handle streaming
+        // Create request
         let opts = web_sys::RequestInit::new();
         opts.set_method("POST");
         
@@ -135,30 +135,16 @@ impl ApiClient {
         let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
         let resp: web_sys::Response = resp_value.dyn_into()?;
         
-        // Get the response text directly
-        let text = JsFuture::from(resp.text()?).await?;
-        let content = text.as_string().unwrap_or_default();
-        
-        // Format as a thread message
-        let message = serde_json::json!({
-            "type": "thread_message",
-            "thread_id": thread_id,
-            "message": {
-                "thread_id": thread_id,
-                "role": "assistant",
-                "content": content,
-                "processed": true,
-                "timestamp": chrono::Utc::now().to_rfc3339()
-            }
-        });
-        
-        // Convert to string and dispatch as a thread message
-        let message_str = message.to_string();
-        web_sys::console::log_1(&format!("Dispatching thread message: {}", message_str).into());
-        // OLD SYSTEM - Replaced by WebSocket push:
-        // crate::state::dispatch_global_message(crate::messages::Message::ThreadMessageReceived(message_str.clone()));
-        
-        Ok(content)
+        // Check if the request was successful (e.g., 200 OK)
+        if resp.ok() {
+            Ok(())
+        } else {
+            let status = resp.status();
+            let status_text = resp.status_text();
+            let error_message = format!("Failed to run thread: {} {}", status, status_text);
+            web_sys::console::error_1(&error_message.clone().into());
+            Err(JsValue::from_str(&error_message))
+        }
     }
 
     // Helper function to make fetch requests
