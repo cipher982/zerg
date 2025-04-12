@@ -145,7 +145,8 @@ impl ChatViewWsManager {
         // Subscribe to thread-specific events
         let topic = format!("thread:{}", thread_id);
         self.thread_subscription_handler = Some(handler.clone());
-        topic_manager.subscribe(topic, handler)?;
+        topic_manager.subscribe(topic.clone(), handler)?;
+        web_sys::console::log_1(&format!("ChatViewWsManager: Subscribed to topic '{}' for thread {}", topic, thread_id).into());
         Ok(())
     }
 

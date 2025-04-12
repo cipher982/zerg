@@ -162,34 +162,41 @@ pub fn execute_network_command(cmd: Command) {
 
 pub fn execute_websocket_command(cmd: Command) {
     match cmd {
-        Command::WebSocketAction { action, topic, data } => {
-            APP_STATE.with(|state| {
-                let state = state.borrow();
-                let topic_manager = state.topic_manager.clone();
-                
-                match action.as_str() {
-                    "subscribe" => {
-                        if let Some(topic_str) = topic {
-                            let handler = Box::new(|_: serde_json::Value| {}) as Box<dyn FnMut(serde_json::Value)>;
-                            if let Ok(mut manager) = topic_manager.try_borrow_mut() {
-                                let _ = manager.subscribe(topic_str, Rc::new(RefCell::new(handler)));
-                            } else {
-                                web_sys::console::error_1(&"Failed to borrow topic manager".into());
-                            }
-                        }
-                    },
-                    "unsubscribe" => {
-                        if let Some(topic_str) = topic {
-                            if let Ok(mut manager) = topic_manager.try_borrow_mut() {
-                                let _ = manager.unsubscribe(&topic_str);
-                            } else {
-                                web_sys::console::error_1(&"Failed to borrow topic manager".into());
-                            }
-                        }
-                    },
-                    _ => web_sys::console::error_1(&format!("Unknown WebSocket action: {}", action).into())
-                }
-            });
+        Command::WebSocketAction { action, topic, data: _ } => {
+            match action.as_str() {
+                "subscribe" => {
+                    if let Some(topic_str) = topic {
+                        APP_STATE.with(|state| {
+                            let state = state.borrow();
+                            let topic_manager = state.topic_manager.clone();
+                            
+                            // Clone topic_str before moving into closure
+                            let topic_for_handler = topic_str.clone();
+                            
+                            // Clone topic_str for potential error logging
+                            let topic_for_error_log = topic_str.clone();
+                            
+                            wasm_bindgen_futures::spawn_local(async move {
+                                // Create a simple handler that logs the received messages
+                                let handler = Rc::new(RefCell::new(move |json_value: serde_json::Value| {
+                                    web_sys::console::log_1(&format!("WS: Received message for topic {}: {:?}", topic_for_handler, json_value).into());
+                                }));
+                                
+                                // Subscribe using the topic manager
+                                if let Err(e) = topic_manager.borrow_mut().subscribe(topic_str, handler) {
+                                    web_sys::console::error_1(&format!("Failed to subscribe to topic {}: {:?}", topic_for_error_log, e).into());
+                                } else {
+                                    // No need to clone here, topic_str wasn't moved in this path if subscribe succeeded
+                                    web_sys::console::log_1(&format!("Successfully subscribed to topic {}", topic_for_error_log).into()); // Use the cloned value here too for consistency, although original topic_str *could* be used if subscribe didn't move.
+                                }
+                            });
+                        });
+                    } else {
+                        web_sys::console::error_1(&"Cannot subscribe without a topic".into());
+                    }
+                },
+                _ => web_sys::console::warn_1(&format!("Unsupported WebSocket action: {}", action).into())
+            }
         },
         _ => web_sys::console::warn_1(&"Unexpected command type in execute_websocket_command".into())
     }

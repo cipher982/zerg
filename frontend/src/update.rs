@@ -886,6 +886,17 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     current_thread_id,
                     thread_messages
                 )));
+
+                // Critical fix: Initialize WebSocket subscription for the thread topic
+                // This ensures that the frontend will receive stream messages from the backend
+                let topic_manager = state.topic_manager.clone();
+                commands.push(Command::UpdateUI(Box::new(move || {
+                    if let Err(e) = crate::components::chat::init_chat_view_ws(thread_id, topic_manager) {
+                        web_sys::console::error_1(&format!("Failed to initialize WebSocket for thread {}: {:?}", thread_id, e).into());
+                    } else {
+                        web_sys::console::log_1(&format!("Initialized WebSocket subscription for thread {}", thread_id).into());
+                    }
+                })));
             }
         },
        
