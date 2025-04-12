@@ -189,21 +189,33 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
     full_response = ""
     try:
         # Process the message stream and broadcast chunks
+        logger.info(f"Starting to process stream for thread {thread_id}...")
+        chunk_count = 0
         for chunk in agent_manager.process_message(db=db, thread=db_thread, content=None, stream=True):
+            chunk_count += 1
+            logger.debug(f"Thread {thread_id} received chunk {chunk_count}: Type={type(chunk)}, Value='{chunk}'")
             if isinstance(chunk, str):  # Assuming chunks are strings
                 full_response += chunk
+                logger.info(f"Broadcasting chunk {chunk_count} for thread {thread_id}...")
                 await topic_manager.broadcast_to_topic(
                     topic, {"type": "stream_chunk", "thread_id": thread_id, "content": chunk}
                 )
+                logger.info(f"Finished broadcasting chunk {chunk_count} for thread {thread_id}")
             else:
                 # Handle potential non-string chunks if necessary (e.g., tool calls)
-                logger.warning(f"Received non-string chunk: {type(chunk)}")
+                logger.warning(
+                    f"Thread {thread_id} received non-string chunk {chunk_count}: Type={type(chunk)}, Value={chunk}"
+                )
+
+        logger.info(f"Finished processing stream for thread {thread_id}. Total chunks: {chunk_count}")
 
         # Update the last assistant message with the full content (optional, depending on logic)
         # crud.update_last_assistant_message(db, thread_id, full_response)
 
         # Send stream_end event
+        logger.info(f"Broadcasting stream_end for thread {thread_id}...")
         await topic_manager.broadcast_to_topic(topic, {"type": "stream_end", "thread_id": thread_id})
+        logger.info(f"Finished broadcasting stream_end for thread {thread_id}")
 
         logger.info(f"Successfully processed and streamed response for thread {thread_id}")
         return {"detail": f"Successfully triggered run for thread {thread_id}"}
