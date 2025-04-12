@@ -75,17 +75,27 @@ impl ChatViewWsManager {
                             web_sys::console::error_1(&"thread_history message missing 'messages' field".into());
                         }
                     },
-                    "thread_message_created" => {
-                        // Parse the message data and dispatch to update UI
-                        // Assuming data field for this event contains ApiThreadMessage
-                        if let Some(message_data_val) = data.get("data") { // Look inside "data" for this event type
+                    "thread_message_created" | "thread_message" => {
+                        // Handle both thread_message_created (from backend WebSocket) and thread_message (from run_thread)
+                        // First, look for data field (thread_message_created format)
+                        if let Some(message_data_val) = data.get("data") {
                             if let Ok(message_data) = serde_json::from_value::<ApiThreadMessage>(message_data_val.clone()) {
                                 dispatch_global_message(Message::ReceiveNewMessage(message_data));
+                                return;
                             } else {
                                 web_sys::console::error_1(&"Failed to parse message_data from thread_message_created".into());
                             }
+                        }
+                        
+                        // If data field not found, try message field (thread_message format from run_thread)
+                        if let Some(message_val) = data.get("message") {
+                            if let Ok(message_data) = serde_json::from_value::<ApiThreadMessage>(message_val.clone()) {
+                                dispatch_global_message(Message::ReceiveNewMessage(message_data));
+                            } else {
+                                web_sys::console::error_1(&"Failed to parse message field from thread_message".into());
+                            }
                         } else {
-                             web_sys::console::error_1(&"thread_message_created event missing 'data' field".into());
+                            web_sys::console::error_1(&"Message event missing both 'data' and 'message' fields".into());
                         }
                     },
                     "thread_updated" => {
