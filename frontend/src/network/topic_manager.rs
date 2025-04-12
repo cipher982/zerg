@@ -191,6 +191,10 @@ impl TopicManager {
               (Some("agent_state"), Some(d)) => { // Check schema new_handlers.py agent_state
                  d.get("id").and_then(|id| id.as_u64()).map(|id| format!("agent:{}", id))
              }
+            // Add cases for stream messages which have thread_id at the top level
+            (Some("stream_start") | Some("stream_chunk") | Some("stream_end"), _) => {
+                message.get("thread_id").and_then(|id| id.as_u64()).map(|id| format!("thread:{}", id))
+            }
             _ => {
                 web_sys::console::warn_1(&format!("Could not determine topic for message type: {:?}", message_type).into());
                 None
