@@ -13,6 +13,7 @@ from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from zerg.app.agents import AgentManager
@@ -159,9 +160,14 @@ async def create_thread_message(thread_id: int, message: ThreadMessageCreate, db
     return db_message
 
 
-@router.post("/{thread_id}/run")
-async def run_thread(thread_id: int, db: Session = Depends(get_db)):
-    """Process unprocessed messages in a thread and broadcast the response via WebSocket."""
+# Define request body model for run endpoint
+class RunThreadRequest(BaseModel):
+    content: str
+
+
+@router.post("/{thread_id}/run", status_code=status.HTTP_202_ACCEPTED)  # Return 202 Accepted
+async def run_thread(thread_id: int, request: RunThreadRequest, db: Session = Depends(get_db)):
+    """Creates a user message, processes it, and broadcasts the response via WebSocket."""
     # Check if the thread exists
     db_thread = crud.get_thread(db, thread_id=thread_id)
     if db_thread is None:
@@ -175,11 +181,6 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
     # Set up the agent manager
     agent_manager = AgentManager(db_agent)
 
-    # Check if there are unprocessed messages
-    unprocessed_messages = crud.get_unprocessed_messages(db, thread_id)
-    if not unprocessed_messages:
-        return {"detail": "No unprocessed messages to run"}
-
     # Define the WebSocket topic for this thread
     topic = f"thread:{thread_id}"
 
@@ -188,10 +189,11 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
 
     full_response = ""
     try:
-        # Process the message stream and broadcast chunks
-        logger.info(f"Starting to process stream for thread {thread_id}...")
+        # Process the message stream using the content from the request
+        # Note: process_message itself will create the user message in DB
+        logger.info(f"Starting to process stream for thread {thread_id} with content: '{request.content}'")
         chunk_count = 0
-        for chunk in agent_manager.process_message(db=db, thread=db_thread, content=None, stream=True):
+        for chunk in agent_manager.process_message(db=db, thread=db_thread, content=request.content, stream=True):
             chunk_count += 1
             logger.debug(f"Thread {thread_id} received chunk {chunk_count}: Type={type(chunk)}, Value='{chunk}'")
             if isinstance(chunk, str):  # Assuming chunks are strings
@@ -202,15 +204,11 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
                 )
                 logger.info(f"Finished broadcasting chunk {chunk_count} for thread {thread_id}")
             else:
-                # Handle potential non-string chunks if necessary (e.g., tool calls)
                 logger.warning(
                     f"Thread {thread_id} received non-string chunk {chunk_count}: Type={type(chunk)}, Value={chunk}"
                 )
 
         logger.info(f"Finished processing stream for thread {thread_id}. Total chunks: {chunk_count}")
-
-        # Update the last assistant message with the full content (optional, depending on logic)
-        # crud.update_last_assistant_message(db, thread_id, full_response)
 
         # Send stream_end event
         logger.info(f"Broadcasting stream_end for thread {thread_id}...")
@@ -218,11 +216,12 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
         logger.info(f"Finished broadcasting stream_end for thread {thread_id}")
 
         logger.info(f"Successfully processed and streamed response for thread {thread_id}")
-        return {"detail": f"Successfully triggered run for thread {thread_id}"}
+        # Return 202 Accepted, response comes via WebSocket
+        return {"detail": f"Processing started for thread {thread_id}"}
 
     except Exception as e:
-        logger.error(f"Error processing message for thread {thread_id}: {str(e)}")
+        logger.error(f"Error processing message for thread {thread_id}: {str(e)}", exc_info=True)
         # Send error over WebSocket if possible
         await topic_manager.broadcast_to_topic(topic, {"type": "stream_error", "thread_id": thread_id, "error": str(e)})
-        # Also raise HTTP exception for the initial request
+        # Raise HTTP exception for the initial request
         raise HTTPException(status_code=500, detail=f"Error processing message: {str(e)}")
