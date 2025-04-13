@@ -678,11 +678,15 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // More button click handler
     let agent_id = agent.id;
-    let more_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
-        web_sys::console::log_1(&format!("More options for agent: {}", agent_id).into());
-        // TODO: Show dropdown menu, which might include a Delete option.
-        // The Delete option's callback should dispatch a message like
-        // RequestAgentDeletion(agent_id) using the captured u32 ID.
+    let more_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+        // Prevent the event from bubbling
+        event.stop_propagation();
+        
+        // Ask for confirmation before deleting
+        let window = web_sys::window().expect("no global window exists");
+        if window.confirm_with_message(&format!("Are you sure you want to delete agent {}?", agent_id)).unwrap_or(false) {
+            crate::state::dispatch_global_message(crate::messages::Message::RequestAgentDeletion { agent_id: agent_id.clone() });
+        }
     }) as Box<dyn FnMut(_)>);
     
     more_btn.dyn_ref::<HtmlElement>()

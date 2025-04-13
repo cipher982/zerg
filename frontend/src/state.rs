@@ -909,6 +909,8 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             
             cmd @ Command::WebSocketAction { .. } => crate::command_executors::execute_websocket_command(cmd),
             
+            Command::DeleteAgentApi { agent_id } => crate::command_executors::execute_network_command(cmd),
+            
             Command::NoOp => {},
         }
     }

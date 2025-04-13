@@ -21,8 +21,10 @@ pub enum Message {
         system_instructions: String,
         task_instructions: String,
     },
-    EditAgent(u32),                   // Edit existing agent by ID
-    DeleteAgent(u32),                 // Delete an agent by ID
+    EditAgent(u32),                  
+    RequestAgentDeletion { agent_id: u32 },
+    AgentDeletionSuccess { agent_id: u32 }, 
+    AgentDeletionFailure { agent_id: u32, error: String },
     
     // Canvas generation from agents
     GenerateCanvasFromAgents,           // Create nodes for agents that don't have one
@@ -211,6 +213,9 @@ pub enum Message {
     ReceiveAgentUpdate(AgentEventData),
     ReceiveAgentDelete(i32),
     ReceiveThreadHistory(Vec<ApiThreadMessage>),
+
+    // Add the DeleteAgentApi command inside the enum
+    DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion
 }
 
 /// Commands represent side effects that should be executed after state updates.
@@ -279,6 +284,9 @@ pub enum Command {
     
     /// Represents no side effect
     NoOp,
+    
+    // Add the DeleteAgentApi command inside the enum
+    DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion
 }
 
 impl Command {
