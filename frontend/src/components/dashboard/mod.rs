@@ -41,7 +41,7 @@ pub enum AgentStatus {
 // Agent data structure for the dashboard
 #[derive(Clone, Debug)]
 pub struct Agent {
-    pub id: String,
+    pub id: u32,
     pub name: String,
     pub status: AgentStatus,
     pub last_run: Option<String>,
@@ -52,7 +52,7 @@ pub struct Agent {
 }
 
 impl Agent {
-    pub fn new(id: String, name: String) -> Self {
+    pub fn new(id: u32, name: String) -> Self {
         Self {
             id,
             name,
@@ -427,59 +427,41 @@ fn create_agents_table(document: &Document) -> Result<Element, JsValue> {
     Ok(table)
 }
 
-// Get agents from the application state
+// Helper function to extract agents from APP_STATE and convert them
+// This function now directly uses the u32 ID and skips agents without one.
 fn get_agents_from_app_state() -> Vec<Agent> {
-    let agents_data = APP_STATE.with(|state| {
+    APP_STATE.with(|state| {
         let state = state.borrow();
-        
-        // Return early if still loading
-        if state.is_loading {
-            return Vec::new();
-        }
-        
-        // Collect all agent data directly from the agents HashMap
-        state.agents.iter()
-            .map(|(id, api_agent)| {
-                // Format agent_id with the "agent-" prefix to be consistent with node IDs
-                // This is necessary because nodes referencing agents use the "agent-{id}" format
-                let agent_id = format!("agent-{}", id);
-                let name = api_agent.name.clone();
-                let status_str = api_agent.status.clone();
-                
-                (agent_id, name, status_str)
+        state.agents.values()
+            .filter_map(|api_agent| {
+                // Only include agents that have a valid u32 ID
+                api_agent.id.map(|id| {
+                    // Map ApiAgent status to local AgentStatus
+                    let status = match api_agent.status.as_deref() {
+                        Some("running") | Some("processing") => AgentStatus::Running,
+                        Some("idle") | Some("complete") => AgentStatus::Idle,
+                        Some("error") => AgentStatus::Error,
+                        Some("scheduled") => AgentStatus::Scheduled,
+                        Some("paused") => AgentStatus::Paused,
+                        _ => AgentStatus::Idle, // Default to Idle if status is None or unknown
+                    };
+
+                    // Create the local Agent struct
+                    Agent {
+                        id, // Use the u32 ID directly
+                        name: api_agent.name.clone(),
+                        status,
+                        // TODO: Populate these fields if available in ApiAgent or elsewhere
+                        last_run: None,
+                        next_run: None,
+                        success_rate: 0.0, // Placeholder
+                        run_count: 0,      // Placeholder
+                        last_run_success: None, // Placeholder
+                    }
+                })
             })
-            .collect::<Vec<_>>()
-    });
-    
-    // Sort by name outside the borrow
-    let mut sorted_data = agents_data;
-    sorted_data.sort_by(|a, b| a.1.cmp(&b.1));
-    
-    // Convert to Agent objects
-    let mut agents = Vec::new();
-    for (id, name, status_str) in sorted_data {
-        // Convert API status to AgentStatus
-        let status = match status_str.as_deref() {
-            Some("processing") => AgentStatus::Running,
-            Some("error") => AgentStatus::Error,
-            Some("scheduled") => AgentStatus::Scheduled,
-            Some("paused") => AgentStatus::Paused,
-            Some("idle") | None => AgentStatus::Idle,
-            _ => AgentStatus::Idle, // Default to idle
-        };
-        
-        // Create agent with available data
-        let mut agent = Agent::new(id, name);
-        agent.status = status;
-        
-        // For now, we'll set default values for the other fields
-        agent.success_rate = 100.0; // Default to 100%
-        agent.run_count = 0;
-        
-        agents.push(agent);
-    }
-    
-    agents
+            .collect()
+    })
 }
 
 // Populate the table with agent data
@@ -517,7 +499,7 @@ fn populate_agents_table(document: &Document) -> Result<(), JsValue> {
 // Create a table row for an agent
 fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsValue> {
     let row = document.create_element("tr")?;
-    row.set_attribute("data-agent-id", &agent.id)?;
+    row.set_attribute("data-agent-id", &agent.id.to_string())?;
     
     // Name cell
     let name_cell = document.create_element("td")?;
@@ -590,10 +572,16 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     run_btn.set_attribute("title", "Run Agent")?;
     
     // Run button click handler
-    let agent_id = agent.id.clone();
+    let agent_id = agent.id;
     let run_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
-        
+
+        // TODO: Implement the actual 'run' logic using the u32 agent_id.
+        // This likely involves dispatching a message/command to trigger a thread run via the API.
+        // For now, just log. Replace the old complex logic.
+        web_sys::console::warn_1(&format!("TODO: Implement run logic for agent_id: {}", agent_id).into());
+
+        /* Old logic removed:
         // Check if this is an API agent (with agent-{id} format)
         if let Some(api_agent_id_str) = agent_id.strip_prefix("agent-") {
             if let Ok(api_agent_id) = api_agent_id_str.parse::<u32>() {
@@ -613,29 +601,9 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
             }
         } else {
             // For legacy nodes without the agent- prefix, use the old approach
-            // Dispatch SendTaskToAgent message and capture both the need_refresh flag and any pending network call
-            let commands = {
-                // Scope the mutable borrow so it's dropped before refresh_ui_after_state_change
-                APP_STATE.with(|state| {
-                    let mut state = state.borrow_mut();
-                    
-                    // Set the selected agent first so the message handler knows which agent to run
-                    state.selected_node_id = Some(agent_id.clone());
-                    
-                    // Dispatch the message to run the agent
-                    state.dispatch(crate::messages::Message::SendTaskToAgent)
-                })
-            };
-            
-            // Execute commands
-            for cmd in commands {
-                match cmd {
-                    Command::SendMessage(msg) => dispatch_global_message(msg),
-                    Command::NoOp => {},
-                    _ => {},  // Ignore other commands in this context
-                }
-            }
+            // ... old SendTaskToAgent logic ...
         }
+        */
     }) as Box<dyn FnMut(_)>);
     
     run_btn.dyn_ref::<HtmlElement>()
@@ -652,13 +620,13 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     edit_btn.set_attribute("title", "Edit Agent")?;
     
     // Edit button click handler
-    let agent_id = agent.id.clone();
+    let agent_id = agent.id;
     let edit_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&format!("Edit agent: {}", agent_id).into());
-        
-        // agent_id is already in the correct format since we construct it in get_agents_from_app_state
-        // Just dispatch the EditAgent message directly
-        crate::state::dispatch_global_message(crate::messages::Message::EditAgent(agent_id.clone()));
+
+        // Dispatch EditAgent message with the u32 ID
+        // NOTE: Message::EditAgent needs to be updated to accept u32
+        crate::state::dispatch_global_message(crate::messages::Message::EditAgent(agent_id));
     }) as Box<dyn FnMut(_)>);
     
     edit_btn.dyn_ref::<HtmlElement>()
@@ -673,10 +641,15 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     chat_btn.set_attribute("title", "Chat with Agent")?;
     
     // Chat button click handler
-    let agent_id = agent.id.clone();
+    let agent_id = agent.id;
     let chat_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&format!("Chat with agent: {}", agent_id).into());
-        
+
+        // Dispatch NavigateToChatView message with the u32 ID
+        // NOTE: Message::NavigateToChatView needs to be updated to accept u32
+        crate::state::dispatch_global_message(crate::messages::Message::NavigateToChatView(agent_id));
+
+        /* Old logic removed:
         // Check if this is an API agent (with agent-{id} format)
         if let Some(api_agent_id_str) = agent_id.strip_prefix("agent-") {
             if let Ok(api_agent_id) = api_agent_id_str.parse::<u32>() {
@@ -686,6 +659,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
                 web_sys::console::error_1(&format!("Invalid agent ID format: {}", agent_id).into());
             }
         }
+        */
     }) as Box<dyn FnMut(_)>);
     
     chat_btn.dyn_ref::<HtmlElement>()
@@ -703,10 +677,12 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     more_btn.set_attribute("title", "More Options")?;
     
     // More button click handler
-    let agent_id = agent.id.clone();
+    let agent_id = agent.id;
     let more_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&format!("More options for agent: {}", agent_id).into());
-        // Show dropdown menu
+        // TODO: Show dropdown menu, which might include a Delete option.
+        // The Delete option's callback should dispatch a message like
+        // RequestAgentDeletion(agent_id) using the captured u32 ID.
     }) as Box<dyn FnMut(_)>);
     
     more_btn.dyn_ref::<HtmlElement>()
