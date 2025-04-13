@@ -1499,7 +1499,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             });
             
             state.state_modified = true;
-            needs_refresh = true;
+            
+            // Add a command to refresh the agents list after state is updated
+            commands.push(Command::SendMessage(Message::RefreshAgentsFromAPI));
         },
         
         Message::AgentDeletionFailure { agent_id, error } => {
