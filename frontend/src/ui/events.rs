@@ -12,7 +12,7 @@ use crate::{
         DEFAULT_AGENT_NODE_COLOR,
         DEFAULT_MODEL
     },
-    network::ws_client_v2::send_text_to_backend,
+    network::ws_client_v2::send_thread_message,
     storage::ActiveView,
 };
 

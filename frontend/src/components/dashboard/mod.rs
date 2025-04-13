@@ -18,7 +18,7 @@ use crate::constants::{
     DEFAULT_THREAD_TITLE
 };
 use crate::network::api_client;
-use crate::network::ws_client_v2::send_text_to_backend;
+use crate::network::ws_client_v2::send_thread_message;
 use crate::storage::ActiveView;
 use wasm_bindgen::closure::Closure;
 use uuid;

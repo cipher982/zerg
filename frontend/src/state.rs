@@ -1,13 +1,12 @@
 use std::cell::RefCell;
+use std::rc::Rc;
+use std::collections::{HashMap, HashSet};
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
 use crate::models::{Node, NodeType, Workflow, Edge, ApiAgent, ApiThread, ApiThreadMessage};
 use crate::canvas::renderer;
 use crate::storage::ActiveView;
 use crate::network::{WsClientV2, TopicManager};
-use crate::network::ws_client_v2::send_text_to_backend;
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
-use crate::messages::Message;
+use crate::messages::{Message, Command};
 use crate::constants::{
     DEFAULT_TASK_INSTRUCTIONS,
     DEFAULT_NODE_WIDTH,
@@ -22,7 +21,6 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures;
 use serde_json;
-use crate::messages::Command;
 use crate::update;
 use crate::command_executors;
 
@@ -906,7 +904,8 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::UpdateThreadTitle { .. } |
             cmd @ Command::RunThread(_) => crate::command_executors::execute_thread_command(cmd),
             
-            cmd @ Command::NetworkCall { .. } => crate::command_executors::execute_network_command(cmd),
+            cmd @ Command::NetworkCall { .. } |
+            cmd @ Command::UpdateAgent { .. } => crate::command_executors::execute_network_command(cmd),
             
             cmd @ Command::WebSocketAction { .. } => crate::command_executors::execute_websocket_command(cmd),
             
@@ -921,6 +920,17 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
     
     // 4. Process legacy network calls (these will be migrated to commands)
     if let Some((text, message_id)) = network_data {
-        send_text_to_backend(&text, message_id);
+        // This only handles thread messages now
+        if let Ok(thread_id) = message_id.parse::<u32>() {
+            // If message_id is a thread ID, it's a thread message
+            let command = Command::SendThreadMessage { 
+                thread_id, 
+                content: text, 
+                client_id: None 
+            };
+            crate::command_executors::execute_thread_command(command);
+        } else {
+            web_sys::console::warn_1(&format!("Unhandled pending network call: {}", message_id).into());
+        }
     }
 } 

@@ -529,8 +529,8 @@ mod tests {
     }
 }
 
-pub fn send_text_to_backend(text: &str, message_id: String) {
-    web_sys::console::log_1(&format!("Network: Attempting to send text to backend: '{}', message_id: {}", text, message_id).into());
+pub fn send_thread_message(text: &str, message_id: String) {
+    web_sys::console::log_1(&format!("Network: Sending thread message: '{}', message_id: {}", text, message_id).into());
 
     super::ui_updates::flash_activity(); // Flash on send
     
@@ -581,53 +581,6 @@ pub fn send_text_to_backend(text: &str, message_id: String) {
             }
         });
     } else {
-        // Use the Fetch API for non-agent communication or as fallback
-        let window = web_sys::window().expect("no global window exists");
-        
-        // Get the selected model and system instructions
-        let (selected_model, system_instructions) = crate::state::APP_STATE.with(|state| {
-            let state = state.borrow();
-            let model = state.selected_model.clone();
-            
-            // Get system instructions if any
-            let instructions = if let Some(agent_id) = &state.selected_node_id {
-                if let Some(agent) = state.nodes.get(agent_id) {
-                    agent.system_instructions().clone().unwrap_or_default()
-                } else {
-                    String::new()
-                }
-            } else {
-                String::new()
-            };
-            
-            (model, instructions)
-        });
-        
-        // Create headers
-        let headers = web_sys::Headers::new().unwrap();
-        headers.append("Content-Type", "application/json").unwrap();
-        
-        // Create request body
-        let body_obj = js_sys::Object::new();
-        js_sys::Reflect::set(&body_obj, &"text".into(), &text.into()).unwrap();
-        js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into()).unwrap();
-        js_sys::Reflect::set(&body_obj, &"model".into(), &selected_model.into()).unwrap();
-        js_sys::Reflect::set(&body_obj, &"system".into(), &system_instructions.into()).unwrap();
-        let body_string = js_sys::JSON::stringify(&body_obj).unwrap();
-        
-        // Create request init object
-        let opts = web_sys::RequestInit::new();
-        opts.set_method("POST");
-        opts.set_headers(&headers.into());
-        opts.set_body(&body_string.into());
-        
-        // Create request
-        let request = web_sys::Request::new_with_str_and_init(
-            "http://localhost:8001/api/process-text", 
-            &opts
-        ).unwrap();
-        
-        // Send the fetch request
-        let _ = window.fetch_with_request(&request);
+        web_sys::console::error_1(&"Cannot send message: No websocket connection or no agent selected".into());
     }
 } 
