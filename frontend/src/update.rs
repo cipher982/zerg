@@ -345,24 +345,30 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 state.track_message(message_id.clone(), response_node_id);
                
                 // Store the necessary values for the network call
-                // This way, we don't need to borrow APP_STATE again in the send_text_to_backend function
                 let task_text_clone = task_text.clone();
                 let message_id_clone = message_id.clone();
-               
+
+                // Generate a u32 client ID for the send command
+                let client_id_u32 = u32::MAX - rand::random::<u32>() % 1000;
+
                 // Mark state as modified
                 state.state_modified = true;
-               
+
                 // Close the modal after sending - this doesn't borrow APP_STATE
                 let window = web_sys::window().expect("no global window exists");
                 let document = window.document().expect("should have a document");
                 if let Err(e) = crate::views::hide_agent_modal(&document) {
                     web_sys::console::error_1(&format!("Failed to hide modal: {:?}", e).into());
                 }
-               
+
                 // After the update function returns and the AppState borrow is dropped,
-                // the dispatch function caller will need to call this function:
-                // crate::network::send_text_to_backend(&task_text_clone, message_id_clone);
-               
+                // we'll send a command to handle the thread message
+                commands.push(Command::SendThreadMessage {
+                    thread_id: state.current_thread_id.unwrap_or(1),
+                    client_id: Some(client_id_u32),
+                    content: task_text_clone.clone(),
+                });
+
                 // For now, we'll use a simple approach: stash the data in state
                 state.pending_network_call = Some((task_text_clone, message_id_clone));
             }
@@ -964,8 +970,8 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // Add network operation command
             commands.push(Command::SendThreadMessage {
                 thread_id,
-                content,
                 client_id: Some(client_id),
+                content: content.clone(),
             });
         },
        
