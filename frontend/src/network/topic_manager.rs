@@ -168,6 +168,12 @@ impl TopicManager {
     pub fn route_incoming_message(&self, message: serde_json::Value) {
         web_sys::console::log_1(&format!("TopicManager received message: {:?}", message).into());
 
+        // Handle administrative messages that don't belong to a topic
+        if let Some("unsubscribe_success") = message.get("type").and_then(|t| t.as_str()) {
+            web_sys::console::debug_1(&"Received unsubscribe confirmation".into());
+            return;
+        }
+
         // --- Determine the topic from the message --- 
         // This logic needs to align with how the backend structures event messages.
         // Assuming backend sends: {"type": "event_type", "data": {"id": resource_id, ...}}
