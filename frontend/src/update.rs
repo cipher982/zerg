@@ -1350,8 +1350,31 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::ReceiveStreamStart(thread_id) => {
             // Mark thread as streaming in local state
             state.streaming_threads.insert(thread_id);
-            // Optionally dispatch UI update if needed to show spinner
-            web_sys::console::log_1(&format!("Stream started for thread {}", thread_id).into());
+
+            // Create a new message entry for the assistant's response
+            let now = chrono::Utc::now().to_rfc3339();
+            let assistant_message = ApiThreadMessage {
+                id: None, // ID might be set later or not needed for streaming display
+                thread_id,
+                role: "assistant".to_string(),
+                content: "".to_string(), // Start with empty content
+                created_at: Some(now),
+            };
+
+            // Add the new message to the state
+            let messages = state.thread_messages.entry(thread_id).or_default();
+            messages.push(assistant_message);
+
+            // If this is the current thread, trigger an immediate UI update 
+            // to show the new (empty) assistant message bubble.
+            if state.current_thread_id == Some(thread_id) {
+                let messages_clone = messages.clone();
+                state.pending_ui_updates = Some(Box::new(move || {
+                    dispatch_global_message(Message::UpdateConversation(messages_clone));
+                }));
+            }
+
+            web_sys::console::log_1(&format!("Stream started for thread {}: Created empty assistant message.", thread_id).into());
         },
 
         Message::ReceiveStreamChunk { thread_id, content } => {
