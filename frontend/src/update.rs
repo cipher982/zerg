@@ -225,7 +225,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             } else {
                 None
             };
-           
+            
             // Process the save operation
             if let Some(node_id) = node_id {
                 // Extract agent_id from node_id if in format "agent-{id}"
@@ -238,13 +238,13 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 } else {
                     None
                 };
-               
+                
                 // Update node if it exists
                 if let Some(node) = state.nodes.get_mut(&node_id) {
                     // Update node's visual representation
                     node.text = name.clone();
                 }
-               
+                
                 // Update agent data if we have an agent ID
                 if let Some(id) = agent_id {
                     if let Some(agent) = state.agents.get_mut(&id) {
@@ -252,7 +252,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         agent.name = name;
                         agent.system_instructions = Some(system_instructions.clone());
                         agent.model = Some(model.clone());
-                       
+                        
                         // Create API update payload
                         let update_payload = format!(
                             r#"{{
@@ -264,21 +264,23 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                             agent.system_instructions.clone().unwrap_or_default(),
                             model
                         );
-                       
-                        // Queue the API call
-                        state.pending_network_call = Some((
-                            update_payload,
-                            format!("agent-update-{}", id)
-                        ));
+                        
+                        // Return a command to update the agent via API
+                        commands.push(Command::UpdateAgent {
+                            agent_id: id,
+                            payload: update_payload,
+                            on_success: Box::new(Message::RefreshAgentsFromAPI),
+                            on_error: Box::new(Message::RefreshAgentsFromAPI), // Refresh anyway to restore state
+                        });
                     }
                 }
-               
+                
                 // Mark state as modified
                 state.state_modified = true;
-               
+                
                 // Save state to API
                 let _ = state.save_if_modified();
-               
+                
                 // Close the modal after saving
                 if let Some(window) = web_sys::window() {
                     if let Some(document) = window.document() {
