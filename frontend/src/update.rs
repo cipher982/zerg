@@ -1397,8 +1397,27 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::ReceiveStreamEnd(thread_id) => {
             // Mark thread as no longer streaming in local state
             state.streaming_threads.remove(&thread_id);
-            // Optionally dispatch UI update if needed to hide spinner
-            web_sys::console::log_1(&format!("Stream ended for thread {}", thread_id).into());
+
+            // Find the last user message and update its status (e.g., mark as completed)
+            // We assume the stream ending means the corresponding user message is processed.
+            if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
+                if let Some(last_user_message) = messages.iter_mut().filter(|msg| msg.role == "user").last() {
+                    // Mark completion by setting the temporary ID back to None
+                    // This will stop the UI from showing "Sending..." or "pending" styles
+                    last_user_message.id = None;
+                    web_sys::console::log_1(&format!("Stream ended: Set last user message ID to None for thread {}.", thread_id).into());
+                }
+
+                // Trigger UI update for the conversation to reflect the change
+                if state.current_thread_id == Some(thread_id) {
+                    let messages_clone = messages.clone();
+                    state.pending_ui_updates = Some(Box::new(move || {
+                        dispatch_global_message(Message::UpdateConversation(messages_clone));
+                    }));
+                }
+            }
+
+            web_sys::console::log_1(&format!("Stream ended for thread {}.", thread_id).into());
         },
 
         // --- NEW WebSocket Event Handlers ---
