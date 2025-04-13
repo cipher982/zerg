@@ -250,6 +250,14 @@ pub enum Command {
         title: String,
     },
     
+    /// Update an agent
+    UpdateAgent {
+        agent_id: u32,
+        payload: String,
+        on_success: Box<Message>,
+        on_error: Box<Message>,
+    },
+    
     /// Load agent info
     LoadAgentInfo(u32),
     

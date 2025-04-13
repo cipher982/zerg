@@ -156,6 +156,22 @@ pub fn execute_network_command(cmd: Command) {
                 }
             });
         },
+        Command::UpdateAgent { agent_id, payload, on_success, on_error } => {
+            web_sys::console::log_1(&format!("Executor: Updating agent {} with payload: {}", agent_id, payload).into());
+            
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::update_agent(agent_id, &payload).await {
+                    Ok(response) => {
+                        web_sys::console::log_1(&format!("Agent update successful: {}", response).into());
+                        dispatch_global_message(*on_success);
+                    },
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to update agent {}: {:?}", agent_id, e).into());
+                        dispatch_global_message(*on_error);
+                    }
+                }
+            });
+        },
         _ => web_sys::console::warn_1(&"Unexpected command type in execute_network_command".into())
     }
 }
