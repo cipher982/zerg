@@ -1,39 +1,127 @@
-# Rust File Analysis
-Here's a list of the Rust files in your src directory and their apparent purpose:
+# AI Agent Platform – Frontend Overview
 
-src/mod.rs: Root module file for the src directory. Based on the provided content (empty), it's not currently declaring sub-modules or re-exporting anything significant. It might be a placeholder or leftover.
-src/renderer.rs: (Top-level) Seems like an older version for drawing nodes and connections on the canvas. Imports shapes.
-src/shapes.rs: (Top-level) Seems like an older version containing functions to draw specific geometric shapes (rectangles, arrows, etc.) for the canvas.
-src/canvas_editor.rs: (Top-level) Looks like an older or misplaced file for handling canvas setup, events (mouse, resize), and dispatching canvas-related messages (dragging, zooming).
-src/components/canvas_editor.rs: Handles setup of the HTML Canvas, event listeners (mouse down/move/up/wheel, resize), dispatches canvas-related messages (StartDragging, UpdateNodePosition, ZoomCanvas, etc.), and interacts with AppState for canvas state. This seems like the active canvas interaction logic file based on its location.
-src/components/chat/mod.rs: Module file for the chat component directory. Exports the WebSocket manager.
-src/components/chat/ws_manager.rs: Manages WebSocket subscriptions and message handling specifically for the Chat View, interacting with the global TopicManager. It handles thread:* topics and dispatches messages like ReceiveThreadHistory, ReceiveNewMessage, ReceiveThreadUpdate.
-src/components/chat_view.rs: Responsible for setting up the DOM structure for the chat view, handling its specific UI events (back button, send message, new thread), and providing functions to update the chat UI (agent info, thread list, conversation messages).
-src/components/dashboard.rs.bak: A backup file, clearly not in active use.
-src/components/dashboard/mod.rs: Defines the dashboard view. It includes rendering the agent table, handling dashboard-specific actions (create agent, run, edit, chat, reset DB), interacting with the API client, and managing the dashboard's WebSocket connection via its ws_manager. Defines a local Agent struct likely for display purposes.
-src/components/dashboard/ws_manager.rs: Manages WebSocket subscriptions for the Dashboard view, specifically listening for agent events (agent:* topic) and triggering refreshes. Interacts with the global TopicManager.
-src/components/dashboard/ws_manager_test.rs: Contains unit/integration tests for the DashboardWsManager, using mock implementations for dependencies.
-src/components/mod.rs: Module file for the components directory, likely declaring the sub-modules (chat, dashboard, etc.).
-src/components/model_selector.rs: Handles the UI and logic for the AI model selection dropdown, including fetching available models from the backend and updating the application state.
-src/constants.rs: Defines shared constant values used across the application (default names, instructions, colors, dimensions, etc.).
-src/lib.rs: The main entry point of the WASM library (#[wasm_bindgen(start)]). Initializes the application, sets up the base UI, connects the WebSocket (V2), initializes state, sets up navigation, and starts timers (like auto-save).
-src/messages.rs: Defines the central Message enum representing all possible actions/events that can modify the application state, and the Command enum for handling side effects.
-src/models.rs: Defines the core data structures used throughout the application, including Node, NodeType, ApiAgent, ApiThread, ApiThreadMessage, Workflow, etc. Distinguishes between backend API models and frontend visual models.
-src/network/api_client.rs: Implements the ApiClient struct for making HTTP REST requests to the backend API (fetching/creating/updating/deleting agents, threads, messages). Includes helper functions like load_agents.
-src/network/event_types.rs: Defines enums (MessageType, EventType) and helper functions (topics) related to WebSocket message/event types and topic naming conventions.
-src/network/messages.rs: Defines the specific structures for various WebSocket message payloads (e.g., PingMessage, SubscribeMessage, ThreadHistoryMessage, StreamChunkMessage, event data payloads).
-src/network/mod.rs: Module file for the network directory. Re-exports key network components and provides helper functions like get_api_base_url.
-src/network/topic_manager.rs: Implements the TopicManager and ITopicManager trait. Manages WebSocket topic subscriptions (subscribe/unsubscribe) and routes incoming WebSocket messages to the correct handlers based on topic. Works with IWsClient.
-src/network/ui_updates.rs: Contains utility functions specifically for updating small parts of the UI related to network activity (connection status indicator, packet flash).
-src/network/ws_client.rs: An older WebSocket client implementation. Appears to handle connection, reconnection, and message processing directly, tightly coupled with AppState.
-src/network/ws_client_v2.rs: The newer WebSocket client (WsClientV2) implementing the IWsClient trait. Focuses on connection management, pinging, and reconnection logic, delegating message routing/handling via callbacks (used by TopicManager).
-src/state.rs: Defines the global AppState struct, the APP_STATE thread-local static variable, methods for modifying state (like adding nodes, drawing, fitting view), saving/loading helpers, and the dispatch_global_message function.
-src/storage.rs: Handles persistence logic. Includes functions to save/load state to/from localStorage (legacy nodes, viewport, workflows) and interacts with the ApiClient to save/load state (agents, messages) from the backend API. Defines ActiveView.
-src/thread_handlers.rs: Contains specific logic for handling chat message sending, including optimistic UI updates and processing server responses/failures for thread messages.
-src/ui/events.rs: Sets up various UI event listeners (buttons, toggles, modals) that dispatch Messages to the state management system.
-src/ui/main.rs: Responsible for creating the main UI elements within the app-container, like the input panel, canvas container, buttons, and dropdowns.
-src/ui/mod.rs: Module file for the ui directory. Also includes the setup_animation_loop function using requestAnimationFrame for canvas drawing updates.
-src/ui/modals.rs: Contains functions specifically for controlling the agent modal dialog (opening, closing, populating data).
-src/ui/setup.rs: Creates the initial, static parts of the UI structure like the header, status bar, and the basic modal structure.
-src/update.rs: Contains the core update function, which acts as the state reducer, handling incoming Messages, modifying the AppState, and returning Commands for side effects.
-src/views.rs: Provides functions (render_active_view, render_dashboard_view, render_canvas_view) to manage which major UI view (Dashboard, Canvas, Chat) is currently displayed by showing/hiding the relevant containers.
+Welcome to the Rust + WebAssembly frontend of the AI Agent Platform!  
+This README describes:  
+1. How the frontend is architected (state management, messages, UI layering).  
+2. Where to find specific functionality (Canvas, Chat, Dashboard).  
+3. How to build, run, and contribute.
+
+--------------------------------------------------------------------------------
+## Table of Contents
+1. Introduction and High-Level Flow  
+2. Project Structure  
+3. State Management (Elm-Style)  
+4. Network Layer  
+5. Major UI Components (Dashboard, Canvas, Chat)  
+6. Commands and Side Effects  
+7. Tips for Contributing
+
+--------------------------------------------------------------------------------
+## 1) Introduction and High-Level Flow
+
+This frontend is compiled from Rust → WebAssembly. It uses an “Elm-like” architecture in which:  
+• User actions or system events produce a Message (see src/messages.rs).  
+• These go through an update function (src/update.rs) that updates AppState and emits Commands for side effects (HTTP calls, WebSocket actions, etc.).  
+• The global AppState (src/state.rs) is a single “source of truth” containing:  
+  – A list of Agents, Threads, Canvas Nodes, etc.  
+  – The user’s current View (Dashboard, Canvas, or Chat).  
+  – Current WebSocket connections / topic subscriptions.  
+
+Under the hood, “command executors” run any side effects (e.g., fetch data from the backend API). Once the side effects resolve, they often dispatch new Messages, continuing the cycle.
+
+--------------------------------------------------------------------------------
+## 2) Project Structure
+
+Below is a rough breakdown of critical directories and files:
+
+• src/  
+  ├── canvas/  
+  │    ├── shapes.rs           (drawing shapes like rectangles, arrows on Canvas)  
+  │    └── renderer.rs         (canvas rendering logic)  
+  ├── components/  
+  │    ├── dashboard/          (dashboard UI for listing agents)  
+  │    ├── chat/               (chat UI logic, WebSocket manager)  
+  │    └── canvas_editor.rs    (sets up the HTML Canvas + event listeners)  
+  ├── network/  
+  │    ├── api_client.rs       (handles HTTP API calls)  
+  │    ├── ws_client_v2.rs     (WebSocket client code)  
+  │    ├── topic_manager.rs    (subscribes/unsubscribes to WS topics)  
+  │    └── messages.rs         (structures for WS messages)  
+  ├── state.rs                 (global AppState, user selections, current view)  
+  ├── messages.rs              (all possible front-end events, i.e. “Messages”)  
+  ├── update.rs                (the “reducer”: transforms Messages → new state)  
+  ├── command_executors.rs     (logic for executing side-effectful Commands)  
+  ├── models.rs                (main data structures: agents, threads, nodes)  
+  ├── storage.rs               (localStorage + saving/loading from backend)  
+  ├── views.rs                 (functions to render specific views)  
+  ├── lib.rs                   (WASM entry point [#[wasm_bindgen(start)]])  
+
+• www/  
+  ├── index.html               (core HTML page loading our WASM + JS)  
+  ├── styles.css, chat.css     (styling)  
+  └── index.js                 (generated by wasm-pack, references the WASM)
+
+--------------------------------------------------------------------------------
+## 3) State Management (Elm-Style)
+
+We follow a unidirectional data flow:
+
+1. The global state is in AppState (src/state.rs).  
+   – This includes structured data like:  
+     • agents (HashMap<u32, ApiAgent>)  
+     • thread_messages, nodes, workflows, etc.  
+   – Also includes ephemeral info like “current_thread_id” or “dragging = Some(node_id).”
+
+2. Messages enumeration (src/messages.rs)  
+   – Example: ToggleView(ActiveView), CreateAgent, LoadThreads, SendThreadMessage.  
+   – These represent every possible user action or system event that can mutate the AppState.
+
+3. The update function (src/update.rs)  
+   – A big match on Message. We adjust state accordingly (e.g., add a node, change a thread’s title).  
+   – Returns zero or more Command objects (HTTP request, WebSocket subscription, etc.).
+
+4. Commands and command_executors  
+   – Each Command is a structured “side effect” that update.rs cannot run directly (since it’s meant to be pure).  
+   – Commands get passed to command_executors.rs, which actually performs the network calls or dispatches new messages after success/failure.
+
+--------------------------------------------------------------------------------
+## 4) Network Layer
+
+All networking lives in src/network/:  
+• api_client.rs → Basic HTTP fetch calls to the python backend (like “/api/agents”).  
+• ws_client_v2.rs → Our actual WebSocket client that handles connect/disconnect + message parsing.  
+• topic_manager.rs → Subscribes/unsubscribes to “topics” (like thread:123), distributing incoming WS messages to the correct handler in the code.  
+
+When the frontend loads, lib.rs calls ws_client.connect() to open the socket. Once connected, it might subscribe to relevant topics (agent:*, thread:*) via the TopicManager.  
+
+--------------------------------------------------------------------------------
+## 5) Major UI Components
+
+We have three primary “views,” each with distinct responsibilities:
+
+1. Dashboard (src/components/dashboard)  
+   – Displays a table of Agents with actions like “Edit, Chat, Create Agent.”  
+   – Has an associated “ws_manager.rs” that subscribes to agent:* updates.  
+
+2. Canvas (src/components/canvas_editor.rs + src/canvas/)  
+   – A 2D area where “nodes” can be displayed and moved around (like agent nodes, user input nodes).  
+   – renderer.rs draws the shapes. canvas_editor.rs sets up event handlers (mouse, drag, zoom).  
+
+3. Chat (src/components/chat/)  
+   – ChatView is built from chat_view.rs + ws_manager.rs.  
+   – There’s a side panel with threads, plus the conversation area. Real-time updates come via the WebSocket “thread:*” subscription.
+
+The active view is always stored in AppState.active_view. Switching tabs triggers a ToggleView(Message) → update, and we hide all other view containers in the DOM.
+
+--------------------------------------------------------------------------------
+## 6) Commands and Side Effects
+
+After an update function handles a message (like “SendThreadMessage”), it might return:
+
+  Command::SendThreadMessage { thread_id, content, client_id }
+
+That goes to command_executors.rs, which does:  
+• Actually calls the HTTP endpoint or run_thread.  
+• On success/failure, dispatches more messages (e.g., ThreadMessageSent or ThreadMessageFailed).
+
+This keeps update.rs “pure” while making side effects explicit and testable.
