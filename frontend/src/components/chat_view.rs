@@ -347,8 +347,8 @@ pub fn update_conversation_ui(
         // Clear existing messages
         messages_container.set_inner_html("");
         
-        // Display thread messages
-        for message in messages {
+        // Display thread messages, but filter out system messages
+        for message in messages.iter().filter(|m| m.role != "system") {
             let message_element = document.create_element("div")?;
             
             // Set class based on message role
