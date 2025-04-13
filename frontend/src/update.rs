@@ -102,21 +102,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
         },
        
-        Message::DeleteAgent(agent_id) => {
-            web_sys::console::log_1(&format!("Update: Handling DeleteAgent request for agent_id: {}", agent_id).into());
-            // TODO: This should trigger an API call to delete the agent.
-            // Example: commands.push(Command::DeleteAgentApi { agent_id });
-            // The actual removal from state.agents and state.nodes should happen
-            // in response to a success message (e.g., Message::AgentDeletionSuccess).
-
-            // Remove the incorrect direct node removal:
-            // state.nodes.remove(&agent_id); 
-            // state.state_modified = true;
-
-            web_sys::console::warn_1(&"TODO: Implement API call for agent deletion".into());
-            needs_refresh = false; // No immediate state change that requires refresh
-        },
-       
         Message::UpdateNodePosition { node_id, x, y } => {
             state.update_node_position(&node_id, x, y);
             // Only mark state as modified if we're not actively dragging
@@ -1489,6 +1474,41 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 needs_refresh = false;
             }
         },
+       
+        // --- New Agent Deletion Flow ---
+        Message::RequestAgentDeletion { agent_id } => {
+            commands.push(Command::DeleteAgentApi { agent_id });
+        },
+        
+        Message::DeleteAgentApi { agent_id } => {
+            // Just delegate to the Command that handles the API call
+            commands.push(Command::DeleteAgentApi { agent_id });
+        },
+        
+        Message::AgentDeletionSuccess { agent_id } => {
+            // Remove agent from agents map
+            state.agents.remove(&agent_id);
+            
+            // Remove any nodes associated with this agent
+            state.nodes.retain(|_, node| {
+                if let Some(node_agent_id) = node.agent_id {
+                    node_agent_id != agent_id
+                } else {
+                    true
+                }
+            });
+            
+            state.state_modified = true;
+            needs_refresh = true;
+        },
+        
+        Message::AgentDeletionFailure { agent_id, error } => {
+            web_sys::console::error_1(&format!("Update: Received AgentDeletionFailure for {}: {}", agent_id, error).into());
+            // Optionally, update UI to show error message
+            // For now, just log the error
+            needs_refresh = false; // No state change, no refresh needed
+        },
+        // --- End New Agent Deletion Flow ---
     }
 
     // For now, if needs_refresh is true, add a NoOp command

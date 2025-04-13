@@ -172,6 +172,20 @@ pub fn execute_network_command(cmd: Command) {
                 }
             });
         },
+        Command::DeleteAgentApi { agent_id } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::delete_agent(agent_id).await {
+                    Ok(_) => dispatch_global_message(Message::AgentDeletionSuccess { agent_id }),
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Delete agent API call failed: {:?}", e).into());
+                        dispatch_global_message(Message::AgentDeletionFailure { 
+                            agent_id, 
+                            error: format!("Failed to delete agent: {:?}", e) 
+                        })
+                    }
+                }
+            });
+        },
         _ => web_sys::console::warn_1(&"Unexpected command type in execute_network_command".into())
     }
 }
