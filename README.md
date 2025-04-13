@@ -80,9 +80,16 @@ Visit http://localhost:8002 to see the UI.
 The repository is divided into three main areas:
 
 1. **Frontend (Rust + WebAssembly)**  
-   - Uses wasm-bindgen, web-sys, and js-sys for DOM/event handling.  
-   - Renders a "Dashboard" for quick agent management and a "Canvas Editor" for more advanced flows.  
-   - State, events, and UI logic are in modules (src/state.rs, src/ui/, src/components/).
+   - Uses wasm-bindgen, web-sys, and js-sys for DOM/event handling  
+   - Implements an "Elm-style" architecture where:
+     • User actions produce Messages (defined in messages.rs)
+     • An update function (update.rs) handles state changes
+     • Commands handle side effects (API calls, WebSocket actions)
+   - Renders three main views:
+     • Dashboard for quick agent management
+     • Canvas Editor for visual flow configuration
+     • Chat interface for real-time agent interaction
+   - State management via AppState (state.rs) as single source of truth
 
 2. **Backend (Python + FastAPI)**  
    - Provides both REST and WebSocket endpoints to handle streaming from OpenAI.  
@@ -100,28 +107,33 @@ The frontend uses an Elm-like message-passing architecture for state management:
 
 ### Message-Based State Updates
 
-All state modifications should follow these principles:
+All state modifications follow these principles:
 
 1. **Never Directly Mutate State**: Instead of directly modifying `APP_STATE`, dispatch a message that describes the change.
 
-2. **Define Messages in `messages.rs`**: Each possible state change should have a corresponding message type.
+2. **Messages Define Intent**: Each state change has a corresponding message type in `messages.rs`.
 
-3. **Handle State Logic in `update.rs`**: All state mutation logic belongs in the `update()` function.
+3. **Pure State Updates**: The `update()` function in `update.rs` handles state mutations and returns Commands for side effects.
 
-4. **Use the Global Dispatch Function**:
+4. **Commands Handle Side Effects**: Network calls, WebSocket actions, and other side effects are handled by command executors.
+
+5. **Use the Message/Command Pattern**:
    ```rust
-   // Good: Message-based state update
-   crate::state::dispatch_global_message(Message::UpdateNodePosition { 
-       node_id: id.clone(), 
-       x: new_x, 
-       y: new_y 
+   // Good: Message that may produce Commands
+   crate::state::dispatch_global_message(Message::SendThreadMessage { 
+       thread_id,
+       content: "Hello agent".to_string(),
+       client_id: Some("user-123".to_string())
    });
+   // This will:
+   // 1. Update thread state in update()
+   // 2. Return a Command::SendThreadMessage
+   // 3. command_executor handles the API call
    
-   // Bad: Direct state mutation - avoid this!
+   // Bad: Direct mutation or side effects
    APP_STATE.with(|state| {
        let mut state = state.borrow_mut();
-       state.nodes.insert(id.clone(), node);
-       state.draw_nodes();
+       state.send_message_to_thread(thread_id, message);  // Don't mix state and side effects!
    });
    ```
 
@@ -175,9 +187,17 @@ A simplified overview of notable top-level files and folders:
 
 • frontend/  
    ├── Cargo.toml, build.sh, build-debug.sh  
-   ├── src/ (Rust code: components, ui, state, canvas)  
-   ├── target/ (Build artifacts)  
-   └── www/ (Final WASM output & static files)
+   ├── src/  
+   │    ├── canvas/           (shapes, rendering logic)  
+   │    ├── components/       (dashboard, chat, canvas UI)  
+   │    ├── network/         (API client, WebSocket, topics)  
+   │    ├── state.rs         (global AppState)  
+   │    ├── messages.rs      (frontend events/actions)  
+   │    ├── update.rs        (state mutation logic)  
+   │    ├── command_executors.rs (side effects)  
+   │    └── lib.rs          (WASM entry point)  
+   ├── target/              (build artifacts)  
+   └── www/                 (WASM output & static files)
 
 • prerender/  
    ├── prerender.js, server.js (Playwright & Express)  
