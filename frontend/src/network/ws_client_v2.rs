@@ -6,7 +6,8 @@ use js_sys::Array;
 use serde_json::Value;
 use std::any::Any;
 
-use super::messages::{builders};
+use super::messages::{builders, handlers};
+use super::event_types::MessageType;
 
 /// Trait defining the WebSocket client interface
 pub trait IWsClient: Any {
@@ -267,15 +268,39 @@ impl WsClientV2 {
                     // Attempt to parse the message as JSON
                     match serde_json::from_str::<Value>(&msg_str) {
                         Ok(parsed_value) => {
-                             // --- Call on_message callback --- 
-                            if let Some(callback_rc) = &on_message_cb_clone {
-                                 if let Ok(mut callback) = callback_rc.try_borrow_mut() {
-                                    (*callback)(parsed_value);
-                                } else {
-                                    web_sys::console::error_1(&"Failed to borrow on_message callback".into());
+                            // Try to parse as a specific message type first
+                            match handlers::parse_message(&msg_str) {
+                                Ok(message) => {
+                                    // Handle connection-level messages here
+                                    match message.message_type() {
+                                        MessageType::Pong => {
+                                            // Silently handle pong - it's just keeping the connection alive
+                                            return;
+                                        }
+                                        MessageType::Error => {
+                                            web_sys::console::error_1(&format!("WebSocket error: {:?}", parsed_value).into());
+                                            return;
+                                        }
+                                        _ => {
+                                            // Forward all other messages to topic manager via callback
+                                            if let Some(callback_rc) = &on_message_cb_clone {
+                                                if let Ok(mut callback) = callback_rc.try_borrow_mut() {
+                                                    (*callback)(parsed_value);
+                                                } else {
+                                                    web_sys::console::error_1(&"Failed to borrow on_message callback".into());
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                            } else {
-                                web_sys::console::warn_1(&"Received message but no on_message callback is set".into());
+                                Err(_) => {
+                                    // If parsing as specific type failed, just forward the raw value
+                                    if let Some(callback_rc) = &on_message_cb_clone {
+                                        if let Ok(mut callback) = callback_rc.try_borrow_mut() {
+                                            (*callback)(parsed_value);
+                                        }
+                                    }
+                                }
                             }
                         }
                         Err(e) => {
