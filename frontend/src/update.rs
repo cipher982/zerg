@@ -1442,7 +1442,13 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             needs_refresh = true; // Assume agent list UI might need refresh
         },
         Message::ReceiveThreadHistory(messages) => {
-            web_sys::console::log_1(&format!("Update handler: Received thread history ({} messages)", messages.len()).into());
+            let system_messages_count = messages.iter().filter(|msg| msg.role == "system").count();
+            if system_messages_count > 0 {
+                web_sys::console::log_1(&format!("Thread history contains {} system messages which won't be displayed in the chat UI", system_messages_count).into());
+            }
+            web_sys::console::log_1(&format!("Update handler: Received thread history ({} messages, {} displayable)", 
+                messages.len(), messages.len() - system_messages_count).into());
+            
             // Use the correct field name: current_thread_id
             if let Some(active_thread_id) = state.current_thread_id {
                 // Store the received history messages in the correct cache: thread_messages
