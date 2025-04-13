@@ -79,21 +79,42 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
        
         Message::EditAgent(agent_id) => {
-            // agent_id will be in the format "agent-{numeric_id}"
-            state.selected_node_id = Some(agent_id.clone());
-            state.state_modified = true;
-           
-            // Show the agent modal for editing
-            let window = web_sys::window().expect("no global window exists");
-            let document = window.document().expect("should have a document");
-            if let Err(e) = crate::views::show_agent_modal(state, &document) {
-                web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
+            web_sys::console::log_1(&format!("Update: Handling EditAgent for agent_id: {}", agent_id).into());
+            // Find the node associated with this agent ID
+            let node_id_to_select = state.nodes.iter()
+                .find(|(_, node)| node.agent_id == Some(agent_id))
+                .map(|(id, _)| id.clone());
+
+            if let Some(node_id) = node_id_to_select {
+                web_sys::console::log_1(&format!("Found node_id {} for agent_id {}, selecting it.", node_id, agent_id).into());
+                state.selected_node_id = Some(node_id); // Select the found node_id
+                state.state_modified = true;
+
+                // Show the agent modal for editing
+                let window = web_sys::window().expect("no global window exists");
+                let document = window.document().expect("should have a document");
+                if let Err(e) = crate::views::show_agent_modal(state, &document) {
+                    web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
+                }
+            } else {
+                web_sys::console::error_1(&format!("EditAgent: Could not find a node for agent_id: {}", agent_id).into());
+                needs_refresh = false; // Don't refresh if we couldn't find the node
             }
         },
        
         Message::DeleteAgent(agent_id) => {
-            state.nodes.remove(&agent_id);
-            state.state_modified = true;
+            web_sys::console::log_1(&format!("Update: Handling DeleteAgent request for agent_id: {}", agent_id).into());
+            // TODO: This should trigger an API call to delete the agent.
+            // Example: commands.push(Command::DeleteAgentApi { agent_id });
+            // The actual removal from state.agents and state.nodes should happen
+            // in response to a success message (e.g., Message::AgentDeletionSuccess).
+
+            // Remove the incorrect direct node removal:
+            // state.nodes.remove(&agent_id); 
+            // state.state_modified = true;
+
+            web_sys::console::warn_1(&"TODO: Implement API call for agent deletion".into());
+            needs_refresh = false; // No immediate state change that requires refresh
         },
        
         Message::UpdateNodePosition { node_id, x, y } => {

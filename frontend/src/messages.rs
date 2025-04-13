@@ -21,8 +21,8 @@ pub enum Message {
         system_instructions: String,
         task_instructions: String,
     },
-    EditAgent(String),                   // Edit existing agent by ID
-    DeleteAgent(String),                 // Delete an agent by ID
+    EditAgent(u32),                   // Edit existing agent by ID
+    DeleteAgent(u32),                 // Delete an agent by ID
     
     // Canvas generation from agents
     GenerateCanvasFromAgents,           // Create nodes for agents that don't have one
