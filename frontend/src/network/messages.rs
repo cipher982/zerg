@@ -148,6 +148,14 @@ pub struct AgentStateMessage {
     pub message_id: Option<String>,
 }
 
+/// Unsubscribe success message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnsubscribeSuccessMessage {
+    #[serde(rename = "type")]
+    pub message_type: MessageType,
+    pub message_id: Option<String>,
+}
+
 /// Helper functions for creating messages
 pub mod builders {
     use super::*;
@@ -199,6 +207,7 @@ pub mod handlers {
             "stream_start" => Ok(Box::new(serde_json::from_str::<StreamStartMessage>(json)?)),
             "stream_chunk" => Ok(Box::new(serde_json::from_str::<StreamChunkMessage>(json)?)),
             "stream_end" => Ok(Box::new(serde_json::from_str::<StreamEndMessage>(json)?)),
+            "unsubscribe_success" => Ok(Box::new(serde_json::from_str::<UnsubscribeSuccessMessage>(json)?)),
             _ => {
                 console::warn_1(&format!("Unknown message type: {}", msg_type).into());
                 Err(serde_json::Error::custom(format!("Unknown message type: {}", msg_type)))
@@ -237,6 +246,7 @@ impl_ws_message!(
     PongMessage,
     SubscribeMessage,
     UnsubscribeMessage,
+    UnsubscribeSuccessMessage,
     ThreadHistoryMessage,
     StreamStartMessage,
     StreamChunkMessage,

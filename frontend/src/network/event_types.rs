@@ -15,6 +15,7 @@ pub enum MessageType {
     // Generic Subscriptions (NEW)
     Subscribe,
     Unsubscribe,
+    UnsubscribeSuccess,
     
     // Thread messages
     SubscribeThread,
@@ -78,6 +79,7 @@ impl fmt::Display for MessageType {
             MessageType::SystemStatus => "system_status",
             MessageType::AgentState => "agent_state",
             MessageType::Unknown => "unknown",
+            MessageType::UnsubscribeSuccess => "unsubscribe_success",
         };
         write!(f, "{}", s)
     }
