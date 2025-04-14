@@ -886,6 +886,12 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 state.thread_messages.remove(&thread_id); // Clear stale messages
                 state.active_streams.remove(&thread_id); // Clear stale streams
 
+                // Get the title of the selected thread to update the header
+                let selected_thread_title = state.threads.get(&thread_id)
+                    .expect("Selected thread not found in state")
+                    .title
+                    .clone();
+
                 // Return commands for side effects
                 commands.push(Command::SendMessage(Message::LoadThreadMessages(thread_id)));
                 
@@ -900,6 +906,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     current_thread_id,
                     thread_messages
                 )));
+
+                // Update the main thread title UI
+                commands.push(Command::SendMessage(Message::UpdateThreadTitleUI(selected_thread_title)));
 
                 // Critical fix: Initialize WebSocket subscription for the thread topic
                 // This ensures that the frontend will receive stream messages from the backend
