@@ -14,7 +14,6 @@ use crate::constants::{
     DEFAULT_AGENT_NAME, 
     DEFAULT_SYSTEM_INSTRUCTIONS, 
     DEFAULT_TASK_INSTRUCTIONS,
-    DEFAULT_MODEL,
     DEFAULT_THREAD_TITLE
 };
 use crate::network::api_client;
@@ -226,72 +225,11 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
         // Generate a random agent name
         let agent_name = format!("{} {}", DEFAULT_AGENT_NAME, (js_sys::Math::random() * 100.0).round());
         
-        // Create the agent data payload for the API
-        let agent_data = format!(
-            r#"{{
-                "name": "{}",
-                "system_instructions": "{}",
-                "task_instructions": "{}",
-                "model": "{}"
-            }}"#,
-            agent_name,
-            DEFAULT_SYSTEM_INSTRUCTIONS,
-            DEFAULT_TASK_INSTRUCTIONS,
-            DEFAULT_MODEL
-        );
-        
-        // Use async block to call the API
-        wasm_bindgen_futures::spawn_local(async move {
-            web_sys::console::log_1(&"Creating agent in API first".into());
-            
-            // Make the API call to create the agent
-            match crate::network::ApiClient::create_agent(&agent_data).await {
-                Ok(response) => {
-                    // Parse the response to get the agent ID
-                    if let Ok(json) = js_sys::JSON::parse(&response) {
-                        if let Some(id) = js_sys::Reflect::get(&json, &"id".into()).ok()
-                            .and_then(|v| v.as_f64()) 
-                        {
-                            let agent_id = id as u32;
-                            web_sys::console::log_1(&format!("Successfully created agent with ID: {}", agent_id).into());
-                            
-                            // Create default thread for the new agent
-                            match crate::network::ApiClient::create_thread(agent_id, DEFAULT_THREAD_TITLE).await {
-                                Ok(_) => {
-                                    web_sys::console::log_1(&format!("Created default thread for agent: {}", agent_id).into());
-                                },
-                                Err(e) => {
-                                    web_sys::console::error_1(&format!("Failed to create default thread: {:?}", e).into());
-                                }
-                            }
-                            
-                            // Now that we have the ID from API, add to state with the proper node ID format
-                            crate::state::dispatch_global_message(crate::messages::Message::CreateAgentWithDetails {
-                                name: agent_name,
-                                agent_id,
-                                system_instructions: DEFAULT_SYSTEM_INSTRUCTIONS.to_string(),
-                                task_instructions: DEFAULT_TASK_INSTRUCTIONS.to_string(),
-                            });
-                            
-                            // Refresh agents from API to update state
-                            crate::state::dispatch_global_message(crate::messages::Message::RefreshAgentsFromAPI);
-                            
-                            // Now explicitly refresh the dashboard to show the new agent
-                            if let Some(window) = web_sys::window() {
-                                if let Some(document) = window.document() {
-                                    // Refresh the dashboard UI
-                                    if let Err(e) = render_dashboard(&document) {
-                                        web_sys::console::error_1(&format!("Failed to refresh dashboard: {:?}", e).into());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                Err(e) => {
-                    web_sys::console::error_1(&format!("Failed to create agent in API: {:?}", e).into());
-                }
-            }
+        // Dispatch a message to request agent creation (do not access state directly)
+        crate::state::dispatch_global_message(crate::messages::Message::RequestCreateAgent {
+            name: agent_name,
+            system_instructions: DEFAULT_SYSTEM_INSTRUCTIONS.to_string(),
+            task_instructions: DEFAULT_TASK_INSTRUCTIONS.to_string(),
         });
     }) as Box<dyn FnMut()>);
     

@@ -222,6 +222,13 @@ pub enum Message {
         models: Vec<(String, String)>,
         default_model_id: String,
     },
+
+    // Agent creation message
+    RequestCreateAgent {
+        name: String,
+        system_instructions: String,
+        task_instructions: String,
+    },
 }
 
 /// Commands represent side effects that should be executed after state updates.
