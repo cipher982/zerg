@@ -25,6 +25,7 @@ dependencies = [
     "langsmith>=0.3.14",
     "langchain-openai>=0.3.8",
     "pytest-asyncio>=0.25.3",
+    "apscheduler>=3.11.0",
 ]
 
 [build-system]

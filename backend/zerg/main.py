@@ -14,6 +14,7 @@ from zerg.app.routers.agents import router as agents_router
 from zerg.app.routers.models import router as models_router
 from zerg.app.routers.threads import router as threads_router
 from zerg.app.routers.websocket import router as websocket_router
+from zerg.app.services.scheduler_service import scheduler_service
 
 # from zerg.app.websocket import EventType
 # from zerg.app.websocket import connected_clients
@@ -89,6 +90,26 @@ app.include_router(models_router)  # Add models router for /api/models
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on app startup."""
+    try:
+        await scheduler_service.start()
+        logger.info("Scheduler service initialized")
+    except Exception as e:
+        logger.error(f"Error starting scheduler service: {e}")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up services on app shutdown."""
+    try:
+        await scheduler_service.stop()
+        logger.info("Scheduler service stopped")
+    except Exception as e:
+        logger.error(f"Error stopping scheduler service: {e}")
 
 
 # Root endpoint

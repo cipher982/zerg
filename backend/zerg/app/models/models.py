@@ -25,6 +25,7 @@ class Agent(Base):
     config = Column(JSON, nullable=True)  # Additional configuration as JSON
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    run_on_schedule = Column(Boolean, default=False, nullable=False)
 
     # Define relationship with AgentMessage
     messages = relationship("AgentMessage", back_populates="agent", cascade="all, delete-orphan")
