@@ -178,6 +178,7 @@ pub fn start() -> Result<(), JsValue> {
 
 // Create tab navigation for switching between dashboard and canvas
 fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
+    web_sys::console::log_1(&"create_tab_navigation called".into());
     // Create a tabs container
     let tabs_container = document.create_element("div")?;
     tabs_container.set_id("tabs-container");
@@ -202,20 +203,8 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     // Set up dashboard tab click handler
     {
         let dashboard_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
-            // Use the new dispatch method with ToggleView message
-            let commands = state::APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.dispatch(messages::Message::ToggleView(storage::ActiveView::Dashboard))
-            });
-            
-            // Execute commands
-            for cmd in commands {
-                match cmd {
-                    messages::Command::SendMessage(msg) => dispatch_global_message(msg),
-                    messages::Command::NoOp => {},
-                    _ => {},  // Ignore other commands in this context
-                }
-            }
+            web_sys::console::log_1(&"Dashboard tab clicked".into());
+            dispatch_global_message(messages::Message::ToggleView(storage::ActiveView::Dashboard));
         }) as Box<dyn FnMut(_)>);
         
         dashboard_tab.add_event_listener_with_callback("click", dashboard_click.as_ref().unchecked_ref())?;
@@ -225,20 +214,8 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     // Set up canvas tab click handler
     {
         let canvas_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
-            // Use the new dispatch method with ToggleView message
-            let commands = state::APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.dispatch(messages::Message::ToggleView(storage::ActiveView::Canvas))
-            });
-            
-            // Execute commands
-            for cmd in commands {
-                match cmd {
-                    messages::Command::SendMessage(msg) => dispatch_global_message(msg),
-                    messages::Command::NoOp => {},
-                    _ => {},  // Ignore other commands in this context
-                }
-            }
+            web_sys::console::log_1(&"Canvas tab clicked".into());
+            dispatch_global_message(messages::Message::ToggleView(storage::ActiveView::Canvas));
         }) as Box<dyn FnMut(_)>);
         
         canvas_tab.add_event_listener_with_callback("click", canvas_click.as_ref().unchecked_ref())?;
@@ -249,6 +226,7 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     let header = document.get_element_by_id("header")
         .ok_or_else(|| JsValue::from_str("Header not found"))?;
     header.append_child(&tabs_container)?;
+    web_sys::console::log_1(&"Tabs added to DOM".into());
     
     Ok(())
 }
