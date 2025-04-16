@@ -123,6 +123,7 @@ body {
     flex: 1;
     position: relative;
     overflow: hidden;
+    /* background-color: #2a2a3a; */
 }
 
 /* UI Panel */

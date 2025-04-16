@@ -1,6 +1,7 @@
 use web_sys::CanvasRenderingContext2d;
 use crate::models::{Node, NodeType, ApiAgent};
 use crate::state::AppState;
+use crate::constants::*;
 use super::shapes;
 use js_sys::Date;
 use std::collections::HashMap;
@@ -113,24 +114,24 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
                         // Pulsing animation using time
                         let timestamp = Date::now() as f64;
                         let pulse = (timestamp / 500.0).sin() * 0.5 + 0.5; // 0 to 1 pulsing
-                        let pulse_color = format!("rgba(46, 204, 113, {})", 0.5 + pulse * 0.5); // Green with pulsing
+                        let pulse_color = format!("rgba({}, {})", NODE_BORDER_AGENT_PROCESSING_BASE, 0.5 + pulse * 0.5);
                         context.set_stroke_style_str(&pulse_color);
                     },
                     "error" => {
-                        context.set_stroke_style_str("rgba(231, 76, 60, 0.8)"); // Red for error
+                        context.set_stroke_style_str(NODE_BORDER_AGENT_ERROR);
                     },
                     "scheduled" => {
-                        context.set_stroke_style_str("rgba(52, 152, 219, 0.8)"); // Blue for scheduled
+                        context.set_stroke_style_str(NODE_BORDER_AGENT_SCHEDULED);
                     },
                     "paused" => {
-                        context.set_stroke_style_str("rgba(243, 156, 18, 0.8)"); // Orange for paused
+                        context.set_stroke_style_str(NODE_BORDER_AGENT_PAUSED);
                     },
                     _ => { // idle or other
-                        context.set_stroke_style_str("rgba(149, 165, 166, 0.8)"); // Gray for idle
+                        context.set_stroke_style_str(NODE_BORDER_AGENT_IDLE);
                     }
                 }
             } else {
-                context.set_stroke_style_str("rgba(149, 165, 166, 0.8)"); // Gray by default (idle)
+                context.set_stroke_style_str(NODE_BORDER_AGENT_IDLE);
             }
             
             context.set_line_width(2.0);
@@ -138,7 +139,7 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             context.stroke();
             
             // Fill with semi-transparent background
-            context.set_fill_style_str("rgba(255, 255, 255, 0.1)");
+            context.set_fill_style_str(NODE_FILL_AGENT_IDENTITY);
             context.fill();
             
             context.restore();
