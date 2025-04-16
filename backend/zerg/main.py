@@ -11,6 +11,7 @@ from zerg.app.database import Base
 # Import our application modules directly from their source
 from zerg.app.database import engine
 from zerg.app.routers.agents import router as agents_router
+from zerg.app.routers.models import router as models_router
 from zerg.app.routers.threads import router as threads_router
 from zerg.app.routers.websocket import router as websocket_router
 
@@ -84,16 +85,10 @@ async def options_handler(rest_of_path: str):
 app.include_router(agents_router)  # Already has /api/agents prefix
 app.include_router(threads_router)  # Already has /api/threads prefix
 app.include_router(websocket_router)  # Already has /api prefix
+app.include_router(models_router)  # Add models router for /api/models
 
 # Set up logging
 logger = logging.getLogger(__name__)
-
-
-# Add explicit models endpoint that the frontend is trying to access
-@app.get("/api/models")
-async def get_models():
-    """Return available models."""
-    return {"models": ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]}
 
 
 # Root endpoint
