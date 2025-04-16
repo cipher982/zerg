@@ -216,6 +216,12 @@ pub enum Message {
 
     // Add the DeleteAgentApi command inside the enum
     DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion
+
+    // Model management
+    SetAvailableModels {
+        models: Vec<(String, String)>,
+        default_model_id: String,
+    },
 }
 
 /// Commands represent side effects that should be executed after state updates.
