@@ -25,14 +25,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
     match msg {
         Message::ToggleView(view) => {
-            web_sys::console::log_1(&format!("Handling ToggleView message, switching to: {:?}", view).into());
             state.active_view = view;
             state.state_modified = true;
-            web_sys::console::log_1(&"State updated with new view".into());
             
             // Add a command to refresh the UI after view change
             commands.push(Command::UpdateUI(Box::new(move || {
-                web_sys::console::log_1(&"Executing UI refresh after view change".into());
                 if let Err(e) = AppState::refresh_ui_after_state_change() {
                     web_sys::console::error_1(&format!("Failed to refresh UI after view change: {:?}", e).into());
                 }
