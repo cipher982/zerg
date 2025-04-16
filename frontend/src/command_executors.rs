@@ -127,23 +127,36 @@ pub fn execute_network_command(cmd: Command) {
     match cmd {
         Command::NetworkCall { endpoint, method, body, on_success, on_error } => {
             wasm_bindgen_futures::spawn_local(async move {
+                // Ensure endpoint is absolute
+                let endpoint_abs = if endpoint.starts_with("http") {
+                    endpoint
+                } else {
+                    match crate::network::get_api_base_url() {
+                        Ok(base) => format!("{}{}", base, endpoint),
+                        Err(e) => {
+                            web_sys::console::error_1(&format!("API base URL error: {}", e).into());
+                            dispatch_global_message(*on_error);
+                            return;
+                        }
+                    }
+                };
                 let result = match method.as_str() {
-                    "GET" => ApiClient::fetch_json(&endpoint, "GET", None).await,
+                    "GET" => ApiClient::fetch_json(&endpoint_abs, "GET", None).await,
                     "POST" => {
                         if let Some(data) = body {
-                            ApiClient::fetch_json(&endpoint, "POST", Some(&data)).await
+                            ApiClient::fetch_json(&endpoint_abs, "POST", Some(&data)).await
                         } else {
                             Err("POST request requires body data".into())
                         }
                     },
                     "PUT" => {
                         if let Some(data) = body {
-                            ApiClient::fetch_json(&endpoint, "PUT", Some(&data)).await
+                            ApiClient::fetch_json(&endpoint_abs, "PUT", Some(&data)).await
                         } else {
                             Err("PUT request requires body data".into())
                         }
                     },
-                    "DELETE" => ApiClient::fetch_json(&endpoint, "DELETE", None).await,
+                    "DELETE" => ApiClient::fetch_json(&endpoint_abs, "DELETE", None).await,
                     _ => Err(format!("Unsupported HTTP method: {}", method).into()),
                 };
                 

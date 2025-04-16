@@ -4,9 +4,6 @@ import logging
 import os
 from typing import List
 
-# from zerg.app.websocket import EventType
-# from zerg.app.websocket import broadcast_event
-# dotenv
 from dotenv import load_dotenv
 from fastapi import APIRouter
 from fastapi import Depends
