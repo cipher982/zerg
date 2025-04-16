@@ -625,6 +625,7 @@ impl AppState {
 
     // Separate method to refresh UI after state changes
     pub fn refresh_ui_after_state_change() -> Result<(), JsValue> {
+        web_sys::console::log_1(&"refresh_ui_after_state_change called".into());
         // Refresh both canvas and dashboard views to ensure all UI elements are in sync
         let window = web_sys::window().ok_or(JsValue::from_str("No window"))?;
         let document = window.document().ok_or(JsValue::from_str("No document"))?;
@@ -632,10 +633,12 @@ impl AppState {
         // Get the active view once to avoid multiple borrows
         let active_view = APP_STATE.with(|state| {
             let state = state.borrow();
+            web_sys::console::log_1(&format!("Current active_view is: {:?}", state.active_view).into());
             state.active_view.clone() // Clone to avoid borrowing issues
         });
         
         // First render the active view to ensure proper display of containers
+        web_sys::console::log_1(&"Calling render_active_view_by_type".into());
         crate::views::render_active_view_by_type(&active_view, &document)?;
         
         // Check if we need to refresh canvas in a separate borrow scope
@@ -645,6 +648,7 @@ impl AppState {
         });
         
         if has_canvas {
+            web_sys::console::log_1(&"Refreshing canvas".into());
             // Refresh canvas in a separate borrow scope
             APP_STATE.with(|state| {
                 let state = state.borrow_mut();
@@ -654,6 +658,7 @@ impl AppState {
         
         // Always refresh the dashboard to ensure it has the latest data
         crate::components::dashboard::refresh_dashboard(&document)?;
+        web_sys::console::log_1(&"UI refresh complete".into());
         
         Ok(())
     }

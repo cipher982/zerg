@@ -279,20 +279,49 @@ pub fn show_agent_modal(state: &AppState, document: &Document) -> Result<(), JsV
 // Render the appropriate view based on the explicit view type
 // This avoids requiring a reference to AppState, preventing potential borrow issues
 pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -> Result<(), JsValue> {
+    web_sys::console::log_1(&format!("render_active_view_by_type called for view: {:?}", view_type).into());
     // First hide all view containers
     let containers = ["dashboard-container", "canvas-container", "chat-view-container"];
     for container_id in containers.iter() {
         if let Some(container) = document.get_element_by_id(container_id) {
             container.set_attribute("style", "display: none;")?;
+            web_sys::console::log_1(&format!("Hidden container: {}", container_id).into());
+        } else {
+            web_sys::console::warn_1(&format!("Container not found: {}", container_id).into());
         }
     }
 
     match view_type {
-        ActiveView::Dashboard => render_dashboard_view(&AppState::new(), document)?,
+        ActiveView::Dashboard => {
+            web_sys::console::log_1(&"Rendering Dashboard view".into());
+            // Create dashboard container if needed
+            if document.get_element_by_id("dashboard-container").is_none() {
+                web_sys::console::log_1(&"Creating new dashboard container".into());
+                let dashboard_container = document.create_element("div")?;
+                dashboard_container.set_id("dashboard-container");
+                dashboard_container.set_class_name("dashboard-container");
+                dashboard_container.set_attribute("style", "display: block;")?;
+                
+                let app_container = document
+                    .get_element_by_id("app-container")
+                    .ok_or(JsValue::from_str("Could not find app-container"))?;
+                
+                app_container.append_child(&dashboard_container)?;
+                
+                // Create dashboard element
+                let dashboard = document.create_element("div")?;
+                dashboard.set_id("dashboard");
+                dashboard.set_class_name("dashboard");
+                dashboard_container.append_child(&dashboard)?;
+            }
+            render_dashboard_view(&AppState::new(), document)?
+        },
         ActiveView::Canvas => {
+            web_sys::console::log_1(&"Rendering Canvas view".into());
             // For canvas, we'll just toggle the visibility without relying on state
             // Create canvas container if needed
             if document.get_element_by_id("canvas-container").is_none() {
+                web_sys::console::log_1(&"Creating new canvas container".into());
                 let canvas_container = document.create_element("div")?;
                 canvas_container.set_id("canvas-container");
                 canvas_container.set_class_name("canvas-container");
@@ -312,6 +341,7 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
                 // Set up the canvas once it's created
                 crate::components::canvas_editor::setup_canvas(document)?;
             } else {
+                web_sys::console::log_1(&"Showing existing canvas container".into());
                 // Just show the existing canvas container
                 if let Some(canvas) = document.get_element_by_id("canvas-container") {
                     canvas.set_attribute("style", "display: block;")?;
@@ -331,6 +361,7 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
             if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
                 canvas_tab.set_class_name("tab-button active");
             }
+            web_sys::console::log_1(&"Canvas view setup complete".into());
         },
         ActiveView::ChatView => {
             // Setup the chat view if needed
