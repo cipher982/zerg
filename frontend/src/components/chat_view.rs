@@ -146,9 +146,20 @@ pub fn show_chat_view(document: &Document, agent_id: u32) -> Result<(), JsValue>
         chat_view.set_attribute("style", "display: flex;")?;
     }
     
-    // IMPORTANT: Instead of directly dispatching messages here, which would cause
-    // a recursive borrow of APP_STATE, use setTimeout to schedule these dispatches
-    // to occur after the current message handler has completed
+    // Instead of accessing APP_STATE, dispatch a message to update the thread list after the DOM is ready
+    let agent_id_clone = agent_id;
+    let update_thread_list = Closure::once(Box::new(move || {
+        dispatch_global_message(Message::RequestThreadListUpdate(agent_id_clone));
+    }) as Box<dyn FnOnce()>);
+    web_sys::window()
+        .expect("no global window exists")
+        .set_timeout_with_callback_and_timeout_and_arguments_0(
+            update_thread_list.as_ref().unchecked_ref(),
+            50 // Small delay to ensure DOM is ready
+        )?;
+    update_thread_list.forget();
+
+    // Schedule the dispatches to occur after the current function returns
     let agent_id_clone = agent_id;
     let load_agent_info = Closure::once(Box::new(move || {
         dispatch_global_message(Message::LoadAgentInfo(agent_id_clone));
@@ -159,7 +170,6 @@ pub fn show_chat_view(document: &Document, agent_id: u32) -> Result<(), JsValue>
         dispatch_global_message(Message::LoadThreads(agent_id_clone));
     }) as Box<dyn FnOnce()>);
     
-    // Schedule the dispatches to occur after the current function returns
     web_sys::window()
         .expect("no global window exists")
         .set_timeout_with_callback_and_timeout_and_arguments_0(

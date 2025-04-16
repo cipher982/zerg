@@ -206,6 +206,7 @@ pub enum Message {
     RequestSendMessage(String),            // Request to send message
     RequestUpdateThreadTitle(String),      // Request to update thread title
     RequestThreadTitleUpdate,              // Request to refresh thread title UI
+    RequestThreadListUpdate(u32),          // Request to update thread list for agent
     UpdateThreadList(Vec<ApiThread>, Option<u32>, HashMap<u32, Vec<ApiThreadMessage>>),  // Update thread list UI
     UpdateConversation(Vec<ApiThreadMessage>),  // Update conversation UI
     UpdateThreadTitleUI(String),           // Update thread title UI with provided title

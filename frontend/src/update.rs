@@ -1553,6 +1553,23 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             });
             needs_refresh = false;
         },
+
+        Message::RequestThreadListUpdate(agent_id) => {
+            // Filter threads for the given agent_id
+            let threads: Vec<ApiThread> = state.threads.values()
+                .filter(|t| t.agent_id == agent_id)
+                .cloned()
+                .collect();
+            let current_thread_id = state.current_thread_id;
+            let thread_messages = state.thread_messages.clone();
+            commands.push(Command::UpdateUI(Box::new(move || {
+                dispatch_global_message(Message::UpdateThreadList(
+                    threads,
+                    current_thread_id,
+                    thread_messages,
+                ));
+            })));
+        },
     }
 
     // For now, if needs_refresh is true, add a NoOp command
