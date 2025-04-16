@@ -91,6 +91,7 @@ pub struct AppState {
     pub ws_client: Rc<RefCell<WsClientV2>>,
     pub topic_manager: Rc<RefCell<TopicManager>>,
     pub streaming_threads: HashSet<u32>,
+    pub current_agent_id: Option<u32>,
 }
 
 impl AppState {
@@ -145,6 +146,7 @@ impl AppState {
             ws_client: ws_client_rc,
             topic_manager: topic_manager_rc,
             streaming_threads: HashSet::new(),
+            current_agent_id: None,
         }
     }
 
@@ -893,19 +895,20 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             // Group commands by type and delegate to appropriate executor
             cmd @ Command::FetchThreads(_) |
             cmd @ Command::FetchThreadMessages(_) |
-            cmd @ Command::LoadAgentInfo(_) => crate::command_executors::execute_fetch_command(cmd),
+            cmd @ Command::LoadAgentInfo(_) |
+            cmd @ Command::FetchAgents => crate::command_executors::execute_fetch_command(cmd),
             
             cmd @ Command::CreateThread { .. } |
             cmd @ Command::SendThreadMessage { .. } |
             cmd @ Command::UpdateThreadTitle { .. } |
             cmd @ Command::RunThread(_) => crate::command_executors::execute_thread_command(cmd),
             
+            // Group network calls together with consistent cmd binding
             cmd @ Command::NetworkCall { .. } |
-            cmd @ Command::UpdateAgent { .. } => crate::command_executors::execute_network_command(cmd),
+            cmd @ Command::UpdateAgent { .. } |
+            cmd @ Command::DeleteAgentApi { .. } => crate::command_executors::execute_network_command(cmd),
             
             cmd @ Command::WebSocketAction { .. } => crate::command_executors::execute_websocket_command(cmd),
-            
-            Command::DeleteAgentApi { agent_id } => crate::command_executors::execute_network_command(cmd),
             
             Command::NoOp => {},
         }

@@ -160,6 +160,7 @@ pub enum Message {
     
     // Reload agents from the API to refresh state
     RefreshAgentsFromAPI,
+    AgentsRefreshed(Vec<ApiAgent>),    // Agents have been refreshed from API
     
     // Animation related
     AnimationTick,
@@ -300,6 +301,8 @@ pub enum Command {
     
     // Add the DeleteAgentApi command inside the enum
     DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion
+
+    FetchAgents,                     // Command to fetch agents from API
 }
 
 impl Command {
