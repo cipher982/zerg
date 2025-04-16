@@ -10,8 +10,7 @@ pub struct ApiClient;
 impl ApiClient {
     // Get the base URL for API calls
     fn api_base_url() -> String {
-        // In a production environment, this might be read from configuration
-        super::get_api_base_url().unwrap_or_else(|_| "http://localhost:8001".to_string())
+        super::get_api_base_url().expect("API base URL must be set (no fallback allowed)")
     }
 
     // Get available models

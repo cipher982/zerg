@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Load .env if it exists
+if [ -f .env ]; then
+  export $(grep -v '^#' .env | xargs)
+fi
+
 # Build with debug profile and source maps
 RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir www
 
