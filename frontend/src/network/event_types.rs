@@ -34,6 +34,9 @@ pub enum MessageType {
     // Agent messages
     AgentState,
     
+    // Model messages
+    Models,
+    
     // Special cases
     Unknown,
 }
@@ -80,6 +83,7 @@ impl fmt::Display for MessageType {
             MessageType::AgentState => "agent_state",
             MessageType::Unknown => "unknown",
             MessageType::UnsubscribeSuccess => "unsubscribe_success",
+            MessageType::Models => "models",
         };
         write!(f, "{}", s)
     }

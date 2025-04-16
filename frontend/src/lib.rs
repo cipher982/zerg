@@ -2,23 +2,27 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{window, Document};
-use network::ui_updates; // Added import
+use network::ui_updates;
 use crate::state::dispatch_global_message;
 
+// Import modules
 mod models;
 mod state;
 mod canvas;
 mod ui;
-// Removed: mod ui_old; // Temporarily commented out to confirm everything is refactored
 mod network;
-pub mod storage;
+mod storage;
 mod components;
-mod messages;  // New module for Message enum
-mod update;    // New module for update function
-mod views;     // New module for view functions
-mod constants; // Module for constants and default values
-pub mod thread_handlers; // Add the new module
-pub mod command_executors;  // Add this line
+mod messages;
+mod update;
+mod views;
+mod constants;
+mod thread_handlers;
+mod command_executors;
+mod models_config;
+
+#[macro_use]
+extern crate lazy_static;
 
 // Main entry point for the WASM application
 #[wasm_bindgen(start)]
@@ -85,8 +89,6 @@ pub fn start() -> Result<(), JsValue> {
         }
     } // Mutable borrow of ws_client ends here
     
-    // OLD: network::setup_websocket()?;
-    
     // Create the tab navigation
     create_tab_navigation(&document)?;
     
@@ -110,8 +112,35 @@ pub fn start() -> Result<(), JsValue> {
         }
     }
     
-    // Initialize loading of both legacy data and new agent data
+    // Initialize loading of both models, legacy data and new agent data
     spawn_local(async {
+        // Fetch available models from API
+        let models_json = match network::api_client::ApiClient::fetch_available_models().await {
+            Ok(json) => json,
+            Err(e) => {
+                web_sys::console::error_1(&format!("Failed to fetch models: {:?}", e).into());
+                return;
+            }
+        };
+        let models: Vec<crate::models_config::ModelConfig> = match serde_json::from_str(&models_json) {
+            Ok(m) => m,
+            Err(e) => {
+                web_sys::console::error_1(&format!("Failed to parse models: {:?}", e).into());
+                return;
+            }
+        };
+        let default_model = models.iter().find(|m| m.is_default);
+        if let Some(default) = default_model {
+            let model_pairs = models.iter().map(|m| (m.id.clone(), m.display_name.clone())).collect();
+            dispatch_global_message(crate::messages::Message::SetAvailableModels {
+                models: model_pairs,
+                default_model_id: default.id.clone(),
+            });
+        } else {
+            web_sys::console::error_1(&"No default model found in backend response".into());
+            return;
+        }
+        
         // Load the state (this will also try to load workflows and agents)
         state::APP_STATE.with(|s| {
             let mut app_state = s.borrow_mut();
@@ -231,9 +260,6 @@ fn setup_auto_save_timer(interval_ms: i32) -> Result<(), JsValue> {
             let mut state = state.borrow_mut();
             if let Err(e) = state.save_if_modified() {
                 web_sys::console::warn_1(&format!("Auto-save failed: {:?}", e).into());
-            } else {
-                // Optional: log successful saves for debugging
-                // web_sys::console::log_1(&"Auto-saved state".into());
             }
         });
     }) as Box<dyn FnMut()>);

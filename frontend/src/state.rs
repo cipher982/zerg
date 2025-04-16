@@ -12,7 +12,6 @@ use crate::constants::{
     DEFAULT_NODE_WIDTH,
     DEFAULT_NODE_HEIGHT,
     DEFAULT_AGENT_NODE_COLOR,
-    DEFAULT_MODEL
 };
 use crate::components::chat;
 use js_sys::Date;
@@ -23,6 +22,7 @@ use wasm_bindgen_futures;
 use serde_json;
 use crate::update;
 use crate::command_executors;
+use crate::models_config;
 
 // Store global application state
 pub struct AppState {
@@ -126,12 +126,8 @@ impl AppState {
             auto_fit: true,
             latest_user_input_id: None,
             message_id_to_node_id: HashMap::new(),
-            selected_model: DEFAULT_MODEL.to_string(),
-            available_models: vec![
-                ("gpt-4o".to_string(), "GPT-4o".to_string()),
-                ("gpt-4-turbo".to_string(), "GPT-4 Turbo".to_string()),
-                ("gpt-3.5-turbo".to_string(), "GPT-3.5 Turbo".to_string()),
-            ],
+            selected_model: String::new(),
+            available_models: Vec::new(), // Start with empty models, will fetch from API
             state_modified: false,
             selected_node_id: None,
             is_dragging_agent: false,

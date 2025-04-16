@@ -10,7 +10,6 @@ use crate::{
         DEFAULT_NODE_WIDTH,
         DEFAULT_NODE_HEIGHT,
         DEFAULT_AGENT_NODE_COLOR,
-        DEFAULT_MODEL
     },
     network::ws_client_v2::send_thread_message,
     storage::ActiveView,
@@ -326,7 +325,7 @@ pub fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
                 name: name_value,
                 system_instructions,
                 task_instructions,
-                model: DEFAULT_MODEL.to_string(),
+                model: String::new(),
             });
             
             // Show a visual feedback that the save was successful

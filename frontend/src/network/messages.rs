@@ -156,6 +156,15 @@ pub struct UnsubscribeSuccessMessage {
     pub message_id: Option<String>,
 }
 
+/// Message containing available models
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelListMessage {
+    #[serde(rename = "type")]
+    pub message_type: MessageType,
+    pub message_id: Option<String>,
+    pub models: Vec<serde_json::Value>,
+}
+
 /// Helper functions for creating messages
 pub mod builders {
     use super::*;
@@ -181,6 +190,13 @@ pub mod builders {
             message_type: MessageType::Unsubscribe,
             message_id: Some(Uuid::new_v4().to_string()),
             topics,
+        }
+    }
+    
+    pub fn create_models_request() -> BaseMessage {
+        BaseMessage {
+            message_type: MessageType::Models,
+            message_id: Some(Uuid::new_v4().to_string()),
         }
     }
 }

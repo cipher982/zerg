@@ -1520,6 +1520,33 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             needs_refresh = false; // No state change, no refresh needed
         },
         // --- End New Agent Deletion Flow ---
+
+        // Model management
+        Message::SetAvailableModels { models, default_model_id } => {
+            state.available_models = models;
+            state.selected_model = default_model_id;
+            state.state_modified = true;
+        },
+
+        Message::RequestCreateAgent { name, system_instructions, task_instructions } => {
+            // Use the selected model from state
+            let model = state.selected_model.clone();
+            let agent_payload = serde_json::json!({
+                "name": name,
+                "system_instructions": system_instructions,
+                "task_instructions": task_instructions,
+                "model": model
+            });
+            let agent_data = agent_payload.to_string();
+            commands.push(Command::NetworkCall {
+                endpoint: "/api/agents".to_string(),
+                method: "POST".to_string(),
+                body: Some(agent_data),
+                on_success: Box::new(Message::RefreshAgentsFromAPI),
+                on_error: Box::new(Message::RefreshAgentsFromAPI), // Could add error handling message
+            });
+            needs_refresh = false;
+        },
     }
 
     // For now, if needs_refresh is true, add a NoOp command
