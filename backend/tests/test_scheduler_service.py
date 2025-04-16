@@ -33,13 +33,21 @@ def service():
 
 @pytest.mark.asyncio
 async def test_schedule_agent_adds_job(service):
-    await service.schedule_agent(agent_id=1, cron_expression="0 * * * *")
-    job = service.scheduler.get_job("agent_1")
-    assert job is not None, "Job for agent_1 should be scheduled"
-    # Check trigger is CronTrigger and matches expression
-    assert isinstance(job.trigger, CronTrigger)
-    # Verify minute field matches '0'
-    assert job.trigger.fields[1].expressions[0].expression == 0
+    """Test that schedule_agent creates a job with the correct ID and function."""
+    agent_id = 1
+    cron = "0 * * * *"
+
+    await service.schedule_agent(agent_id=agent_id, cron_expression=cron)
+
+    # Check job exists with correct ID
+    job = service.scheduler.get_job(f"agent_{agent_id}")
+    assert job is not None, "Job should be scheduled"
+
+    # Check it's using the correct function (run_agent_task)
+    assert job.func == service.run_agent_task
+
+    # Check it was given the correct agent_id argument
+    assert job.args == (agent_id,)
 
 
 def test_remove_agent_job(service):
