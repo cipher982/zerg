@@ -14,19 +14,9 @@ pub use topic_manager::TopicManager;
 
 // Helper function to get API base URL
 pub(crate) fn get_api_base_url() -> Result<String, &'static str> {
-    #[cfg(debug_assertions)]
-    {
-        Ok("http://localhost:8001".to_string())
-    }
-    #[cfg(not(debug_assertions))]
-    {
-        if let Some(window) = web_sys::window() {
-            if let Ok(location) = window.location().href() {
-                let url = url::Url::parse(&location)
-                    .map_err(|_| "Failed to parse window location")?;
-                return Ok(format!("{}://{}", url.scheme(), url.host_str().unwrap_or("localhost")));
-            }
-        }
-        Err("Could not determine API base URL")
+    if let Some(url) = option_env!("API_BASE_URL") {
+        Ok(url.to_string())
+    } else {
+        Err("API_BASE_URL environment variable is not set")
     }
 } 

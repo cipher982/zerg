@@ -30,6 +30,9 @@ pub fn start() -> Result<(), JsValue> {
     // Initialize better panic messages
     console_error_panic_hook::set_once();
 
+    // Log the API base URL for debugging
+    web_sys::console::log_1(&format!("API_BASE_URL at build: {:?}", option_env!("API_BASE_URL")).into());
+
     // Get the document
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
