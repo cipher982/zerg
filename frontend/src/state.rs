@@ -12,6 +12,7 @@ use crate::constants::{
     DEFAULT_NODE_WIDTH,
     DEFAULT_NODE_HEIGHT,
     DEFAULT_AGENT_NODE_COLOR,
+    CANVAS_BACKGROUND_COLOR,
 };
 use crate::components::chat;
 use js_sys::Date;
@@ -265,8 +266,8 @@ impl AppState {
     
     pub fn draw_nodes(&self) {
         if let (Some(context), Some(canvas)) = (&self.context, &self.canvas) {
-            // Clear the canvas with a slight off-white color for better visibility
-            context.set_fill_style_str("#f5f5f5");
+            // Clear the canvas with our themed background color
+            context.set_fill_style_str(crate::constants::CANVAS_BACKGROUND_COLOR);
             context.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
             
             // Apply transformations for viewport

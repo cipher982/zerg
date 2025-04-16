@@ -1,11 +1,12 @@
 use web_sys::CanvasRenderingContext2d;
 use crate::models::Node;
+use crate::constants::*;
 
 pub fn draw_rounded_rect(context: &CanvasRenderingContext2d, node: &Node) {
     context.save();
     
     // Shadow
-    context.set_shadow_color("rgba(0, 0, 0, 0.1)");
+    context.set_shadow_color(SHADOW_COLOR);
     context.set_shadow_blur(10.0);
     context.set_shadow_offset_x(3.0);
     context.set_shadow_offset_y(3.0);
@@ -20,11 +21,11 @@ pub fn draw_rounded_rect(context: &CanvasRenderingContext2d, node: &Node) {
     // Border
     context.set_shadow_color("rgba(0, 0, 0, 0)"); // Remove shadow for border
     context.set_line_width(1.0);
-    context.set_stroke_style_str("#000000");
+    context.set_stroke_style_str(NODE_BORDER_DEFAULT);
     
     if node.is_selected {
         // Add highlights for selected node
-        context.set_stroke_style_str("#3498db"); // Blue highlight 
+        context.set_stroke_style_str(NODE_BORDER_SELECTED);
         context.set_line_width(2.0);
     }
     
@@ -48,7 +49,7 @@ pub fn draw_arrow(context: &CanvasRenderingContext2d, x: f64, y: f64, dx: f64, d
         x - head_len * f64::cos(angle + std::f64::consts::PI / 6.0),
         y - head_len * f64::sin(angle + std::f64::consts::PI / 6.0)
     );
-    context.set_stroke_style_str("#95a5a6");
+    context.set_stroke_style_str(CONNECTION_LINE_COLOR);
     context.set_line_width(2.0);
     context.stroke();
 }
@@ -116,7 +117,7 @@ pub fn draw_node_text(context: &CanvasRenderingContext2d, node: &Node) {
     
     // Text configuration
     context.set_font("14px Arial");
-    context.set_fill_style_str("#333333");
+    context.set_fill_style_str(NODE_TEXT_COLOR);
     context.set_text_align("left");
     context.set_text_baseline("top");
     
