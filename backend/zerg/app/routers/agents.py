@@ -61,6 +61,7 @@ async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
         model=agent.model,
         schedule=agent.schedule,
         config=agent.config,
+        run_on_schedule=agent.run_on_schedule,
     )
     return new_agent
 
@@ -99,6 +100,7 @@ async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(
         status=agent.status,
         schedule=agent.schedule,
         config=agent.config,
+        run_on_schedule=agent.run_on_schedule,
     )
     if db_agent is None:
         raise HTTPException(status_code=404, detail="Agent not found")

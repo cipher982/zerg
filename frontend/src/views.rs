@@ -284,9 +284,6 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
     for container_id in containers.iter() {
         if let Some(container) = document.get_element_by_id(container_id) {
             container.set_attribute("style", "display: none;")?;
-        } else {
-            // Only log if a main container is missing
-            web_sys::console::warn_1(&format!("Container not found: {}", container_id).into());
         }
     }
 

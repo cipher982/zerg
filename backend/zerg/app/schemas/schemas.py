@@ -15,6 +15,7 @@ class AgentBase(BaseModel):
     model: str
     schedule: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
+    run_on_schedule: Optional[bool] = False
 
 
 class AgentCreate(AgentBase):
@@ -29,6 +30,7 @@ class AgentUpdate(BaseModel):
     status: Optional[str] = None
     schedule: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
+    run_on_schedule: Optional[bool] = False
 
 
 class AgentMessage(BaseModel):
@@ -101,6 +103,7 @@ class Agent(AgentBase):
     created_at: datetime
     updated_at: datetime
     messages: List[AgentMessage] = []
+    run_on_schedule: Optional[bool] = False
 
     class Config:
         from_attributes = True
