@@ -179,3 +179,4 @@ scratch/
 backend/data
 .DS_Store
 .cursorrules
+.cursor/
