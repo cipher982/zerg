@@ -48,6 +48,23 @@ pub fn execute_fetch_command(cmd: Command) {
                 }
             });
         },
+        Command::FetchAgents => {
+            web_sys::console::log_1(&"Executing FetchAgents command".into());
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_agents().await {
+                    Ok(agents_json) => {
+                        match serde_json::from_str::<Vec<ApiAgent>>(&agents_json) {
+                            Ok(agents) => {
+                                web_sys::console::log_1(&format!("Fetched {} agents from API", agents.len()).into());
+                                dispatch_global_message(Message::AgentsRefreshed(agents))
+                            },
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse agents: {:?}", e).into())
+                        }
+                    },
+                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch agents: {:?}", e).into())
+                }
+            });
+        },
         _ => web_sys::console::warn_1(&"Unexpected command type in execute_fetch_command".into())
     }
 }

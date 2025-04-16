@@ -16,6 +16,7 @@ use crate::components::chat_view::{update_thread_list_ui, update_conversation_ui
 use serde_json;
 use rand;
 use chrono;
+use std::collections::HashSet;
 
 
 pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
@@ -70,12 +71,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // Draw the nodes on canvas
             state.draw_nodes();
            
+            // After creating the agent, immediately create a default thread
+            commands.push(Command::SendMessage(Message::CreateThread(agent_id, DEFAULT_THREAD_TITLE.to_string())));
+           
             // IMPORTANT: We intentionally don't set state_modified = true here
             // This prevents the auto-save mechanism from making redundant API calls
             
-            // NOTE: We intentionally don't create a thread here.
-            // The backend automatically creates a thread when an agent is created,
-            // and we'll receive a thread_created WebSocket message.
+            // Note: A default thread will be created by our Message::AgentsRefreshed handler
+            // when the agent list is refreshed from the API.
         },
        
         Message::EditAgent(agent_id) => {
@@ -775,45 +778,46 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
        
         Message::RefreshAgentsFromAPI => {
             // Trigger an async operation to fetch agents from the API
-            web_sys::console::log_1(&"Refreshing agents from API".into());
-           
-            // Clone whatever data we need from state before leaving the borrow
-            let current_view = state.active_view.clone();
-           
-            // Spawn an async operation to fetch agents
-            wasm_bindgen_futures::spawn_local(async move {
-                match crate::network::ApiClient::get_agents().await {
-                    Ok(agents_json) => {
-                        if let Ok(agents) = serde_json::from_str::<Vec<crate::models::ApiAgent>>(&agents_json) {
-                            web_sys::console::log_1(&format!("Refreshed {} agents from API", agents.len()).into());
-                           
-                            // Update the agents in the global APP_STATE using message dispatch
-                            crate::state::APP_STATE.with(|state_ref| {
-                                let mut state = state_ref.borrow_mut();
-                                state.agents.clear();
-                               
-                                // Add each agent to the HashMap
-                                for agent in &agents {
-                                    if let Some(id) = agent.id {
-                                        state.agents.insert(id, agent.clone());
-                                    }
-                                }
-                               
-                                // Set active view back to what it was
-                                state.active_view = current_view;
-                            });
-                           
-                            // Refresh the UI
-                            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                                web_sys::console::error_1(&format!("Failed to refresh UI: {:?}", e).into());
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        web_sys::console::error_1(&format!("Error refreshing agents: {:?}", e).into());
-                    }
+            web_sys::console::log_1(&"Requesting agent refresh from API".into());
+            // Return a command to fetch agents instead of doing it directly
+            commands.push(Command::FetchAgents);
+            needs_refresh = false; // The command executor will handle subsequent messages/updates
+        },
+       
+        Message::AgentsRefreshed(agents) => {
+            web_sys::console::log_1(&format!("Update: Handling AgentsRefreshed with {} agents", agents.len()).into());
+
+            // Get the current set of agent IDs BEFORE updating
+            let old_agent_ids: HashSet<u32> = state.agents.keys().cloned().collect();
+
+            // Update state.agents with the new list
+            state.agents.clear();
+            let mut new_agent_ids = HashSet::new();
+            for agent in &agents {
+                if let Some(id) = agent.id {
+                    state.agents.insert(id, agent.clone());
+                    new_agent_ids.insert(id);
                 }
-            });
+            }
+
+            // Check for newly created agent
+            let just_created_agent_ids: Vec<u32> = new_agent_ids.difference(&old_agent_ids).cloned().collect();
+            
+            if just_created_agent_ids.len() == 1 {
+                let new_agent_id = just_created_agent_ids[0];
+                web_sys::console::log_1(&format!("Detected newly created agent ID: {}. Creating default thread.", new_agent_id).into());
+                commands.push(Command::SendMessage(Message::CreateThread(new_agent_id, DEFAULT_THREAD_TITLE.to_string())));
+            } else if just_created_agent_ids.len() > 1 {
+                web_sys::console::warn_1(&"Detected multiple new agents after refresh, cannot auto-create default thread.".into());
+            }
+            
+            // Schedule a UI refresh after state is updated
+            state.pending_ui_updates = Some(Box::new(|| {
+                if let Err(e) = AppState::refresh_ui_after_state_change() {
+                    web_sys::console::error_1(&format!("Failed to refresh UI after AgentsRefreshed: {:?}", e).into());
+                }
+            }));
+            needs_refresh = false; // Refresh handled by pending_ui_updates
         },
        
         // Thread-related messages
@@ -1137,6 +1141,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // 1. Pure state updates first
             state.active_view = crate::storage::ActiveView::ChatView;
             state.is_chat_loading = true;
+            state.current_agent_id = Some(agent_id);
             
             // 2. Collect data needed for side effects
             let agent_id_for_effects = agent_id;
@@ -1244,10 +1249,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
 
         Message::RequestNewThread => {
-            // Get current agent ID from the current thread
+            // Try to get agent ID from current thread, else from current_agent_id
             let agent_id_opt = state.current_thread_id
                 .and_then(|thread_id| state.threads.get(&thread_id))
-                .map(|thread| thread.agent_id);
+                .map(|thread| thread.agent_id)
+                .or(state.current_agent_id);
             
             // Log for debugging
             web_sys::console::log_1(&format!("RequestNewThread - agent_id: {:?}", agent_id_opt).into());
