@@ -9,19 +9,20 @@ Agent Platform is a full-stack application combining a Rust + WebAssembly (WASM)
 2. [Quick Start](#quick-start)  
 3. [Architecture Overview](#architecture-overview)  
 4. [Frontend State Management](#frontend-state-management)  
-5. [Key Features](#key-features)  
-6. [Directory Structure](#directory-structure)  
-7. [Dependencies](#dependencies)  
-8. [Setup & Running](#setup--running)  
+5. [WebSocket & Event Communication](#websocket--event-communication)  
+6. [Key Features](#key-features)  
+7. [Directory Structure](#directory-structure)  
+8. [Dependencies](#dependencies)  
+9. [Setup & Running](#setup--running)  
    - [Backend Setup](#backend-setup)  
    - [Frontend Setup](#frontend-setup)  
    - [Pre‑Rendering Setup (Optional)](#pre-rendering-setup-optional)  
-9. [Using the Dashboard & Canvas Editor](#using-the-dashboard--canvas-editor)  
-10. [Pre‑Rendering & SEO Details](#pre-rendering--seo-details)  
-11. [How It Works](#how-it-works)  
-12. [Extending the Project & Future Plans](#extending-the-project--future-plans)  
-13. [Testing & Verification](#testing--verification)  
-14. [License](#license)  
+10. [Using the Dashboard & Canvas Editor](#using-the-dashboard--canvas-editor)  
+11. [Pre‑Rendering & SEO Details](#pre-rendering--seo-details)  
+12. [How It Works](#how-it-works)  
+13. [Extending the Project & Future Plans](#extending-the-project--future-plans)  
+14. [Testing & Verification](#testing--verification)  
+15. [License](#license)  
 
 --------------------------------------------------------------------------------
 ## Overview
@@ -90,10 +91,13 @@ The repository is divided into three main areas:
      • Canvas Editor for visual flow configuration
      • Chat interface for real-time agent interaction
    - State management via AppState (state.rs) as single source of truth
+   - Communicates with backend via REST API calls and real-time WebSocket connection
 
 2. **Backend (Python + FastAPI)**  
-   - Provides both REST and WebSocket endpoints to handle streaming from OpenAI.  
-   - Environment variables (OPENAI_API_KEY, etc.) loaded from a .env file.  
+   - Provides both REST and WebSocket endpoints to handle streaming from OpenAI.
+   - Uses an event-based architecture with custom decorators and an event bus.
+   - REST endpoints handle CRUD operations while WebSocket connections provide real-time updates.
+   - Environment variables (OPENAI_API_KEY, etc.) loaded from a .env file.
    - uvicorn or gunicorn can host the app in production.
 
 3. **Pre-Rendering (Node/Playwright)**  
@@ -155,6 +159,52 @@ When extending or modifying the frontend:
 4. **Use `dispatch_global_message`**: Always use the dispatch function for state changes
 
 This architecture makes the codebase more maintainable, prevents bugs related to borrowing, and creates a predictable data flow.
+
+--------------------------------------------------------------------------------
+## WebSocket & Event Communication
+
+The application uses a sophisticated event-based architecture for real-time communication:
+
+### Backend Event System
+
+1. **Event Bus Pattern**
+   - The backend implements a central `EventBus` that manages event publishing and subscription.
+   - Events are typed (e.g., `THREAD_CREATED`, `AGENT_UPDATED`) and carry payload data.
+   - Components can subscribe to specific event types without knowing about the publisher.
+
+2. **Publish-Event Decorator**
+   - REST endpoints use the `@publish_event(EventType.XYZ)` decorator to broadcast state changes.
+   - After an endpoint successfully completes (e.g., creates a thread), the decorator:
+     • Extracts data from the function result
+     • Publishes an event to the EventBus
+     • All subscribers for that event type are notified
+
+3. **WebSocket Integration**
+   - The `TopicConnectionManager` subscribes to relevant EventBus events.
+   - When an event occurs (e.g., thread created), the manager broadcasts to all WebSocket clients subscribed to that topic.
+
+**Summary:** When a REST endpoint changes state, the decorator publishes an event, the event bus notifies subscribers, and the WebSocket manager pushes updates to all subscribed clients in real time.
+
+### Frontend WebSocket Integration
+
+1. **Topic-Based Subscription Model**
+   - The frontend WebSocket client connects to `/api/ws/v2` and can subscribe to specific topics:
+     • `thread:{id}` for thread updates and messages
+     • `agent:{id}` for agent status updates
+
+2. **Topic Manager**
+   - The frontend implements a `TopicManager` that handles:
+     • WebSocket connection management
+     • Topic subscription
+     • Message routing to appropriate handlers
+
+3. **Real-Time UI Updates**
+   - When WebSocket messages arrive, they are converted to appropriate Messages:
+     • `ReceiveThreadUpdate` for thread metadata changes
+     • `ReceiveStreamChunk` for incoming streaming responses
+     • `ThreadMessagesLoaded` for thread history
+
+This architecture creates a seamless real-time experience: when an agent is created, a thread is created, or a message is sent, the UI updates instantly across all connected clients without polling.
 
 --------------------------------------------------------------------------------
 ## Key Features
