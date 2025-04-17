@@ -15,6 +15,8 @@ from apscheduler.triggers.cron import CronTrigger
 from zerg.app.agents import AgentManager
 from zerg.app.crud import crud
 from zerg.app.database import SessionLocal
+from zerg.app.events import EventType
+from zerg.app.events.event_bus import event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,10 @@ class SchedulerService:
         if not self._initialized:
             # Load all scheduled agents from DB
             await self.load_scheduled_agents()
+
+            # Subscribe to agent events for dynamic scheduling
+            await self._subscribe_to_events()
+
             # Start the scheduler
             self.scheduler.start()
             self._initialized = True
@@ -43,6 +49,62 @@ class SchedulerService:
             self.scheduler.shutdown()
             self._initialized = False
             logger.info("Scheduler service stopped")
+
+    async def _subscribe_to_events(self):
+        """Subscribe to agent-related events for dynamic scheduling updates."""
+        # Subscribe to agent created events
+        event_bus.subscribe(EventType.AGENT_CREATED, self._handle_agent_created)
+        # Subscribe to agent updated events
+        event_bus.subscribe(EventType.AGENT_UPDATED, self._handle_agent_updated)
+        # Subscribe to agent deleted events
+        event_bus.subscribe(EventType.AGENT_DELETED, self._handle_agent_deleted)
+
+        logger.info("Scheduler subscribed to agent events")
+
+    async def _handle_agent_created(self, data):
+        """Handle agent created events by scheduling if needed."""
+        if data.get("run_on_schedule") and data.get("schedule"):
+            agent_id = data.get("id")
+            cron_expression = data.get("schedule")
+            logger.info(f"Scheduling newly created agent {agent_id}")
+            await self.schedule_agent(agent_id, cron_expression)
+
+    async def _handle_agent_updated(self, data):
+        """
+        Handle agent updated events by updating scheduling accordingly.
+        This covers cases where run_on_schedule is toggled or the schedule is changed.
+        """
+        agent_id = data.get("id")
+        run_on_schedule = data.get("run_on_schedule")
+        schedule = data.get("schedule")
+
+        # If we can't determine the scheduling state, fetch the agent
+        if run_on_schedule is None or schedule is None:
+            db = SessionLocal()
+            try:
+                agent = crud.get_agent(db, agent_id)
+                if agent:
+                    run_on_schedule = agent.run_on_schedule
+                    schedule = agent.schedule
+            finally:
+                db.close()
+
+        # Remove any existing job
+        self.remove_agent_job(agent_id)
+
+        # Add new job if needed
+        if run_on_schedule and schedule:
+            logger.info(f"Updating schedule for agent {agent_id}")
+            await self.schedule_agent(agent_id, schedule)
+        else:
+            logger.info(f"Agent {agent_id} updated, not scheduled to run")
+
+    async def _handle_agent_deleted(self, data):
+        """Handle agent deleted events by removing any scheduled jobs."""
+        agent_id = data.get("id")
+        if agent_id:
+            logger.info(f"Removing schedule for deleted agent {agent_id}")
+            self.remove_agent_job(agent_id)
 
     async def load_scheduled_agents(self):
         """Load all agents with run_on_schedule=True from the database and schedule them."""

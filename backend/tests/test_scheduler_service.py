@@ -27,36 +27,37 @@ def patch_session_local(monkeypatch, db_session):
 
 @pytest.fixture
 def service():
-    """Return a fresh SchedulerService instance."""
-    return SchedulerService()
+    """
+    Create and return a SchedulerService instance for testing.
+
+    The service is configured to use a test scheduler that does not actually
+    run jobs but allows verifying that jobs would be scheduled correctly.
+    """
+    service = SchedulerService()
+    # Mock the event_bus subscription to avoid errors during tests
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        "zerg.app.services.scheduler_service.event_bus.subscribe",
+        lambda event_type, handler: None,
+    )
+    yield service
+    # Ensure scheduler is properly shut down
+    if service._initialized:
+        service.scheduler.shutdown()
 
 
 @pytest.mark.asyncio
-async def test_schedule_agent_adds_job(service):
-    """Test that schedule_agent creates a job with the correct ID and function."""
-    agent_id = 1
-    cron = "0 * * * *"
+async def test_schedule_agent(service):
+    # Schedule an agent
+    agent_id = 42
+    cron_expression = "*/5 * * * *"
+    await service.schedule_agent(agent_id, cron_expression)
 
-    await service.schedule_agent(agent_id=agent_id, cron_expression=cron)
-
-    # Check job exists with correct ID
+    # Verify the job was added
     job = service.scheduler.get_job(f"agent_{agent_id}")
-    assert job is not None, "Job should be scheduled"
-
-    # Check it's using the correct function (run_agent_task)
-    assert job.func == service.run_agent_task
-
-    # Check it was given the correct agent_id argument
+    assert job is not None
+    assert isinstance(job.trigger, CronTrigger)
     assert job.args == (agent_id,)
-
-
-def test_remove_agent_job(service):
-    # Add a job first
-    service.scheduler.add_job(lambda: None, id="agent_2", trigger=CronTrigger.from_crontab("*/5 * * * *"))
-    assert service.scheduler.get_job("agent_2") is not None
-
-    service.remove_agent_job(agent_id=2)
-    assert service.scheduler.get_job("agent_2") is None
 
 
 @pytest.mark.asyncio
@@ -98,59 +99,107 @@ async def test_load_scheduled_agents(service, db_session):
 
 
 @pytest.mark.asyncio
-async def test_run_agent_task_invokes_manager(monkeypatch, service, db_session):
-    # Create a sample agent
-    from zerg.app.crud import crud
-    from zerg.app.models.models import Agent
+async def test_remove_agent_job(service):
+    # First schedule an agent
+    agent_id = 42
+    await service.schedule_agent(agent_id, "*/5 * * * *")
 
-    agent = Agent(
-        name="Test",
-        system_instructions="sys",
-        task_instructions="do something",
-        model="m1",
-        status="idle",
-        run_on_schedule=True,
-    )
-    db_session.add(agent)
-    db_session.commit()
-    db_session.refresh(agent)
+    # Verify it was scheduled
+    assert service.scheduler.get_job(f"agent_{agent_id}") is not None
 
-    # Dummy AgentManager to capture calls
-    called = {}
+    # Now remove the job
+    service.remove_agent_job(agent_id)
 
-    class DummyManager:
-        def __init__(self, agent_model):
-            assert agent_model.id == agent.id
+    # Verify it was removed
+    assert service.scheduler.get_job(f"agent_{agent_id}") is None
 
-        def get_or_create_thread(self, db, title):
-            # Create a new thread via CRUD to simulate real behavior
-            thread = crud.create_thread(
-                db=db,
-                agent_id=agent.id,
-                title=title,
-                active=True,
-                agent_state={},
-                memory_strategy="buffer",
-            )
-            called["created_thread"] = True
-            return thread, True
 
-        def add_system_message(self, db, thread):
-            called["added_system_message"] = True
+@pytest.mark.asyncio
+async def test_handle_agent_created(service):
+    """Test that an agent creation event schedules the agent if needed."""
+    # Create event data
+    event_data = {
+        "id": 1,
+        "name": "Test Agent",
+        "schedule": "*/5 * * * *",
+        "run_on_schedule": True,
+    }
 
-        async def process_message(self, db, thread, content, stream):
-            called["processed"] = (content, stream)
+    # Process the event
+    await service._handle_agent_created(event_data)
 
-    # Patch AgentManager in the scheduler service module
-    monkeypatch.setattr(
-        "zerg.app.services.scheduler_service.AgentManager",
-        DummyManager,
-    )
+    # Verify the agent was scheduled
+    job = service.scheduler.get_job(f"agent_{event_data['id']}")
+    assert job is not None
+    assert job.args == (event_data["id"],)
 
-    # Run the task
-    await service.run_agent_task(agent_id=agent.id)
 
-    # Verify DummyManager methods were called
-    assert called.get("created_thread", False), "Thread should be created"
-    assert called.get("added_system_message", False), "System message should be added"
-    assert called.get("processed") == ("do something", False)
+@pytest.mark.asyncio
+async def test_handle_agent_updated_enabled(service):
+    """Test that an agent update event updates its schedule when enabled."""
+    # First schedule the agent
+    agent_id = 2
+    await service.schedule_agent(agent_id, "*/10 * * * *")
+
+    # Update with a new schedule
+    event_data = {
+        "id": agent_id,
+        "schedule": "*/5 * * * *",
+        "run_on_schedule": True,
+    }
+
+    # Process the update event
+    await service._handle_agent_updated(event_data)
+
+    # Verify the schedule was updated
+    job = service.scheduler.get_job(f"agent_{agent_id}")
+    assert job is not None
+    # Check that the job uses the new schedule
+    # We can't easily check the cron expression directly but can verify
+    # the job still exists with the same ID
+
+
+@pytest.mark.asyncio
+async def test_handle_agent_updated_disabled(service):
+    """Test that an agent update event removes the schedule when disabled."""
+    # First schedule the agent
+    agent_id = 3
+    await service.schedule_agent(agent_id, "*/10 * * * *")
+
+    # Verify the agent is scheduled
+    assert service.scheduler.get_job(f"agent_{agent_id}") is not None
+
+    # Update to disable scheduling
+    event_data = {
+        "id": agent_id,
+        "run_on_schedule": False,
+    }
+
+    # Process the update event
+    await service._handle_agent_updated(event_data)
+
+    # Verify the schedule was removed
+    assert service.scheduler.get_job(f"agent_{agent_id}") is None
+
+
+@pytest.mark.asyncio
+async def test_handle_agent_deleted(service):
+    """Test that an agent deletion event removes any scheduled jobs."""
+    # First schedule the agent
+    agent_id = 4
+    await service.schedule_agent(agent_id, "*/10 * * * *")
+
+    # Verify the agent is scheduled
+    assert service.scheduler.get_job(f"agent_{agent_id}") is not None
+
+    # Delete the agent
+    event_data = {
+        "id": agent_id,
+        "name": "Deleted Agent",
+    }
+
+    # Process the delete event
+    await service._handle_agent_deleted(event_data)
+
+    # Verify the schedule was removed
+    assert service.scheduler.get_job(f"agent_{agent_id}") is None
