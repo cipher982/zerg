@@ -14,9 +14,9 @@ from sqlalchemy.orm import Session
 
 from zerg.app.crud import crud
 from zerg.app.schemas.ws_messages import ErrorMessage
-from zerg.app.schemas.ws_messages import MessageType
 from zerg.app.schemas.ws_messages import PingMessage
 from zerg.app.schemas.ws_messages import PongMessage
+from zerg.app.schemas.ws_messages import ThreadHistoryMessage
 from zerg.app.websocket.new_manager import topic_manager
 
 logger = logging.getLogger(__name__)
@@ -84,26 +84,26 @@ async def handle_subscribe(client_id: str, message: Dict[str, Any], db: Session)
                 # Subscribe to topic
                 await topic_manager.subscribe_to_topic(client_id, topic)
 
-                # Send thread history
-                messages = crud.get_thread_messages(db, thread_id)
-                history_msg = {
-                    "type": MessageType.THREAD_HISTORY,
-                    "thread_id": thread_id,
-                    "messages": [
-                        {
-                            "id": msg.id,
-                            "thread_id": msg.thread_id,
-                            "role": msg.role,
-                            "content": msg.content,
-                            "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
-                            "processed": msg.processed,
-                        }
-                        for msg in messages
-                    ],
-                    "message_id": subscribe_msg.message_id,
-                }
+                # Send thread history using Pydantic model
+                thread_messages = crud.get_thread_messages(db, thread_id)
+                history_list = [
+                    {
+                        "id": msg.id,
+                        "thread_id": msg.thread_id,
+                        "role": msg.role,
+                        "content": msg.content,
+                        "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+                        "processed": msg.processed,
+                    }
+                    for msg in thread_messages
+                ]
+                history_msg = ThreadHistoryMessage(
+                    thread_id=thread_id,
+                    messages=history_list,
+                    message_id=subscribe_msg.message_id,
+                )
                 if client_id in topic_manager.active_connections:
-                    await topic_manager.active_connections[client_id].send_json(history_msg)
+                    await topic_manager.active_connections[client_id].send_json(history_msg.model_dump())
 
             elif topic_type == "agent":
                 # Validate agent exists
@@ -205,4 +205,7 @@ async def dispatch_message_v2(client_id: str, message: Dict[str, Any], db: Sessi
             await topic_manager.active_connections[client_id].send_json(error_msg.model_dump())
 
 
-__all__ = ["dispatch_message_v2"]
+# Create alias for backwards compatibility
+dispatch_message = dispatch_message_v2
+
+__all__ = ["dispatch_message_v2", "dispatch_message"]

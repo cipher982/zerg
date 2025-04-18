@@ -161,7 +161,7 @@ def test_run_agent(client: TestClient, sample_agent: Agent, db_session):
         mock_agent_manager.process_message.return_value = mock_process_message()
 
         # Run the thread
-        response = client.post(f"/api/threads/{thread['id']}/run")
+        response = client.post(f"/api/threads/{thread['id']}/run", json={"content": "Test message"})
         assert response.status_code == 200
 
         # Verify the agent status in the database is still valid

@@ -283,7 +283,7 @@ def test_run_thread(client: TestClient, sample_thread: Thread, db_session):
         mock_agent_manager.process_message.return_value = mock_process_message()
 
         # Run the thread
-        response = client.post(f"/api/threads/{sample_thread.id}/run")
+        response = client.post(f"/api/threads/{sample_thread.id}/run", json={"content": "Test message"})
 
         # Verify response
         assert response.status_code == 200
@@ -301,14 +301,14 @@ def test_run_thread(client: TestClient, sample_thread: Thread, db_session):
 
 def test_run_thread_no_unprocessed_messages(client: TestClient, sample_thread: Thread):
     """Test the POST /api/threads/{thread_id}/run endpoint with no unprocessed messages"""
-    response = client.post(f"/api/threads/{sample_thread.id}/run")
+    response = client.post(f"/api/threads/{sample_thread.id}/run", json={"content": ""})
     assert response.status_code == 200
     assert response.json() == {"detail": "No unprocessed messages to run"}
 
 
 def test_run_thread_not_found(client: TestClient):
     """Test the POST /api/threads/{thread_id}/run endpoint with a non-existent thread ID"""
-    response = client.post("/api/threads/999/run")
+    response = client.post("/api/threads/999/run", json={"content": "Test message"})
     assert response.status_code == 404
     assert "detail" in response.json()
     assert response.json()["detail"] == "Thread not found"
