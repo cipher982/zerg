@@ -26,7 +26,7 @@ from zerg.app.schemas.schemas import ThreadMessageResponse
 from zerg.app.schemas.schemas import ThreadUpdate
 
 # Import the new topic manager
-from zerg.app.websocket.new_manager import topic_manager
+from zerg.app.websocket.manager import topic_manager
 
 # Set up logging
 logger = logging.getLogger(__name__)

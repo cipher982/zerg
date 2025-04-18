@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from zerg.app.events import EventType
-from zerg.app.websocket.new_manager import TopicConnectionManager
+from zerg.app.websocket.manager import TopicConnectionManager
 
 
 @pytest.fixture

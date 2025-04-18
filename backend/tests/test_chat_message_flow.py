@@ -37,7 +37,7 @@ async def ws_client(client):
 
     ws_client = WebSocketTestClient(base_url)
     try:
-        await ws_client.connect()
+        await ws_client.connect(path="/api/ws")
         yield ws_client
     finally:
         await ws_client.disconnect()
