@@ -162,7 +162,7 @@ def test_run_agent(client: TestClient, sample_agent: Agent, db_session):
 
         # Run the thread
         response = client.post(f"/api/threads/{thread['id']}/run", json={"content": "Test message"})
-        assert response.status_code == 200
+        assert response.status_code == 202
 
         # Verify the agent status in the database is still valid
         response = client.get(f"/api/agents/{sample_agent.id}")
