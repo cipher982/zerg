@@ -51,7 +51,14 @@ def create_thread(thread: ThreadCreate, db: Session = Depends(get_db)):
     if not crud.get_agent(db, agent_id=thread.agent_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    return crud.create_thread(db=db, thread=thread)
+    return crud.create_thread(
+        db=db,
+        agent_id=thread.agent_id,
+        title=thread.title,
+        active=thread.active,
+        agent_state=thread.agent_state,
+        memory_strategy=thread.memory_strategy,
+    )
 
 
 @router.get("/{thread_id}", response_model=Thread)
@@ -112,7 +119,7 @@ def run_thread(thread_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
 
     # Get unprocessed messages
-    messages = crud.get_thread_messages(db, thread_id=thread_id, processed=False)
+    messages = crud.get_unprocessed_messages(db, thread_id=thread_id)
     if not messages:
         return {"status": "No unprocessed messages"}
 
@@ -131,7 +138,7 @@ def run_thread(thread_id: int, db: Session = Depends(get_db)):
 
         # Mark messages as processed
         for msg in messages:
-            crud.update_thread_message_processed(db, msg.id, True)
+            crud.mark_message_processed(db, msg.id)
 
         return response_msg
 

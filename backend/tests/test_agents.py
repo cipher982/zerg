@@ -151,7 +151,7 @@ def test_run_agent(client: TestClient, sample_agent: Agent, db_session):
     assert response.status_code == 201
 
     # Run the thread
-    with patch("zerg.app.routers.threads.AgentManager") as mock_agent_manager_class:
+    with patch("zerg.app.agents.AgentManager") as mock_agent_manager_class:
         mock_agent_manager = MagicMock()
         mock_agent_manager_class.return_value = mock_agent_manager
 
