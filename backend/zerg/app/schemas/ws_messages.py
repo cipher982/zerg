@@ -1,9 +1,3 @@
-"""WebSocket message schemas.
-
-This module defines the Pydantic models for WebSocket messages
-in the unified WebSocket system.
-"""
-
 from enum import Enum
 from typing import Any
 from typing import Dict
@@ -12,6 +6,8 @@ from typing import Optional
 from typing import Union
 
 from pydantic import BaseModel
+
+from zerg.app.schemas.schemas import Agent  # Use absolute import for Agent schema
 
 
 class MessageType(str, Enum):
@@ -37,6 +33,11 @@ class MessageType(str, Enum):
 
     # System events
     SYSTEM_STATUS = "system_status"
+
+    # Agent events
+    SUBSCRIBE_AGENT = "subscribe_agent"
+    AGENT_STATE = "agent_state"
+    AGENT_EVENT = "agent_event"
 
 
 class BaseMessage(BaseModel):
@@ -122,11 +123,34 @@ class StreamEndMessage(BaseMessage):
     thread_id: int
 
 
+# Agent message schemas
+class SubscribeAgentMessage(BaseMessage):
+    """Request to subscribe to an agent's events."""
+
+    type: MessageType = MessageType.SUBSCRIBE_AGENT
+    agent_id: int
+
+
+class AgentStateMessage(BaseMessage):
+    """Initial agent state sent upon subscription."""
+
+    type: MessageType = MessageType.AGENT_STATE
+    data: Agent
+
+
+class AgentEventMessage(BaseMessage):
+    """An event related to an agent (e.g., status change)."""
+
+    type: MessageType = MessageType.AGENT_EVENT
+    data: Dict[str, Any]  # Keep as dict for flexibility with various event data
+
+
 # Union type for all possible incoming messages
 IncomingMessage = Union[
     PingMessage,
     SubscribeThreadMessage,
     SendMessageRequest,
+    SubscribeAgentMessage,  # Add agent subscription
 ]
 
 # Union type for all possible outgoing messages
@@ -138,4 +162,6 @@ OutgoingMessage = Union[
     StreamStartMessage,
     StreamChunkMessage,
     StreamEndMessage,
+    AgentStateMessage,  # Add agent state
+    AgentEventMessage,  # Add agent event
 ]

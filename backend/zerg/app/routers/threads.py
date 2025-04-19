@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from fastapi import status
 from sqlalchemy.orm import Session
 
+from zerg.app.agents import AgentManager
 from zerg.app.crud import crud
 from zerg.app.database import get_db
 from zerg.app.schemas.schemas import Thread
@@ -136,6 +137,9 @@ def run_thread(thread_id: int, db: Session = Depends(get_db)):
         agent = crud.get_agent(db, agent_id=thread.agent_id)
         if agent is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+        # Initialize the AgentManager
+        _ = AgentManager(agent)
 
         # Create response message
         message = ThreadMessageCreate(role="assistant", content="Processing...")

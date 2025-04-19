@@ -10,10 +10,12 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from zerg.app.crud import crud
+from zerg.app.schemas.ws_messages import AgentStateMessage
 from zerg.app.schemas.ws_messages import ErrorMessage
 from zerg.app.schemas.ws_messages import MessageType
 from zerg.app.schemas.ws_messages import PingMessage
@@ -153,7 +155,7 @@ async def _subscribe_thread(client_id: str, thread_id: int, message_id: str, db:
 
 
 async def _subscribe_agent(client_id: str, agent_id: int, message_id: str, db: Session) -> None:
-    """Subscribe to agent events.
+    """Subscribe to agent events and send initial state.
 
     Args:
         client_id: The client ID subscribing
@@ -171,6 +173,15 @@ async def _subscribe_agent(client_id: str, agent_id: int, message_id: str, db: S
         # Subscribe to agent topic
         topic = f"agent:{agent_id}"
         await topic_manager.subscribe_to_topic(client_id, topic)
+
+        # Send initial agent state back to the client
+        agent_state_msg = AgentStateMessage(
+            type=MessageType.AGENT_STATE,
+            message_id=message_id,
+            data=agent,
+        )
+        await send_to_client(client_id, jsonable_encoder(agent_state_msg))
+        logger.info(f"Sent initial agent_state for agent {agent_id} to client {client_id}")
 
     except Exception as e:
         logger.error(f"Error in _subscribe_agent: {str(e)}")
@@ -222,11 +233,17 @@ async def handle_unsubscribe(client_id: str, message: Dict[str, Any], _: Session
         _: Unused database session
     """
     try:
+        message_id = message.get("message_id", "")
         for topic in message.get("topics", []):
             await topic_manager.unsubscribe_from_topic(client_id, topic)
+
+        # Send confirmation message back to client
+        await send_to_client(
+            client_id, {"type": "unsubscribe_success", "message_id": message_id, "topics": message.get("topics", [])}
+        )
     except Exception as e:
         logger.error(f"Error handling unsubscribe: {str(e)}")
-        await send_error(client_id, "Failed to process unsubscribe")
+        await send_error(client_id, "Failed to process unsubscribe", message.get("message_id", ""))
 
 
 # Message handler dispatcher
