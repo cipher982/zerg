@@ -35,9 +35,9 @@ async def ws_client(client):
     base_url = f"ws://localhost:{client.port}"
     logger.info(f"Connecting to WebSocket at {base_url}")
 
-    ws_client = WebSocketTestClient(base_url)
+    ws_client = WebSocketTestClient(base_url, path="/api/ws")
     try:
-        await ws_client.connect(path="/api/ws")
+        await ws_client.connect()
         yield ws_client
     finally:
         await ws_client.disconnect()
