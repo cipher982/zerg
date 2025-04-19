@@ -9,6 +9,7 @@ from zerg.app.config import API_PREFIX
 from zerg.app.config import MODELS_PREFIX
 from zerg.app.config import THREADS_PREFIX
 from zerg.app.database import initialize_database
+from zerg.app.routers.admin import router as admin_router
 from zerg.app.routers.agents import router as agents_router
 from zerg.app.routers.models import router as models_router
 from zerg.app.routers.threads import router as threads_router
@@ -36,6 +37,7 @@ app.include_router(agents_router, prefix=f"{API_PREFIX}{AGENTS_PREFIX}")
 app.include_router(threads_router, prefix=f"{API_PREFIX}{THREADS_PREFIX}")
 app.include_router(models_router, prefix=f"{API_PREFIX}{MODELS_PREFIX}")
 app.include_router(websocket_router, prefix=API_PREFIX)
+app.include_router(admin_router, prefix=API_PREFIX)
 
 # Set up logging
 logger = logging.getLogger(__name__)

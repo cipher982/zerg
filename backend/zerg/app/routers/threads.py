@@ -29,7 +29,6 @@ from zerg.app.schemas.schemas import ThreadUpdate
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
-    prefix="/threads",
     tags=["threads"],
 )
 
