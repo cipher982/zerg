@@ -6,6 +6,10 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from zerg.app.config import AGENTS_PREFIX
+from zerg.app.config import API_PREFIX
+from zerg.app.config import MODELS_PREFIX
+from zerg.app.config import THREADS_PREFIX
 from zerg.app.database import Base
 
 # Import our application modules directly from their source
@@ -28,7 +32,6 @@ Base.metadata.create_all(bind=engine)
 # Create the FastAPI app
 app = FastAPI(
     # Make FastAPI handle routes both with and without trailing slashes
-    # This ensures /api/agents and /api/agents/ are treated the same
     redirect_slashes=False
 )
 
@@ -82,11 +85,11 @@ async def options_handler(rest_of_path: str):
     return response
 
 
-# Include our API routers
-app.include_router(agents_router)  # Already has /api/agents prefix
-app.include_router(threads_router)  # Already has /api/threads prefix
-app.include_router(websocket_router)  # Already has /api prefix
-app.include_router(models_router)  # Add models router for /api/models
+# Include our API routers with centralized prefixes
+app.include_router(agents_router, prefix=f"{API_PREFIX}{AGENTS_PREFIX}")
+app.include_router(threads_router, prefix=f"{API_PREFIX}{THREADS_PREFIX}")
+app.include_router(models_router, prefix=f"{API_PREFIX}{MODELS_PREFIX}")
+app.include_router(websocket_router, prefix=API_PREFIX)  # WebSocket router handles WS_ENDPOINT internally
 
 # Set up logging
 logger = logging.getLogger(__name__)
