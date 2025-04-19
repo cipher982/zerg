@@ -73,7 +73,14 @@ def read_thread(thread_id: int, db: Session = Depends(get_db)):
 @router.put("/{thread_id}", response_model=Thread)
 def update_thread(thread_id: int, thread: ThreadUpdate, db: Session = Depends(get_db)):
     """Update a thread"""
-    db_thread = crud.update_thread(db, thread_id=thread_id, thread=thread)
+    db_thread = crud.update_thread(
+        db,
+        thread_id=thread_id,
+        title=thread.title,
+        active=thread.active,
+        agent_state=thread.agent_state,
+        memory_strategy=thread.memory_strategy,
+    )
     if db_thread is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
     return db_thread

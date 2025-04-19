@@ -1,11 +1,8 @@
 import logging
 
 import pytest
-import pytest_asyncio
 
 from zerg.app.schemas.ws_messages import MessageType
-
-from .ws_test_client import WebSocketTestClient
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -26,44 +23,47 @@ def test_thread(db_session, sample_agent):
     db_session.add(thread)
     db_session.commit()
     db_session.refresh(thread)
+    logger.info(f"Created test thread with ID: {thread.id}")
     return thread
 
 
-@pytest_asyncio.fixture
-async def ws_client(client):
+@pytest.fixture
+def ws_client(client):
     """Create a WebSocket test client for a single connection"""
-    base_url = f"ws://localhost:{client.port}"
-    logger.info(f"Connecting to WebSocket at {base_url}")
+    logger.info("Connecting to WebSocket at /api/ws")
 
-    ws_client = WebSocketTestClient(base_url, path="/api/ws")
-    try:
-        await ws_client.connect()
-        yield ws_client
-    finally:
-        await ws_client.disconnect()
+    with client.websocket_connect("/api/ws") as websocket:
+        yield websocket
 
 
-@pytest.mark.asyncio
 class TestChatMessageFlow:
     """Test suite for verifying chat message flow through websockets"""
 
-    async def test_basic_connection(self, ws_client):
+    def test_basic_connection(self, ws_client):
         """Verify basic websocket connection works"""
         # Send a ping to check connectivity
-        await ws_client.send_json({"type": MessageType.PING})
-        response = await ws_client.receive_json()
+        ws_client.send_json({"type": MessageType.PING})
+        response = ws_client.receive_json()
         assert response["type"] == MessageType.PONG
 
-    async def test_chat_message_flow(self, ws_client, test_thread):
+    def test_chat_message_flow(self, ws_client, test_thread):
         """Test the complete flow of sending a chat message and receiving response"""
         logger.info("Starting chat message flow test")
 
         # 1. Subscribe to thread first
         sub_msg = {"type": MessageType.SUBSCRIBE_THREAD, "thread_id": test_thread.id, "message_id": "test-sub-1"}
-        await ws_client.send_json(sub_msg)
+        logger.info(f"Subscribing to thread: {test_thread.id}")
+        ws_client.send_json(sub_msg)
 
         # Should receive thread history
-        history = await ws_client.receive_json()
+        history = ws_client.receive_json()
+        logger.info(f"Received response: {history}")
+
+        # If we got an error, log it and fail with details
+        if history["type"] == "error":
+            logger.error(f"Error response: {history}")
+            assert False, f"Received error instead of thread history: {history.get('error')}"
+
         assert history["type"] == MessageType.THREAD_HISTORY
         assert history["thread_id"] == test_thread.id
 
@@ -75,26 +75,34 @@ class TestChatMessageFlow:
             "message_id": "test-msg-1",
         }
         logger.info(f"Sending message: {message}")
-        await ws_client.send_json(message)
+        ws_client.send_json(message)
 
-        # 3. Wait for response with timeout
-        try:
-            response = await ws_client.receive_json(timeout=5.0)
-            logger.info(f"Received response: {response}")
-            assert response["type"] == MessageType.THREAD_MESSAGE
-            assert "message" in response
-            assert "content" in response["message"]
-        except TimeoutError:
-            logger.error("No response received within timeout")
-            raise
+        # 3. Wait for response
+        response = ws_client.receive_json()
+        logger.info(f"Received response: {response}")
 
-    async def test_multiple_messages(self, ws_client, test_thread):
+        # Check for error
+        if response["type"] == "error":
+            logger.error(f"Error sending message: {response}")
+            assert False, f"Error sending message: {response.get('error')}"
+
+        assert response["type"] == MessageType.THREAD_MESSAGE
+        assert "message" in response
+        assert "content" in response["message"]
+
+    def test_multiple_messages(self, ws_client, test_thread):
         """Test sending multiple messages in sequence"""
         # First subscribe to thread
-        await ws_client.send_json(
+        logger.info(f"Subscribing to thread: {test_thread.id}")
+        ws_client.send_json(
             {"type": MessageType.SUBSCRIBE_THREAD, "thread_id": test_thread.id, "message_id": "test-sub-2"}
         )
-        await ws_client.receive_json()  # Consume history
+        history = ws_client.receive_json()  # Consume history
+
+        # Check for error
+        if history["type"] == "error":
+            logger.error(f"Error subscribing to thread: {history}")
+            assert False, f"Error subscribing to thread: {history.get('error')}"
 
         # Send multiple messages
         messages = ["First test message", "Second test message", "Third test message"]
@@ -107,9 +115,16 @@ class TestChatMessageFlow:
                 "message_id": f"test-msg-{idx+1}",
             }
             logger.info(f"Sending message {idx+1}: {message}")
-            await ws_client.send_json(message)
+            ws_client.send_json(message)
 
             # Verify response for each message
-            response = await ws_client.receive_json(timeout=5.0)
+            response = ws_client.receive_json()  # Remove timeout parameter
+            logger.info(f"Received response for message {idx+1}: {response}")
+
+            # Check for error
+            if response["type"] == "error":
+                logger.error(f"Error response for message {idx+1}: {response}")
+                assert False, f"Error sending message {idx+1}: {response.get('error')}"
+
             assert response["type"] == MessageType.THREAD_MESSAGE
             assert response["message"]["content"] == content

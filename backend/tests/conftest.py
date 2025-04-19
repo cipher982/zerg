@@ -7,6 +7,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 
+import zerg.app.database as _db_mod
+import zerg.app.routers.websocket as _ws_router
 from zerg.app.database import Base
 from zerg.app.database import get_db
 from zerg.app.database import make_engine
@@ -30,6 +32,10 @@ test_engine = make_engine(
 )
 
 TestingSessionLocal = make_sessionmaker(test_engine)
+
+# Override default_session_factory to use test sessions for WebSocket
+_db_mod.default_session_factory = TestingSessionLocal
+_ws_router.default_session_factory = TestingSessionLocal
 
 # Mock the OpenAI module before importing main app
 mock_openai = MagicMock()

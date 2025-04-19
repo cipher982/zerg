@@ -100,9 +100,17 @@ async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(
 @publish_event(EventType.AGENT_DELETED)
 async def delete_agent(agent_id: int, db: Session = Depends(get_db)):
     """Delete an agent"""
+    # Get the agent first to include in the event data
+    agent = crud.get_agent(db, agent_id=agent_id)
+    if agent is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+    # Delete the agent
     if not crud.delete_agent(db, agent_id=agent_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
-    return None
+
+    # Return the agent data for the event
+    return agent
 
 
 # Agent messages endpoints
