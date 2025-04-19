@@ -13,6 +13,11 @@ impl ApiConfig {
         }
     }
 
+    /// Create a new ApiConfig from a URL string
+    pub fn from_url(url: &str) -> Self {
+        Self { base_url: url.trim_end_matches('/').to_string() }
+    }
+
     /// Get the base URL for all API calls
     pub fn base_url(&self) -> &str {
         &self.base_url

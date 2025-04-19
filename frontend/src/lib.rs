@@ -33,6 +33,12 @@ pub fn start() -> Result<(), JsValue> {
     // Log the API base URL for debugging
     web_sys::console::log_1(&format!("API_BASE_URL at build: {:?}", option_env!("API_BASE_URL")).into());
 
+    // Initialize API configuration before any network operations
+    if let Err(e) = network::init_api_config() {
+        web_sys::console::error_1(&format!("Failed to initialize API config: {:?}", e).into());
+        return Err(JsValue::from_str(&format!("API config initialization failed: {}", e)));
+    }
+
     // Get the document
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");

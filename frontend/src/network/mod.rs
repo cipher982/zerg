@@ -15,6 +15,7 @@ pub use topic_manager::TopicManager;
 use lazy_static::lazy_static;
 use std::sync::RwLock;
 use config::ApiConfig;
+use wasm_bindgen::prelude::*;
 
 lazy_static! {
     static ref API_CONFIG: RwLock<Option<ApiConfig>> = RwLock::new(None);
@@ -23,6 +24,15 @@ lazy_static! {
 /// Initialize the API configuration. Must be called before any network operations.
 pub fn init_api_config() -> Result<(), &'static str> {
     let config = ApiConfig::new()?;
+    *API_CONFIG.write().unwrap() = Some(config);
+    Ok(())
+}
+
+/// Initialize the API configuration from a JS-provided URL.
+/// This allows runtime configuration of the API endpoints.
+#[wasm_bindgen]
+pub fn init_api_config_js(api_base_url: &str) -> Result<(), JsValue> {
+    let config = ApiConfig::from_url(api_base_url);
     *API_CONFIG.write().unwrap() = Some(config);
     Ok(())
 }
