@@ -43,8 +43,9 @@ client = OpenAI(
 def read_agents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Get all agents"""
     agents = crud.get_agents(db, skip=skip, limit=limit)
+    # Return empty list instead of exception for no agents
     if not agents:
-        raise HTTPException(status_code=status.HTTP_200_OK, detail=[])
+        return []
     return agents
 
 
