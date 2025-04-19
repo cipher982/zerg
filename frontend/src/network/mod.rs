@@ -20,3 +20,15 @@ pub(crate) fn get_api_base_url() -> Result<String, &'static str> {
         Err("API_BASE_URL environment variable is not set")
     }
 } 
+
+pub(crate) fn get_ws_url() -> Result<String, &'static str> {
+    get_api_base_url().map(|url| {
+        // Convert http(s):// to ws(s)://
+        let ws_url = if url.starts_with("https://") {
+            url.replace("https://", "wss://")
+        } else {
+            url.replace("http://", "ws://")
+        };
+        format!("{}/ws", ws_url)
+    })
+} 

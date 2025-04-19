@@ -59,7 +59,7 @@ pub struct WsConfig {
 impl Default for WsConfig {
     fn default() -> Self {
         Self {
-            url: "ws://localhost:8001/api/ws/v2".to_string(),
+            url: super::get_ws_url().expect("WebSocket URL must be set via API_BASE_URL environment variable"),
             max_reconnect_attempts: None,
             initial_backoff_ms: 1000,
             max_backoff_ms: 30000,
