@@ -2,38 +2,34 @@ import sys
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import dotenv
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import zerg.app.database
 from zerg.app.database import Base
 from zerg.app.database import get_db
+from zerg.app.database import make_engine
+from zerg.app.database import make_sessionmaker
 from zerg.app.models.models import Agent
 from zerg.app.models.models import AgentMessage
 from zerg.app.models.models import Thread
 from zerg.app.models.models import ThreadMessage
 
+dotenv.load_dotenv()
+
+
 # Create a test database - using in-memory SQLite for tests
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
-# IMPORTANT: Override the application engine with our test engine
-# This ensures the app and tests use the same database connection
-engine = create_engine(
+# Create test engine and session factory
+test_engine = make_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,  # Use StaticPool for in-memory database
 )
 
-
-zerg.app.database.engine = engine
-
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Initialize models with our test engine
-Base.metadata.create_all(bind=engine)
+TestingSessionLocal = make_sessionmaker(test_engine)
 
 # Mock the OpenAI module before importing main app
 mock_openai = MagicMock()
@@ -65,7 +61,6 @@ sys.modules["langgraph.graph.message"] = MagicMock()
 sys.modules["langchain_openai"] = MagicMock()
 
 # Import app after all engine setup and mocks are in place
-# This ensures app uses our test engine for metadata binding
 from zerg.main import app  # noqa: E402
 
 
@@ -75,7 +70,7 @@ def db_session():
     Creates a fresh database for each test, then tears it down after the test is done.
     """
     # Create the tables
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=test_engine)
 
     # Create a session
     db = TestingSessionLocal()
@@ -84,7 +79,7 @@ def db_session():
     finally:
         db.close()
         # Drop all tables after the test
-        Base.metadata.drop_all(bind=engine)
+        Base.metadata.drop_all(bind=test_engine)
 
 
 @pytest.fixture
@@ -125,6 +120,23 @@ def test_client(db_session):
     yield client
 
     app.dependency_overrides = {}
+
+
+@pytest.fixture
+def test_session_factory():
+    """
+    Returns a session factory using the test database.
+    Used for cases where a service requires a session factory.
+    """
+
+    def get_test_session():
+        db = TestingSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    return get_test_session
 
 
 @pytest.fixture
