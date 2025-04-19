@@ -20,7 +20,7 @@ from zerg.app.services.scheduler_service import scheduler_service
 load_dotenv()
 
 # Create the FastAPI app
-app = FastAPI(redirect_slashes=False)
+app = FastAPI(redirect_slashes=True)
 
 # Add CORS middleware with all necessary headers
 app.add_middleware(

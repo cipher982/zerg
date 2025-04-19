@@ -7,7 +7,7 @@ router = APIRouter(
 )
 
 
-@router.get("/models")
+@router.get("/")
 async def get_models():
     """Return available models."""
     return get_all_models_for_api()
