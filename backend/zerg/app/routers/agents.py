@@ -28,7 +28,6 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
-    prefix="/agents",
     tags=["agents"],
 )
 
