@@ -1,88 +1,82 @@
-"""New WebSocket routing module.
+"""WebSocket routing module.
 
-This module provides a new FastAPI router for WebSocket connections
-using the topic-based subscription system.
+This module provides a FastAPI router for WebSocket connections
+using a topic-based subscription system.
 """
 
 import json
 import logging
 import uuid
+from typing import Optional
 
 from fastapi import APIRouter
-from fastapi import Depends
 from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
-from sqlalchemy.orm import Session
 
-from zerg.app.database import get_db
+from zerg.app.database import SessionLocal
 from zerg.app.schemas.ws_messages import ErrorMessage
 from zerg.app.websocket.handlers import dispatch_message
 from zerg.app.websocket.manager import topic_manager
 
-router = APIRouter(prefix="/api")
+router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, db: Session = Depends(get_db), initial_topics: str = None):
-    """New WebSocket endpoint supporting topic-based subscriptions.
+async def websocket_endpoint(websocket: WebSocket, initial_topics: Optional[str] = None):
+    """WebSocket endpoint supporting topic-based subscriptions.
 
-    This endpoint handles all WebSocket connections and routes messages
-    to the appropriate handlers based on message type. It supports
-    subscribing to multiple topics (agent events, thread events) over
-    a single connection.
-
-    Query Parameters:
+    Args:
+        websocket: The WebSocket connection
         initial_topics: Optional comma-separated list of topics to subscribe to
-                      immediately upon connection (e.g., "agent:123,thread:45")
+            immediately upon connection (e.g., "agent:123,thread:45")
     """
-    # Handle CORS for WebSocket
-    try:
-        # Accept all origins in development
-        await websocket.accept()
-        client_id = str(uuid.uuid4())
-        logger.info(f"WebSocket connection established for client {client_id}")
+    client_id = str(uuid.uuid4())
+    logger.info(f"New WebSocket connection attempt from client {client_id}")
 
-        # Accept the connection and register the client
+    try:
+        await websocket.accept()
         await topic_manager.connect(client_id, websocket)
+        logger.info(f"WebSocket connection established for client {client_id}")
 
         # Handle initial topic subscriptions if provided
         if initial_topics:
-            topics = [t.strip() for t in initial_topics.split(",")]
-            subscribe_msg = {
-                "type": "subscribe",
-                "topics": topics,
-                "message_id": f"auto-subscribe-{uuid.uuid4()}",
-            }
-            await dispatch_message(client_id, subscribe_msg, db)
+            db = SessionLocal()
+            try:
+                topics = [t.strip() for t in initial_topics.split(",")]
+                subscribe_msg = {
+                    "type": "subscribe",
+                    "topics": topics,
+                    "message_id": f"auto-subscribe-{uuid.uuid4()}",
+                }
+                await dispatch_message(client_id, subscribe_msg, db)
+            finally:
+                db.close()
 
         # Main message loop
         while True:
             try:
-                # Receive JSON data from the client
-                raw_data = await websocket.receive_text()
-                data = json.loads(raw_data)
+                # Get a fresh DB session for each message
+                db = SessionLocal()
+                try:
+                    raw_data = await websocket.receive_text()
+                    data = json.loads(raw_data)
+                    await dispatch_message(client_id, data, db)
+                finally:
+                    db.close()
 
-                # Dispatch the message to the appropriate handler
-                await dispatch_message(client_id, data, db)
-
-            except json.JSONDecodeError:
-                logger.warning(f"Invalid JSON from client {client_id}")
-                error_msg = ErrorMessage(error="Invalid JSON payload")
-                await websocket.send_json(error_msg.model_dump())
+            except json.JSONDecodeError as e:
+                logger.warning(f"Invalid JSON from client {client_id}: {e}")
+                await websocket.send_json(ErrorMessage(error="Invalid JSON payload").model_dump())
 
     except WebSocketDisconnect:
-        # Handle client disconnect
         logger.info(f"WebSocket connection closed for client {client_id}")
-        await topic_manager.disconnect(client_id)
-
     except Exception as e:
-        # Handle other exceptions
-        logger.error(f"WebSocket error: {str(e)}")
+        logger.error(f"WebSocket error for client {client_id}: {str(e)}")
         try:
-            error_msg = ErrorMessage(error="Internal server error")
-            await websocket.send_json(error_msg.model_dump())
+            await websocket.send_json(ErrorMessage(error="Internal server error").model_dump())
         except Exception:
             pass
-        finally:
-            await topic_manager.disconnect(client_id)
+    finally:
+        await topic_manager.disconnect(client_id)
+        logger.info(f"Cleaned up connection for client {client_id}")

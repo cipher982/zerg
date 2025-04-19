@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from zerg.app.models_config import get_all_models_for_api
 
 router = APIRouter(
-    prefix="/api",
+    prefix="/models",
     tags=["models"],
 )
 

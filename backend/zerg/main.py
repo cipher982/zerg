@@ -2,17 +2,14 @@ import logging
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.middleware.cors import CORSMiddleware
 
 from zerg.app.config import AGENTS_PREFIX
 from zerg.app.config import API_PREFIX
 from zerg.app.config import MODELS_PREFIX
 from zerg.app.config import THREADS_PREFIX
 from zerg.app.database import Base
-
-# Import our application modules directly from their source
 from zerg.app.database import engine
 from zerg.app.routers.agents import router as agents_router
 from zerg.app.routers.models import router as models_router
@@ -20,76 +17,27 @@ from zerg.app.routers.threads import router as threads_router
 from zerg.app.routers.websocket import router as websocket_router
 from zerg.app.services.scheduler_service import scheduler_service
 
-# from zerg.app.websocket import EventType
-# from zerg.app.websocket import connected_clients
-
 # Load environment variables
 load_dotenv()
 
-# Create DB tables if they don't exist
-Base.metadata.create_all(bind=engine)
-
 # Create the FastAPI app
-app = FastAPI(
-    # Make FastAPI handle routes both with and without trailing slashes
-    redirect_slashes=False
-)
+app = FastAPI(redirect_slashes=False)
 
 # Add CORS middleware with all necessary headers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development - allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
 
-# Add a middleware to ensure all responses include CORS headers
-
-
-class EnsureCORSMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        try:
-            response = await call_next(request)
-        except Exception as e:
-            # Catch all exceptions and return a 500 with CORS headers
-            logger.error(f"Error handling request: {str(e)}")
-            response = JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
-
-        # Ensure CORS headers are present on all responses, even errors
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-
-        return response
-
-
-# Apply the middleware
-app.add_middleware(EnsureCORSMiddleware)
-
-
-# Add an OPTIONS handler for CORS preflight requests
-@app.options("/{rest_of_path:path}")
-async def options_handler(rest_of_path: str):
-    """Global OPTIONS handler for CORS preflight requests"""
-    logger.info(f"Handling OPTIONS request for: /{rest_of_path}")
-
-    # Return a response with all necessary CORS headers
-    response = JSONResponse(content={"message": "OK"})
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept"
-    response.headers["Access-Control-Max-Age"] = "86400"  # Cache preflight for 24 hours
-
-    return response
-
-
 # Include our API routers with centralized prefixes
 app.include_router(agents_router, prefix=f"{API_PREFIX}{AGENTS_PREFIX}")
 app.include_router(threads_router, prefix=f"{API_PREFIX}{THREADS_PREFIX}")
 app.include_router(models_router, prefix=f"{API_PREFIX}{MODELS_PREFIX}")
-app.include_router(websocket_router, prefix=API_PREFIX)  # WebSocket router handles WS_ENDPOINT internally
+app.include_router(websocket_router, prefix=API_PREFIX)
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -99,10 +47,16 @@ logger = logging.getLogger(__name__)
 async def startup_event():
     """Initialize services on app startup."""
     try:
+        # Create DB tables if they don't exist
+        # Moved from global scope to prevent eager binding at import time
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables initialized")
+
+        # Start scheduler service
         await scheduler_service.start()
         logger.info("Scheduler service initialized")
     except Exception as e:
-        logger.error(f"Error starting scheduler service: {e}")
+        logger.error(f"Error during startup: {e}")
 
 
 @app.on_event("shutdown")
