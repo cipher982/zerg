@@ -14,7 +14,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from zerg.app.agents import AgentManager
 from zerg.app.crud import crud
-from zerg.app.database import SessionLocal
+from zerg.app.database import default_session_factory
 from zerg.app.events import EventType
 from zerg.app.events.event_bus import event_bus
 
@@ -24,10 +24,11 @@ logger = logging.getLogger(__name__)
 class SchedulerService:
     """Service for managing scheduled agent tasks."""
 
-    def __init__(self):
+    def __init__(self, session_factory=None):
         """Initialize the scheduler service."""
         self.scheduler = AsyncIOScheduler()
         self._initialized = False
+        self.session_factory = session_factory or default_session_factory
 
     async def start(self):
         """Start the scheduler if not already running."""
@@ -80,14 +81,14 @@ class SchedulerService:
 
         # If we can't determine the scheduling state, fetch the agent
         if run_on_schedule is None or schedule is None:
-            db = SessionLocal()
+            db_session = self.session_factory()
             try:
-                agent = crud.get_agent(db, agent_id)
+                agent = crud.get_agent(db_session, agent_id)
                 if agent:
                     run_on_schedule = agent.run_on_schedule
                     schedule = agent.schedule
             finally:
-                db.close()
+                db_session.close()
 
         # Remove any existing job
         self.remove_agent_job(agent_id)
@@ -108,11 +109,11 @@ class SchedulerService:
 
     async def load_scheduled_agents(self):
         """Load all agents with run_on_schedule=True from the database and schedule them."""
-        db = SessionLocal()
+        db_session = self.session_factory()
         try:
             # Get all agents with run_on_schedule=True and valid schedule
             agents = (
-                db.query(crud.Agent)
+                db_session.query(crud.Agent)
                 .filter(
                     crud.Agent.run_on_schedule == True,  # noqa: E712
                     crud.Agent.schedule.isnot(None),
@@ -127,7 +128,7 @@ class SchedulerService:
         except Exception as e:
             logger.error(f"Error loading scheduled agents: {e}")
         finally:
-            db.close()
+            db_session.close()
 
     async def schedule_agent(self, agent_id: int, cron_expression: str):
         """
@@ -172,10 +173,10 @@ class SchedulerService:
         - Creating or getting a thread
         - Running the agent's task instructions
         """
-        db = SessionLocal()
+        db_session = self.session_factory()
         try:
             # Get the agent
-            agent = crud.get_agent(db, agent_id)
+            agent = crud.get_agent(db_session, agent_id)
             if not agent:
                 logger.error(f"Agent {agent_id} not found")
                 return
@@ -184,16 +185,16 @@ class SchedulerService:
             agent_manager = AgentManager(agent)
 
             # Get or create a thread for this scheduled run
-            thread, created = agent_manager.get_or_create_thread(db, title=f"Scheduled Run - {agent.name}")
+            thread, created = agent_manager.get_or_create_thread(db_session, title=f"Scheduled Run - {agent.name}")
 
             # If it's a new thread, add the system message
             if created:
-                agent_manager.add_system_message(db, thread)
+                agent_manager.add_system_message(db_session, thread)
 
             # Run the agent's task instructions
             logger.info(f"Running scheduled task for agent {agent_id}")
             await agent_manager.process_message(
-                db=db,
+                db=db_session,
                 thread=thread,
                 content=agent.task_instructions,
                 stream=False,  # Don't stream for scheduled runs
@@ -202,7 +203,7 @@ class SchedulerService:
         except Exception as e:
             logger.error(f"Error running scheduled task for agent {agent_id}: {e}")
         finally:
-            db.close()
+            db_session.close()
 
 
 # Global instance of the scheduler service

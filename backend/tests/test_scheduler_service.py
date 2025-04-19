@@ -7,33 +7,27 @@ from zerg.app.services.scheduler_service import SchedulerService
 
 
 @pytest.fixture(autouse=True)
-def patch_session_local(monkeypatch, db_session):
+def patch_logging(monkeypatch):
     """
-    Patch the SessionLocal in scheduler_service to use the test DB session.
+    Patch the scheduler service logger for cleaner test output.
     """
-    # Replace SessionLocal to return the test db_session
-    monkeypatch.setattr(
-        "zerg.app.services.scheduler_service.SessionLocal",
-        lambda: db_session,
-    )
     # Silence logging
     monkeypatch.setattr(
         "zerg.app.services.scheduler_service.logger",
         logging.getLogger("test_scheduler_service"),
     )
     yield
-    # No cleanup needed
 
 
 @pytest.fixture
-def service():
+def service(test_session_factory):
     """
     Create and return a SchedulerService instance for testing.
 
     The service is configured to use a test scheduler that does not actually
     run jobs but allows verifying that jobs would be scheduled correctly.
     """
-    service = SchedulerService()
+    service = SchedulerService(session_factory=test_session_factory)
     # Mock the event_bus subscription to avoid errors during tests
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(

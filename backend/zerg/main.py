@@ -3,14 +3,12 @@ import logging
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 
 from zerg.app.config import AGENTS_PREFIX
 from zerg.app.config import API_PREFIX
 from zerg.app.config import MODELS_PREFIX
 from zerg.app.config import THREADS_PREFIX
-from zerg.app.database import Base
-from zerg.app.database import engine
+from zerg.app.database import initialize_database
 from zerg.app.routers.agents import router as agents_router
 from zerg.app.routers.models import router as models_router
 from zerg.app.routers.threads import router as threads_router
@@ -48,8 +46,7 @@ async def startup_event():
     """Initialize services on app startup."""
     try:
         # Create DB tables if they don't exist
-        # Moved from global scope to prevent eager binding at import time
-        Base.metadata.create_all(bind=engine)
+        initialize_database()
         logger.info("Database tables initialized")
 
         # Start scheduler service
@@ -80,22 +77,4 @@ async def read_root():
 # Browsers will go directly to the frontend server for favicon.ico
 
 
-# Database reset endpoint for development
-@app.post("/api/reset-database")
-async def reset_database():
-    """Reset the database by dropping all tables and recreating them.
-    This is for development purposes only and should be secured in production.
-    """
-    try:
-        logger.warning("Resetting database - dropping all tables")
-        # Drop all tables
-        Base.metadata.drop_all(bind=engine)
-
-        # Recreate all tables
-        logger.info("Recreating database tables")
-        Base.metadata.create_all(bind=engine)
-
-        return {"message": "Database reset successfully"}
-    except Exception as e:
-        logger.error(f"Error resetting database: {str(e)}")
-        return JSONResponse(status_code=500, content={"detail": f"Failed to reset database: {str(e)}"})
+# Redundant reset-database endpoint removed - use /admin/reset-database instead

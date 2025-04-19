@@ -54,7 +54,16 @@ def read_agents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 @publish_event(EventType.AGENT_CREATED)
 async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
     """Create a new agent"""
-    return crud.create_agent(db=db, agent=agent)
+    return crud.create_agent(
+        db=db,
+        name=agent.name,
+        system_instructions=agent.system_instructions,
+        task_instructions=agent.task_instructions,
+        model=agent.model,
+        schedule=agent.schedule,
+        config=agent.config,
+        run_on_schedule=agent.run_on_schedule,
+    )
 
 
 @router.get("/{agent_id}", response_model=Agent)
@@ -70,7 +79,18 @@ def read_agent(agent_id: int, db: Session = Depends(get_db)):
 @publish_event(EventType.AGENT_UPDATED)
 async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(get_db)):
     """Update an agent"""
-    db_agent = crud.update_agent(db, agent_id=agent_id, agent=agent)
+    db_agent = crud.update_agent(
+        db=db,
+        agent_id=agent_id,
+        name=agent.name,
+        system_instructions=agent.system_instructions,
+        task_instructions=agent.task_instructions,
+        model=agent.model,
+        status=agent.status,
+        schedule=agent.schedule,
+        config=agent.config,
+        run_on_schedule=agent.run_on_schedule,
+    )
     if db_agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
     return db_agent
@@ -106,7 +126,7 @@ def create_agent_message(agent_id: int, message: MessageCreate, db: Session = De
     if not crud.get_agent(db, agent_id=agent_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    return crud.create_agent_message(db=db, agent_id=agent_id, message=message)
+    return crud.create_agent_message(db=db, agent_id=agent_id, role=message.role, content=message.content)
 
 
 @router.post("/{agent_id}/run", status_code=status.HTTP_201_CREATED)
@@ -130,7 +150,7 @@ def run_agent(agent_id: int, db: Session = Depends(get_db)):
 
         # Create response message
         message = MessageCreate(role="assistant", content=response.choices[0].message.content)
-        response_msg = crud.create_agent_message(db=db, agent_id=agent_id, message=message)
+        response_msg = crud.create_agent_message(db=db, agent_id=agent_id, role=message.role, content=message.content)
 
         # Mark messages as processed
         for msg in messages:

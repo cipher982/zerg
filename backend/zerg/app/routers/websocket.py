@@ -12,14 +12,29 @@ from typing import Optional
 from fastapi import APIRouter
 from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
+from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
 
-from zerg.app.database import SessionLocal
+from zerg.app.database import default_session_factory
 from zerg.app.schemas.ws_messages import ErrorMessage
 from zerg.app.websocket.handlers import dispatch_message
 from zerg.app.websocket.manager import topic_manager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def get_websocket_session(session_factory: sessionmaker = None) -> Session:
+    """Create a new database session for WebSocket handlers.
+
+    Args:
+        session_factory: Optional custom session factory to use
+
+    Returns:
+        A SQLAlchemy Session object that must be closed by the caller
+    """
+    factory = session_factory or default_session_factory
+    return factory()
 
 
 @router.websocket("/ws")
@@ -41,7 +56,8 @@ async def websocket_endpoint(websocket: WebSocket, initial_topics: Optional[str]
 
         # Handle initial topic subscriptions if provided
         if initial_topics:
-            db = SessionLocal()
+            # Use our explicit session creation function
+            db = get_websocket_session()
             try:
                 topics = [t.strip() for t in initial_topics.split(",")]
                 subscribe_msg = {
@@ -56,8 +72,8 @@ async def websocket_endpoint(websocket: WebSocket, initial_topics: Optional[str]
         # Main message loop
         while True:
             try:
-                # Get a fresh DB session for each message
-                db = SessionLocal()
+                # Get a fresh DB session for each message using our function
+                db = get_websocket_session()
                 try:
                     raw_data = await websocket.receive_text()
                     data = json.loads(raw_data)
