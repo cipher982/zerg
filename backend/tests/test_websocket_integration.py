@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 import pytest_asyncio
 
@@ -129,14 +131,25 @@ class TestWebSocketIntegration:
                 }
             )
 
-            # Both clients should receive the broadcast
-            response1 = await clients[0].receive_json()
-            response2 = await clients[1].receive_json()
+            # Create a list to store responses from both clients
+            responses = []
 
-            assert response1["type"] == MessageType.THREAD_MESSAGE
-            assert response2["type"] == MessageType.THREAD_MESSAGE
-            assert response1["message"]["content"] == test_content
-            assert response2["message"]["content"] == test_content
+            # Wait for both clients to receive the message with a timeout
+            async def receive_message(client):
+                try:
+                    return await client.receive_json()
+                except Exception as e:
+                    return {"error": str(e)}
+
+            # Gather responses from both clients concurrently
+            response_tasks = [receive_message(client) for client in clients]
+            responses = await asyncio.gather(*response_tasks)
+
+            # Verify both clients received valid messages
+            for response in responses:
+                assert "error" not in response, f"Error receiving message: {response.get('error')}"
+                assert response["type"] == MessageType.THREAD_MESSAGE
+                assert response["message"]["content"] == test_content
 
         finally:
             await disconnect_clients(clients)

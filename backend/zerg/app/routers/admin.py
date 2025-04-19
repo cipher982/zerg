@@ -7,7 +7,7 @@ from zerg.app.database import Base
 from zerg.app.database import engine
 
 router = APIRouter(
-    prefix="/api",
+    prefix="/admin",
     tags=["admin"],
 )
 

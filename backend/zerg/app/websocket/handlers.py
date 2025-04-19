@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from zerg.app.crud import crud
 from zerg.app.schemas.ws_messages import ErrorMessage
+from zerg.app.schemas.ws_messages import MessageType
 from zerg.app.schemas.ws_messages import PingMessage
 from zerg.app.schemas.ws_messages import PongMessage
 from zerg.app.schemas.ws_messages import SendMessageRequest
@@ -63,117 +64,117 @@ async def send_to_client(client_id: str, message: Dict[str, Any]) -> bool:
         return False
 
 
-async def send_error(client_id: str, error_message: str, message_id: Optional[str] = None) -> None:
+async def send_error(client_id: str, error_msg: str, message_id: Optional[str] = None) -> None:
     """Send an error message to a client.
 
     Args:
         client_id: The client ID to send to
-        error_message: The error message text
-        message_id: Optional message ID for correlation
+        error_msg: The error message
+        message_id: Optional message ID to correlate with request
     """
-    error_msg = ErrorMessage(error=error_message, message_id=message_id)
-    await send_to_client(client_id, error_msg.model_dump())
+    error = ErrorMessage(
+        type=MessageType.ERROR,
+        error=error_msg,
+        message_id=message_id,
+    )
+    await send_to_client(client_id, error.model_dump())
 
 
-async def handle_ping(client_id: str, message: Dict[str, Any], db: Session = None) -> None:
-    """Handle ping messages to keep connections alive.
+async def handle_ping(client_id: str, message: Dict[str, Any], _: Session) -> None:
+    """Handle ping messages to keep connection alive.
 
     Args:
-        client_id: The client ID that sent the message
+        client_id: The client ID that sent the ping
         message: The ping message
-        db: Database session (not used for ping)
+        _: Unused database session
     """
     try:
         ping_msg = PingMessage(**message)
-        pong_response = PongMessage(timestamp=ping_msg.timestamp)
-        await send_to_client(client_id, pong_response.model_dump())
+        pong = PongMessage(
+            type=MessageType.PONG,
+            message_id=ping_msg.message_id,
+            timestamp=ping_msg.timestamp,
+        )
+        await send_to_client(client_id, pong.model_dump())
     except Exception as e:
         logger.error(f"Error handling ping: {str(e)}")
+        await send_error(client_id, "Failed to process ping")
 
 
 # Topic subscription handlers for different topic types
-async def _subscribe_thread(client_id: str, thread_id: int, message_id: str, db: Session) -> bool:
-    """Handle subscription to a thread topic.
+async def _subscribe_thread(client_id: str, thread_id: int, message_id: str, db: Session) -> None:
+    """Subscribe to a thread and send initial history.
 
     Args:
         client_id: The client ID subscribing
         thread_id: The thread ID to subscribe to
         message_id: Message ID for correlation
         db: Database session
-
-    Returns:
-        bool: True if subscription succeeded, False otherwise
     """
-    # Validate thread exists
-    thread = crud.get_thread(db, thread_id)
-    if not thread:
-        await send_error(client_id, f"Thread {thread_id} not found", message_id)
-        return False
+    try:
+        # Validate thread exists
+        thread = crud.get_thread(db, thread_id)
+        if not thread:
+            await send_error(client_id, f"Thread {thread_id} not found", message_id)
+            return
 
-    # Subscribe to topic
-    topic = f"thread:{thread_id}"
-    await topic_manager.subscribe_to_topic(client_id, topic)
+        # Subscribe to thread topic
+        topic = f"thread:{thread_id}"
+        await topic_manager.subscribe_to_topic(client_id, topic)
 
-    # Send thread history
-    thread_messages = crud.get_thread_messages(db, thread_id)
-    history_list = [
-        {
-            "id": msg.id,
-            "thread_id": msg.thread_id,
-            "role": msg.role,
-            "content": msg.content,
-            "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
-            "processed": msg.processed,
-        }
-        for msg in thread_messages
-    ]
+        # Get thread history
+        messages = crud.get_thread_messages(db, thread_id)
 
-    history_msg = ThreadHistoryMessage(
-        thread_id=thread_id,
-        messages=history_list,
-        message_id=message_id,
-    )
+        # Convert messages to ThreadMessageData format
+        message_data = [
+            ThreadMessageData(
+                id=msg.id,
+                thread_id=msg.thread_id,
+                role=msg.role,
+                content=msg.content,
+                timestamp=msg.timestamp.isoformat() if msg.timestamp else None,
+                processed=msg.processed,
+            ).model_dump()
+            for msg in messages
+        ]
 
-    await send_to_client(client_id, history_msg.model_dump())
-    return True
+        # Send thread history
+        history = ThreadHistoryMessage(
+            type=MessageType.THREAD_HISTORY,
+            message_id=message_id,
+            thread_id=thread_id,
+            messages=message_data,
+        )
+        await send_to_client(client_id, history.model_dump())
+
+    except Exception as e:
+        logger.error(f"Error in _subscribe_thread: {str(e)}")
+        await send_error(client_id, "Failed to subscribe to thread", message_id)
 
 
-async def _subscribe_agent(client_id: str, agent_id: int, message_id: str, db: Session) -> bool:
-    """Handle subscription to an agent topic.
+async def _subscribe_agent(client_id: str, agent_id: int, message_id: str, db: Session) -> None:
+    """Subscribe to agent events.
 
     Args:
         client_id: The client ID subscribing
         agent_id: The agent ID to subscribe to
         message_id: Message ID for correlation
         db: Database session
-
-    Returns:
-        bool: True if subscription succeeded, False otherwise
     """
-    # Validate agent exists
-    agent = crud.get_agent(db, agent_id)
-    if not agent:
-        await send_error(client_id, f"Agent {agent_id} not found", message_id)
-        return False
+    try:
+        # Validate agent exists
+        agent = crud.get_agent(db, agent_id)
+        if not agent:
+            await send_error(client_id, f"Agent {agent_id} not found", message_id)
+            return
 
-    # Subscribe to topic
-    topic = f"agent:{agent_id}"
-    await topic_manager.subscribe_to_topic(client_id, topic)
+        # Subscribe to agent topic
+        topic = f"agent:{agent_id}"
+        await topic_manager.subscribe_to_topic(client_id, topic)
 
-    # Send current agent state
-    agent_msg = {
-        "type": "agent_state",
-        "data": {
-            "id": agent.id,
-            "name": agent.name,
-            "status": agent.status,
-            # Add other relevant agent fields
-        },
-        "message_id": message_id,
-    }
-
-    await send_to_client(client_id, agent_msg)
-    return True
+    except Exception as e:
+        logger.error(f"Error in _subscribe_agent: {str(e)}")
+        await send_error(client_id, "Failed to subscribe to agent", message_id)
 
 
 async def handle_subscribe(client_id: str, message: Dict[str, Any], db: Session) -> None:
@@ -212,27 +213,20 @@ async def handle_subscribe(client_id: str, message: Dict[str, Any], db: Session)
         await send_error(client_id, "Failed to process subscription", message.get("message_id", ""))
 
 
-async def handle_unsubscribe(client_id: str, message: Dict[str, Any], db: Session = None) -> None:
+async def handle_unsubscribe(client_id: str, message: Dict[str, Any], _: Session) -> None:
     """Handle topic unsubscription requests.
 
     Args:
         client_id: The client ID that sent the message
         message: The unsubscription message
-        db: Database session (not used for unsubscribe)
+        _: Unused database session
     """
     try:
-        unsubscribe_msg = UnsubscribeMessage(**message)
-
-        for topic in unsubscribe_msg.topics:
+        for topic in message.get("topics", []):
             await topic_manager.unsubscribe_from_topic(client_id, topic)
-
-        # Send success confirmation
-        success_msg = {"type": "unsubscribe_success", "message_id": unsubscribe_msg.message_id}
-        await send_to_client(client_id, success_msg)
-
     except Exception as e:
-        logger.error(f"Error handling unsubscription: {str(e)}")
-        await send_error(client_id, "Failed to process unsubscription", message.get("message_id", ""))
+        logger.error(f"Error handling unsubscribe: {str(e)}")
+        await send_error(client_id, "Failed to process unsubscribe")
 
 
 # Message handler dispatcher
