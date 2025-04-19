@@ -1,5 +1,7 @@
 """Tests for the new WebSocket implementation."""
 
+import logging
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
@@ -9,6 +11,9 @@ from zerg.app.events import event_bus
 from zerg.app.models.models import Agent
 from zerg.app.models.models import Thread
 from zerg.app.websocket.manager import TopicConnectionManager
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 @pytest.fixture
@@ -62,25 +67,36 @@ class TestTopicBasedWebSocket:
 
     async def test_subscribe_to_agent(self, ws_client, sample_agent: Agent):
         """Test subscribing to an agent topic."""
+        logger.info("START: test_subscribe_to_agent")
         # Subscribe to agent
+        logger.info(f"Subscribing to agent: {sample_agent.id}")
         ws_client.send_json({"type": "subscribe", "topics": [f"agent:{sample_agent.id}"], "message_id": "test-sub-2"})
+        logger.info("Subscription message sent")
 
         # Should receive current agent state
+        logger.info("Waiting for agent_state response...")
         response = ws_client.receive_json()
+        logger.info(f"Received agent_state response: {response}")
         assert response["type"] == "agent_state"
         assert response["data"]["id"] == sample_agent.id
         assert response["data"]["name"] == sample_agent.name
+        logger.info("Agent state assertion passed")
 
         # Publish an agent event
-        await event_bus.publish(
-            EventType.AGENT_UPDATED, {"id": sample_agent.id, "name": sample_agent.name, "status": "processing"}
-        )
+        event_data = {"id": sample_agent.id, "name": sample_agent.name, "status": "processing"}
+        logger.info(f"Publishing AGENT_UPDATED event: {event_data}")
+        await event_bus.publish(EventType.AGENT_UPDATED, event_data)
+        logger.info("AGENT_UPDATED event published")
 
         # Should receive the event
+        logger.info("Waiting for agent_event response...")
         response = ws_client.receive_json()
+        logger.info(f"Received agent_event response: {response}")
         assert response["type"] == "agent_event"
         assert response["data"]["id"] == sample_agent.id
         assert response["data"]["status"] == "processing"
+        logger.info("Agent event assertion passed")
+        logger.info("END: test_subscribe_to_agent")
 
     async def test_subscribe_to_multiple_topics(self, ws_client, sample_thread: Thread, sample_agent: Agent):
         """Test subscribing to multiple topics in one request."""

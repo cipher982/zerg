@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -13,10 +14,14 @@ from zerg.app.database import Base
 from zerg.app.database import get_db
 from zerg.app.database import make_engine
 from zerg.app.database import make_sessionmaker
+from zerg.app.events import EventType
+from zerg.app.events import event_bus
 from zerg.app.models.models import Agent
 from zerg.app.models.models import AgentMessage
 from zerg.app.models.models import Thread
 from zerg.app.models.models import ThreadMessage
+from zerg.app.services.scheduler_service import scheduler_service
+from zerg.app.websocket.manager import topic_manager
 
 dotenv.load_dotenv()
 
@@ -68,6 +73,64 @@ sys.modules["langchain_openai"] = MagicMock()
 
 # Import app after all engine setup and mocks are in place
 from zerg.main import app  # noqa: E402
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_global_resources(request):
+    """
+    Ensure global resources like topic_manager are cleaned up after the session.
+    This is crucial because topic_manager subscribes to event_bus at import time.
+    """
+    yield  # Run all tests
+
+    # Teardown logic after all tests in the session have run
+    print("\nPerforming session cleanup...")
+
+    # 1. Clear topic_manager state
+    #    Resetting internal dicts to break potential reference cycles
+    #    and ensure no lingering client data.
+    topic_manager.active_connections.clear()
+    topic_manager.topic_subscriptions.clear()
+    topic_manager.client_topics.clear()
+    print("Cleared topic_manager state.")
+
+    # 2. Unsubscribe topic_manager handlers from event_bus
+    #    This is important to prevent errors if event_bus tries to call
+    #    handlers on a potentially partially garbage-collected topic_manager.
+    #    Assuming event_bus.unsubscribe is synchronous.
+    try:
+        event_bus.unsubscribe(EventType.AGENT_CREATED, topic_manager._handle_agent_event)
+        event_bus.unsubscribe(EventType.AGENT_UPDATED, topic_manager._handle_agent_event)
+        event_bus.unsubscribe(EventType.AGENT_DELETED, topic_manager._handle_agent_event)
+        event_bus.unsubscribe(EventType.THREAD_CREATED, topic_manager._handle_thread_event)
+        event_bus.unsubscribe(EventType.THREAD_UPDATED, topic_manager._handle_thread_event)
+        event_bus.unsubscribe(EventType.THREAD_DELETED, topic_manager._handle_thread_event)
+        event_bus.unsubscribe(EventType.THREAD_MESSAGE_CREATED, topic_manager._handle_thread_event)
+        print("Unsubscribed topic_manager from event_bus.")
+    except Exception as e:
+        print(f"Error during topic_manager unsubscribe: {e}")
+
+    # 3. Explicitly stop the scheduler service
+    try:
+        # Need to run the async stop method
+        async def _stop_scheduler():
+            await scheduler_service.stop()
+
+        # Use asyncio.run ONLY if no other loop is running (which should be true at session end)
+        # If this causes issues, might need pytest-asyncio's loop access.
+        if scheduler_service._initialized:
+            asyncio.run(_stop_scheduler())
+            print("Stopped scheduler service.")
+        else:
+            print("Scheduler service was not initialized, skipping stop.")
+    except Exception as e:
+        print(f"Error stopping scheduler service during cleanup: {e}")
+
+    # 4. Optionally, clear event_bus subscribers if necessary (use with caution)
+    # event_bus._subscribers.clear()
+    # print("Cleared event_bus subscribers.")
+
+    print("Session cleanup complete.")
 
 
 @pytest.fixture
@@ -129,18 +192,15 @@ def test_client(db_session):
 
 
 @pytest.fixture
-def test_session_factory():
+def test_session_factory(db_session):
     """
     Returns a session factory using the test database.
     Used for cases where a service requires a session factory.
+    Ensures all database operations in a test use the same connection.
     """
 
     def get_test_session():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
+        return db_session
 
     return get_test_session
 
