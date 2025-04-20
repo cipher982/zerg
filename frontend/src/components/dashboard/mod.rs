@@ -513,35 +513,16 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let agent_id = agent.id;
     let run_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
-
-        // TODO: Implement the actual 'run' logic using the u32 agent_id.
-        // This likely involves dispatching a message/command to trigger a thread run via the API.
-        // For now, just log. Replace the old complex logic.
-        web_sys::console::warn_1(&format!("TODO: Implement run logic for agent_id: {}", agent_id).into());
-
-        /* Old logic removed:
-        // Check if this is an API agent (with agent-{id} format)
-        if let Some(api_agent_id_str) = agent_id.strip_prefix("agent-") {
-            if let Ok(api_agent_id) = api_agent_id_str.parse::<u32>() {
-                // Call the API to run the agent
-                wasm_bindgen_futures::spawn_local(async move {
-                    match crate::network::ApiClient::run_agent(api_agent_id).await {
-                        Ok(_) => {
-                            web_sys::console::log_1(&format!("Agent {} running via API", api_agent_id).into());
-                        }
-                        Err(e) => {
-                            web_sys::console::error_1(&format!("Error running agent {}: {:?}", api_agent_id, e).into());
-                        }
-                    }
-                });
-            } else {
-                web_sys::console::error_1(&format!("Invalid agent ID format: {}", agent_id).into());
+        wasm_bindgen_futures::spawn_local(async move {
+            match crate::network::api_client::ApiClient::run_agent(agent_id).await {
+                Ok(response) => {
+                    web_sys::console::log_1(&format!("Agent {} run triggered: {}", agent_id, response).into());
+                },
+                Err(e) => {
+                    web_sys::console::error_1(&format!("Run error for agent {}: {:?}", agent_id, e).into());
+                }
             }
-        } else {
-            // For legacy nodes without the agent- prefix, use the old approach
-            // ... old SendTaskToAgent logic ...
-        }
-        */
+        });
     }) as Box<dyn FnMut(_)>);
     
     run_btn.dyn_ref::<HtmlElement>()

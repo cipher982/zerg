@@ -137,35 +137,35 @@ def create_agent_message(agent_id: int, message: MessageCreate, db: Session = De
     return crud.create_agent_message(db=db, agent_id=agent_id, role=message.role, content=message.content)
 
 
-@router.post("/{agent_id}/run", status_code=status.HTTP_201_CREATED)
-def run_agent(agent_id: int, db: Session = Depends(get_db)):
-    """Run an agent to process its messages"""
-    # First check if agent exists
-    if not crud.get_agent(db, agent_id=agent_id):
+@router.post("/{agent_id}/task", status_code=status.HTTP_202_ACCEPTED)
+def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
+    """Run the agent's main task (task_instructions) in a new thread, matching scheduled run behavior."""
+    from zerg.app.agents import AgentManager
+
+    agent = crud.get_agent(db, agent_id=agent_id)
+    if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    # Get unprocessed messages
-    messages = crud.get_agent_messages(db, agent_id=agent_id, processed=False)
-    if not messages:
-        return {"status": "No unprocessed messages"}
+    agent_manager = AgentManager(agent)
+    import datetime
 
-    # Process messages through OpenAI
+    timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    thread_title = f"Manual Task Run - {timestamp}"
+    thread, created = agent_manager.get_or_create_thread(db, title=thread_title)
+    if created:
+        agent_manager.add_system_message(db, thread)
+    # Run the agent's task instructions (non-streaming)
     try:
-        response = client.chat.completions.create(
-            model="gpt-4",  # TODO: Get from agent config
-            messages=[{"role": msg.role, "content": msg.content} for msg in messages],
+        result_chunks = agent_manager.process_message(
+            db=db,
+            thread=thread,
+            content=agent.task_instructions,
+            stream=False,
         )
-
-        # Create response message
-        message = MessageCreate(role="assistant", content=response.choices[0].message.content)
-        response_msg = crud.create_agent_message(db=db, agent_id=agent_id, role=message.role, content=message.content)
-
-        # Mark messages as processed
-        for msg in messages:
-            crud.update_message_processed(db, msg.id, True)
-
-        return response_msg
-
+        # process_message yields the result, so get the first (and only) chunk
+        _ = next(result_chunks, "")  # TODO: do we need to return this somewhere?
+        # The response message is already created in process_message
+        return {"thread_id": thread.id}
     except Exception as e:
-        logger.error(f"Error running agent {agent_id}: {str(e)}")
+        logger.error(f"Error running agent task for agent {agent_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

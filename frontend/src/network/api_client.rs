@@ -64,7 +64,7 @@ impl ApiClient {
 
     // Trigger an agent to run
     pub async fn run_agent(agent_id: u32) -> Result<String, JsValue> {
-        let url = format!("{}/api/agents/{}/run", Self::api_base_url(), agent_id);
+        let url = format!("{}/api/agents/{}/task", Self::api_base_url(), agent_id);
         Self::fetch_json(&url, "POST", None).await
     }
 

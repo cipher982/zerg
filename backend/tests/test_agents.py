@@ -186,3 +186,23 @@ def test_run_agent_not_found(client: TestClient):
     assert response.status_code == 404
     assert "detail" in response.json()
     assert response.json()["detail"] == "Agent not found"
+
+
+def test_run_agent_task(client: TestClient, sample_agent: Agent, db_session):
+    """Test running an agent's main task via the /api/agents/{id}/task endpoint."""
+    with patch("zerg.app.agents.AgentManager") as mock_agent_manager_class:
+        mock_agent_manager = MagicMock()
+        mock_agent_manager_class.return_value = mock_agent_manager
+
+        def mock_process_message(*args, **kwargs):
+            yield "Task result"
+
+        mock_agent_manager.process_message.return_value = mock_process_message()
+        mock_agent_manager.get_or_create_thread.return_value = (MagicMock(id=123), True)
+        mock_agent_manager.add_system_message.return_value = None
+
+        response = client.post(f"/api/agents/{sample_agent.id}/task")
+        assert response.status_code == 202
+        data = response.json()
+        assert "thread_id" in data
+        assert data["thread_id"] == 123
