@@ -96,19 +96,35 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 .map(|(id, _)| id.clone());
 
             if let Some(node_id) = node_id_to_select {
+                // Happy‑path: we already have a visual node for this agent
                 web_sys::console::log_1(&format!("Found node_id {} for agent_id {}, selecting it.", node_id, agent_id).into());
-                state.selected_node_id = Some(node_id); // Select the found node_id
+                state.selected_node_id = Some(node_id);
                 state.state_modified = true;
 
-                // Show the agent modal for editing
+                // Open the modal
                 let window = web_sys::window().expect("no global window exists");
                 let document = window.document().expect("should have a document");
                 if let Err(e) = crate::views::show_agent_modal(state, &document) {
                     web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
                 }
             } else {
-                web_sys::console::error_1(&format!("EditAgent: Could not find a node for agent_id: {}", agent_id).into());
-                needs_refresh = false; // Don't refresh if we couldn't find the node
+                // Fallback: no canvas node yet (e.g., user came from Dashboard before generating canvas)
+                let synthetic_node_id = format!("agent-{}", agent_id);
+                web_sys::console::log_1(&format!("No visual node for agent_id {}. Using synthetic id {}.", agent_id, synthetic_node_id).into());
+
+                state.selected_node_id = Some(synthetic_node_id.clone());
+                // Not marking state_modified because we haven't changed any persistent state
+
+                // Directly open the modal with this synthetic id – show_agent_modal already has logic
+                // to fall back to agent data when it receives an id of the form "agent-{id}".
+                let window = web_sys::window().expect("no global window exists");
+                let document = window.document().expect("should have a document");
+                if let Err(e) = crate::views::show_agent_modal(state, &document) {
+                    web_sys::console::error_1(&format!("Failed to show modal for synthetic id: {:?}", e).into());
+                }
+
+                // We purposely skip any canvas refresh here
+                needs_refresh = false;
             }
         },
        
