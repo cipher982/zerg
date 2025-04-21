@@ -61,6 +61,9 @@ class SchedulerService:
         # Subscribe to agent deleted events
         event_bus.subscribe(EventType.AGENT_DELETED, self._handle_agent_deleted)
 
+        # External triggers
+        event_bus.subscribe(EventType.TRIGGER_FIRED, self._handle_trigger_fired)
+
         logger.info("Scheduler subscribed to agent events")
 
     async def _handle_agent_created(self, data):
@@ -107,6 +110,22 @@ class SchedulerService:
         if agent_id:
             logger.info(f"Removing schedule for deleted agent {agent_id}")
             self.remove_agent_job(agent_id)
+
+    async def _handle_trigger_fired(self, data):
+        """Run the associated agent immediately when a trigger fires."""
+
+        agent_id = data.get("agent_id")
+        if agent_id is None:
+            logger.warning("trigger_fired event missing agent_id – ignoring")
+            return
+
+        logger.info(f"Trigger fired for agent {agent_id}; executing run task now")
+
+        # Execute the agent task immediately (await) so tests can observe the
+        # call synchronously; the actual work done inside `run_agent_task` is
+        # asynchronous and non‑blocking.  If later we need true fire‑and‑forget
+        # behaviour we can switch back to `asyncio.create_task`.
+        await self.run_agent_task(agent_id)
 
     async def load_scheduled_agents(self):
         """Load all agents with run_on_schedule=True from the database and schedule them."""

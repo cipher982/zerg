@@ -71,6 +71,37 @@ class Thread(Base):
     messages = relationship("ThreadMessage", back_populates="thread", cascade="all, delete-orphan")
 
 
+# ------------------------------------------------------------
+# Triggers
+# ------------------------------------------------------------
+
+
+class Trigger(Base):
+    """A trigger that can fire an agent (e.g. via webhook).
+
+    Currently only the *webhook* type is implemented.  Each trigger owns a
+    unique secret token that must be supplied when the webhook is invoked.
+    """
+
+    __tablename__ = "triggers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    agent_id = Column(Integer, ForeignKey("agents.id"), nullable=False)
+
+    # For now we only support webhook triggers but leave room for future
+    # extension (e.g. kafka, email, slack, etc.).
+    type = Column(String, default="webhook", nullable=False)
+
+    # Shared secret that must accompany incoming webhook calls.  Very simple
+    # scheme for now – a random hex string.
+    secret = Column(String, nullable=False, unique=True, index=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+    # ORM relationships
+    agent = relationship("Agent", backref="triggers")
+
+
 class ThreadMessage(Base):
     __tablename__ = "thread_messages"
 
