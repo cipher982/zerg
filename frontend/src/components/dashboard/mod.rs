@@ -22,6 +22,26 @@ use crate::storage::ActiveView;
 use wasm_bindgen::closure::Closure;
 use uuid;
 
+// ---------------------------------------------------------------------------
+// Utility helpers
+// ---------------------------------------------------------------------------
+
+/// Format an ISO‑8601 timestamp (`YYYY-MM-DDTHH:MM:SSZ`) into a short readable
+/// form shown in the dashboard table: `YYYY‑MM‑DD HH:MM` (UTC).
+fn format_datetime_short(iso: &str) -> String {
+    // Very small helper – avoid pulling chrono in WASM build.
+    // Expected formats: "2025-04-21T14:03:12Z" or with fractional seconds.
+    let parts: Vec<&str> = iso.split('T').collect();
+    if parts.len() != 2 {
+        return iso.to_string();
+    }
+    let date = parts[0];
+    let time = parts[1].trim_end_matches('Z');
+    // keep only HH:MM
+    let time_short = &time[..std::cmp::min(5, time.len())];
+    format!("{} {}", date, time_short)
+}
+
 // Agent status for displaying in the dashboard
 #[derive(Clone, Debug, PartialEq)]
 pub enum AgentStatus {
@@ -375,7 +395,7 @@ fn get_agents_from_app_state() -> Vec<Agent> {
                 // Only include agents that have a valid u32 ID
                 api_agent.id.map(|id| {
                     // Map ApiAgent status to local AgentStatus
-                    let status = match api_agent.status.as_deref() {
+                    let mut status = match api_agent.status.as_deref() {
                         Some("running") | Some("processing") => AgentStatus::Running,
                         Some("idle") | Some("complete") => AgentStatus::Idle,
                         Some("error") => AgentStatus::Error,
@@ -384,18 +404,31 @@ fn get_agents_from_app_state() -> Vec<Agent> {
                         _ => AgentStatus::Idle, // Default to Idle if status is None or unknown
                     };
 
-                    // Create the local Agent struct
-                    Agent {
-                        id, // Use the u32 ID directly
-                        name: api_agent.name.clone(),
-                        status,
-                        // TODO: Populate these fields if available in ApiAgent or elsewhere
-                        last_run: None,
-                        next_run: None,
-                        success_rate: 0.0, // Placeholder
-                        run_count: 0,      // Placeholder
-                        last_run_success: None, // Placeholder
+                    // Override with Scheduled if backend marks run_on_schedule=true
+                    if api_agent.run_on_schedule.unwrap_or(false) && matches!(status, AgentStatus::Idle) {
+                        status = AgentStatus::Scheduled;
                     }
+
+                // Determine scheduling metadata strings (truncate seconds for compact display)
+                let last_run_fmt = api_agent
+                    .last_run_at
+                    .as_ref()
+                    .map(|s| format_datetime_short(s));
+                let next_run_fmt = api_agent
+                    .next_run_at
+                    .as_ref()
+                    .map(|s| format_datetime_short(s));
+
+                Agent {
+                    id, // Use the u32 ID directly
+                    name: api_agent.name.clone(),
+                    status,
+                    last_run: last_run_fmt,
+                    next_run: next_run_fmt,
+                    success_rate: 0.0, // Placeholder – needs backend metric
+                    run_count: 0,      // Placeholder – needs backend metric
+                    last_run_success: None, // Placeholder
+                }
                 })
             })
             .collect()

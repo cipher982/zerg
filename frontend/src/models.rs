@@ -109,7 +109,15 @@ pub struct ApiAgent {
     pub temperature: Option<f64>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
-    // Add other fields as needed
+    // -------- Scheduling metadata (Milestone 0) --------
+    /// Cron expression defining when the agent should run (None means not scheduled)
+    pub schedule: Option<String>,
+    /// If true the backend scheduler will actually run the agent on its schedule
+    pub run_on_schedule: Option<bool>,
+    /// ISO‑8601 timestamp of the next scheduled run (set by backend)
+    pub next_run_at: Option<String>,
+    /// ISO‑8601 timestamp when the agent last finished a run
+    pub last_run_at: Option<String>,
 }
 
 /// ApiAgentCreate is used when creating a new agent
@@ -120,6 +128,7 @@ pub struct ApiAgentCreate {
     pub task_instructions: String,
     pub model: Option<String>,
     pub schedule: Option<String>,
+    pub run_on_schedule: Option<bool>,
     pub config: Option<serde_json::Value>,
 }
 
@@ -132,6 +141,7 @@ pub struct ApiAgentUpdate {
     pub task_instructions: Option<String>,
     pub model: Option<String>,
     pub schedule: Option<String>,
+    pub run_on_schedule: Option<bool>,
     pub config: Option<serde_json::Value>,
 }
 
