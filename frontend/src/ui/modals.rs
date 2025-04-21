@@ -21,6 +21,25 @@ pub fn open_agent_modal(document: &Document, node_id: &str) -> Result<(), JsValu
             (String::new(), String::new(), String::new(), Vec::new())
         }
     });
+
+    // Attempt to fetch schedule metadata from agent (if node linked to agent)
+    let (schedule_value, run_on_schedule_flag) = APP_STATE.with(|state| {
+        let state = state.borrow();
+        if let Some(node) = state.nodes.get(node_id) {
+            // Try get agent_id either from node or derived from node_id string
+            if let Some(agent_id) = node.agent_id
+                .or_else(|| node_id.strip_prefix("agent-").and_then(|s| s.parse::<u32>().ok()))
+            {
+                if let Some(agent) = state.agents.get(&agent_id) {
+                    return (
+                        agent.schedule.clone().unwrap_or_default(),
+                        agent.run_on_schedule.unwrap_or(false),
+                    );
+                }
+            }
+        }
+        (String::new(), false)
+    });
     
     // Store current node ID in a data attribute on the modal
     if let Some(modal) = document.get_element_by_id("agent-modal") {
@@ -64,6 +83,20 @@ pub fn open_agent_modal(document: &Document, node_id: &str) -> Result<(), JsValu
     if let Some(task_elem) = document.get_element_by_id("default-task-instructions") {
         if let Some(task_textarea) = task_elem.dyn_ref::<HtmlTextAreaElement>() {
             task_textarea.set_value(&task_instructions_value);
+        }
+    }
+
+    // Set schedule cron input if control exists
+    if let Some(schedule_elem) = document.get_element_by_id("agent-schedule") {
+        if let Some(schedule_input) = schedule_elem.dyn_ref::<HtmlInputElement>() {
+            schedule_input.set_value(&schedule_value);
+        }
+    }
+
+    // Set run_on_schedule checkbox if control exists
+    if let Some(enable_elem) = document.get_element_by_id("agent-run-on-schedule") {
+        if let Some(enable_checkbox) = enable_elem.dyn_ref::<HtmlInputElement>() {
+            enable_checkbox.set_checked(run_on_schedule_flag);
         }
     }
     

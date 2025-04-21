@@ -129,6 +129,34 @@ pub fn create_agent_input_modal(document: &Document) -> Result<(), JsValue> {
     main_content.append_child(&system_textarea)?;
     main_content.append_child(&default_task_label)?;
     main_content.append_child(&default_task_textarea)?;
+
+    // ------------------------------------------------------------------
+    // Scheduling controls (Cron + toggle)
+    // ------------------------------------------------------------------
+
+    // Schedule (Cron) label & input
+    let schedule_label = document.create_element("label")?;
+    schedule_label.set_inner_html("Schedule (Cron expression):");
+    schedule_label.set_attribute("for", "agent-schedule")?;
+
+    let schedule_input = document.create_element("input")?;
+    schedule_input.set_id("agent-schedule");
+    schedule_input.set_attribute("type", "text")?;
+    schedule_input.set_attribute("placeholder", "*/15 * * * *")?;
+
+    // Enable schedule toggle
+    let enable_label = document.create_element("label")?;
+    enable_label.set_inner_html("Enable schedule:");
+
+    let enable_checkbox = document.create_element("input")?;
+    enable_checkbox.set_id("agent-run-on-schedule");
+    enable_checkbox.set_attribute("type", "checkbox")?;
+
+    // Append scheduling controls
+    main_content.append_child(&schedule_label)?;
+    main_content.append_child(&schedule_input)?;
+    main_content.append_child(&enable_label)?;
+    main_content.append_child(&enable_checkbox)?;
     
     // Create history section
     let history_content = document.create_element("div")?;

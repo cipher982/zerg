@@ -3,16 +3,8 @@ use web_sys::{Document, Event, HtmlInputElement, HtmlTextAreaElement, MouseEvent
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use crate::{
-    messages::{Message, Command},
-    models::NodeType,
-    state::{APP_STATE, dispatch_global_message},
-    constants::{
-        DEFAULT_NODE_WIDTH,
-        DEFAULT_NODE_HEIGHT,
-        DEFAULT_AGENT_NODE_COLOR,
-    },
-    network::ws_client_v2::send_thread_message,
-    storage::ActiveView,
+    messages::Message,
+    state::dispatch_global_message,
 };
 
 // This will contain event handlers that we'll extract from ui.rs
@@ -220,42 +212,21 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
                                 let agent_id = id as u32;
                                 web_sys::console::log_1(&format!("Successfully created agent with ID: {}", agent_id).into());
                                 
-                                // Now create a node in the UI for this agent
-                                let (x, y) = APP_STATE.with(|state| {
-                                    let state = state.borrow();
-                                    (state.viewport_x + 200.0, state.viewport_y + 100.0)
+                                // --------------------------------------------------------------------------------
+                                // IMPORTANT: Do NOT mutate global state directly here.
+                                // Instead, dispatch a Message so the `update` function can
+                                // handle the mutation in a single, centralized place.
+                                // --------------------------------------------------------------------------------
+
+                                // Dispatch message that carries the required data so that
+                                // `update.rs` can create the visual node and perform any
+                                // additional work (creating a default thread, refreshing UI, etc.)
+                                dispatch_global_message(Message::CreateAgentWithDetails {
+                                    name: agent_name,
+                                    agent_id,
+                                    system_instructions: "You are a helpful AI assistant.".to_string(),
+                                    task_instructions: "Respond to user questions accurately and concisely.".to_string(),
                                 });
-                                
-                                // Create the message with the agent node - correctly ID'ed as agent-{id}
-                                let node_id = format!("agent-{}", agent_id);
-                                
-                                // Use AddNode with the assigned agent ID
-                                APP_STATE.with(|state| {
-                                    let mut state = state.borrow_mut();
-                                    let node = crate::models::Node {
-                                        node_id: node_id.clone(),
-                                        agent_id: Some(agent_id),
-                                        x,
-                                        y,
-                                        text: agent_name,
-                                        width: DEFAULT_NODE_WIDTH,
-                                        height: DEFAULT_NODE_HEIGHT,
-                                        color: DEFAULT_AGENT_NODE_COLOR.to_string(),
-                                        parent_id: None,
-                                        node_type: NodeType::AgentIdentity,
-                                        is_selected: false,
-                                        is_dragging: false,
-                                    };
-                                    
-                                    state.nodes.insert(node_id, node);
-                                    state.state_modified = true;
-                                    state.draw_nodes(); // Redraw to show the new node
-                                });
-                                
-                                // Refresh the UI
-                                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                                    web_sys::console::warn_1(&format!("Failed to refresh UI after agent creation: {:?}", e).into());
-                                }
                             }
                         }
                     },
@@ -317,6 +288,21 @@ pub fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
                 String::new()
             };
             
+            // Retrieve schedule cron string
+            let schedule_value = if let Some(schedule_elem) = document.get_element_by_id("agent-schedule") {
+                if let Some(schedule_input) = schedule_elem.dyn_ref::<HtmlInputElement>() {
+                    let v = schedule_input.value();
+                    if v.trim().is_empty() { None } else { Some(v) }
+                } else { None }
+            } else { None };
+
+            // Retrieve run_on_schedule checkbox state
+            let run_on_schedule = if let Some(enable_elem) = document.get_element_by_id("agent-run-on-schedule") {
+                if let Some(enable_checkbox) = enable_elem.dyn_ref::<HtmlInputElement>() {
+                    enable_checkbox.checked()
+                } else { false }
+            } else { false };
+
             // Log to console to help with debugging
             web_sys::console::log_1(&"Save button clicked - processing agent details".into());
             
@@ -326,6 +312,8 @@ pub fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
                 system_instructions,
                 task_instructions,
                 model: String::new(),
+                schedule: schedule_value,
+                run_on_schedule,
             });
             
             // Show a visual feedback that the save was successful
