@@ -561,6 +561,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                             task_instructions: None,
                             model: None,
                             schedule: None,
+                            run_on_schedule: None,
                             config: None,
                         };
                        
@@ -683,6 +684,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         task_instructions: None,
                         model: None,
                         schedule: None,
+                        run_on_schedule: None,
                         config: None,
                     };
                    

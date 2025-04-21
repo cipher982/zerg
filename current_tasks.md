@@ -201,32 +201,33 @@ NOTES FROM ONGOING WORK
 
     Proposed work‑plan (what I will do)
 
-        1. Front‑end ‑ Surface scheduling metadata  (completes M0‑part‑1)
-           a. Extend ApiAgent (+ AppState, serde) with:
-              • schedule :String?  • run_on_schedule :bool
-              • next_run_at :String?  • last_run_at :String?
-           b. Dashboard: new AgentCard fields “Next run / Last run” (friendly utc→local).
-           c. Agent‑modal / Canvas side‑panel:
-              • Cron expression text‑box.
-              • “Enable schedule” toggle.
-           d. Message / update.rs additions:
-              • SetSchedule(String)  • ToggleRunOnSchedule(bool)
+        1. Front‑end ‑ Surface scheduling metadata  ✅ (completed 2025‑04‑21)
+           a. ApiAgent(+Create/+Update) models now include:
+              • schedule :String?   • run_on_schedule :bool
+              • next_run_at :String?   • last_run_at :String?
+           b. Dashboard table and cards render “Next run / Last run” using local‑timezone formatting.
+           c. Agent‑modal & Canvas side‑panel expose:
+              • Cron expression input field.
+              • “Enable schedule” toggle bound to run_on_schedule.
+           d. Elm‑style Message / update.rs augmented with
+              • SetSchedule(String)  • ToggleRunOnSchedule(bool)
               • Command::SaveAgentSchedule(agent_id, ApiAgentUpdate).
-           e. Command executor issues PUT /api/agents/{id}.
-           f. TopicManager already receives AGENT_UPDATED → ensure reducer patches next_run_at/last_run_at live.
-        2. Front‑end – Cron editing PATCH call (M0‑part‑2)
-           • Re‑use agent PUT endpoint; success path closes modal & shows toast.
-           • Validation: lightweight “YYYY* * *…” regex; let backend reject invalid cron for now.
-        3. Backend – Trigger MVP ✅ (completed in previous PR)
-        4. Front‑end – expose triggers (read‑only for now)
-           • Dashboard agent‑details panel lists existing webhook URLs with copy‑button.
+           e. Command executor PATCHes /api/agents/{id} carrying schedule & run_on_schedule.
+           f. TopicManager reducer merges AGENT_UPDATED events and updates next_run_at/last_run_at live.
 
-    Order of execution
+        2. Front‑end – Cron editing PATCH flow  ✅ (completed)
+           • PUT/PATCH /api/agents/{id} hooked up; successful save auto‑closes modal & shows toast.
+           • Basic cron string validation (regex) added; backend still the source of truth.
+        3. Backend – Trigger MVP  ✅ (previous PR)
+        4. Front‑end – expose triggers (read‑only)  ✅ (completed)
+           • Dashboard agent‑details drawer now lists existing webhook URLs with copy‑button.
 
-        1. Implement & test front‑end model changes + display fields.
-        2. Wire edit UI + PUT flow.
-        3. Land Trigger DB + router + tests.
-        4. Basic read‑only trigger list in UI.
+    Order of execution (✔ means finished)
+
+        ✔ 1. Implement & test front‑end model changes + display fields.
+        ✔ 2. Wire edit UI + PATCH flow.
+        ✔ 3. Land Trigger DB + router + tests.
+        ✔ 4. Basic read‑only trigger list in UI.
 
     Deliverables per PR
        • Code + passing pytest & wasm build.
