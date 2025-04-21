@@ -465,9 +465,8 @@ Below is a practical “big‑picture” walkthrough of the repository.
             – HTTP upgrade endpoint (routers.websocket) glues it together.
 
     2.8 Tests
-        • tests/ directory is exhaustive: CRUD, scheduler timing, event‑bus semantics,
-          streaming routes, WebSocket integration (async test‑client).
-        • A tiny uvicorn wrapper plus run_tests.sh for CI.
+        - to run tests:
+          » uv run pytest (no need to install, use pip, sync, etc.)
 
     ────────────────────────────────────────
     3.  Front‑end walkthrough
