@@ -109,29 +109,39 @@ class TopicConnectionManager:
         logger.info(f"Client {client_id} unsubscribed from topic {topic}")
 
     async def broadcast_to_topic(self, topic: str, message: Dict[str, Any]) -> None:
-        """Send a message to all clients subscribed to a topic.
+        """Broadcast a message to all clients subscribed to a topic.
 
         Args:
             topic: The topic to broadcast to
-            message: The message to send
+            message: The message to broadcast
         """
         if topic not in self.topic_subscriptions:
+            logger.warning(f"broadcast_to_topic: No subscribers for topic {topic}")
             return
 
-        disconnected = []
-        for client_id in self.topic_subscriptions[topic]:
-            if client_id in self.active_connections:
-                try:
-                    await self.active_connections[client_id].send_json(message)
-                except Exception as e:
-                    logger.error(f"Failed to send to client {client_id}: {str(e)}")
-                    disconnected.append(client_id)
-            else:
-                disconnected.append(client_id)
+        # Track disconnected clients so we can clean up afterwards
+        disconnected_clients = []
 
-        # Clean up any disconnected clients
-        for client_id in disconnected:
-            await self.disconnect(client_id)
+        for client_id in self.topic_subscriptions[topic]:
+            # Remove any subscription pointing to a now‑missing websocket
+            if client_id not in self.active_connections:
+                disconnected_clients.append(client_id)
+                continue
+
+            try:
+                await self.active_connections[client_id].send_json(message)
+            except Exception:
+                # If sending fails, mark the connection as lost and forget the socket
+                disconnected_clients.append(client_id)
+
+        # Unsubscribe clients that are no longer connected
+        for client_id in disconnected_clients:
+            # Remove websocket reference if still present
+            self.active_connections.pop(client_id, None)
+            await self.unsubscribe_from_topic(client_id, topic)
+        # If the client is now subscribed to no topics, drop the mapping entirely
+        if client_id in self.client_topics and not self.client_topics[client_id]:
+            del self.client_topics[client_id]
 
     async def _handle_agent_event(self, data: Dict[str, Any]) -> None:
         """Handle agent-related events from the event bus."""

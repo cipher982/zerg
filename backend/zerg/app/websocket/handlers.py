@@ -282,6 +282,7 @@ async def handle_subscribe_thread(client_id: str, message: Dict[str, Any], db: S
 
 async def handle_send_message(client_id: str, message: Dict[str, Any], db: Session) -> None:  # noqa: D401
     """Persist a new message to a thread and broadcast it."""
+
     try:
         send_req = SendMessageRequest(**message)
 
@@ -297,6 +298,7 @@ async def handle_send_message(client_id: str, message: Dict[str, Any], db: Sessi
             thread_id=send_req.thread_id,
             role="user",
             content=send_req.content,
+            processed=False,
         )
 
         msg_dict = {
