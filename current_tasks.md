@@ -20,7 +20,7 @@
         3. Canvas – node editor (agents are nodes; edges are “flow”).
            • Networking layer (api_client.rs + ws_client_v2.rs) already supports:
              – REST CRUD, WS subscribe, topic routing.
-           • Scheduling UI is half–wired: the Agent modal shows cron fields but they are not surfaced on Dashboard cards nor editable from Canvas.
+           • Scheduling UX finished: Dashboard shows next/last‑run, and Agent modal & Canvas panel include cron input + “Enable schedule” toggle; backend PATCH fully wired.
 
     What’s NOT in place
     • Webhook Triggers exist server‑side but **UI still lacks** trigger management/visualisation.
@@ -112,13 +112,28 @@
     • Treat every Agent run as immutable; derive analytics offline rather than mutating rows.
 
     ────────────────────────────────────────
-    6.  Immediate next steps (actionable)  — April 2025 status
+    6.  Immediate next steps (actionable)  — April 2025 status (post‑M0)
     ────────────────────────────────────────
 
-        1. Frontend: show `next_run/last_run` on Dashboard & Agent modal; allow editing `schedule` & `run_on_schedule` (PATCH /agents/{id}).
-        2. Frontend: Cron‑UI (simple text field for now) + validation.
-        3. Frontend: list existing Triggers (read‑only) with copy‑URL button; later add creation flow in Canvas.
-        4. (Backend follow‑up): optional security hardening for trigger secrets & HMAC signing.
+        ✅ Scheduling UX completed – M0 closed.
+
+        Now kicking off M1 (Triggers WebHooks):
+
+        1. Frontend – create Trigger node in Canvas
+           • Node palette entry “Webhook Trigger”.
+           • Auto‑generate URL + secret (display copy buttons in side‑panel).
+           • Allow deleting trigger.
+
+        2. Dashboard – full Trigger management
+           • In agent details drawer: list triggers, create new, delete, copy URL.
+
+        3. Backend polish
+           • Add `/api/triggers/{id}` DELETE + tests.
+           • Secret HMAC verification endpoint (optional hardening).
+
+        4. QA / Docs
+           • Add end‑to‑end pytest: POST trigger event → Scheduler runs agent.
+           • README snippet: how to curl a trigger.
 
     Let me know which milestone you’d like to dive into first, and I can sketch the detailed technical tasks or start sending PRs.
 

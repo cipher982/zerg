@@ -123,6 +123,8 @@ pub enum Message {
         system_instructions: String,
         task_instructions: String,
         model: String,
+        schedule: Option<String>,
+        run_on_schedule: bool,
     },
     
     CloseAgentModal,

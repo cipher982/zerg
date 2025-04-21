@@ -242,7 +242,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.draw_nodes();
         },
        
-        Message::SaveAgentDetails { name, system_instructions, task_instructions: _task_instructions, model } => {
+        Message::SaveAgentDetails { name, system_instructions, task_instructions: _task_instructions, model, schedule, run_on_schedule } => {
             // Get the current node ID from the modal
             let node_id = if let Some(window) = web_sys::window() {
                 if let Some(document) = window.document() {
@@ -284,25 +284,31 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         agent.name = name;
                         agent.system_instructions = Some(system_instructions.clone());
                         agent.model = Some(model.clone());
+                        agent.schedule = schedule.clone();
+                        agent.run_on_schedule = Some(run_on_schedule);
                         
-                        // Create API update payload
-                        let update_payload = format!(
-                            r#"{{
-                                "name": "{}",
-                                "system_instructions": "{}",
-                                "model": "{}"
-                            }}"#,
-                            agent.name,
-                            agent.system_instructions.clone().unwrap_or_default(),
-                            model
-                        );
-                        
+                        // Build update struct
+                        use crate::models::ApiAgentUpdate;
+                        let api_update = ApiAgentUpdate {
+                            name: Some(agent.name.clone()),
+                            status: None,
+                            system_instructions: Some(agent.system_instructions.clone().unwrap_or_default()),
+                            task_instructions: None,
+                            model: Some(model.clone()),
+                            schedule: schedule.clone(),
+                            run_on_schedule: Some(run_on_schedule),
+                            config: None,
+                        };
+
+                        // Serialize to JSON
+                        let update_payload = serde_json::to_string(&api_update).unwrap_or_else(|_| "{}".to_string());
+
                         // Return a command to update the agent via API
                         commands.push(Command::UpdateAgent {
                             agent_id: id,
                             payload: update_payload,
                             on_success: Box::new(Message::RefreshAgentsFromAPI),
-                            on_error: Box::new(Message::RefreshAgentsFromAPI), // Refresh anyway to restore state
+                            on_error: Box::new(Message::RefreshAgentsFromAPI),
                         });
                     }
                 }
