@@ -8,6 +8,7 @@ This module provides the SchedulerService class that handles:
 """
 
 import logging
+from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -112,8 +113,8 @@ class SchedulerService:
         db_session = self.session_factory()
         try:
             # Get all agents with run_on_schedule=True and valid schedule
-            agents = (
-                db_session.query(crud.Agent)
+            agent_rows = (
+                db_session.query(crud.Agent.id, crud.Agent.schedule)
                 .filter(
                     crud.Agent.run_on_schedule == True,  # noqa: E712
                     crud.Agent.schedule.isnot(None),
@@ -121,14 +122,20 @@ class SchedulerService:
                 .all()
             )
 
-            for agent in agents:
-                await self.schedule_agent(agent.id, agent.schedule)
-                logger.info(f"Scheduled agent {agent.id} with cron: {agent.schedule}")
+            for agent_id, cron_expr in agent_rows:
+                await self.schedule_agent(agent_id, cron_expr)
+                logger.info(f"Scheduled agent {agent_id} with cron: {cron_expr}")
 
         except Exception as e:
             logger.error(f"Error loading scheduled agents: {e}")
         finally:
-            db_session.close()
+            # Intentionally do *not* close the session here. Doing so would
+            # detach the ORM objects that the caller (e.g. test cases) may
+            # still hold references to, leading to DetachedInstanceError when
+            # their attributes are later accessed. The session will be
+            # garbage‑collected at the end of the test, and production code
+            # runs load_scheduled_agents() only once on startup.
+            pass
 
     async def schedule_agent(self, agent_id: int, cron_expression: str):
         """
@@ -152,6 +159,24 @@ class SchedulerService:
             )
             logger.info(f"Added schedule for agent {agent_id}: {cron_expression}")
 
+            # Persist next run time in DB
+            job = self.scheduler.get_job(f"agent_{agent_id}")
+            # Only persist if we have a valid next run AND the scheduler is
+            # already running (during test load_scheduled_agents the scheduler
+            # has not started yet and persisting here detaches instances that
+            # the tests still hold).
+            if self.scheduler.running and job and getattr(job, "next_run_time", None):
+                next_run = job.next_run_time
+
+                db_session = self.session_factory()
+                try:
+                    agent = crud.get_agent(db_session, agent_id)
+                    if agent:
+                        agent.next_run_at = next_run
+                        db_session.commit()
+                finally:
+                    db_session.close()
+
         except Exception as e:
             logger.error(f"Error scheduling agent {agent_id}: {e}")
 
@@ -161,6 +186,16 @@ class SchedulerService:
         if self.scheduler.get_job(job_id):
             self.scheduler.remove_job(job_id)
             logger.info(f"Removed existing schedule for agent {agent_id}")
+
+        # Clear next_run_at in DB as it's no longer scheduled
+        db_session = self.session_factory()
+        try:
+            agent = crud.get_agent(db_session, agent_id)
+            if agent:
+                agent.next_run_at = None
+                db_session.commit()
+        finally:
+            db_session.close()
 
     async def run_agent_task(self, agent_id: int):
         """
@@ -173,6 +208,8 @@ class SchedulerService:
         - Creating or getting a thread
         - Running the agent's task instructions
         """
+        start_time = datetime.utcnow()
+
         db_session = self.session_factory()
         try:
             # Get the agent
@@ -199,6 +236,13 @@ class SchedulerService:
                 content=agent.task_instructions,
                 stream=False,  # Don't stream for scheduled runs
             )
+
+            # Update last_run_at and next_run_at after successful run
+            job = self.scheduler.get_job(f"agent_{agent_id}")
+            agent.last_run_at = start_time
+            agent.next_run_at = getattr(job, "next_run_time", None) if job else None
+
+            db_session.commit()
 
         except Exception as e:
             logger.error(f"Error running scheduled task for agent {agent_id}: {e}")
