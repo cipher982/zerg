@@ -25,6 +25,9 @@ class EventType(str, Enum):
     THREAD_DELETED = "thread_deleted"
     THREAD_MESSAGE_CREATED = "thread_message_created"
 
+    # Trigger events (external webhook or other sources)
+    TRIGGER_FIRED = "trigger_fired"
+
     # System events
     SYSTEM_STATUS = "system_status"
     ERROR = "error"

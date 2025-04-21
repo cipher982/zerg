@@ -10,6 +10,7 @@ from zerg.app.models.models import Agent
 from zerg.app.models.models import AgentMessage
 from zerg.app.models.models import Thread
 from zerg.app.models.models import ThreadMessage
+from zerg.app.models.models import Trigger
 
 
 # Agent CRUD operations
@@ -105,6 +106,38 @@ def delete_agent(db: Session, agent_id: int):
     if db_agent is None:
         return False
     db.delete(db_agent)
+    db.commit()
+    return True
+
+
+# ------------------------------------------------------------
+# Trigger CRUD operations
+# ------------------------------------------------------------
+
+
+def create_trigger(db: Session, agent_id: int, trigger_type: str = "webhook", secret: Optional[str] = None):
+    """Create a new trigger for an agent."""
+    from uuid import uuid4
+
+    if secret is None:
+        secret = uuid4().hex
+
+    db_trigger = Trigger(agent_id=agent_id, type=trigger_type, secret=secret)
+    db.add(db_trigger)
+    db.commit()
+    db.refresh(db_trigger)
+    return db_trigger
+
+
+def get_trigger(db: Session, trigger_id: int):
+    return db.query(Trigger).filter(Trigger.id == trigger_id).first()
+
+
+def delete_trigger(db: Session, trigger_id: int):
+    trg = get_trigger(db, trigger_id)
+    if trg is None:
+        return False
+    db.delete(trg)
     db.commit()
     return True
 

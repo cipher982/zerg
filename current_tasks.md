@@ -9,6 +9,7 @@
            • LangGraph‑based Agent runtime with streaming ChatCompletion → EventBus → WebSocket.
            • APScheduler service exists and correctly runs cron‑style schedules (tests cover it).
            • Topic‑based WS hub is solid; decorators publish DB events automatically.
+           • **Webhook Triggers implemented:** Trigger table, `/api/triggers` router, `EventType.TRIGGER_FIRED`, SchedulerService hook & passing tests.
            • Tests are extensive (>180) and green.
 
     Frontend (Rust / Yew / WASM)
@@ -22,7 +23,7 @@
            • Scheduling UI is half–wired: the Agent modal shows cron fields but they are not surfaced on Dashboard cards nor editable from Canvas.
 
     What’s NOT in place
-    • No concept of “Trigger” (external event that fires an agent).
+    • Webhook Triggers exist server‑side but **UI still lacks** trigger management/visualisation.
     • No persistent history when an agent is executed from Dashboard (a temp thread is created but never shown).
     • Canvas nodes = agents only; no first‑class “Tool”, “Input/Output”, “Condition”, etc.
     • Multistep workflows (a chain of nodes) are not executed—Canvas is only an editor.
@@ -51,11 +52,9 @@
       Rationale: uniform data model simplifies analytics & debugging.
 
     M1  “Triggers v1 – Inbound WebHooks”  (1 week)
-    Backend
-      – POST /api/triggers/{trigger_id}/events that publishes EventType.TRIGGER_FIRED with JSON payload.
-      – SchedulerService subscribes and enqueues run_agent_task(trigger.agent_id, payload).
-    DB
-      – new table Trigger (id, agent_id, type='webhook', secret, created_at…).
+    Backend  ✅  (delivered)
+      – Trigger DB table, router & event flow shipped; tests green.
+    DB       ✅
     Frontend
       – Canvas gets “Webhook Trigger” node (auto‑generates URL + secret).
       – Dashboard > Agent details lists its triggers with copy‑URL button.
@@ -113,13 +112,13 @@
     • Treat every Agent run as immutable; derive analytics offline rather than mutating rows.
 
     ────────────────────────────────────────
-    6.  Immediate next steps (actionable)
+    6.  Immediate next steps (actionable)  — April 2025 status
     ────────────────────────────────────────
 
-        1. Backend: expose `next_run` and `last_run` fields in Agent schema & tests. DONE
-        2. Frontend: add them to AgentCard component and update.rs message flow.
-        3. Decide cron‑UI (simple text‑field vs presets).
-        4. Draft Trigger table + router skeleton; write a pytest that POSTs event and asserts Agent executed.
+        1. Frontend: show `next_run/last_run` on Dashboard & Agent modal; allow editing `schedule` & `run_on_schedule` (PATCH /agents/{id}).
+        2. Frontend: Cron‑UI (simple text field for now) + validation.
+        3. Frontend: list existing Triggers (read‑only) with copy‑URL button; later add creation flow in Canvas.
+        4. (Backend follow‑up): optional security hardening for trigger secrets & HMAC signing.
 
     Let me know which milestone you’d like to dive into first, and I can sketch the detailed technical tasks or start sending PRs.
 
@@ -218,15 +217,7 @@ NOTES FROM ONGOING WORK
         2. Front‑end – Cron editing PATCH call (M0‑part‑2)
            • Re‑use agent PUT endpoint; success path closes modal & shows toast.
            • Validation: lightweight “YYYY* * *…” regex; let backend reject invalid cron for now.
-        3. Backend – Trigger skeleton (kick‑off M1)
-           a. DB: new table `triggers` (id, agent_id FK, type='webhook', secret, created_at).
-           b. Pydantic + CRUD helpers.
-           c. Router /api/triggers
-              • POST   /           create trigger (returns secret & URL).
-              • POST   /{id}/events  → publish EventType.TRIGGER_FIRED(payload).
-           d. SchedulerService listens to TRIGGER_FIRED and enqueues run_agent_task(agent_id).
-           e. Unit tests:
-              – create trigger → fire event → assert run_agent_task mocked/invoked.
+        3. Backend – Trigger MVP ✅ (completed in previous PR)
         4. Front‑end – expose triggers (read‑only for now)
            • Dashboard agent‑details panel lists existing webhook URLs with copy‑button.
 
