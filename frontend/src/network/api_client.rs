@@ -70,7 +70,7 @@ impl ApiClient {
 
     // Reset the database (development only)
     pub async fn reset_database() -> Result<String, JsValue> {
-        let url = format!("{}/api/reset-database", Self::api_base_url());
+        let url = format!("{}/api/admin/reset-database", Self::api_base_url());
         Self::fetch_json(&url, "POST", None).await
     }
 
