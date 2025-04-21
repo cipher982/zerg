@@ -122,3 +122,125 @@
         4. Draft Trigger table + router skeleton; write a pytest that POSTs event and asserts Agent executed.
 
     Let me know which milestone you’d like to dive into first, and I can sketch the detailed technical tasks or start sending PRs.
+
+
+----
+NOTES FROM ONGOING WORK
+
+
+    0. TL;DR
+    Backend = FastAPI + SQLAlchemy + LangGraph, WS via EventBus.
+    Frontend = Rust/Yew WASM SPA (Dashboard, Chat, Canvas).
+    You are picking up after milestone 0 (schedule metadata shipped).
+
+    1. Skeleton you should open first
+    backend/
+      • zerg/app/models/models.py  – DB schema (Agents, Threads, Messages).
+      • zerg/app/services/scheduler_service.py  – APScheduler + event listeners.
+      • zerg/app/events/  – tiny pub/sub bus.
+      • zerg/app/routers/agents.py  – CRUD + run‑task endpoint.
+      • tests/ (good reading; >180 tests show expected behaviour).
+
+    frontend/
+      • src/network/ws_client_v2.rs + topic_manager.rs – WS client.
+      • src/components/dashboard/ – Agent cards UI.
+      • src/components/canvas_editor.rs – node editor entry point.
+      • src/update.rs & messages.rs – Elm‑style state update.
+
+    docs & road‑map
+      • README.md – full project overview.
+      • project_goals.md – agreed roadmap (M0‑M5).
+      • DATABASE.md – table cheat‑sheet.
+
+    2. Current backend state (after M0)
+    • Agent now has next_run_at / last_run_at.
+    • scheduler_service persists those on schedule & after each run.
+    • Session maker uses expire_on_commit=False to avoid detached errors in tests.
+    • All tests pass via: cd backend && uv run pytest tests.
+
+    3. Immediate tasks in backlog (see project_goals.md)
+    Frontend
+      ‑ show next/last run on Dashboard card & Agent modal.
+      ‑ add cron editing UI and PATCH /agents/{id} call (schedule + run_on_schedule).
+
+    Backend
+      ‑ Trigger table + router skeleton (M1 start).
+      ‑ POST /api/triggers/{id}/events publishes EventType.TRIGGER_FIRED.
+      ‑ SchedulerService listens and enqueues run_agent_task.
+
+    Testing
+      ‑ new pytest for trigger flow (create trigger row → POST event → assert run called).
+      ‑ Add assertions in existing scheduler_service tests for next_run_at/last_run_at.
+
+    4. Gotchas / conventions
+    • DB sessions via default_session_factory; tests override with in‑memory session.
+    • EventBus callbacks are async; always await publish().
+    • Any REST route that mutates state is decorated with @publish_event to fan out WS messages.
+    • Frontend never mutates state directly – dispatch Message → update.rs → Command executor.
+    • LangGraph integration currently single‑node; you’ll extend to DAG later.
+    • Use uv run pytest instead of pip installs – uv handles virtual env + deps.
+    • sessionmaker(expire_on_commit=False) means objects stay live after commit—handy but remember to refresh() if you need latest DB values.
+
+    5. Environment
+    Set DATABASE_URL (sqlite path ok) and OPENAI_API_KEY (can be dummy during tests).
+    Run backend: uv run python -m uvicorn zerg.main:app --reload --port 8001
+    Run frontend: ./frontend/build-debug.sh (spawns simple http server on :8002).
+
+    6. Where to start coding
+
+        1. frontend/src/components/dashboard/agent_card.rs (doesn’t exist yet – add).
+        2. backend/zerg/app/routers/triggers.py (new).
+        3. tests/test_triggers.py (new).
+
+    Ping project_goals.md after each PR so roadmap stays current.
+
+    Welcome aboard & happy hacking!
+
+
+## BEGIN TASK LIST
+
+
+    Proposed work‑plan (what I will do)
+
+        1. Front‑end ‑ Surface scheduling metadata  (completes M0‑part‑1)
+           a. Extend ApiAgent (+ AppState, serde) with:
+              • schedule :String?  • run_on_schedule :bool
+              • next_run_at :String?  • last_run_at :String?
+           b. Dashboard: new AgentCard fields “Next run / Last run” (friendly utc→local).
+           c. Agent‑modal / Canvas side‑panel:
+              • Cron expression text‑box.
+              • “Enable schedule” toggle.
+           d. Message / update.rs additions:
+              • SetSchedule(String)  • ToggleRunOnSchedule(bool)
+              • Command::SaveAgentSchedule(agent_id, ApiAgentUpdate).
+           e. Command executor issues PUT /api/agents/{id}.
+           f. TopicManager already receives AGENT_UPDATED → ensure reducer patches next_run_at/last_run_at live.
+        2. Front‑end – Cron editing PATCH call (M0‑part‑2)
+           • Re‑use agent PUT endpoint; success path closes modal & shows toast.
+           • Validation: lightweight “YYYY* * *…” regex; let backend reject invalid cron for now.
+        3. Backend – Trigger skeleton (kick‑off M1)
+           a. DB: new table `triggers` (id, agent_id FK, type='webhook', secret, created_at).
+           b. Pydantic + CRUD helpers.
+           c. Router /api/triggers
+              • POST   /           create trigger (returns secret & URL).
+              • POST   /{id}/events  → publish EventType.TRIGGER_FIRED(payload).
+           d. SchedulerService listens to TRIGGER_FIRED and enqueues run_agent_task(agent_id).
+           e. Unit tests:
+              – create trigger → fire event → assert run_agent_task mocked/invoked.
+        4. Front‑end – expose triggers (read‑only for now)
+           • Dashboard agent‑details panel lists existing webhook URLs with copy‑button.
+
+    Order of execution
+
+        1. Implement & test front‑end model changes + display fields.
+        2. Wire edit UI + PUT flow.
+        3. Land Trigger DB + router + tests.
+        4. Basic read‑only trigger list in UI.
+
+    Deliverables per PR
+       • Code + passing pytest & wasm build.
+       • Short update in project_goals.md marking M0 complete and M1 started.
+
+    Estimated time
+       – Scheduling UX: 1–2 sessions.
+       – Trigger MVP: 1 session backend, ½ session tests, ½ session UI list.
