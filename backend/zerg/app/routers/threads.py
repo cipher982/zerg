@@ -23,8 +23,10 @@ from zerg.app.schemas.schemas import ThreadCreate
 from zerg.app.schemas.schemas import ThreadMessageCreate
 from zerg.app.schemas.schemas import ThreadMessageResponse
 from zerg.app.schemas.schemas import ThreadUpdate
-
-# Import the new topic manager
+from zerg.app.schemas.ws_messages import StreamChunkMessage
+from zerg.app.schemas.ws_messages import StreamEndMessage
+from zerg.app.schemas.ws_messages import StreamStartMessage
+from zerg.app.websocket.manager import topic_manager
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -111,48 +113,57 @@ def read_thread_messages(thread_id: int, skip: int = 0, limit: int = 100, db: Se
 @router.post("/{thread_id}/messages", response_model=ThreadMessageResponse, status_code=status.HTTP_201_CREATED)
 def create_thread_message(thread_id: int, message: ThreadMessageCreate, db: Session = Depends(get_db)):
     """Create a new message in a thread"""
+    logger.info(f"Creating message in thread {thread_id}: role={message.role}, content={message.content}")
+
     # First check if thread exists
     if not crud.get_thread(db, thread_id=thread_id):
+        logger.warning(f"Thread {thread_id} not found when creating message")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
 
-    return crud.create_thread_message(db=db, thread_id=thread_id, role=message.role, content=message.content)
+    # Create the message (note: by default, processed=False for user messages)
+    new_message = crud.create_thread_message(db=db, thread_id=thread_id, role=message.role, content=message.content)
+    logger.info(f"Created message with ID {new_message.id} in thread {thread_id}, processed={new_message.processed}")
+
+    return new_message
 
 
 @router.post("/{thread_id}/run", status_code=status.HTTP_202_ACCEPTED)
-def run_thread(thread_id: int, db: Session = Depends(get_db)):
-    """Run a thread to process its messages"""
-    # First check if thread exists
+async def run_thread(thread_id: int, db: Session = Depends(get_db)):
+    """Process any unprocessed messages in the thread and stream back the result."""
+
+    # Validate thread & agent
     thread = crud.get_thread(db, thread_id=thread_id)
     if thread is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
 
-    # Get unprocessed messages
     messages = crud.get_unprocessed_messages(db, thread_id=thread_id)
     if not messages:
         return {"status": "No unprocessed messages"}
 
-    # Process messages through OpenAI
-    try:
-        # Get agent configuration
-        agent = crud.get_agent(db, agent_id=thread.agent_id)
-        if agent is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+    agent = crud.get_agent(db, agent_id=thread.agent_id)
+    if agent is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-        # Initialize the AgentManager
-        _ = AgentManager(agent)
+    agent_manager = AgentManager(agent)
+    latest_message = messages[-1]
 
-        # Create response message
-        message = ThreadMessageCreate(role="assistant", content="Processing...")
-        response_msg = crud.create_thread_message(
-            db=db, thread_id=thread_id, role=message.role, content=message.content
+    topic = f"thread:{thread_id}"
+
+    # Notify clients that a streamed response is starting
+    await topic_manager.broadcast_to_topic(topic, StreamStartMessage(thread_id=thread_id).model_dump())
+
+    # Stream the assistant response chunk‑by‑chunk
+    for chunk in agent_manager.process_message(db, thread, latest_message.content, stream=True):
+        await topic_manager.broadcast_to_topic(
+            topic,
+            StreamChunkMessage(thread_id=thread_id, content=chunk).model_dump(),
         )
 
-        # Mark messages as processed
-        for msg in messages:
-            crud.mark_message_processed(db, msg.id)
+    # Signal the end of the stream
+    await topic_manager.broadcast_to_topic(topic, StreamEndMessage(thread_id=thread_id).model_dump())
 
-        return response_msg
+    # Mark all consumed messages as processed
+    for msg in messages:
+        crud.mark_message_processed(db, msg.id)
 
-    except Exception as e:
-        logger.error(f"Error running thread {thread_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return {"status": "ok"}
