@@ -120,12 +120,11 @@ impl ApiClient {
         Self::fetch_json(&url, "POST", Some(&message_data)).await
     }
 
-    // Run a thread (create user message, process, stream response via WS)
-    pub async fn run_thread(thread_id: u32, request_body: &str) -> Result<String, JsValue> {
+    // Run a thread – the backend expects NO body, simply triggers processing
+    pub async fn run_thread(thread_id: u32) -> Result<String, JsValue> {
         let url = format!("{}/api/threads/{}/run", Self::api_base_url(), thread_id);
-        // Call fetch_json helper which handles POST with body and returns response text
-        // The response text will be the confirmation like {"detail": "Processing started..."}
-        Self::fetch_json(&url, "POST", Some(request_body)).await 
+        // We deliberately pass None for the body – backend ignores payload.
+        Self::fetch_json(&url, "POST", None).await
     }
 
     // Helper function to make fetch requests

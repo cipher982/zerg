@@ -88,27 +88,21 @@ pub fn execute_thread_command(cmd: Command) {
             web_sys::console::log_1(&format!("Executor: Handling Command::SendThreadMessage for thread {}: '{}'", thread_id, content).into());
             let client_id_str = client_id.map(|id| id.to_string()).unwrap_or_default();
             
-            // Construct the request body for the /run endpoint
-            let request_body = json!({ "content": content }).to_string();
-            
-            // Call the /run endpoint directly, sending the content
+            // Minimal required flow: (1) create message, (2) trigger processing
             wasm_bindgen_futures::spawn_local(async move {
-                // Note: We now only call run_thread, which creates the message and processes it
-                match ApiClient::run_thread(thread_id, &request_body).await {
-                    Ok(response) => {
-                        // The HTTP response is just a confirmation (202 Accepted)
-                        // The actual chat response arrives via WebSocket stream
-                        // We can log success, but the original ThreadMessageSent isn't really applicable
-                        // as the message isn't fully 'sent' until the stream completes.
-                        web_sys::console::log_1(&format!("Executor: run_thread POST succeeded for thread {}: {}", thread_id, response).into());
-                        // Optionally, dispatch a new message indicating processing started, if needed for UI
-                        // dispatch_global_message(Message::ThreadProcessingStarted(thread_id, client_id_str)); 
-                    },
-                    Err(e) => {
-                        // Log the error and dispatch failure
-                        web_sys::console::error_1(&format!("Executor: Failed to run thread {}: {:?}", thread_id, e).into());
-                        dispatch_global_message(Message::ThreadMessageFailed(thread_id, client_id_str));
-                    }
+                // Step 1 – create the user message
+                if let Err(e) = ApiClient::create_thread_message(thread_id, &content).await {
+                    web_sys::console::error_1(&format!("Executor: Failed to create message for thread {}: {:?}", thread_id, e).into());
+                    dispatch_global_message(Message::ThreadMessageFailed(thread_id, client_id_str.clone()));
+                    return;
+                }
+
+                // Step 2 – run the thread (process unprocessed messages)
+                if let Err(e) = ApiClient::run_thread(thread_id).await {
+                    web_sys::console::error_1(&format!("Executor: Failed to run thread {}: {:?}", thread_id, e).into());
+                    dispatch_global_message(Message::ThreadMessageFailed(thread_id, client_id_str));
+                } else {
+                    web_sys::console::log_1(&format!("Executor: Processing started for thread {}", thread_id).into());
                 }
             });
         },
@@ -118,9 +112,9 @@ pub fn execute_thread_command(cmd: Command) {
             // Consider removing or repurposing this command.
             web_sys::console::warn_1(&format!("Executor: Handling potentially redundant Command::RunThread for thread {}", thread_id).into());
             wasm_bindgen_futures::spawn_local(async move {
-                match ApiClient::run_thread(thread_id, "{}").await { // Sending empty body as placeholder
+                match ApiClient::run_thread(thread_id).await {
                     Ok(response) => {
-                         web_sys::console::log_1(&format!("Executor: run_thread (manual) POST succeeded for thread {}: {}", thread_id, response).into());
+                        web_sys::console::log_1(&format!("Executor: run_thread (manual) POST succeeded for thread {}: {}", thread_id, response).into());
                     },
                     Err(e) => {
                         web_sys::console::error_1(&format!("Executor: Failed to run thread {} (manual): {:?}", thread_id, e).into());
