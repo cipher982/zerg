@@ -43,6 +43,8 @@ def create_agent(
         schedule=schedule,
         config=config,
         run_on_schedule=run_on_schedule if run_on_schedule is not None else False,
+        next_run_at=None,
+        last_run_at=None,
     )
     db.add(db_agent)
     db.commit()
@@ -61,6 +63,8 @@ def update_agent(
     schedule: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
     run_on_schedule: Optional[bool] = None,
+    next_run_at: Optional[datetime] = None,
+    last_run_at: Optional[datetime] = None,
 ):
     """Update an existing agent"""
     db_agent = db.query(Agent).filter(Agent.id == agent_id).first()
@@ -84,6 +88,10 @@ def update_agent(
         db_agent.config = config
     if run_on_schedule is not None:
         db_agent.run_on_schedule = run_on_schedule
+    if next_run_at is not None:
+        db_agent.next_run_at = next_run_at
+    if last_run_at is not None:
+        db_agent.last_run_at = last_run_at
 
     db_agent.updated_at = datetime.now()
     db.commit()

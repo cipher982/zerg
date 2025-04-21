@@ -104,6 +104,8 @@ class Agent(AgentBase):
     updated_at: datetime
     messages: List[AgentMessage] = []
     run_on_schedule: Optional[bool] = False
+    next_run_at: Optional[datetime] = None
+    last_run_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

@@ -23,6 +23,12 @@ class Agent(Base):
     schedule = Column(String, nullable=True)  # CRON expression or interval
     model = Column(String, nullable=False)  # Model to use (no default)
     config = Column(JSON, nullable=True)  # Additional configuration as JSON
+    # Scheduling metadata
+    # Next time this agent is currently expected to run.  Updated by the
+    # SchedulerService whenever a cron job is (re)scheduled.
+    next_run_at = Column(DateTime, nullable=True)
+    # Last time a scheduled (or manual) run actually finished successfully.
+    last_run_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     run_on_schedule = Column(Boolean, default=False, nullable=False)

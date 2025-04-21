@@ -42,7 +42,16 @@ def make_sessionmaker(engine: Engine) -> sessionmaker:
     Returns:
         A sessionmaker class
     """
-    return sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    # `expire_on_commit=False` keeps attributes accessible after a commit,
+    # preventing DetachedInstanceError in situations where objects outlive the
+    # session lifecycle (e.g. during test helpers that commit and then access
+    # attributes after other background DB activity).
+    return sessionmaker(
+        autocommit=False,
+        autoflush=False,
+        expire_on_commit=False,
+        bind=engine,
+    )
 
 
 def get_session_factory() -> sessionmaker:
