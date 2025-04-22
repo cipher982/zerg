@@ -47,14 +47,74 @@ impl DashboardWsManager {
         let handler = Rc::new(RefCell::new(|data: serde_json::Value| {
             web_sys::console::log_1(&format!("Dashboard handler received agent event: {:?}", data).into());
 
-            // Backend broadcasts as: { "type": "agent_event", "data": {..}}
+            // Backend broadcasts as: { "type": "agent_event", "data": { .. }}.
+            // Extract the inner payload so we can update local state immediately
+            // instead of doing an extra round‑trip to the REST API (which may
+            // already contain an *older* status if the agent finished very
+            // quickly).
             let payload = if let Some(inner) = data.get("data") {
                 inner.clone()
             } else {
                 data.clone()
             };
 
-            // Always reload agent list for now (simple & safe)
+            // -----------------------------------------------------------------
+            // 1. Apply the delta contained in the event (`id`, `status`,
+            //    `last_run_at`, ... ) directly to APP_STATE so the UI can flip
+            //    the status badge to "Running" without waiting for the REST
+            //    refresh.
+            // -----------------------------------------------------------------
+            if let (Some(id_val), Some(status_val)) = (
+                payload.get("id"),
+                payload.get("status"),
+            ) {
+                if let (Some(id_num), Some(status_str)) = (
+                    id_val.as_u64(),
+                    status_val.as_str(),
+                ) {
+                    crate::state::APP_STATE.with(|state_ref| {
+                        let mut state = state_ref.borrow_mut();
+                        if let Some(agent) = state.agents.get_mut(&(id_num as u32)) {
+                            agent.status = Some(status_str.to_string());
+
+                            // Also update last_run_at / next_run_at if present so
+                            // the dashboard timestamp column refreshes instantly.
+                            if let Some(ts) = payload.get("last_run_at").and_then(|v| v.as_str()) {
+                                agent.last_run_at = Some(ts.to_string());
+                            }
+                            if let Some(ts) = payload.get("next_run_at").and_then(|v| v.as_str()) {
+                                agent.next_run_at = Some(ts.to_string());
+                            }
+                        }
+                    });
+
+                    // Refresh UI optimistically so the change is visible right
+                    // away.
+                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                        web_sys::console::error_1(&format!("UI refresh error: {:?}", e).into());
+                    }
+
+                    // -----------------------------------------------------------------
+                    // 2. Decide if we still want to hit the REST endpoint:
+                    //    • For a transition *into* "running" we skip the
+                    //      immediate reload so that we don't clobber the just
+                    //      applied optimistic state with a stale "idle" one.
+                    //    • For all other statuses (e.g. "idle", "deleted" …)
+                    //      we perform a targeted reload of that single agent
+                    //      object so that any additional fields changed by the
+                    //      backend are picked up.
+                    // -----------------------------------------------------------------
+                    if status_str != "running" && status_str != "processing" {
+                        crate::network::api_client::reload_agent(id_num as u32);
+                    }
+
+                    // Nothing more to do for handled events.
+                    return;
+                }
+            }
+
+            // Fall‑back behaviour – when payload is missing the expected
+            // fields we keep the previous strategy of reloading everything.
             crate::network::api_client::load_agents();
 
             // Subscribe to the specific agent topic so we receive future
