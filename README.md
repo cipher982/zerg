@@ -22,12 +22,11 @@ Agent Platform is a full-stack application combining a Rust + WebAssembly (WASM)
 12. [How It Works](#how-it-works)  
 13. [Extending the Project & Future Plans](#extending-the-project--future-plans)  
 14. [Testing & Verification](#testing--verification)  
-15. [License](#license)  
 
 --------------------------------------------------------------------------------
 ## Overview
 
-Agent Platform is designed for users who need to create, manage, and orchestrate threadal or task-based AI "agents." At a high level:  
+Agent Platform is designed for users who need to create, manage, and orchestrate thread-based AI "agents." At a high level:  
 
 • Agents can be created or edited via either:  
   1. The Dashboard view (for a structured, spreadsheet-like experience of agent cards).  
@@ -49,16 +48,19 @@ Here's the minimal set of commands to get Agent Platform running locally:
 
 2. Install prerequisites:  
    - Python 3.12+  
+   - uv (https://github.com/astral-sh/uv)
    - Rust (with wasm-pack)  
    - Node.js and npm  
 
 ### Backend
 1. cd backend  
 2. Copy the example environment file:  
-   » cp .env.example .env  
+   » cp backend/.env.example .env  
    (Insert your OPENAI_API_KEY in the .env file to enable AI calls.)   
 3. Run backend server:  
    » uv run python -m uvicorn zerg.main:app --reload --port 8001
+4. Run backend tests:
+   » ./backend/run_backend_tests.sh
 
 ### Frontend
 1. cd frontend  
@@ -66,6 +68,8 @@ Here's the minimal set of commands to get Agent Platform running locally:
    » ./build.sh   (production build on http://localhost:8002)  
    or  
    » ./build-debug.sh (debug build with source maps)  
+3. Run frontend tests:
+   » ./frontend/run_frontend_tests.sh
 
 ### (Optional) Pre‑rendering
 1. cd prerender  
@@ -91,6 +95,7 @@ The repository is divided into three main areas:
      • Canvas Editor for visual flow configuration
      • Chat interface for real-time agent interaction
    - State management via AppState (state.rs) as single source of truth
+   - Uses pure wasm-bindgen + web-sys DOM helpers for rendering
    - Communicates with backend via REST API calls and real-time WebSocket connection
 
 2. **Backend (Python + FastAPI)**  
@@ -98,6 +103,8 @@ The repository is divided into three main areas:
    - Uses an event-based architecture with custom decorators and an event bus.
    - REST endpoints handle CRUD operations while WebSocket connections provide real-time updates.
    - Environment variables (OPENAI_API_KEY, etc.) loaded from a .env file.
+   - Main entry point is backend/zerg/main.py
+   - Uses LangGraph-based AgentManager.process_message() pipeline for agent execution
    - uvicorn or gunicorn can host the app in production.
 
 3. **Pre-Rendering (Node/Playwright)**  
@@ -122,24 +129,24 @@ All state modifications follow these principles:
 4. **Commands Handle Side Effects**: Network calls, WebSocket actions, and other side effects are handled by command executors.
 
 5. **Use the Message/Command Pattern**:
-   ```rust
-   // Good: Message that may produce Commands
-   crate::state::dispatch_global_message(Message::SendThreadMessage { 
-       thread_id,
-       content: "Hello agent".to_string(),
-       client_id: Some("user-123".to_string())
-   });
-   // This will:
-   // 1. Update thread state in update()
-   // 2. Return a Command::SendThreadMessage
-   // 3. command_executor handles the API call
-   
-   // Bad: Direct mutation or side effects
-   APP_STATE.with(|state| {
-       let mut state = state.borrow_mut();
-       state.send_message_to_thread(thread_id, message);  // Don't mix state and side effects!
-   });
-   ```
+```rust
+// Good: Message that may produce Commands
+crate::state::dispatch_global_message(Message::SendThreadMessage { 
+    thread_id,
+    content: "Hello agent".to_string(),
+    client_id: Some("user-123".to_string())
+});
+// This will:
+// 1. Update thread state in update()
+// 2. Return a Command::SendThreadMessage
+// 3. command_executor handles the API call
+
+// Bad: Direct mutation or side effects
+APP_STATE.with(|state| {
+    let mut state = state.borrow_mut();
+    state.send_message_to_thread(thread_id, message);  // Don't mix state and side effects!
+});
+```
 
 ### Avoiding Borrowing Issues
 
@@ -187,12 +194,12 @@ The application uses a sophisticated event-based architecture for real-time comm
 
 ### Frontend WebSocket Integration
 
-1. **Topic-Based Subscription Model**
+1. **Topic-Based Subscription Model** (`frontend/src/network/ws_client_v2.rs`)
    - The frontend WebSocket client connects to `/api/ws/v2` and can subscribe to specific topics:
      • `thread:{id}` for thread updates and messages
      • `agent:{id}` for agent status updates
 
-2. **Topic Manager**
+2. **Topic Manager** (`frontend/src/network/topic_manager.rs`)
    - The frontend implements a `TopicManager` that handles:
      • WebSocket connection management
      • Topic subscription
@@ -223,8 +230,11 @@ This architecture creates a seamless real-time experience: when an agent is crea
 • **SEO-Friendly Pre‑Rendering**  
   - A Node + Playwright system captures static HTML snapshots, serving them to web crawlers.  
 
-• **Rust + WASM Performance**  
-  - The Canvas Editor uses Rust for efficient rendering and fluid user interactions.
+• **Canvas Editor written in Rust/wgpu‑free 2‑D renderer**  
+  - Custom rendering for efficient performance and fluid user interactions.
+
+• **Cron‑style scheduling via SchedulerService**
+  - APScheduler-based cron scheduling for automated agent execution.
 
 --------------------------------------------------------------------------------
 ## Directory Structure
@@ -232,11 +242,13 @@ This architecture creates a seamless real-time experience: when an agent is crea
 A simplified overview of notable top-level files and folders:
 
 • backend/  
-   ├── main.py (FastAPI & streaming logic)  
+   ├── zerg/main.py (FastAPI & streaming logic)  
+   ├── run_backend_tests.sh (Test runner script)
    └── pyproject.toml (Python project config & linting)  
 
 • frontend/  
    ├── Cargo.toml, build.sh, build-debug.sh  
+   ├── run_frontend_tests.sh (Test runner script)
    ├── src/  
    │    ├── canvas/           (shapes, rendering logic)  
    │    ├── components/       (dashboard, chat, canvas UI)  
@@ -246,7 +258,6 @@ A simplified overview of notable top-level files and folders:
    │    ├── update.rs        (state mutation logic)  
    │    ├── command_executors.rs (side effects)  
    │    └── lib.rs          (WASM entry point)  
-   ├── target/              (build artifacts)  
    └── www/                 (WASM output & static files)
 
 • prerender/  
@@ -254,17 +265,22 @@ A simplified overview of notable top-level files and folders:
    ├── dist/ (Generated static HTML snapshots)  
    └── package.json  
 
+• scripts/
+   └── (Various helper scripts)
+
 --------------------------------------------------------------------------------
 ## Dependencies
 
 1. **Frontend**  
    - Rust (edition 2021) & wasm-pack  
-   - wasm-bindgen, web-sys, serde, console_error_panic_hook  
+   - wasm-bindgen, web-sys, js-sys, serde, console_error_panic_hook  
    - Python 3 for the local dev server in build.sh (if using the script's local server)  
 
 2. **Backend**  
    - Python 3.12+  
    - FastAPI, uvicorn, websockets, openai, python-dotenv  
+   - langgraph, langchain, apscheduler, sqlalchemy
+   - uv (for dependency management and running scripts)
 
 3. **Pre-Rendering (Optional)**  
    - Node.js and npm  
@@ -288,7 +304,7 @@ A simplified overview of notable top-level files and folders:
    » ./build.sh (production)  
      or  
    » ./build-debug.sh (debug)  
-4. A local server at http://localhost:8002 is started, hosting the UI.
+4. A local server at http://localhost:8002 is automatically started by the build script, hosting the UI.
 
 ### Pre-rendering Setup (Optional)
 1. cd prerender  
@@ -342,6 +358,38 @@ After launching the frontend (http://localhost:8002):
 4. **Pre‑Rendering**: For bots, server.js in /prerender returns a pre-rendered HTML snapshot; humans get the interactive WASM page.
 
 --------------------------------------------------------------------------------
+## Testing & Verification
+
+1. **Basic Functionality**  
+   - Start the backend (uvicorn) and frontend (./build.sh).  
+   - Create a new agent in the dashboard or canvas, send a prompt, and confirm a streaming response in the UI.  
+
+2. **Logs & Console**  
+   - Check the console logs in your browser dev tools, as well as uvicorn logs in your terminal.  
+   - For pre-rendering, inspect prerender/dist/index.html and test-crawler.sh results to verify bot detection.  
+
+3. **Running Tests**  
+   - Backend: `cd backend && ./run_backend_tests.sh` (spins up in-memory SQLite, no extra services needed)
+   - Frontend (wasm-bindgen tests): `cd frontend && ./run_frontend_tests.sh`
+   - Current test coverage exceeds 95% for the backend
+
+--------------------------------------------------------------------------------
+## Extending the Project & Future Plans
+
+• **Multi-Agent Orchestration**  
+  - LangGraph foundation enables agents to chain operations and share state
+  - Agents can be composed into larger workflows
+
+• **Advanced Agent Plugins**  
+  - Agents bridging to external services, e.g. sending emails or reading logs.  
+
+• **Data Analytics & Usage Metrics**  
+  - Track token usage, cost, and latency.  
+
+• **Refinement of Canvas Editor**  
+  - Enhanced node library for more complex flows or branching logic.
+
+--------------------------------------------------------------------------------
 ## Extending the Project & Future Plans
 
 • **Additional Scheduling Features**  
@@ -370,195 +418,169 @@ After launching the frontend (http://localhost:8002):
    - Check the console logs in your browser dev tools, as well as uvicorn logs in your terminal.  
    - For pre-rendering, inspect prerender/dist/index.html and test-crawler.sh results to verify bot detection.  
 
-3. **Additional Tests**  
-   - Python-based tests can be placed in backend/tests (pytest).  
-   - Additional front-end tests might use wasm-pack test or tools like Cypress (not yet set up).
+3. **Running Tests**  
+   - Backend: `cd backend && ./run_backend_tests.sh` (spins up in-memory SQLite, no extra services needed)
+   - Frontend (wasm-bindgen tests): `cd frontend && ./run_frontend_tests.sh`
+   - Current test coverage exceeds 95% for the backend
 
 
----- V2 Analysis ----
-Below is a practical “big‑picture” walkthrough of the repository.
-    I read every top‑level source file (skipping compiler artefacts in target/) and the entire test‑suite so that what follows is accurate, but I’m only summarising – no large blocks of code are reproduced.
+# Developer Notes - Detailed Architecture Analysis
 
-    ────────────────────────────────────────
+Below is a practical "big‑picture" walkthrough of the repository.
+I read every top‑level source file and the entire test‑suite so that what follows is accurate, but I'm only summarizing – no large blocks of code are reproduced.
 
-        1. High‑level architecture
-           ────────────────────────────────────────
-           • “backend/”   — Python 3.12 FastAPI service (codename “zerg”).
-             – Relational persistence through SQLAlchemy → SQLite (app.db)
-             – Domain: Agents, Threads, Messages.
-             – LangChain + LangGraph used to run LLM workflows for each Agent.
-             – Real‑time layers:
-           • in‑process EventBus (pub/sub enum EventType)
-           • topic‑based WebSocket hub that relays EventBus messages to browsers.
+## 1. High‑level architecture
 
-      – APScheduler drives cron‑like runs of Agents.
-      – Almost 200 Pytest tests give >95 % coverage.
+* **"backend/"** — Python 3.12 FastAPI service (codename "zerg").
+  - Relational persistence through SQLAlchemy → SQLite (app.db)
+  - Domain: Agents, Threads, Messages.
+  - LangChain + LangGraph used to run LLM workflows for each Agent.
+  - Real‑time layers:
+    * in‑process EventBus (pub/sub enum EventType)
+    * topic‑based WebSocket hub that relays EventBus messages to browsers.
+  - APScheduler drives cron‑like runs of Agents.
+  - Almost 200 Pytest tests give >95% coverage.
 
-    • “frontend/”  — Rust (edition 2021) Yew / wasm‑bindgen SPA.
-      – Compiles to WASM; starter html in www/ mounts the app.
-      – Mirrors back‑end models in src/models.rs and keeps global app‑state in src/state.rs.
-      – Two big UI surfaces:
-            • Canvas editor (graphical editor built on <canvas>)
-            • Chat/dashboard (Yew components with split‑pane layout)
-      – A single WebSocket client (src/network/ws_client_v2.rs) plus TopicManager
-        handles subscribe / publish just like the Python side.
-      – Async/await throughout via wasm‑bindgen‑futures.
+* **"frontend/"** — Rust (edition 2021) + wasm‑bindgen SPA.
+  - Compiles to WASM; starter html in www/ mounts the app.
+  - Mirrors back‑end models in src/models.rs and keeps global app‑state in src/state.rs.
+  - Two big UI surfaces:
+    * Canvas editor (graphical editor built on <canvas>)
+    * Chat/dashboard (DOM components with split‑pane layout)
+  - A single WebSocket client (src/network/ws_client_v2.rs) plus TopicManager
+    handles subscribe / publish just like the Python side.
+  - Async/await throughout via wasm‑bindgen‑futures.
 
-    ────────────────────────────────────────
-    2.  Back‑end walkthrough
-    ────────────────────────────────────────
-    main entry‑point
-    └── backend/zerg/main.py
-        • boots FastAPI, installs CORS & OPTIONS middleware.
-        • creates tables, mounts routers, starts/stops SchedulerService.
+## 2. Back‑end walkthrough
 
-    2.1 Persistence layer
-        backend/zerg/app/database.py
-            – Standard SQLAlchemy engine/session helpers.
-        backend/zerg/app/models/models.py
-            – Three tables: Agent, Thread, *Message (two subclasses for agent‑ and
-              thread‑scope but share columns).
-              All models expose JSON columns for flexible config.
+### Main entry‑point
+- backend/zerg/main.py
+  * boots FastAPI, installs CORS & OPTIONS middleware.
+  * creates tables, mounts routers, starts/stops SchedulerService.
 
-    2.2 CRUD helpers (thin)
-        backend/zerg/app/crud/crud.py
-            – Pure SQLAlchemy operations, no business logic.
+### 2.1 Persistence layer
+- backend/zerg/app/database.py
+  - Standard SQLAlchemy engine/session helpers.
+- backend/zerg/app/models/models.py
+  - Three tables: Agent, Thread, *Message (two subclasses for agent‑ and thread‑scope but share columns).
+  - All models expose JSON columns for flexible config.
 
-    2.3 Event bus
-        backend/zerg/app/events/event_bus.py
-            – Very small async pub/sub written from scratch.
-            – Decorator publish_event(event_type) lets router functions
-              emit automatically.
+### 2.2 CRUD helpers (thin)
+- backend/zerg/app/crud/crud.py
+  - Pure SQLAlchemy operations, no business logic.
 
-    2.4 Routers
-        • agents.py – full CRUD, nested /messages sub‑endpoints.
-        • threads.py – manage conversation threads & messages.
-        • websocket.py – HTTP handshake that upgrades to WS and
-          delegates to TopicConnectionManager.
-        • models.py – surfaces list of OpenAI models (one simple GET).
+### 2.3 Event bus
+- backend/zerg/app/events/event_bus.py
+  - Very small async pub/sub written from scratch.
+  - Decorator publish_event(event_type) lets router functions emit automatically.
 
-          All routers are version‑less but live under prefix “/api”.
+### 2.4 Routers
+- agents.py – full CRUD, nested /messages sub‑endpoints.
+- threads.py – manage conversation threads & messages.
+- websocket.py – HTTP handshake that upgrades to WS and delegates to TopicConnectionManager.
+- models.py – surfaces list of OpenAI models (one simple GET).
 
-    2.5 Agent runtime
-        backend/zerg/app/agents.py
-            – Wraps an Agent row and hides LangGraph plumbing.
-            – get_or_create_thread() lazily builds Thread.
-            – process_message() builds a LangGraph state machine:
-                  START ─► chatbot node ─► END
-              The node calls OpenAI ChatCompletion (via langchain_openai.ChatOpenAI).
-            – Supports streaming via generator: yields chunks to caller.
+All routers are version‑less but live under prefix "/api".
 
-    2.6 SchedulerService
-        backend/zerg/app/services/scheduler_service.py
-            – AsyncIOScheduler.
-            – On startup loads all agents where run_on_schedule=True and
-              schedule ≠ NULL, converts cron strings to CronTrigger.
-            – Subscribes to agent‑events so schedule stays in sync.
-            – run_agent_task(): gets (or creates) a thread, injects system message, then
-              calls process_message(stream=False).
+### 2.5 Agent runtime
+- backend/zerg/app/agents.py
+  - Wraps an Agent row and hides LangGraph plumbing.
+  - get_or_create_thread() lazily builds Thread.
+  - process_message() builds a LangGraph state machine:
+    - START ─► chatbot node ─► END
+  - The node calls OpenAI ChatCompletion (via langchain_openai.ChatOpenAI).
+  - Supports streaming via generator: yields chunks to caller.
 
-    2.7 WebSocket layer
-        backend/zerg/app/websocket/manager.py
-            – Keeps {client_id → websocket}, {topic → set(client_id)}.
-            – Topics are plain strings: “agent:{id}”, “thread:{id}”, etc.
-            – EventBus handlers turn internal events into outbound JSON.
-            – HTTP upgrade endpoint (routers.websocket) glues it together.
+### 2.6 SchedulerService
+- backend/zerg/app/services/scheduler_service.py
+  - AsyncIOScheduler.
+  - On startup loads all agents where run_on_schedule=True and schedule ≠ NULL, converts cron strings to CronTrigger.
+  - Subscribes to agent‑events so schedule stays in sync.
+  - run_agent_task(): gets (or creates) a thread, injects system message, then calls process_message(stream=False).
 
-    2.8 Tests
-        - to run tests:
-          » uv run pytest (no need to install, use pip, sync, etc.)
+### 2.7 WebSocket layer
+- backend/zerg/app/websocket/manager.py
+  - Keeps {client_id → websocket}, {topic → set(client_id)}.
+  - Topics are plain strings: "agent:{id}", "thread:{id}", etc.
+  - EventBus handlers turn internal events into outbound JSON.
+  - HTTP upgrade endpoint (routers.websocket) glues it together.
 
-    ────────────────────────────────────────
-    3.  Front‑end walkthrough
-    ────────────────────────────────────────
-    3.1 Build & entry
-        • Cargo.toml pulls yew 0.20, wasm‑bindgen, web‑sys, console_error_panic_hook, etc.
-        • start() in src/lib.rs is #[wasm_bindgen(start)]  → sets up panic hook,
-          constructs base DOM stub, connects WebSocket, triggers first API fetches.
+### 2.8 Tests
+- to run tests:
+  - » ./backend/run_backend_tests.sh
 
-    3.2 Global state
-        src/state.rs
-            – OnceCell‑style APP_STATE, holds Rc<RefCell<AppState>> with:
-                  • ws_client (single connection)
-                  • topic_manager (maps topic → Vec<Callback>)
-                  • active models, agent list, threads, UI flags …
+## 3. Front‑end walkthrough
 
-    3.3 Network layer
-        src/network/ws_client_v2.rs
-            – wraps WebSocket; reconnection logic with exponential back‑off.
-        src/network/topic_manager.rs
-            – mirrors Python manager: subscribe/unsubscribe & callback dispatch.
-        src/network/api_client.rs
-            – fetch wrapper for standard REST routes, uses serde_json.
+### 3.1 Build & entry
+- Cargo.toml pulls wasm‑bindgen, web‑sys, console_error_panic_hook, etc.
+- start() in src/lib.rs is #[wasm_bindgen(start)] → sets up panic hook, constructs base DOM stub, connects WebSocket, triggers first API fetches.
 
-    3.4 Components
-        • Chat UI (components/chat/) – message list + textarea.
-        • Dashboard (components/dashboard/) – lists agents/threads; gets live updates
-          by subscribing to topics right after mount.
-        • Canvas editor – vector shapes, renderer, selection, etc.
+### 3.2 Global state
+- src/state.rs
+  - OnceCell‑style APP_STATE, holds Rc<RefCell<AppState>> with:
+    * ws_client (single connection)
+    * topic_manager (maps topic → Vec<Callback>)
+    * active models, agent list, threads, UI flags …
 
-    3.5 Update / Msg enum
-        Elm‑style msg handling (src/update.rs) drives state updates.
+### 3.3 Network layer
+- src/network/ws_client_v2.rs
+  - wraps WebSocket; reconnection logic with exponential back‑off.
+- src/network/topic_manager.rs
+  - mirrors Python manager: subscribe/unsubscribe & callback dispatch.
+- src/network/api_client.rs
+  - fetch wrapper for standard REST routes, uses serde_json.
 
-    3.6 Storage
-        Local‑storage persistence of “last open thread”, auth token, window layout.
+### 3.4 Components
+- Chat UI (components/chat/) – message list + textarea.
+- Dashboard (components/dashboard/) – lists agents/threads; gets live updates by subscribing to topics right after mount.
+- Canvas editor – vector shapes, renderer, selection, etc.
 
-    ────────────────────────────────────────
-    4.  Cross‑cutting concerns
-    ────────────────────────────────────────
-    Logging
-        – Python: std logging; root logger set in main.py.
-        – Rust: web_sys::console directly, but TODO: swap to gloo‑console for levels.
+### 3.5 Update / Msg enum
+- Elm‑style msg handling (src/update.rs) drives state updates.
 
-    Error handling
-        – Back‑end wraps every router in exception traps and still adds CORS headers.
-        – Front‑end shows banner in UI_updates when WS disconnects or API fetch fails.
+### 3.6 Storage
+- Local‑storage persistence of "last open thread", auth token, window layout.
 
-    Security
-        • OPENAI_API_KEY comes from .env on server; never sent to client.
-        • CORS is wildcard during dev – tighten for prod.
-        • No authentication/authorisation yet; every route is public.
+## 4. Cross‑cutting concerns
 
-    Performance
-        • Chat streaming is efficient (chunk generator).
-        • APScheduler runs in same event loop; long LLM calls could block – consider
-          moving heavy inference to worker queues.
+### Logging
+- Python: std logging; root logger set in main.py.
+- Rust: web_sys::console directly, but TODO: swap to gloo‑console for levels.
 
-    ────────────────────────────────────────
-    5.  Suggested improvements / risks
-    ────────────────────────────────────────
-    Backend
+### Error handling
+- Back‑end wraps every router in exception traps and still adds CORS headers.
+- Front‑end shows banner in UI_updates when WS disconnects or API fetch fails.
 
-        1. Database isolation: most crud functions open external Session; consider
-           using dependency‑injected scoped session per request to avoid leaks.
-        2. process_message streams chunks but accumulates them in a Python string —
-           O(n²) copy for long responses; collect list + \"\".join at the end.
-        3. Ensure Cron strings validated (currently pass‑through to CronTrigger; bad
-           strings raise at runtime).
-        4. websocket.manager.TopicConnectionManager uses Dict[str, WebSocket] but
-           never timeouts stale entries if client crashes mid‑handshake.
+### Security
+- OPENAI_API_KEY comes from .env on server; never sent to client.
+- CORS is wildcard during dev – tighten for prod.
+- No authentication/authorisation yet; every route is public.
 
-    Frontend
+### Performance
+- Chat streaming is efficient (chunk generator).
+- APScheduler runs in same event loop; long LLM calls could block – consider moving heavy inference to worker queues.
 
-        1. start() directly manipulates DOM; Yew now supports portals — consider a pure
-           component hierarchy to remove manual document queries.
-        2. TopicManager keeps callbacks in HashMap<String, Vec<_>> without pruning
-           duplicates; add Weak<Callback> or dedup.
-        3. Large incremental compilation artefacts committed to git? add target/ to .gitignore.
+## 5. Suggested improvements / risks
 
-    Dev‑ops / CI
-    • Tests run with sqlite in cwd; parallel CI might race → parametrize db‑file path.
-    • Provide justfile or Makefile that builds both wasm & backend.
+### Backend
+1. Database isolation: most crud functions open external Session; consider using dependency‑injected scoped session per request to avoid leaks.
+2. process_message streams chunks but accumulates them in a Python string — O(n²) copy for long responses; collect list + "".join at the end.
+3. Ensure Cron strings validated (currently pass‑through to CronTrigger; bad strings raise at runtime).
+4. websocket.manager.TopicConnectionManager uses Dict[str, WebSocket] but never timeouts stale entries if client crashes mid‑handshake.
 
-    ────────────────────────────────────────
-    6.  Mental model cheat‑sheet
-    ────────────────────────────────────────
-    REST  ➜ FastAPI routers ➜ CRUD ➜ SQLAlchemy
-    WS    ➜ /api/ws/{client_id} ➜ TopicConnectionManager
-    LLM   ➜ AgentManager.process_message() → LangGraph graph → OpenAI
-    Cron  ➜ APScheduler → SchedulerService → AgentManager.run_agent_task
-    Browser subscribes to topics → receives JSON deltas → Yew updates components.
+### Frontend
+1. start() directly manipulates DOM; consider a more structured approach to DOM manipulation for better maintainability.
+2. TopicManager keeps callbacks in HashMap<String, Vec<_>> without pruning duplicates; add Weak<Callback> or dedup.
 
-    ────────────────────────────────────────
-    That should give you a solid grasp of “everything” without drowning in code.
-    Let me know if you want to zoom into any specific file, execution path or test!
+### Dev‑ops / CI
+- Tests run with sqlite in cwd; parallel CI might race → parametrize db‑file path.
+- Provide justfile or Makefile that builds both wasm & backend.
+
+## 6. Mental model cheat‑sheet
+- REST → FastAPI routers → CRUD → SQLAlchemy
+- WS → /api/ws/{client_id} → TopicConnectionManager
+- LLM → AgentManager.process_message() → LangGraph graph → OpenAI
+- Cron → APScheduler → SchedulerService → AgentManager.run_agent_task
+- Browser subscribes to topics → receives JSON deltas → DOM updates via wasm-bindgen.
+
+This should give you a solid grasp of "everything" without drowning in code. Let me know if you want to zoom into any specific file, execution path or test! 
