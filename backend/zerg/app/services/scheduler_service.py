@@ -283,6 +283,18 @@ class SchedulerService:
 
         except Exception as e:
             logger.error(f"Error running scheduled task for agent {agent_id}: {e}")
+            # Reset the agent status to avoid it getting stuck in "running"
+            try:
+                crud.update_agent(db_session, agent_id, status="error")
+                db_session.commit()
+
+                # Also notify via event bus so UI updates immediately
+                await event_bus.publish(
+                    EventType.AGENT_UPDATED,
+                    {"id": agent_id, "status": "error", "error": str(e)},
+                )
+            except Exception as status_error:
+                logger.error(f"Failed to reset agent status after error: {status_error}")
         finally:
             db_session.close()
 
