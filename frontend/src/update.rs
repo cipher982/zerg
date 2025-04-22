@@ -298,6 +298,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                             schedule: schedule.clone(),
                             run_on_schedule: Some(run_on_schedule),
                             config: None,
+                            last_error: None,
                         };
 
                         // Serialize to JSON
@@ -569,6 +570,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                             schedule: None,
                             run_on_schedule: None,
                             config: None,
+                            last_error: None,
                         };
                        
                         // Clone data for async use
@@ -692,6 +694,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         schedule: None,
                         run_on_schedule: None,
                         config: None,
+                        last_error: None,
                     };
                    
                     // Clone data for async use

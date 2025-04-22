@@ -118,6 +118,11 @@ pub struct ApiAgent {
     pub next_run_at: Option<String>,
     /// ISO‑8601 timestamp when the agent last finished a run
     pub last_run_at: Option<String>,
+
+    /// If the last run produced an error the backend stores the message here.
+    /// `None` or empty string means the agent is healthy.
+    #[serde(default)]
+    pub last_error: Option<String>,
 }
 
 /// ApiAgentCreate is used when creating a new agent
@@ -143,6 +148,10 @@ pub struct ApiAgentUpdate {
     pub schedule: Option<String>,
     pub run_on_schedule: Option<bool>,
     pub config: Option<serde_json::Value>,
+
+    /// Optional error string – only present if we need to update/clear it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
 }
 
 /// ApiMessage represents a message in the agent thread

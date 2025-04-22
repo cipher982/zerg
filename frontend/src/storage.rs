@@ -117,6 +117,7 @@ pub fn save_state_to_api(app_state: &AppState) {
                             schedule: None,
                             run_on_schedule: None,
                             config: None, // Will need to add more node data as needed
+                            last_error: None,
                         };
                         
                         // Check if the agent data has actually changed by comparing with backend data

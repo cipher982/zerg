@@ -68,6 +68,9 @@ pub struct Agent {
     pub success_rate: f64,
     pub run_count: u32,
     pub last_run_success: Option<bool>,
+
+    // Stores the most recent error message (if any) returned by the backend
+    pub last_error: Option<String>,
 }
 
 impl Agent {
@@ -81,6 +84,8 @@ impl Agent {
             success_rate: 0.0,
             run_count: 0,
             last_run_success: None,
+
+            last_error: None,
         }
     }
 }
@@ -428,6 +433,7 @@ fn get_agents_from_app_state() -> Vec<Agent> {
                     success_rate: 0.0, // Placeholder – needs backend metric
                     run_count: 0,      // Placeholder – needs backend metric
                     last_run_success: None, // Placeholder
+                    last_error: api_agent.last_error.clone(),
                 }
                 })
             })
@@ -471,6 +477,13 @@ fn populate_agents_table(document: &Document) -> Result<(), JsValue> {
 fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsValue> {
     let row = document.create_element("tr")?;
     row.set_attribute("data-agent-id", &agent.id.to_string())?;
+
+    // Highlight the entire row if the agent is currently in an error state so
+    // users can spot it quickly.
+    if agent.status == AgentStatus::Error {
+        // Add a CSS class (requires style definition in stylesheet)
+        row.set_class_name("error-row");
+    }
     
     // Name cell
     let name_cell = document.create_element("td")?;
@@ -492,6 +505,18 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     status_indicator.set_inner_html(status_text);
     status_cell.append_child(&status_indicator)?;
+
+    // If we have an error message, append a small info icon with a tooltip so
+    // that hovering shows the error string. This avoids adding a whole new
+    // column while still keeping the information discoverable.
+    if let Some(err_msg) = &agent.last_error {
+        let info_icon = document.create_element("span")?;
+        info_icon.set_class_name("info-icon");
+        info_icon.set_inner_html("ℹ");
+        // Use the "title" attribute for a simple browser tooltip.
+        info_icon.set_attribute("title", err_msg)?;
+        status_cell.append_child(&info_icon)?;
+    }
     
     // Add last run success/failure indicator if available
     if let Some(success) = agent.last_run_success {
