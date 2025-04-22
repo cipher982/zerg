@@ -20,6 +20,9 @@ from zerg.app.services.scheduler_service import scheduler_service
 # Load environment variables
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s", handlers=[logging.StreamHandler()])
+
 # Create the FastAPI app
 app = FastAPI(redirect_slashes=True)
 
