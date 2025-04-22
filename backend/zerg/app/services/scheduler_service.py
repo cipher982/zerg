@@ -256,12 +256,15 @@ class SchedulerService:
 
             # Run the agent's task instructions
             logger.info(f"Running scheduled task for agent {agent_id}")
-            await agent_manager.process_message(
+            # Fix: process_message returns a generator, which needs to be consumed, not awaited
+            result_chunks = agent_manager.process_message(
                 db=db_session,
                 thread=thread,
                 content=agent.task_instructions,
                 stream=False,  # Don't stream for scheduled runs
             )
+            # Consume the generator to get the result
+            _ = next(result_chunks, "")  # materialise generator so errors propagate
 
             # Update last_run_at and next_run_at after successful run
             job = self.scheduler.get_job(f"agent_{agent_id}")
