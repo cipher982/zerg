@@ -268,6 +268,7 @@ class SchedulerService:
             agent.last_run_at = start_time
             agent.next_run_at = getattr(job, "next_run_time", None) if job else None
             agent.status = "idle"
+            agent.last_error = None  # Clear any previous error on success
 
             db_session.commit()
 
@@ -278,20 +279,22 @@ class SchedulerService:
                     "status": "idle",
                     "last_run_at": start_time.isoformat(),
                     "next_run_at": agent.next_run_at.isoformat() if agent.next_run_at else None,
+                    "last_error": None,
                 },
             )
 
         except Exception as e:
-            logger.error(f"Error running scheduled task for agent {agent_id}: {e}")
+            error_msg = str(e)
+            logger.error(f"Error running scheduled task for agent {agent_id}: {error_msg}")
             # Reset the agent status to avoid it getting stuck in "running"
             try:
-                crud.update_agent(db_session, agent_id, status="error")
+                crud.update_agent(db_session, agent_id, status="error", last_error=error_msg)
                 db_session.commit()
 
                 # Also notify via event bus so UI updates immediately
                 await event_bus.publish(
                     EventType.AGENT_UPDATED,
-                    {"id": agent_id, "status": "error", "error": str(e)},
+                    {"id": agent_id, "status": "error", "last_error": error_msg},
                 )
             except Exception as status_error:
                 logger.error(f"Failed to reset agent status after error: {status_error}")

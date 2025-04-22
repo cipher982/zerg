@@ -66,6 +66,7 @@ def update_agent(
     run_on_schedule: Optional[bool] = None,
     next_run_at: Optional[datetime] = None,
     last_run_at: Optional[datetime] = None,
+    last_error: Optional[str] = None,
 ):
     """Update an existing agent"""
     db_agent = db.query(Agent).filter(Agent.id == agent_id).first()
@@ -93,6 +94,8 @@ def update_agent(
         db_agent.next_run_at = next_run_at
     if last_run_at is not None:
         db_agent.last_run_at = last_run_at
+    if last_error is not None:
+        db_agent.last_error = last_error
 
     db_agent.updated_at = datetime.now()
     db.commit()

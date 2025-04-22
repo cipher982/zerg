@@ -16,6 +16,7 @@ class AgentBase(BaseModel):
     schedule: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
     run_on_schedule: Optional[bool] = False
+    last_error: Optional[str] = None
 
 
 class AgentCreate(AgentBase):
@@ -31,6 +32,7 @@ class AgentUpdate(BaseModel):
     schedule: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
     run_on_schedule: Optional[bool] = False
+    last_error: Optional[str] = None
 
 
 class AgentMessage(BaseModel):
@@ -106,6 +108,7 @@ class Agent(AgentBase):
     run_on_schedule: Optional[bool] = False
     next_run_at: Optional[datetime] = None
     last_run_at: Optional[datetime] = None
+    last_error: Optional[str] = None
 
     class Config:
         from_attributes = True

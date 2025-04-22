@@ -194,17 +194,35 @@ async def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
         #    another update so the dashboard can refresh.
         # ------------------------------------------------------------------
         now = datetime.utcnow()
-        crud.update_agent(db, agent_id, status="idle", last_run_at=now)
+        crud.update_agent(db, agent_id, status="idle", last_run_at=now, last_error=None)
         db.commit()
 
         await event_bus.publish(
             EventType.AGENT_UPDATED,
-            {"id": agent_id, "status": "idle", "last_run_at": now.isoformat(), "thread_id": thread.id},
+            {
+                "id": agent_id,
+                "status": "idle",
+                "last_run_at": now.isoformat(),
+                "thread_id": thread.id,
+                "last_error": None,
+            },
         )
 
         # The response message is already created in process_message; return
         # the thread so the caller (frontend) can open it if desired.
         return {"thread_id": thread.id}
     except Exception as e:
-        logger.error(f"Error running agent task for agent {agent_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = str(e)
+        logger.error(f"Error running agent task for agent {agent_id}: {error_msg}")
+
+        # Update agent status and error message
+        crud.update_agent(db, agent_id, status="error", last_error=error_msg)
+        db.commit()
+
+        # Publish error state
+        await event_bus.publish(
+            EventType.AGENT_UPDATED,
+            {"id": agent_id, "status": "error", "last_error": error_msg},
+        )
+
+        raise HTTPException(status_code=500, detail=error_msg)
