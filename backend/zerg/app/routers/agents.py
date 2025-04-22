@@ -2,6 +2,7 @@
 
 import logging
 import os
+from datetime import datetime
 from typing import List
 
 from dotenv import load_dotenv
@@ -137,8 +138,13 @@ def create_agent_message(agent_id: int, message: MessageCreate, db: Session = De
     return crud.create_agent_message(db=db, agent_id=agent_id, role=message.role, content=message.content)
 
 
+# ---------------------------------------------------------------------------
+# Manual "▶ Play" endpoint
+# ---------------------------------------------------------------------------
+
+
 @router.post("/{agent_id}/task", status_code=status.HTTP_202_ACCEPTED)
-def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
+async def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
     """Run the agent's main task (task_instructions) in a new thread, matching scheduled run behavior."""
     from zerg.app.agents import AgentManager
 
@@ -147,9 +153,27 @@ def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
     agent_manager = AgentManager(agent)
-    import datetime
 
-    timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    # ------------------------------------------------------------------
+    # 1. Mark the agent as *running* and broadcast the change so that the
+    #    dashboard can flip the status badge immediately.
+    # ------------------------------------------------------------------
+    from zerg.app.events.event_bus import EventType
+    from zerg.app.events.event_bus import event_bus
+
+    crud.update_agent(db, agent_id, status="running")
+    # We need to commit before publishing so that other DB readers (e.g.
+    # websocket handlers that fetch agent state) observe the change.
+    db.commit()
+
+    # Fire-and‑forget publish (no await-able subscribers need the result
+    # synchronously).  Because we are inside an *async* route we can await.
+    await event_bus.publish(EventType.AGENT_UPDATED, {"id": agent_id, "status": "running"})
+
+    # ------------------------------------------------------------------
+    # 2. Kick off the actual task run inside its own thread context.
+    # ------------------------------------------------------------------
+    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     thread_title = f"Manual Task Run - {timestamp}"
     thread, created = agent_manager.get_or_create_thread(db, title=thread_title)
     if created:
@@ -163,8 +187,23 @@ def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
             stream=False,
         )
         # process_message yields the result, so get the first (and only) chunk
-        _ = next(result_chunks, "")  # TODO: do we need to return this somewhere?
-        # The response message is already created in process_message
+        _ = next(result_chunks, "")  # materialise generator so errors propagate
+
+        # ------------------------------------------------------------------
+        # 3. Mark the agent back to *idle*, persist last_run_at, and publish
+        #    another update so the dashboard can refresh.
+        # ------------------------------------------------------------------
+        now = datetime.utcnow()
+        crud.update_agent(db, agent_id, status="idle", last_run_at=now)
+        db.commit()
+
+        await event_bus.publish(
+            EventType.AGENT_UPDATED,
+            {"id": agent_id, "status": "idle", "last_run_at": now.isoformat(), "thread_id": thread.id},
+        )
+
+        # The response message is already created in process_message; return
+        # the thread so the caller (frontend) can open it if desired.
         return {"thread_id": thread.id}
     except Exception as e:
         logger.error(f"Error running agent task for agent {agent_id}: {str(e)}")

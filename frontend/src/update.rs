@@ -1601,6 +1601,30 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 ));
             })));
         },
+
+        // Force re-render of Dashboard when active
+        Message::RefreshDashboard => {
+            // Schedule UI update outside the current mutable borrow scope
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        // Step 1: read active view with an immutable borrow and drop it.
+                        let is_dashboard = crate::state::APP_STATE.with(|state_cell| {
+                            state_cell.borrow().active_view == crate::storage::ActiveView::Dashboard
+                        });
+
+                        if is_dashboard {
+                            // Refresh only the dashboard to avoid borrowing state mutably while inside refresh.
+                            if let Err(e) = crate::components::dashboard::refresh_dashboard(&document) {
+                                web_sys::console::error_1(&format!("Failed to refresh dashboard: {:?}", e).into());
+                            }
+                        }
+                    }
+                }
+            })));
+
+            needs_refresh = false;
+        },
     }
 
     // For now, if needs_refresh is true, add a NoOp command

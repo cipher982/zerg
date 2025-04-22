@@ -129,6 +129,7 @@ class SchedulerService:
 
     async def load_scheduled_agents(self):
         """Load all agents with run_on_schedule=True from the database and schedule them."""
+
         db_session = self.session_factory()
         try:
             # Get all agents with run_on_schedule=True and valid schedule
@@ -237,6 +238,12 @@ class SchedulerService:
                 logger.error(f"Agent {agent_id} not found")
                 return
 
+            # Immediately mark agent as running so dashboards can react.
+            crud.update_agent(db_session, agent_id, status="running")
+            db_session.commit()
+
+            await event_bus.publish(EventType.AGENT_UPDATED, {"id": agent_id, "status": "running"})
+
             # Create the agent manager
             agent_manager = AgentManager(agent)
 
@@ -260,8 +267,19 @@ class SchedulerService:
             job = self.scheduler.get_job(f"agent_{agent_id}")
             agent.last_run_at = start_time
             agent.next_run_at = getattr(job, "next_run_time", None) if job else None
+            agent.status = "idle"
 
             db_session.commit()
+
+            await event_bus.publish(
+                EventType.AGENT_UPDATED,
+                {
+                    "id": agent_id,
+                    "status": "idle",
+                    "last_run_at": start_time.isoformat(),
+                    "next_run_at": agent.next_run_at.isoformat() if agent.next_run_at else None,
+                },
+            )
 
         except Exception as e:
             logger.error(f"Error running scheduled task for agent {agent_id}: {e}")

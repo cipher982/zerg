@@ -1,4 +1,4 @@
-mod ws_manager;
+pub mod ws_manager;
 #[cfg(test)]
 mod ws_manager_test;
 
@@ -550,6 +550,10 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
             match crate::network::api_client::ApiClient::run_agent(agent_id).await {
                 Ok(response) => {
                     web_sys::console::log_1(&format!("Agent {} run triggered: {}", agent_id, response).into());
+
+                    // Optimistically reload the agents list so the UI reflects the new
+                    // \"running\" status without waiting for the WebSocket event.
+                    crate::network::api_client::load_agents();
                 },
                 Err(e) => {
                     web_sys::console::error_1(&format!("Run error for agent {}: {:?}", agent_id, e).into());
