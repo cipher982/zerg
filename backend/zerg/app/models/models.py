@@ -32,6 +32,7 @@ class Agent(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     run_on_schedule = Column(Boolean, default=False, nullable=False)
+    last_error = Column(Text, nullable=True)  # Store the last error message
 
     # Define relationship with AgentMessage
     messages = relationship("AgentMessage", back_populates="agent", cascade="all, delete-orphan")
