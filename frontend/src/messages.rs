@@ -214,6 +214,9 @@ pub enum Message {
     UpdateThreadTitleUI(String),           // Update thread title UI with provided title
     UpdateLoadingState(bool),              // Update loading state in UI
 
+    // Force a redraw of the Dashboard table after agents have been reloaded
+    RefreshDashboard,
+
     ReceiveAgentUpdate(AgentEventData),
     ReceiveAgentDelete(i32),
     ReceiveThreadHistory(Vec<ApiThreadMessage>),

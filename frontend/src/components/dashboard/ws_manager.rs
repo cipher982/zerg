@@ -47,23 +47,36 @@ impl DashboardWsManager {
         let handler = Rc::new(RefCell::new(|data: serde_json::Value| {
             web_sys::console::log_1(&format!("Dashboard handler received agent event: {:?}", data).into());
 
-            if let Some(event_type) = data.get("type").and_then(|t| t.as_str()) {
-                match event_type {
-                    // TODO (Refine): Use more granular updates based on event data
-                    // instead of reloading all agents every time.
-                    "agent_created" | "agent_updated" | "agent_deleted" => {
-                        crate::network::api_client::load_agents();
-                    },
-                    _ => {
-                        web_sys::console::warn_1(&format!("Dashboard handler: Unhandled agent event type: {}", event_type).into());
-                    }
-                }
-            }
+            // Backend broadcasts as: { "type": "agent_event", "data": {..}}
+            let payload = if let Some(inner) = data.get("data") {
+                inner.clone()
+            } else {
+                data.clone()
+            };
+
+            // Always reload agent list for now (simple & safe)
+            crate::network::api_client::load_agents();
+
+            // Subscribe to the specific agent topic so we receive future
+            // status updates immediately.
+            // (Optional) could subscribe to this specific agent topic here if we
+            // had a reference to the original handler. For simplicity we rely
+            // on load_agents() + re‑initialisation to add subscriptions.
         }));
 
         self.agent_subscription_handler = Some(handler.clone());
-        // Call subscribe via the trait object
-        topic_manager.subscribe("agent:*".to_string(), handler)?;
+
+        // Subscribe to each existing agent individually (wildcards not supported by backend).
+        let agent_ids: Vec<u32> = crate::state::APP_STATE.with(|state_ref| {
+            state_ref.borrow().agents.keys().cloned().collect()
+        });
+
+        for aid in agent_ids {
+            let topic = format!("agent:{}", aid);
+            // Cast the concrete closure type to the trait object type expected by TopicManager.
+            let cloned: TopicHandler = Rc::clone(&handler) as TopicHandler;
+            topic_manager.subscribe(topic, cloned)?;
+        }
         Ok(())
     }
 
@@ -74,8 +87,17 @@ impl DashboardWsManager {
         
         if let Some(handler) = self.agent_subscription_handler.take() {
              web_sys::console::log_1(&"DashboardWsManager: Cleaning up agent subscription handler".into());
-            // Call unsubscribe_handler via the trait object
-             topic_manager.unsubscribe_handler(&"agent:*".to_string(), &handler)?;
+            // We do not track which specific agent topics we subscribed to.
+            // As a simple cleanup we iterate over the agents currently in
+            // state and attempt to unsubscribe from their topics.
+            let agent_ids: Vec<u32> = crate::state::APP_STATE.with(|state_ref| {
+                state_ref.borrow().agents.keys().cloned().collect()
+            });
+
+            for aid in agent_ids {
+                let topic = format!("agent:{}", aid);
+                let _ = topic_manager.unsubscribe_handler(&topic, &handler);
+            }
         } else {
             web_sys::console::warn_1(&"DashboardWsManager cleanup: No handler found to unsubscribe.".into());
         }

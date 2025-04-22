@@ -3,6 +3,8 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{RequestMode};
 use super::ui_updates::flash_activity;
 use crate::constants::{DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT};
+use std::rc::Rc;
+use crate::components::dashboard::ws_manager;
 
 // REST API Client for Agent operations
 pub struct ApiClient;
@@ -211,6 +213,20 @@ pub fn load_agents() {
                                                                 state.agents.insert(id, agent);
                                                             }
                                                         }
+                                                    // Subscribe dashboard WS manager (if already initialised)
+                                                    let topic_manager_rc = state.topic_manager.clone();
+                                                    let handler_opt = crate::components::dashboard::ws_manager::DASHBOARD_WS.with(|cell| {
+                                                        cell.borrow().as_ref().and_then(|mgr| mgr.agent_subscription_handler.clone())
+                                                    });
+
+                                                    if let Some(handler) = handler_opt {
+                                                        if let Ok(mut tm) = topic_manager_rc.try_borrow_mut() {
+                                                            for id in state.agents.keys() {
+                                                                let topic = format!("agent:{}", id);
+                                                                let _ = tm.subscribe(topic.clone(), Rc::clone(&handler));
+                                                            }
+                                                        }
+                                                    }
                                                         
                                                         // Now that we have loaded agents, check if we need to create nodes for them
                                                         // Only create nodes for agents that don't already have one
@@ -225,6 +241,9 @@ pub fn load_agents() {
                                                     if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
                                                         web_sys::console::error_1(&format!("Error refreshing UI: {:?}", e).into());
                                                     }
+
+                                                    // Notify the application that the dashboard data changed
+                                                    crate::state::dispatch_global_message(crate::messages::Message::RefreshDashboard);
                                                 },
                                                 Err(e) => {
                                                     web_sys::console::error_1(&format!("Failed to deserialize agents: {:?}", e).into());
