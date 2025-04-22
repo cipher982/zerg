@@ -93,6 +93,10 @@ pub struct AppState {
     pub topic_manager: Rc<RefCell<TopicManager>>,
     pub streaming_threads: HashSet<u32>,
     pub current_agent_id: Option<u32>,
+
+    // Track which agent rows are expanded in the dashboard UI so we can
+    // preserve open/closed state across re‑renders.
+    pub expanded_agent_rows: HashSet<u32>,
 }
 
 impl AppState {
@@ -148,6 +152,8 @@ impl AppState {
             topic_manager: topic_manager_rc,
             streaming_threads: HashSet::new(),
             current_agent_id: None,
+
+            expanded_agent_rows: HashSet::new(),
         }
     }
 
