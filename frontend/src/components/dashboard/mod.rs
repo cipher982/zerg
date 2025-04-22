@@ -546,14 +546,29 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let agent_id = agent.id;
     let run_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
+        // Optimistically mark the agent as running so the UI updates instantly.
+        crate::state::APP_STATE.with(|state_ref| {
+            let mut state = state_ref.borrow_mut();
+            if let Some(agent) = state.agents.get_mut(&agent_id) {
+                agent.status = Some("running".to_string());
+            }
+        });
+
+        // Refresh dashboard immediately to reflect optimistic change.
+        if let Some(window) = web_sys::window() {
+            if let Some(document) = window.document() {
+                let _ = crate::components::dashboard::refresh_dashboard(&document);
+            }
+        }
+
         wasm_bindgen_futures::spawn_local(async move {
             match crate::network::api_client::ApiClient::run_agent(agent_id).await {
                 Ok(response) => {
                     web_sys::console::log_1(&format!("Agent {} run triggered: {}", agent_id, response).into());
 
-                    // Optimistically reload the agents list so the UI reflects the new
-                    // \"running\" status without waiting for the WebSocket event.
-                    crate::network::api_client::load_agents();
+                    // After the task completes we refresh the specific agent to
+                    // pick up the final status and timestamps.
+                    crate::network::api_client::reload_agent(agent_id);
                 },
                 Err(e) => {
                     web_sys::console::error_1(&format!("Run error for agent {}: {:?}", agent_id, e).into());
