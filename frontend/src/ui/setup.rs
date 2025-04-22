@@ -142,7 +142,13 @@ pub fn create_agent_input_modal(document: &Document) -> Result<(), JsValue> {
     let schedule_input = document.create_element("input")?;
     schedule_input.set_id("agent-schedule");
     schedule_input.set_attribute("type", "text")?;
-    schedule_input.set_attribute("placeholder", "*/15 * * * *")?;
+    schedule_input.set_attribute("placeholder", "*/15 * * * * (min hour day month weekday)")?;
+    
+    // Add help text for cron format
+    let schedule_help = document.create_element("div")?;
+    schedule_help.set_class_name("help-text");
+    schedule_help.set_inner_html("Format: minute(0-59) hour(0-23) day(1-31) month(1-12) weekday(0-6). Example: */15 * * * * runs every 15 minutes.");
+    schedule_help.set_attribute("style", "font-size: 0.6em; color: #666; margin-bottom: 10px;")?;
 
     // Enable schedule toggle
     let enable_label = document.create_element("label")?;
@@ -155,6 +161,7 @@ pub fn create_agent_input_modal(document: &Document) -> Result<(), JsValue> {
     // Append scheduling controls
     main_content.append_child(&schedule_label)?;
     main_content.append_child(&schedule_input)?;
+    main_content.append_child(&schedule_help)?;
     main_content.append_child(&enable_label)?;
     main_content.append_child(&enable_checkbox)?;
     
