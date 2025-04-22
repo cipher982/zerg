@@ -20,6 +20,7 @@ use crate::network::api_client;
 use crate::network::ws_client_v2::send_thread_message;
 use crate::storage::ActiveView;
 use wasm_bindgen::closure::Closure;
+use serde_json;
 use uuid;
 
 // ---------------------------------------------------------------------------
@@ -465,8 +466,19 @@ fn populate_agents_table(document: &Document) -> Result<(), JsValue> {
     } else {
         // Create a row for each agent
         for agent in agents {
+            // Create main row
             let row = create_agent_row(document, &agent)?;
             tbody.append_child(&row)?;
+
+            // If this agent is currently expanded, render an additional row
+            let expanded = APP_STATE.with(|s| {
+                s.borrow().expanded_agent_rows.contains(&agent.id)
+            });
+
+            if expanded {
+                let detail_row = create_agent_detail_row(document, &agent)?;
+                tbody.append_child(&detail_row)?;
+            }
         }
     }
     
@@ -693,6 +705,103 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     actions_cell.append_child(&more_btn)?;
     
     row.append_child(&actions_cell)?;
-    
+
+    // ---------------- Toggle detail expansion on row click ----------------
+    let toggle_id = agent.id;
+    let toggle_cb = Closure::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+        crate::state::APP_STATE.with(|state_ref| {
+            let mut s = state_ref.borrow_mut();
+            if s.expanded_agent_rows.contains(&toggle_id) {
+                s.expanded_agent_rows.remove(&toggle_id);
+            } else {
+                s.expanded_agent_rows.insert(toggle_id);
+            }
+        });
+
+        if let Some(win) = web_sys::window() {
+            if let Some(doc) = win.document() {
+                let _ = crate::components::dashboard::refresh_dashboard(&doc);
+            }
+        }
+    }) as Box<dyn FnMut(_)>);
+
+    row.add_event_listener_with_callback("click", toggle_cb.as_ref().unchecked_ref())?;
+    toggle_cb.forget();
+
     Ok(row)
 } 
+
+// -------------------------------------------------------------------------
+// Detail row with error info + action buttons
+// -------------------------------------------------------------------------
+fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element, JsValue> {
+    let tr = document.create_element("tr")?;
+    tr.set_class_name("agent-detail-row");
+
+    let td = document.create_element("td")?;
+    td.set_attribute("colspan", "6")?;
+
+    let container = document.create_element("div")?;
+    container.set_class_name("agent-detail-container");
+
+    // Error
+    if let Some(err) = &agent.last_error {
+        let pre = document.create_element("pre")?;
+        pre.set_class_name("error-block");
+        pre.set_text_content(Some(err));
+        container.append_child(&pre)?;
+    } else {
+        let span = document.create_element("span")?;
+        span.set_inner_html("No recent errors.");
+        container.append_child(&span)?;
+    }
+
+    // Action buttons
+    let btn_wrap = document.create_element("div")?;
+    btn_wrap.set_class_name("detail-actions");
+
+    // Retry
+    let retry_btn = document.create_element("button")?;
+    retry_btn.set_class_name("detail-btn");
+    retry_btn.set_inner_html("↻ Retry");
+    let rid = agent.id;
+    let retry_cb = Closure::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+        wasm_bindgen_futures::spawn_local(async move {
+            let _ = crate::network::ApiClient::run_agent(rid).await;
+        });
+    }) as Box<dyn FnMut(_)>);
+    retry_btn.add_event_listener_with_callback("click", retry_cb.as_ref().unchecked_ref())?;
+    retry_cb.forget();
+    btn_wrap.append_child(&retry_btn)?;
+
+    // Dismiss
+    let dismiss_btn = document.create_element("button")?;
+    dismiss_btn.set_class_name("detail-btn");
+    dismiss_btn.set_inner_html("✖ Dismiss");
+    let did = agent.id;
+    let dismiss_cb = Closure::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+        let payload = serde_json::json!({"last_error": null}).to_string();
+        wasm_bindgen_futures::spawn_local(async move {
+            let _ = crate::network::ApiClient::update_agent(did, &payload).await;
+            crate::state::APP_STATE.with(|s| {
+                if let Some(a) = s.borrow_mut().agents.get_mut(&did) {
+                    a.last_error = None;
+                }
+            });
+            if let Some(win) = web_sys::window() {
+                if let Some(doc) = win.document() {
+                    let _ = crate::components::dashboard::refresh_dashboard(&doc);
+                }
+            }
+        });
+    }) as Box<dyn FnMut(_)>);
+    dismiss_btn.add_event_listener_with_callback("click", dismiss_cb.as_ref().unchecked_ref())?;
+    dismiss_cb.forget();
+    btn_wrap.append_child(&dismiss_btn)?;
+
+    container.append_child(&btn_wrap)?;
+    td.append_child(&container)?;
+    tr.append_child(&td)?;
+
+    Ok(tr)
+}
