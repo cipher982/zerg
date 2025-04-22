@@ -85,6 +85,16 @@ impl DashboardWsManager {
                             if let Some(ts) = payload.get("next_run_at").and_then(|v| v.as_str()) {
                                 agent.next_run_at = Some(ts.to_string());
                             }
+
+                            // Update last_error field if present in payload
+                            if let Some(err) = payload.get("last_error").and_then(|v| v.as_str()) {
+                                // Treat empty string as None for cleanliness
+                                if err.is_empty() {
+                                    agent.last_error = None;
+                                } else {
+                                    agent.last_error = Some(err.to_string());
+                                }
+                            }
                         }
                     });
 
