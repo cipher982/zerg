@@ -127,16 +127,22 @@ async def _subscribe_thread(client_id: str, thread_id: int, message_id: str, db:
         # Get thread history
         messages = crud.get_thread_messages(db, thread_id)
 
-        # Convert messages to ThreadMessageData format
+        # Build payloads that conform to ThreadMessageData (thread_id + nested message dict)
+
+        # For *thread_history* we only need the raw message dictionaries – the
+        # frontend converts them to its own `ApiThreadMessage` struct.  Do not
+        # wrap them in ThreadMessageData (that wrapper is reserved for live
+        # incremental *thread_message* broadcasts).
+
         message_data = [
-            ThreadMessageData(
-                id=msg.id,
-                thread_id=msg.thread_id,
-                role=msg.role,
-                content=msg.content,
-                timestamp=msg.timestamp.isoformat() if msg.timestamp else None,
-                processed=msg.processed,
-            ).model_dump()
+            {
+                "id": msg.id,
+                "thread_id": msg.thread_id,
+                "role": msg.role,
+                "content": msg.content,
+                "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
+                "processed": msg.processed,
+            }
             for msg in messages
         ]
 
