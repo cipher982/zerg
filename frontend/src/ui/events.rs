@@ -186,54 +186,17 @@ pub fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsVa
             // Generate a random agent name
             let agent_name = format!("Agent {}", (js_sys::Math::random() * 10000.0).round());
             
-            // First create the agent in the API
-            let agent_data = format!(
-                r#"{{
-                    "name": "{}",
-                    "system_instructions": "You are a helpful AI assistant.",
-                    "task_instructions": "Respond to user questions accurately and concisely.",
-                    "model": "gpt-3.5-turbo"
-                }}"#,
-                agent_name
-            );
-            
-            // This is the ONLY place where agents should be created in the API
-            web_sys::console::log_1(&"Creating new agent via the proper API call".into());
-            
-            // Use async block to call the API
-            wasm_bindgen_futures::spawn_local(async move {
-                match crate::network::ApiClient::create_agent(&agent_data).await {
-                    Ok(response_string) => {
-                        // Parse the response to get the agent ID
-                        if let Ok(json) = js_sys::JSON::parse(&response_string) {
-                            if let Some(id) = js_sys::Reflect::get(&json, &"id".into()).ok()
-                                .and_then(|v| v.as_f64()) 
-                            {
-                                let agent_id = id as u32;
-                                web_sys::console::log_1(&format!("Successfully created agent with ID: {}", agent_id).into());
-                                
-                                // --------------------------------------------------------------------------------
-                                // IMPORTANT: Do NOT mutate global state directly here.
-                                // Instead, dispatch a Message so the `update` function can
-                                // handle the mutation in a single, centralized place.
-                                // --------------------------------------------------------------------------------
+            // ------------------------------------------------------------------
+            // NEW simplified flow: delegate to the global message handler so the
+            //    standard RequestCreateAgent → update.rs → NetworkCall path is
+            //    reused.  This guarantees the selected model (fetched from the
+            //    backend list) is used and avoids hand‑rolled JSON.
+            // ------------------------------------------------------------------
 
-                                // Dispatch message that carries the required data so that
-                                // `update.rs` can create the visual node and perform any
-                                // additional work (creating a default thread, refreshing UI, etc.)
-                                dispatch_global_message(Message::CreateAgentWithDetails {
-                                    name: agent_name,
-                                    agent_id,
-                                    system_instructions: "You are a helpful AI assistant.".to_string(),
-                                    task_instructions: "Respond to user questions accurately and concisely.".to_string(),
-                                });
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to create agent: {:?}", e).into());
-                    }
-                }
+            dispatch_global_message(crate::messages::Message::RequestCreateAgent {
+                name: agent_name,
+                system_instructions: "You are a helpful AI assistant.".to_string(),
+                task_instructions: "Respond to user questions accurately and concisely.".to_string(),
             });
         }) as Box<dyn FnMut(_)>);
         
@@ -306,12 +269,18 @@ pub fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
             // Log to console to help with debugging
             web_sys::console::log_1(&"Save button clicked - processing agent details".into());
             
+            // Fetch the currently selected model from global state
+            let selected_model = crate::state::APP_STATE.with(|state| {
+                let state = state.borrow();
+                state.selected_model.clone()
+            });
+
             // Use the global dispatch function which handles commands
             dispatch_global_message(Message::SaveAgentDetails {
                 name: name_value,
                 system_instructions,
                 task_instructions,
-                model: String::new(),
+                model: selected_model,
                 schedule: schedule_value,
                 run_on_schedule,
             });

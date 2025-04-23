@@ -236,6 +236,10 @@ pub enum Message {
         system_instructions: String,
         task_instructions: String,
     },
+
+    // Dashboard-specific actions for error rows
+    RetryAgentTask { agent_id: u32 },
+    DismissAgentError { agent_id: u32 },
 }
 
 /// Commands represent side effects that should be executed after state updates.

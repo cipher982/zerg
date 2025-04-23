@@ -1628,6 +1628,44 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
             needs_refresh = false;
         },
+
+        Message::RetryAgentTask { agent_id } => {
+            // Optimistically update the agent status in the state
+            if let Some(agent) = state.agents.get_mut(&agent_id) {
+                agent.status = Some("running".to_string());
+            }
+            
+            // Create command to call the API
+            commands.push(Command::NetworkCall {
+                endpoint: format!("/api/agents/{}/task", agent_id),
+                method: "POST".to_string(),
+                body: None,
+                on_success: Box::new(Message::RefreshAgentsFromAPI),
+                on_error: Box::new(Message::RefreshAgentsFromAPI),
+            });
+            
+            needs_refresh = true;
+        },
+        
+        Message::DismissAgentError { agent_id } => {
+            // Optimistically clear the error in the state
+            if let Some(agent) = state.agents.get_mut(&agent_id) {
+                agent.last_error = None;
+            }
+            
+            // Create payload for API update
+            let payload = serde_json::json!({"last_error": null}).to_string();
+            
+            // Create command to update the agent via API
+            commands.push(Command::UpdateAgent {
+                agent_id,
+                payload,
+                on_success: Box::new(Message::RefreshAgentsFromAPI),
+                on_error: Box::new(Message::RefreshAgentsFromAPI),
+            });
+            
+            needs_refresh = true;
+        },
     }
 
     // For now, if needs_refresh is true, add a NoOp command
