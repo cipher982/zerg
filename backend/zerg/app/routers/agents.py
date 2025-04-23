@@ -28,6 +28,28 @@ load_dotenv()
 # Set up logging
 logger = logging.getLogger(__name__)
 
+# ------------------------------------------------------------
+# Helper validation
+# ------------------------------------------------------------
+
+
+def _validate_model_or_400(model_id: str) -> None:
+    """Ensure the supplied model_id exists in the backend model registry.
+
+    Raises HTTPException(400) if the model is unknown.
+    """
+    from zerg.app.models_config import MODELS_BY_ID
+
+    if not model_id or model_id.strip() == "":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="'model' must be a non‑empty string")
+
+    if model_id not in MODELS_BY_ID:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported model '{model_id}'. Call /api/models for the list of valid model IDs.",
+        )
+
+
 router = APIRouter(
     tags=["agents"],
 )
@@ -55,6 +77,9 @@ def read_agents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
 @publish_event(EventType.AGENT_CREATED)
 async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
     """Create a new agent"""
+    # Validate model against backend registry
+    _validate_model_or_400(agent.model)
+
     return crud.create_agent(
         db=db,
         name=agent.name,
@@ -80,6 +105,10 @@ def read_agent(agent_id: int, db: Session = Depends(get_db)):
 @publish_event(EventType.AGENT_UPDATED)
 async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(get_db)):
     """Update an agent"""
+    # Validate provided model if present
+    if agent.model is not None:
+        _validate_model_or_400(agent.model)
+
     db_agent = crud.update_agent(
         db=db,
         agent_id=agent_id,
@@ -153,6 +182,12 @@ async def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
     agent_manager = AgentManager(agent)
+
+    # Sanity‑check: ensure stored model is still valid (defence‑in‑depth)
+    try:
+        _validate_model_or_400(agent.model)
+    except HTTPException as exc:
+        raise exc  # propagate 400 to caller
 
     # ------------------------------------------------------------------
     # 1. Mark the agent as *running* and broadcast the change so that the

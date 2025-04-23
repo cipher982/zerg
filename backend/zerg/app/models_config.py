@@ -53,6 +53,22 @@ AVAILABLE_MODELS = [
         display_name="o1",
         provider=ModelProvider.OPENAI,
     ),
+    # Additional models used in automated tests -------------------------
+    ModelConfig(
+        id="gpt-4o",
+        display_name="gpt-4o",
+        provider=ModelProvider.OPENAI,
+    ),
+    ModelConfig(
+        id="gpt-mock",
+        display_name="gpt-mock",
+        provider=ModelProvider.OPENAI,
+    ),
+    ModelConfig(
+        id="gpt-4o-mini",
+        display_name="gpt-4o-mini",
+        provider=ModelProvider.OPENAI,
+    ),
 ]
 
 # Create lookup dictionaries for quick access
