@@ -145,15 +145,18 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
     agent_manager = AgentManager(agent)
-    latest_message = messages[-1]
 
     topic = f"thread:{thread_id}"
 
     # Notify clients that a streamed response is starting
     await topic_manager.broadcast_to_topic(topic, StreamStartMessage(thread_id=thread_id).model_dump())
 
-    # Stream the assistant response chunk‑by‑chunk
-    for chunk in agent_manager.process_message(db, thread, latest_message.content, stream=True):
+    # Stream the assistant response chunk‑by‑chunk.  We already have the
+    # latest user message stored in the DB (`latest_message`).  Passing
+    # `content=None` avoids creating a duplicate copy of the same user
+    # message inside `AgentManager.process_message`.
+
+    for chunk in agent_manager.process_message(db, thread, content=None, stream=True):
         await topic_manager.broadcast_to_topic(
             topic,
             StreamChunkMessage(thread_id=thread_id, content=chunk).model_dump(),
