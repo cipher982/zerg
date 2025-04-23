@@ -13,6 +13,7 @@ use web_sys::Document;
 use wasm_bindgen::JsValue;
 use std::collections::HashMap;
 use crate::components::chat_view::{update_thread_list_ui, update_conversation_ui};
+use crate::thread_handlers;
 use serde_json;
 use rand;
 use chrono;
@@ -977,55 +978,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // Trigger UI update for conversation area implicitly via state change
         },
        
-        Message::SendThreadMessage(thread_id, content) => {
-            web_sys::console::log_1(&format!("Update: Handling SendThreadMessage for thread {}: '{}'", thread_id, content).into());
-
-            // Generate a client ID for tracking this message
-            let client_id = u32::MAX - rand::random::<u32>() % 1000;
-            
-            // Create an optimistic message for immediate UI feedback
-            let now = chrono::Utc::now().to_rfc3339();
-            let user_message = ApiThreadMessage {
-                id: Some(client_id),
-                thread_id,
-                role: "user".to_string(),
-                content: content.clone(),
-                created_at: Some(now),
-            };
-            
-            // Add optimistic message to state
-            if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
-                messages.push(user_message.clone());
-            } else {
-                state.thread_messages.insert(thread_id, vec![user_message.clone()]);
-            }
-            
-            // Prepare UI update commands
-            let threads: Vec<ApiThread> = state.threads.values().cloned().collect();
-            let current_thread_id = state.current_thread_id;
-            let thread_messages = state.thread_messages.clone();
-            
-            // Add UI update command
-            commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(_document) = web_sys::window().and_then(|w| w.document()) {
-                    dispatch_global_message(Message::UpdateConversation(
-                        thread_messages.get(&thread_id).cloned().unwrap_or_default()
-                    ));
-                    dispatch_global_message(Message::UpdateThreadList(
-                        threads,
-                        current_thread_id,
-                        thread_messages
-                    ));
-                }
-            })));
-            
-            web_sys::console::log_1(&format!("Update: Pushing Command::SendThreadMessage for thread {} with client_id {}", thread_id, client_id).into());
-            // Add network operation command
-            commands.push(Command::SendThreadMessage {
-                thread_id,
-                client_id: Some(client_id),
-                content: content.clone(),
-            });
+        // This variant should no longer be dispatched by the UI.  We keep the
+        // arm to satisfy the exhaustive match requirement and to surface a
+        // helpful warning in case some legacy code still emits it.
+        Message::SendThreadMessage(_, _) => {
+            web_sys::console::warn_1(&"Received legacy SendThreadMessage; ignoring to avoid duplicate network call".into());
         },
        
         Message::ThreadMessageSent(response, client_id) => {
@@ -1303,13 +1260,24 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
 
         Message::RequestSendMessage(content) => {
-            // Store thread_id locally
-            let thread_id_opt = state.current_thread_id;
-            
-            // Return a command instead of using pending_ui_updates
-            if let Some(thread_id) = thread_id_opt {
-                let content_clone = content.clone();
-                commands.push(Command::SendMessage(Message::SendThreadMessage(thread_id, content_clone)));
+            // We expect to be inside an active thread when the user presses
+            // Enter in the chat input.  Guard just in case.
+            if let Some(thread_id) = state.current_thread_id {
+                // Delegate all optimistic‑UI + network responsibilities to the
+                // dedicated helper so we have a single source of truth.
+                let ui_callback = crate::thread_handlers::handle_send_thread_message(
+                    thread_id,
+                    content,
+                    &mut state.thread_messages,
+                    &state.threads,
+                    state.current_thread_id,
+                );
+
+                // Schedule the callback to run after this update finishes so we
+                // avoid active mutable borrows of `state`.
+                commands.push(Command::UpdateUI(ui_callback));
+            } else {
+                web_sys::console::error_1(&"RequestSendMessage but no current_thread_id".into());
             }
         },
 
