@@ -766,9 +766,8 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
     retry_btn.set_inner_html("↻ Retry");
     let rid = agent.id;
     let retry_cb = Closure::wrap(Box::new(move |_e: web_sys::MouseEvent| {
-        wasm_bindgen_futures::spawn_local(async move {
-            let _ = crate::network::ApiClient::run_agent(rid).await;
-        });
+        // Dispatch message instead of direct API call and state manipulation
+        crate::state::dispatch_global_message(crate::messages::Message::RetryAgentTask { agent_id: rid });
     }) as Box<dyn FnMut(_)>);
     retry_btn.add_event_listener_with_callback("click", retry_cb.as_ref().unchecked_ref())?;
     retry_cb.forget();
@@ -780,20 +779,8 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
     dismiss_btn.set_inner_html("✖ Dismiss");
     let did = agent.id;
     let dismiss_cb = Closure::wrap(Box::new(move |_e: web_sys::MouseEvent| {
-        let payload = serde_json::json!({"last_error": null}).to_string();
-        wasm_bindgen_futures::spawn_local(async move {
-            let _ = crate::network::ApiClient::update_agent(did, &payload).await;
-            crate::state::APP_STATE.with(|s| {
-                if let Some(a) = s.borrow_mut().agents.get_mut(&did) {
-                    a.last_error = None;
-                }
-            });
-            if let Some(win) = web_sys::window() {
-                if let Some(doc) = win.document() {
-                    let _ = crate::components::dashboard::refresh_dashboard(&doc);
-                }
-            }
-        });
+        // Dispatch message instead of direct API call and state manipulation
+        crate::state::dispatch_global_message(crate::messages::Message::DismissAgentError { agent_id: did });
     }) as Box<dyn FnMut(_)>);
     dismiss_btn.add_event_listener_with_callback("click", dismiss_cb.as_ref().unchecked_ref())?;
     dismiss_cb.forget();
