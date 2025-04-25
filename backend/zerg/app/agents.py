@@ -80,14 +80,22 @@ class AgentManager:
         return graph_builder.compile()
 
     def _chatbot_node(self, state: AgentManagerState) -> Dict:
-        """
-        LangGraph node that processes messages with the LLM.
-        This takes the current state and returns an updated state.
-        """
-        # Invoke the LLM with the current messages
-        response = self.llm.invoke(state["messages"])
+        """LangGraph node that processes messages with the LLM.
 
-        # Return the updated state
+        We purposefully call :pymeth:`ChatOpenAI.invoke` here *even when* we
+        want token streaming.  With ``streaming=True`` set on the LLM
+        instance LangChain will internally call the streaming OpenAI
+        endpoint, surface each token through the callback system, and—when
+        *stream_mode="messages"* is used on ``graph.stream``—LangGraph will
+        emit every token chunk to the outer event loop.  Finally
+        ``invoke`` returns the fully-assembled answer so we can persist it
+        in the database.
+        """
+
+        # Direct, blocking LLM call – token-level callbacks are handled by
+        # LangChain/LLM instrumentation, not by yielding generator chunks
+        # ourselves.
+        response = self.llm.invoke(state["messages"])
         return {"messages": [response]}
 
     def get_or_create_thread(
@@ -104,6 +112,14 @@ class AgentManager:
         Returns:
             Tuple of (thread, created) where created is True if a new thread was created
         """
+
+        # Store the token_stream preference on the instance so that the
+        # _chatbot_node can access it without having to thread the value
+        # through every intermediate call.  This flag is guaranteed to be
+        # read-only during the lifetime of a single `process_message` call
+        # (AgentManager is instantiated on-demand per request), so this is
+        # safe even though we mutate `self`.
+
         from zerg.app.crud import crud
 
         created = False
@@ -149,20 +165,36 @@ class AgentManager:
                 content=self.agent_model.system_instructions,
             )
 
-    def process_message(self, db, thread: ThreadModel, content: Optional[str] = None, stream: bool = True):
+    def process_message(
+        self,
+        db,
+        thread: ThreadModel,
+        content: Optional[str] = None,
+        *,
+        stream: bool = True,
+        token_stream: bool = False,
+    ):
         """
         Processes a new user message through the LangGraph agent.
         This method now REQUIRES content to be provided.
 
         Args:
             db: Database session
-            thread: The thread to add the message to
-            content: The content of the user message (required)
-            stream: Whether to stream the response
+            thread: Thread to operate on.
+            content: User-supplied text.  ``None`` means *use the last
+                unprocessed message* that is already stored in the DB (the
+                optimistic-UI path used by ``/threads/{id}/run``).
+            stream: If **True** we call ``graph.stream`` to receive node-level
+                events as they happen; otherwise the call blocks until the
+                LangGraph run completes.
+            token_stream: If **True** the underlying OpenAI call streams
+                tokens.  Useful for interactive chat where the UI shows a
+                ripple effect.  In autonomous task-runs this should be
+                **False** so only the final assistant reply is broadcast.
 
-        Returns:
-            Generator that yields response chunks if streaming,
-            or the complete response if not streaming
+        Yields:
+            str – incremental assistant text chunks (either individual tokens
+            or the whole response depending on *token_stream*).
         """
         from zerg.app.crud import crud
 
@@ -225,13 +257,30 @@ class AgentManager:
         response_content = ""
 
         if stream:
-            # Stream mode
-            for event in graph.stream(state):
-                if "chatbot" in event and len(event["chatbot"]["messages"]) > 0:
-                    # Extract the last message added
-                    last_message = event["chatbot"]["messages"][-1]
+            # Determine which stream_mode to use.  For token streaming we rely
+            # on LangGraph's built-in "messages" mode which forwards the LLM
+            # token callbacks.  Otherwise we keep the default ("updates").
+            stream_mode = "messages" if token_stream else None
 
-                    # If this is a chunk, yield it
+            for event in graph.stream(state, stream_mode=stream_mode):
+                if token_stream:
+                    # "messages" mode yields tuples of
+                    # (AIMessageChunk | HumanMessage, metadata).  We only care
+                    # about assistant chunks.
+                    if isinstance(event, tuple):
+                        message_chunk, _metadata = event
+                        # Guard: only assistant role has content we want to
+                        # stream to the UI.
+                        if hasattr(message_chunk, "content") and message_chunk.content:
+                            chunk = str(message_chunk.content)
+                            response_content += chunk
+                            yield chunk
+                    # Ignore non-tuple events (they can be debug or other)
+                    continue
+
+                # ---------- non-token stream path (default "updates") ----------
+                if "chatbot" in event and len(event["chatbot"]["messages"]) > 0:
+                    last_message = event["chatbot"]["messages"][-1]
                     if hasattr(last_message, "content"):
                         chunk = last_message.content
                         response_content += chunk

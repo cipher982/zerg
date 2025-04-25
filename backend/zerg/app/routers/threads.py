@@ -156,7 +156,13 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
     # `content=None` avoids creating a duplicate copy of the same user
     # message inside `AgentManager.process_message`.
 
-    for chunk in agent_manager.process_message(db, thread, content=None, stream=True):
+    for chunk in agent_manager.process_message(
+        db,
+        thread,
+        content=None,
+        stream=True,
+        token_stream=True,
+    ):
         await topic_manager.broadcast_to_topic(
             topic,
             StreamChunkMessage(thread_id=thread_id, content=chunk).model_dump(),
