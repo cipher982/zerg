@@ -41,6 +41,8 @@ Agent Platform is designed for users who need to create, manage, and orchestrate
 --------------------------------------------------------------------------------
 ## Quick Start
 
+**IMPORTANT:** FOR ANY PYTHON CLI CALLS, USE `uv run` TO RUN THE COMMAND. Also NEVER use pip, use UV ONLY. IF you want to run backend tests, use 'cd backend && uv run pytest'. Or even easier, use 'cd backend && ./run_backend_tests.sh' to run the tests.
+
 Here's the minimal set of commands to get Agent Platform running locally:
 
 1. Clone the repository:  
