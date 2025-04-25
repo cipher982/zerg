@@ -473,11 +473,21 @@ fn format_timestamp(timestamp: &str) -> String {
 }
 
 // Helper function to truncate text with ellipsis
-fn truncate_text(text: &str, max_length: usize) -> String {
-    if text.len() <= max_length {
+fn truncate_text(text: &str, max_graphemes: usize) -> String {
+    use unicode_segmentation::UnicodeSegmentation;
+
+    // Collect the string into user-perceived grapheme clusters so we do not
+    // slice through multi-byte characters or emoji sequences ("😎", "🇨🇦",
+    // "👨‍👩‍👧‍👦", etc.).
+    let graphemes: Vec<&str> = text.graphemes(true).collect();
+
+    if graphemes.len() <= max_graphemes {
+        // No truncation required – return the original string verbatim.
         text.to_string()
     } else {
-        format!("{}...", &text[0..max_length])
+        // Join the first `max_graphemes` clusters and append an ellipsis.
+        let truncated: String = graphemes[..max_graphemes].concat();
+        format!("{}...", truncated)
     }
 }
 
