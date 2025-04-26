@@ -101,6 +101,9 @@ pub struct StreamChunkMessage {
     pub tool_name: Option<String>,
     #[serde(default)]
     pub tool_call_id: Option<String>,
+    /// Optional serialized inputs for the tool call (if provided by backend)
+    #[serde(default)]
+    pub tool_input: Option<String>,
 }
 
 /// Message for stream end
