@@ -324,7 +324,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 // Close the modal after saving
                 if let Some(window) = web_sys::window() {
                     if let Some(document) = window.document() {
-                        if let Err(e) = crate::ui::modals::close_agent_modal(&document) {
+                        if let Err(e) = crate::components::agent_config_modal::AgentConfigModal::close(&document) {
                             web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
                         }
                     }
@@ -337,7 +337,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             if let Some(window) = web_sys::window() {
                 if let Some(document) = window.document() {
                     // Close the modal using the modal helper function
-                    if let Err(e) = crate::ui::modals::close_agent_modal(&document) {
+                    if let Err(e) = crate::components::agent_config_modal::AgentConfigModal::close(&document) {
                         web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
                     }
                 }

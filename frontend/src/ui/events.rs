@@ -1,22 +1,21 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{Document, Event, HtmlInputElement, HtmlTextAreaElement, MouseEvent};
+use web_sys::{Document, Event, MouseEvent, HtmlInputElement, HtmlTextAreaElement};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
-use crate::{
-    messages::Message,
-    state::dispatch_global_message,
-};
+use crate::{messages::Message, state::dispatch_global_message};
 
 // This will contain event handlers that we'll extract from ui.rs
 // For now, we just have stubs
+
+// NOTE: Modal-specific handlers (save / close / tabs) were migrated to
+// `components::agent_config_modal`.  The legacy helpers have been removed to
+// avoid dead code.
 
 // Main function to set up all UI event handlers
 pub fn setup_ui_event_handlers(document: &Document) -> Result<(), JsValue> {
     setup_auto_fit_button_handler(document)?;
     setup_center_view_handler(document)?;
     setup_clear_button_handler(document)?;
-    setup_modal_handlers(document)?;
-    setup_modal_action_handlers(document)?;
     setup_create_agent_button_handler(document)?;
     
     Ok(())
@@ -303,7 +302,7 @@ pub fn setup_modal_action_handlers(document: &Document) -> Result<(), JsValue> {
             }
             
             // Explicitly close the modal after saving
-            if let Err(e) = crate::ui::modals::close_agent_modal(&document) {
+            if let Err(e) = crate::components::agent_config_modal::AgentConfigModal::close(&document) {
                 web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
             }
         }) as Box<dyn FnMut(_)>);
