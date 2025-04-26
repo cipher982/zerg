@@ -3,6 +3,7 @@
 import logging
 import os
 from datetime import datetime
+from typing import Any
 from typing import List
 
 from dotenv import load_dotenv
@@ -19,6 +20,7 @@ from zerg.events import EventType
 from zerg.events.decorators import publish_event
 from zerg.schemas.schemas import Agent
 from zerg.schemas.schemas import AgentCreate
+from zerg.schemas.schemas import AgentDetails
 from zerg.schemas.schemas import AgentUpdate
 from zerg.schemas.schemas import MessageCreate
 from zerg.schemas.schemas import MessageResponse
@@ -99,6 +101,56 @@ def read_agent(agent_id: int, db: Session = Depends(get_db)):
     if db_agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
     return db_agent
+
+
+# ---------------------------------------------------------------------------
+# Agent Details (debug) endpoint
+# ---------------------------------------------------------------------------
+
+
+# Use `response_model_exclude_none=True` so that optional fields which were
+# *not* requested via the `include` query parameter are omitted entirely from
+# the serialised JSON.  This keeps the payload small and ensures we respect
+# the contract verified by the test-suite (see tests/test_agent_details.py).
+@router.get(
+    "/{agent_id}/details",
+    response_model=AgentDetails,
+    response_model_exclude_none=True,
+)
+def read_agent_details(
+    agent_id: int,
+    include: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Return an *extended* payload for debugging / observability use-cases.
+
+    Query-string ``include`` allows the caller to request heavier sub-resources
+    (currently ignored – Phase 1 delivers only the top-level *agent* object).
+    """
+
+    # Fetch the agent or 404 early
+    db_agent = crud.get_agent(db, agent_id=agent_id)
+    if db_agent is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+    # Parse include param into a set for later phases (threads, runs, stats)
+    include_set: set[str] = set()
+    if include:
+        include_set = {part.strip().lower() for part in include.split(",") if part.strip()}
+
+    # Build response – only the mandatory `agent` field for now
+    details_payload: dict[str, Any] = {"agent": db_agent}
+
+    # Placeholder for forwards-compatibility – fill with empty list/dict so
+    # that client JSON keys are stable even before we implement them.
+    if "threads" in include_set:
+        details_payload["threads"] = []  # type: ignore[assignment]
+    if "runs" in include_set:
+        details_payload["runs"] = []  # type: ignore[assignment]
+    if "stats" in include_set:
+        details_payload["stats"] = {}  # type: ignore[assignment]
+
+    return details_payload
 
 
 @router.put("/{agent_id}", response_model=Agent)

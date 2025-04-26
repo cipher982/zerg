@@ -135,10 +135,10 @@ Add a 🐞 “Debug” icon/button beside the existing ✎ “Edit” button.
 
 ### Phase 1  – Minimal Vertical Slice
 
-- [ ] **Backend**: implement `/details` endpoint (overview only)
-- [ ] **Frontend**: introduce messages, state, command executor stubs
-- [ ] **Component**: create `AgentDebugModal` with Overview & Raw JSON tabs
-- [ ] **Dashboard**: add “Debug” button → ShowAgentDebugModal
+- [x] **Backend**: implement `/details` endpoint (overview only)
+- [x] **Frontend**: introduce messages, state, command executor stubs
+- [x] **Component**: create `AgentDebugModal` with Overview & Raw JSON tabs
+- [x] **Dashboard**: add “Debug” button → ShowAgentDebugModal
 - [ ] **Linking**: in Debug modal add “Edit Agent” button (deep-link)
 
 ### Phase 2  – Threads Tab
@@ -175,3 +175,49 @@ Add a 🐞 “Debug” icon/button beside the existing ✎ “Edit” button.
 ---
 
 _Feel free to edit, extend, and tick off tasks as we ship!_
+
+---
+
+## 8  Progress Log (2025-04-26)
+
+### What has been delivered
+
+1. **Backend**
+   • New Pydantic wrapper `AgentDetails`.
+   • `GET /api/agents/{id}/details` implemented (returns `{"agent": ...}`; honours `include=` param but currently sends empty placeholders).
+   • Added `backend/tests/test_agent_details.py` – basic & `include`-param cases pass.
+
+2. **Frontend**
+   • Message/command/state scaffolding (`ShowAgentDebugModal`, `ReceiveAgentDetails`, `FetchAgentDetails`, etc.).
+   • `ApiAgentDetails` model mirrors backend wrapper.
+   • `AgentDebugPane` added to global state, with simple enum `DebugTab`.
+   • Command executor wired to new `ApiClient::get_agent_details` helper.
+   • Minimal `AgentDebugModal` component renders Overview + Raw JSON (read-only) and graceful loading placeholder.
+   • 🐞 button added beside ✎ Edit button in dashboard; opens modal.
+   • Modal hides on outside click; also hide via `HideAgentDebugModal` message.
+
+### Things we learned / issues to revisit
+
+* Elm-style architecture still works but **update.rs** is getting unwieldy (>1.5 k LOC).  We bolted the new handlers near the end; consider refactor.
+* Large number of compiler warnings in the WASM build (unused imports, dead code).  None break functionality but noise is growing.
+* `AgentDebugModal` is currently *self-contained* JS/DOM; later we should adopt shared style system / CSS classes.
+* No dedicated CSS yet – relies on inline styles ⇒ accessibility & theme issues.
+* We did **not** add the “Edit Agent” deep-link in the modal (task left open).
+* Tab buttons don’t switch tabs yet – only creation helper exists.  Needs click wiring.
+* End-to-end flow not user-tested; modal overlay dimensions, scrolling etc. might need tweaks.
+
+### Next immediate steps
+
+1. Hook up tab switching (Overview <-> Raw JSON) + basic styling.
+2. Add “Edit Agent” button inside modal (dispatch existing `EditAgent`).
+3. Unit-test frontend reducer & component (wasm-bindgen test harness).
+4. General CSS cleanup + responsive layout.
+5. After smoke-testing Phase 1, start Phase 2 (Threads tab) – requires backend include logic and pagination decisions.
+
+### Open questions (updated)
+
+* Where to place modal component styling? Global styles vs shadow-DOM?
+* Should the `/details` endpoint embed *agent messages* as part of “runs” or separate include?
+* We now expose empty arrays for requested heavy includes – good for forward compatibility, but do we want 204 instead when empty?
+
+---
