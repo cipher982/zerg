@@ -3,7 +3,7 @@ import logging
 import pytest
 from apscheduler.triggers.cron import CronTrigger
 
-from zerg.app.services.scheduler_service import SchedulerService
+from zerg.services.scheduler_service import SchedulerService
 
 
 @pytest.fixture(autouse=True)
@@ -13,7 +13,7 @@ def patch_logging(monkeypatch):
     """
     # Silence logging
     monkeypatch.setattr(
-        "zerg.app.services.scheduler_service.logger",
+        "zerg.services.scheduler_service.logger",
         logging.getLogger("test_scheduler_service"),
     )
     yield
@@ -31,7 +31,7 @@ def service(test_session_factory):
     # Mock the event_bus subscription to avoid errors during tests
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(
-        "zerg.app.services.scheduler_service.event_bus.subscribe",
+        "zerg.services.scheduler_service.event_bus.subscribe",
         lambda event_type, handler: None,
     )
     yield service
@@ -57,7 +57,7 @@ async def test_schedule_agent(service):
 @pytest.mark.asyncio
 async def test_load_scheduled_agents(service, db_session):
     # Insert two agents: one with run_on_schedule=True, one with False
-    from zerg.app.models.models import Agent
+    from zerg.models.models import Agent
 
     a1 = Agent(
         name="A1",

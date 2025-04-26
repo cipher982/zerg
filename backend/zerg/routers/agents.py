@@ -13,15 +13,15 @@ from fastapi import status
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
-from zerg.app.crud import crud
-from zerg.app.database import get_db
-from zerg.app.events import EventType
-from zerg.app.events.decorators import publish_event
-from zerg.app.schemas.schemas import Agent
-from zerg.app.schemas.schemas import AgentCreate
-from zerg.app.schemas.schemas import AgentUpdate
-from zerg.app.schemas.schemas import MessageCreate
-from zerg.app.schemas.schemas import MessageResponse
+from zerg.crud import crud
+from zerg.database import get_db
+from zerg.events import EventType
+from zerg.events.decorators import publish_event
+from zerg.schemas.schemas import Agent
+from zerg.schemas.schemas import AgentCreate
+from zerg.schemas.schemas import AgentUpdate
+from zerg.schemas.schemas import MessageCreate
+from zerg.schemas.schemas import MessageResponse
 
 load_dotenv()
 
@@ -38,7 +38,7 @@ def _validate_model_or_400(model_id: str) -> None:
 
     Raises HTTPException(400) if the model is unknown.
     """
-    from zerg.app.models_config import MODELS_BY_ID
+    from zerg.models_config import MODELS_BY_ID
 
     if not model_id or model_id.strip() == "":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="'model' must be a non‑empty string")
@@ -175,7 +175,7 @@ def create_agent_message(agent_id: int, message: MessageCreate, db: Session = De
 @router.post("/{agent_id}/task", status_code=status.HTTP_202_ACCEPTED)
 async def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
     """Run the agent's main task (task_instructions) in a new thread, matching scheduled run behavior."""
-    from zerg.app.agents import AgentManager
+    from zerg.agents import AgentManager
 
     agent = crud.get_agent(db, agent_id=agent_id)
     if not agent:
@@ -193,8 +193,8 @@ async def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
     # 1. Mark the agent as *running* and broadcast the change so that the
     #    dashboard can flip the status badge immediately.
     # ------------------------------------------------------------------
-    from zerg.app.events.event_bus import EventType
-    from zerg.app.events.event_bus import event_bus
+    from zerg.events.event_bus import EventType
+    from zerg.events.event_bus import event_bus
 
     crud.update_agent(db, agent_id, status="running")
     # We need to commit before publishing so that other DB readers (e.g.
