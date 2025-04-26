@@ -2,8 +2,8 @@
 
 import pytest
 
-from zerg.app.events import EventBus
-from zerg.app.events import EventType
+from zerg.events import EventBus
+from zerg.events import EventType
 
 
 @pytest.mark.asyncio

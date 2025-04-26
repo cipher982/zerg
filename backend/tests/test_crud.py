@@ -1,13 +1,13 @@
 from sqlalchemy.orm import Session
 
-from zerg.app.crud.crud import create_agent
-from zerg.app.crud.crud import create_agent_message
-from zerg.app.crud.crud import delete_agent
-from zerg.app.crud.crud import get_agent
-from zerg.app.crud.crud import get_agent_messages
-from zerg.app.crud.crud import get_agents
-from zerg.app.crud.crud import update_agent
-from zerg.app.models.models import Agent
+from zerg.crud.crud import create_agent
+from zerg.crud.crud import create_agent_message
+from zerg.crud.crud import delete_agent
+from zerg.crud.crud import get_agent
+from zerg.crud.crud import get_agent_messages
+from zerg.crud.crud import get_agents
+from zerg.crud.crud import update_agent
+from zerg.models.models import Agent
 
 
 def test_get_agents(db_session: Session, sample_agent: Agent):

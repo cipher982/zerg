@@ -9,7 +9,7 @@ from sqlalchemy import Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
-from zerg.app.database import Base
+from zerg.database import Base
 
 
 class Agent(Base):

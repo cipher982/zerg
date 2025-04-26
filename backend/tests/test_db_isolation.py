@@ -8,10 +8,10 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from zerg.app.crud import crud
+from zerg.crud import crud
 
 # Import the SQLAlchemy Agent model, not the Pydantic schema
-from zerg.app.models.models import Agent
+from zerg.models.models import Agent
 
 
 @pytest.mark.db_isolation

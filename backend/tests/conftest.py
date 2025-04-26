@@ -8,20 +8,20 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 
-import zerg.app.database as _db_mod
-import zerg.app.routers.websocket as _ws_router
-from zerg.app.database import Base
-from zerg.app.database import get_db
-from zerg.app.database import make_engine
-from zerg.app.database import make_sessionmaker
-from zerg.app.events import EventType
-from zerg.app.events import event_bus
-from zerg.app.models.models import Agent
-from zerg.app.models.models import AgentMessage
-from zerg.app.models.models import Thread
-from zerg.app.models.models import ThreadMessage
-from zerg.app.services.scheduler_service import scheduler_service
-from zerg.app.websocket.manager import topic_manager
+import zerg.database as _db_mod
+import zerg.routers.websocket as _ws_router
+from zerg.database import Base
+from zerg.database import get_db
+from zerg.database import make_engine
+from zerg.database import make_sessionmaker
+from zerg.events import EventType
+from zerg.events import event_bus
+from zerg.models.models import Agent
+from zerg.models.models import AgentMessage
+from zerg.models.models import Thread
+from zerg.models.models import ThreadMessage
+from zerg.services.scheduler_service import scheduler_service
+from zerg.websocket.manager import topic_manager
 
 dotenv.load_dotenv()
 
@@ -295,7 +295,7 @@ def mock_langgraph_state_graph():
     """
     Mock the StateGraph class from LangGraph
     """
-    with patch("zerg.app.agents.StateGraph") as mock_state_graph:
+    with patch("zerg.agents.StateGraph") as mock_state_graph:
         # Create a mock graph
         mock_graph = MagicMock()
         mock_state_graph.return_value = mock_graph

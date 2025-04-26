@@ -11,9 +11,9 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from zerg.app.models.models import Agent
-from zerg.app.models.models import Thread
-from zerg.app.models.models import ThreadMessage
+from zerg.models.models import Agent
+from zerg.models.models import Thread
+from zerg.models.models import ThreadMessage
 
 
 @pytest.fixture
@@ -106,7 +106,7 @@ def test_create_thread(client: TestClient, sample_agent: Agent):
     }
 
     # Test with patched AgentManager to avoid actual LLM calls
-    with patch("zerg.app.routers.threads.AgentManager") as mock_agent_manager:
+    with patch("zerg.routers.threads.AgentManager") as mock_agent_manager:
         # Configure the mock
         mock_instance = MagicMock()
         mock_agent_manager.return_value = mock_instance
@@ -268,7 +268,7 @@ def test_create_thread_message_not_found(client: TestClient):
 def test_run_thread(client: TestClient, sample_thread: Thread, db_session):
     """Test the POST /api/threads/{thread_id}/run endpoint"""
     # Mock the AgentManager to avoid actual LLM calls
-    with patch("zerg.app.routers.threads.AgentManager") as mock_agent_manager:
+    with patch("zerg.routers.threads.AgentManager") as mock_agent_manager:
         # Configure the mock
         mock_instance = MagicMock()
         mock_agent_manager.return_value = mock_instance

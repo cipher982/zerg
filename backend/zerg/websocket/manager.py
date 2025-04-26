@@ -11,8 +11,8 @@ from typing import Set
 
 from fastapi import WebSocket
 
-from zerg.app.events import EventType
-from zerg.app.events import event_bus
+from zerg.events import EventType
+from zerg.events import event_bus
 
 logger = logging.getLogger(__name__)
 
