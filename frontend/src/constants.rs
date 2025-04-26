@@ -1,7 +1,7 @@
 // Default values for agent configuration - these are the single source of truth for defaults
 pub const DEFAULT_AGENT_NAME: &str = "New Agent";
 pub const DEFAULT_SYSTEM_INSTRUCTIONS: &str = "You are a helpful AI assistant.";
-pub const DEFAULT_TASK_INSTRUCTIONS: &str = "Hello.";
+pub const DEFAULT_TASK_INSTRUCTIONS: &str = "These are the default task instructions. Begin your job now based on prompt.";
 pub const DEFAULT_TEMPERATURE: f64 = 0.3;
 pub const DEFAULT_THREAD_TITLE: &str = "New Thread";
 

@@ -112,7 +112,7 @@ pub struct ApiAgent {
     pub temperature: Option<f64>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
-    // -------- Scheduling metadata (Milestone 0) --------
+    // -------- Scheduling metadata (Milestone 0) --------
     /// Cron expression defining when the agent should run (None means not scheduled)
     pub schedule: Option<String>,
     /// If true the backend scheduler will actually run the agent on its schedule
@@ -180,7 +180,7 @@ pub struct ApiMessage {
     pub agent_id: u32,
     pub role: String,
     pub content: String,
-    pub created_at: Option<String>,
+    pub timestamp: Option<String>,
 }
 
 /// ApiMessageCreate is used when creating a new message
@@ -216,14 +216,26 @@ pub struct ApiThreadUpdate {
     pub active: Option<bool>,
 }
 
-/// Thread message from the API
+/// ApiThreadMessage represents a message in a thread
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiThreadMessage {
     pub id: Option<u32>,
     pub thread_id: u32,
     pub role: String,
     pub content: String,
-    pub created_at: Option<String>,
+    pub timestamp: Option<String>,
+    // New fields for tool message display
+    #[serde(default)]
+    pub message_type: Option<String>,  // "tool_output" or "assistant_message"
+    #[serde(default)]
+    pub tool_name: Option<String>,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
+    /// Optional serialized inputs for the tool call (if provided by backend)
+    #[serde(default)]
+    pub tool_input: Option<String>,
+    #[serde(default)]
+    pub parent_id: Option<u32>,
 }
 
 /// Create a new thread message

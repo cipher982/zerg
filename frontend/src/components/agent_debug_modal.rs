@@ -7,8 +7,10 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, HtmlElement};
+use wasm_bindgen::closure::Closure;
 
-use crate::state::{AgentDebugPane, DebugTab, AppState};
+use crate::state::{AgentDebugPane, DebugTab, AppState, dispatch_global_message};
+use crate::messages::Message;
 
 /// Public entry – create or refresh the modal based on current pane state.
 pub fn render_agent_debug_modal(state: &AppState, document: &Document) -> Result<(), JsValue> {
@@ -69,17 +71,22 @@ pub fn render_agent_debug_modal(state: &AppState, document: &Document) -> Result
         // Re-render inner HTML based on state
         content.set_inner_html("");
 
-        // Header
+        // Header section with title and "Edit" button
+        let header_container = document.create_element("div")?;
+        header_container.set_class_name("debug-header");
+
         let header = document.create_element("h2")?;
         header.set_inner_html(&format!("Agent #{} Debug", pane.agent_id));
-        content.append_child(&header)?;
+        header_container.append_child(&header)?;
+
+        content.append_child(&header_container)?;
 
         // Tabs (Overview / Raw JSON)
         let tabs_container = document.create_element("div")?;
         tabs_container.set_class_name("tab-container");
 
-        let overview_tab = create_tab_button(document, "Overview", matches!(pane.active_tab, DebugTab::Overview))?;
-        let raw_tab = create_tab_button(document, "Raw JSON", matches!(pane.active_tab, DebugTab::RawJson))?;
+        let overview_tab = create_tab_button(document, "Overview", DebugTab::Overview, matches!(pane.active_tab, DebugTab::Overview))?;
+        let raw_tab = create_tab_button(document, "Raw JSON", DebugTab::RawJson, matches!(pane.active_tab, DebugTab::RawJson))?;
 
         tabs_container.append_child(&overview_tab)?;
         tabs_container.append_child(&raw_tab)?;
@@ -131,10 +138,24 @@ pub fn render_agent_debug_modal(state: &AppState, document: &Document) -> Result
     Ok(())
 }
 
-fn create_tab_button(document: &Document, label: &str, active: bool) -> Result<Element, JsValue> {
+fn create_tab_button(
+    document: &Document,
+    label: &str,
+    tab: DebugTab,
+    active: bool,
+) -> Result<Element, JsValue> {
     let btn = document.create_element("button")?;
     btn.set_inner_html(label);
     btn.set_class_name(if active { "tab-button active" } else { "tab-button" });
+
+    // Click handler to switch active tab
+    let tab_clone = tab.clone();
+    let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_evt: web_sys::MouseEvent| {
+        dispatch_global_message(Message::SetAgentDebugTab(tab_clone.clone()));
+    }));
+    btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+    cb.forget();
+
     Ok(btn)
 }
 

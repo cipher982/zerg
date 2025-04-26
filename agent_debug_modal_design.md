@@ -1,9 +1,59 @@
+### 2025-04-27
+
+#### What has been delivered
+
+- Aligned design doc with current codebase:
+  - Updated message/state definitions to reflect `u32`/`ApiAgentDetails`.
+  - Removed unsupported `logs` field and noted future placeholders.
+- No functional code changes yet; remaining Phase 1 tasks still pending.
+
+#### Next immediate steps
+
+1. Hook up tab switching handlers in `agent_debug_modal.rs` to dispatch tab change messages.
+2. Add “Edit Agent” button inside modal and dispatch `EditAgent` message.
+3. Write wasm-bindgen tests for reducer and component.
+4. Enhance modal styling and implement responsive layout.
+
+---
+### 2025-04-27
+
+#### What has been delivered
+
+- Aligned design doc with current codebase:
+  - Updated message/state definitions to reflect `u32`/`ApiAgentDetails`.
+  - Removed unsupported `logs` field and noted future placeholders.
+- No functional code changes yet; remaining Phase 1 tasks still pending.
+
+#### Next immediate steps
+
+1. Hook up tab switching handlers in `agent_debug_modal.rs` to dispatch tab change messages.
+2. Add “Edit Agent” button inside modal and dispatch `EditAgent` message.
+3. Write wasm-bindgen tests for reducer and component.
+4. Enhance modal styling and implement responsive layout.
+
+---
 # Agent Debug Modal (Agent Info) – Design Document
 
 > **Status:** Draft  |  Option B (Separate Modals) **selected**
 
 This document captures the evolving design and implementation plan for a new **Agent Debug / Info modal** in the frontend.  It is intended to be _living documentation_: update it as design decisions change, requirements grow, or tasks are completed.
+  
 
+### 2025-04-27
+
+#### What has been delivered
+
+- Aligned design doc with current codebase:
+  - Updated message/state definitions to reflect `u32`/`ApiAgentDetails`.
+  - Removed unsupported `logs` field and noted future placeholders.
+- No functional code changes yet; remaining Phase 1 tasks still pending.
+
+#### Next immediate steps
+
+1. Hook up tab switching handlers in `agent_debug_modal.rs` to dispatch tab change messages.
+2. Add “Edit Agent” button inside modal and dispatch `EditAgent` message.
+3. Write wasm-bindgen tests for reducer and component.
+4. Enhance modal styling and implement responsive layout.
 ---
 
 ## 1  Background & Motivation
@@ -78,30 +128,29 @@ Topic `agent:{id}` already emits status updates.  We will extend it to broadcast
 ### 4.1  New Messages (frontend/src/messages.rs)
 
 ```rust
-ShowAgentDebugModal  { agent_id: Uuid }
+ShowAgentDebugModal { agent_id: u32 }
 HideAgentDebugModal
-ReceiveAgentDetails  { details: AgentDetails }
-ReceiveAgentRunLog   { agent_id: Uuid, log: AgentRunLogEntry }
+ReceiveAgentDetails(ApiAgentDetails)
+// (Future) ReceiveAgentRunLog { agent_id: u32, log: AgentRunLogEntry }
 ```
 
 ### 4.2  State additions (frontend/src/state.rs)
 
 ```rust
 pub struct AgentDebugPane {
-    pub agent_id: Uuid,
+    pub agent_id: u32,
     pub loading: bool,
-    pub details: Option<AgentDetails>,
-    pub logs: Vec<AgentRunLogEntry>,
+    pub details: Option<ApiAgentDetails>,
     pub active_tab: DebugTab,
 }
 
-pub enum DebugTab { Overview, Threads, Runs, RawJson }
+pub enum DebugTab { Overview, RawJson /*, Threads, Runs */ }
 ```
 
 ### 4.3  Command executors (frontend/src/command_executors.rs)
 
-1. `fetch_agent_details(agent_id)` – calls new REST endpoint.
-2. `subscribe_agent_topic(agent_id)` / `unsubscribe_agent_topic` – WebSocket management.
+1. `Command::FetchAgentDetails(agent_id)` – triggers `ApiClient::get_agent_details(agent_id)` and dispatches `ReceiveAgentDetails`.
+2. (Later) WebSocket subscription for live run logs via topic `agent:{id}`.
 
 ### 4.4  Component tree
 
@@ -178,9 +227,11 @@ _Feel free to edit, extend, and tick off tasks as we ship!_
 
 ---
 
-## 8  Progress Log (2025-04-26)
+## 8  Progress Log
 
-### What has been delivered
+### 2025-04-26
+
+#### What has been delivered
 
 1. **Backend**
    • New Pydantic wrapper `AgentDetails`.
@@ -196,17 +247,18 @@ _Feel free to edit, extend, and tick off tasks as we ship!_
    • 🐞 button added beside ✎ Edit button in dashboard; opens modal.
    • Modal hides on outside click; also hide via `HideAgentDebugModal` message.
 
-### Things we learned / issues to revisit
 
-* Elm-style architecture still works but **update.rs** is getting unwieldy (>1.5 k LOC).  We bolted the new handlers near the end; consider refactor.
-* Large number of compiler warnings in the WASM build (unused imports, dead code).  None break functionality but noise is growing.
-* `AgentDebugModal` is currently *self-contained* JS/DOM; later we should adopt shared style system / CSS classes.
-* No dedicated CSS yet – relies on inline styles ⇒ accessibility & theme issues.
-* We did **not** add the “Edit Agent” deep-link in the modal (task left open).
-* Tab buttons don’t switch tabs yet – only creation helper exists.  Needs click wiring.
-* End-to-end flow not user-tested; modal overlay dimensions, scrolling etc. might need tweaks.
+#### Things we learned / issues to revisit
 
-### Next immediate steps
+- Elm-style architecture still works but **update.rs** is getting unwieldy (>1.5 k LOC).  We bolted the new handlers near the end; consider refactor.
+- Large number of compiler warnings in the WASM build (unused imports, dead code).  None break functionality but noise is growing.
+- `AgentDebugModal` is currently *self-contained* JS/DOM; later we should adopt shared style system / CSS classes.
+- No dedicated CSS yet – relies on inline styles ⇒ accessibility & theme issues.
+- We did **not** add the “Edit Agent” deep-link in the modal (task left open).
+- Tab buttons don’t switch tabs yet – only creation helper exists.  Needs click wiring.
+- End-to-end flow not user-tested; modal overlay dimensions, scrolling etc. might need tweaks.
+
+#### Next immediate steps
 
 1. Hook up tab switching (Overview <-> Raw JSON) + basic styling.
 2. Add “Edit Agent” button inside modal (dispatch existing `EditAgent`).

@@ -259,10 +259,16 @@ def delete_thread(db: Session, thread_id: int):
 # Thread Message CRUD operations
 def get_thread_messages(db: Session, thread_id: int, skip: int = 0, limit: int = 100):
     """Get all messages for a specific thread"""
+    # Use the *id* column for deterministic chronological ordering. SQLite
+    # timestamps have a resolution of 1 second which can lead to two messages
+    # inserted within the same second being returned in undefined order.  The
+    # auto-incrementing primary-key is strictly monotonic, therefore provides a
+    # stable ordering even when multiple rows share the same timestamp.
+
     return (
         db.query(ThreadMessage)
         .filter(ThreadMessage.thread_id == thread_id)
-        .order_by(ThreadMessage.timestamp)
+        .order_by(ThreadMessage.id)
         .offset(skip)
         .limit(limit)
         .all()
@@ -278,6 +284,7 @@ def create_thread_message(
     tool_call_id: Optional[str] = None,
     name: Optional[str] = None,
     processed: bool = False,
+    parent_id: Optional[int] = None,
 ):
     """Create a new message for a thread"""
     db_message = ThreadMessage(
@@ -288,6 +295,7 @@ def create_thread_message(
         tool_call_id=tool_call_id,
         name=name,
         processed=processed,
+        parent_id=parent_id,
     )
     db.add(db_message)
     db.commit()
