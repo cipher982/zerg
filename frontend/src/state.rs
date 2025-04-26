@@ -31,7 +31,7 @@ use crate::models_config;
 // Agent Debug Pane (read-only modal) – Phase 1
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DebugTab {
     Overview,
     RawJson,
@@ -43,6 +43,15 @@ pub struct AgentDebugPane {
     pub loading: bool,
     pub details: Option<ApiAgentDetails>,
     pub active_tab: DebugTab,
+}
+
+/// UI state for each tool call indicator (collapsed/expanded and show-full settings)
+#[derive(Debug, Clone)]
+pub struct ToolUiState {
+    /// Whether the tool details panel is expanded
+    pub expanded: bool,
+    /// Whether the full tool output is shown (vs truncated)
+    pub show_full: bool,
 }
 
 // Store global application state
@@ -120,6 +129,8 @@ pub struct AppState {
 
     // Agent Debug modal (None when hidden)
     pub agent_debug_pane: Option<AgentDebugPane>,
+    // UI state for collapsible tool call indicators
+    pub tool_ui_states: HashMap<String, ToolUiState>,
 }
 
 impl AppState {
@@ -179,6 +190,8 @@ impl AppState {
             expanded_agent_rows: HashSet::new(),
 
             agent_debug_pane: None,
+            // Initialize UI state for tool call indicators
+            tool_ui_states: HashMap::new(),
         }
     }
 

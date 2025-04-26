@@ -191,8 +191,15 @@ pub enum Message {
     ReceiveStreamChunk {               // Chunk of streaming response
         thread_id: u32,
         content: String,
+        chunk_type: Option<String>,    // "tool_output" or "assistant_message"
+        tool_name: Option<String>,
+        tool_call_id: Option<String>,
     },
     ReceiveStreamEnd(u32),            // End of streaming response for thread_id
+    /// Toggle collapse/expand of a tool call indicator
+    ToggleToolExpansion { tool_call_id: String },
+    /// Toggle show full vs truncated tool output for a tool call
+    ToggleToolShowMore { tool_call_id: String },
     // Using UpdateConversation for thread history
     // --- END NEW WebSocket Received Messages ---
 
@@ -231,6 +238,9 @@ pub enum Message {
     HideAgentDebugModal,
     /// Backend payload with full AgentDetails has arrived.
     ReceiveAgentDetails(ApiAgentDetails),
+
+    // Switch active tab in Agent Debug Modal
+    SetAgentDebugTab(crate::state::DebugTab),
 
     // Add the DeleteAgentApi command inside the enum
     DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion

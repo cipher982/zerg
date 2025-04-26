@@ -163,9 +163,21 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
         stream=True,
         token_stream=True,
     ):
+        # Always expect the new dictionary format with metadata
+        chunk_content = chunk["content"]
+        chunk_type = chunk["chunk_type"]
+        tool_name = chunk["tool_name"]
+        tool_call_id = chunk["tool_call_id"]
+
         await topic_manager.broadcast_to_topic(
             topic,
-            StreamChunkMessage(thread_id=thread_id, content=chunk).model_dump(),
+            StreamChunkMessage(
+                thread_id=thread_id,
+                content=chunk_content,
+                chunk_type=chunk_type,
+                tool_name=tool_name,
+                tool_call_id=tool_call_id,
+            ).model_dump(),
         )
 
     # Signal the end of the stream

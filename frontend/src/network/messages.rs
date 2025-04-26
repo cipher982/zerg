@@ -94,6 +94,16 @@ pub struct StreamChunkMessage {
     pub message_id: Option<String>,
     pub thread_id: i32,
     pub content: String,
+    // New fields for tool message display
+    #[serde(default)]
+    pub chunk_type: Option<String>,  // "tool_output" or "assistant_message"
+    #[serde(default)]
+    pub tool_name: Option<String>,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
+    /// Optional serialized inputs for the tool call (if provided by backend)
+    #[serde(default)]
+    pub tool_input: Option<String>,
 }
 
 /// Message for stream end
