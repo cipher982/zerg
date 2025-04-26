@@ -70,6 +70,15 @@ impl ApiClient {
         Self::fetch_json(&url, "POST", None).await
     }
 
+    // -------------------------------------------------------------------
+    // Agent *details* endpoint (debug modal)
+    // -------------------------------------------------------------------
+
+    pub async fn get_agent_details(agent_id: u32) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents/{}/details", Self::api_base_url(), agent_id);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
     // Reset the database (development only)
     pub async fn reset_database() -> Result<String, JsValue> {
         let url = format!("{}/api/admin/reset-database", Self::api_base_url());

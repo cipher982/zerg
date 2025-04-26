@@ -42,6 +42,9 @@
 use serde::{Serialize, Deserialize};
 use std::collections::HashMap;
 
+// Needed for AgentDebug modal (Phase 1)
+use serde_json::Value;
+
 /// Type of node (e.g., AgentIdentity, UserInput, ResponseOutput)
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum NodeType {
@@ -123,6 +126,22 @@ pub struct ApiAgent {
     /// `None` or empty string means the agent is healthy.
     #[serde(default)]
     pub last_error: Option<String>,
+}
+
+/// Wrapper returned by `/api/agents/{id}/details`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiAgentDetails {
+    pub agent: ApiAgent,
+
+    // Optional heavy payloads – currently None / empty in Phase 1
+    #[serde(default)]
+    pub threads: Option<Vec<ApiThread>>,
+
+    #[serde(default)]
+    pub runs: Option<Vec<Value>>,
+
+    #[serde(default)]
+    pub stats: Option<Value>,
 }
 
 /// ApiAgentCreate is used when creating a new agent

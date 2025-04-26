@@ -1556,6 +1556,68 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             needs_refresh = false;
         },
 
+        // --------------------------------------------------------------
+        // Agent Debug Modal
+        // --------------------------------------------------------------
+
+        Message::ShowAgentDebugModal { agent_id } => {
+            state.agent_debug_pane = Some(crate::state::AgentDebugPane {
+                agent_id,
+                loading: true,
+                details: None,
+                active_tab: crate::state::DebugTab::Overview,
+            });
+
+            commands.push(Command::FetchAgentDetails(agent_id));
+
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(window) = web_sys::window() {
+                    if let Some(doc) = window.document() {
+                        crate::state::APP_STATE.with(|s| {
+                            let app_state = s.borrow();
+                            let _ = crate::components::agent_debug_modal::render_agent_debug_modal(&app_state, &doc);
+                        });
+                    }
+                }
+            })));
+
+            needs_refresh = false;
+        },
+
+        Message::HideAgentDebugModal => {
+            state.agent_debug_pane = None;
+
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(window) = web_sys::window() {
+                    if let Some(doc) = window.document() {
+                        let _ = crate::components::agent_debug_modal::hide_agent_debug_modal(&doc);
+                    }
+                }
+            })));
+
+            needs_refresh = false;
+        },
+
+        Message::ReceiveAgentDetails(details) => {
+            if let Some(pane) = state.agent_debug_pane.as_mut() {
+                pane.loading = false;
+                pane.details = Some(details);
+            }
+
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(window) = web_sys::window() {
+                    if let Some(doc) = window.document() {
+                        crate::state::APP_STATE.with(|s| {
+                            let app_state = s.borrow();
+                            let _ = crate::components::agent_debug_modal::render_agent_debug_modal(&app_state, &doc);
+                        });
+                    }
+                }
+            })));
+
+            needs_refresh = false;
+        },
+
         Message::RequestThreadListUpdate(agent_id) => {
             // Filter threads for the given agent_id
             let threads: Vec<ApiThread> = state.threads.values()

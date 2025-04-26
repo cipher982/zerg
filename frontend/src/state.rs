@@ -3,6 +3,8 @@ use std::rc::Rc;
 use std::collections::{HashMap, HashSet};
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
 use crate::models::{Node, NodeType, Workflow, Edge, ApiAgent, ApiThread, ApiThreadMessage};
+
+use crate::models::ApiAgentDetails;
 use crate::canvas::renderer;
 use crate::storage::ActiveView;
 use crate::network::{WsClientV2, TopicManager};
@@ -24,6 +26,24 @@ use serde_json;
 use crate::update;
 use crate::command_executors;
 use crate::models_config;
+
+// ---------------------------------------------------------------------------
+// Agent Debug Pane (read-only modal) – Phase 1
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub enum DebugTab {
+    Overview,
+    RawJson,
+}
+
+#[derive(Debug, Clone)]
+pub struct AgentDebugPane {
+    pub agent_id: u32,
+    pub loading: bool,
+    pub details: Option<ApiAgentDetails>,
+    pub active_tab: DebugTab,
+}
 
 // Store global application state
 pub struct AppState {
@@ -97,6 +117,9 @@ pub struct AppState {
     // Track which agent rows are expanded in the dashboard UI so we can
     // preserve open/closed state across re‑renders.
     pub expanded_agent_rows: HashSet<u32>,
+
+    // Agent Debug modal (None when hidden)
+    pub agent_debug_pane: Option<AgentDebugPane>,
 }
 
 impl AppState {
@@ -154,6 +177,8 @@ impl AppState {
             current_agent_id: None,
 
             expanded_agent_rows: HashSet::new(),
+
+            agent_debug_pane: None,
         }
     }
 
@@ -903,7 +928,8 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::FetchThreads(_) |
             cmd @ Command::FetchThreadMessages(_) |
             cmd @ Command::LoadAgentInfo(_) |
-            cmd @ Command::FetchAgents => crate::command_executors::execute_fetch_command(cmd),
+            cmd @ Command::FetchAgents |
+            cmd @ Command::FetchAgentDetails(_) => crate::command_executors::execute_fetch_command(cmd),
             
             cmd @ Command::CreateThread { .. } |
             cmd @ Command::SendThreadMessage { .. } |
