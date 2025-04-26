@@ -10,6 +10,8 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
+from langchain_core.messages import AIMessage
+from langchain_core.messages import ToolMessage
 
 from zerg.agents import AgentManager
 from zerg.models.models import Agent
@@ -48,9 +50,9 @@ def test_agent_manager_init(sample_agent: Agent):
 
 
 def test_build_graph(agent_manager: AgentManager):
-    """Test building a LangGraph state machine"""
+    """Test building a LangGraph state machine with tool handling"""
     with patch("zerg.agents.StateGraph") as mock_state_graph:
-        # Setup the mock graph builder: get the builder mock from return_value
+        # Setup the mock graph builder
         mock_builder = mock_state_graph.return_value
 
         # Call the method
@@ -59,34 +61,52 @@ def test_build_graph(agent_manager: AgentManager):
         # DEBUG: Print the arguments add_edge was called with
         print(f"DEBUG: mock_builder.add_edge called with: {mock_builder.add_edge.call_args_list}")
 
-        # Verify that the chatbot node was added
+        # Verify that both nodes were added
         mock_builder.add_node.assert_any_call("chatbot", ANY)
-        # Verify that the edges were added
+        mock_builder.add_node.assert_any_call("call_tool", ANY)
+
+        # Verify the basic edges were added
         mock_builder.add_edge.assert_any_call("__start__", "chatbot")
-        mock_builder.add_edge.assert_any_call("chatbot", "__end__")
+        mock_builder.add_edge.assert_any_call("call_tool", "chatbot")
+
+        # Verify conditional edges were added
+        mock_builder.add_conditional_edges.assert_called_once_with(
+            "chatbot",
+            agent_manager._decide_next_step,
+            {
+                "call_tool": "call_tool",
+                "__end__": "__end__",
+            },
+        )
+
         # Verify that compile was called
         mock_builder.compile.assert_called_once()
 
 
-def test_chatbot_node(agent_manager: AgentManager, mock_llm):
-    """Test the chatbot node function"""
+def test_chatbot_node(agent_manager: AgentManager):
+    """Test the chatbot node function with tool binding"""
     # Create a test state
     state = {
         "messages": [{"role": "user", "content": "Hello, test assistant"}],
         "metadata": {"agent_id": 1, "thread_id": 1},
     }
 
-    # Call the node function
-    result = agent_manager._chatbot_node(state)
+    # Mock the llm_with_tools.invoke method
+    with patch.object(agent_manager.llm_with_tools, "invoke") as mock_invoke:
+        mock_response = MagicMock()
+        mock_response.content = "This is a test response"
+        mock_invoke.return_value = mock_response
 
-    # Verify the result
-    assert "messages" in result
-    assert len(result["messages"]) == 1
+        # Call the node function
+        result = agent_manager._chatbot_node(state)
 
-    # Verify the LLM was called with the expected arguments
-    mock_llm.invoke.assert_called_once()
-    args, kwargs = mock_llm.invoke.call_args
-    assert args[0] == state["messages"]
+        # Verify the result
+        assert "messages" in result
+        assert len(result["messages"]) == 1
+        assert result["messages"][0].content == "This is a test response"
+
+        # Verify the LLM was called with the expected arguments
+        mock_invoke.assert_called_once_with(state["messages"])
 
 
 def test_get_or_create_thread_new(db_session, agent_manager: AgentManager):
@@ -322,3 +342,50 @@ def test_process_message_with_tool_calls(db_session, agent_manager: AgentManager
         assert second_call_kwargs["thread_id"] == mock_thread.id
         assert second_call_kwargs["role"] == "assistant"
         assert second_call_kwargs["content"] == "Weather response"
+
+
+def test_call_tool_node(agent_manager: AgentManager):
+    """Test the tool execution node function"""
+    # Create a mock AIMessage with a tool call
+    tool_call = {"id": "call_123", "name": "get_current_time", "args": {}}
+    last_message = MagicMock(spec=AIMessage)
+    last_message.tool_calls = [tool_call]
+
+    # Create a test state with the tool call
+    state = {
+        "messages": [last_message],
+        "metadata": {"agent_id": 1, "thread_id": 1},
+    }
+
+    # Call the node function
+    result = agent_manager._call_tool_node(state)
+
+    # Verify the result
+    assert "messages" in result
+    assert len(result["messages"]) == 1
+    tool_message = result["messages"][0]
+    assert isinstance(tool_message, ToolMessage)
+    assert tool_message.tool_call_id == "call_123"
+    assert tool_message.name == "get_current_time"
+    # The content should be an ISO format datetime string
+    assert "T" in tool_message.content  # Simple check for ISO format
+
+
+def test_decide_next_step(agent_manager: AgentManager):
+    """Test the decision function for routing messages"""
+    # Test case 1: Message with tool calls
+    tool_call = {"id": "call_123", "name": "get_current_time", "args": {}}
+    message_with_tool = MagicMock(spec=AIMessage)
+    message_with_tool.tool_calls = [tool_call]
+    state_with_tool = {
+        "messages": [message_with_tool],
+    }
+    assert agent_manager._decide_next_step(state_with_tool) == "call_tool"
+
+    # Test case 2: Regular message without tool calls
+    message_without_tool = MagicMock(spec=AIMessage)
+    message_without_tool.tool_calls = None
+    state_without_tool = {
+        "messages": [message_without_tool],
+    }
+    assert agent_manager._decide_next_step(state_without_tool) == "__end__"
