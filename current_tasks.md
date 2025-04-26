@@ -1,253 +1,216 @@
- Below is a “state‑of‑the‑union” for the repo followed by an opinionated, step‑by‑step roadmap.  I read all of backend/zerg and the Rust/WASM frontend so the comments are concrete, not hand‑wavy.
+# Project Context & Roadmap: Zerg Automation Platform
 
-    ────────────────────────────────────────
+**Document Purpose:** Provides essential context, current status, roadmap, and development guidelines for the Zerg project, intended for both human developers and AI coding assistants.
 
-        1. Where the codebase is TODAY
-           ────────────────────────────────────────
-           Backend (FastAPI + SQLAlchemy)
-           • Stable CRUD for Agents, Threads, Messages.
-           • LangGraph‑based Agent runtime with streaming ChatCompletion → EventBus → WebSocket.
-           • APScheduler service exists and correctly runs cron‑style schedules (tests cover it).
-           • Topic‑based WS hub is solid; decorators publish DB events automatically.
-           • **Webhook Triggers implemented:** Trigger table, `/api/triggers` router, `EventType.TRIGGER_FIRED`, SchedulerService hook & passing tests.
-           • Tests are extensive (>180) and green.
+**Last Updated:** 2025-05-03 *(Remember to update this date regularly!)*
 
-    Frontend (Rust / Yew / WASM)
-    • Three views that mount from the same global AppState:
+---
 
-        1. Dashboard – table of agents with “Run / Pause / Edit”.
-        2. Chat – real‑time conversation per agent/thread.
-        3. Canvas – node editor (agents are nodes; edges are “flow”).
-           • Networking layer (api_client.rs + ws_client_v2.rs) already supports:
-             – REST CRUD, WS subscribe, topic routing.
-           • Scheduling UX finished: Dashboard shows next/last‑run, and Agent modal & Canvas panel include cron input + “Enable schedule” toggle; backend PATCH fully wired.
+## 1. Project Overview & Goals
 
-    What’s NOT in place
-    • Webhook Triggers exist server‑side but **UI still lacks** trigger management/visualisation.
-    • No persistent history when an agent is executed from Dashboard (a temp thread is created but never shown).
-    • Canvas nodes = agents only; no first‑class “Tool”, “Input/Output”, “Condition”, etc.
-    • Multistep workflows (a chain of nodes) are not executed—Canvas is only an editor.
-    • Auth, multi‑tenant, usage metering, cost tracking all missing.
+*   **Core Purpose:** Zerg is an automation platform enabling users to connect event triggers (like webhooks or schedules) to AI agents and deterministic tools using a visual canvas interface, facilitating the creation of complex, event-driven workflows.
+*   **Technology Stack:**
+    *   **Backend:** Python, FastAPI, SQLAlchemy (async with `asyncpg`), LangGraph, APScheduler
+    *   **Frontend:** Rust (compiled to WASM), Yew Framework, WebSockets
+    *   **Key Libraries:** Pydantic (V2), `serde`/`serde_wasm_bindgen`, `uv` (for env/pkg management)
+*   **High-Level Architecture:**
+    *   A central `EventBus` facilitates decoupled communication between services.
+    *   A WebSocket Hub (`ws_manager`) pushes real-time updates (DB changes, agent streaming) to connected frontends based on topic subscriptions.
+    *   The `AgentService` uses LangGraph to execute agent logic (currently single-node, planned for multi-node DAGs).
+    *   The `SchedulerService` manages cron-based job scheduling via APScheduler.
 
-    ────────────────────────────────────────
-    2.  Terminology we should settle on
-    ────────────────────────────────────────
-    Thread        = chronological log of messages (always exists, even for scheduled runs).
-    Run           = one execution of an agent (against a thread).
-    Trigger node  = produces an event (webhook, cron, Kafka, email, Slack, Docker‑alert…).
-    Agent node    = consumes thread context, calls LLM, yields messages.
-    Tool node     = deterministic function (send Slack msg, create Jira ticket, read email IMAP).
-    Condition     = tiny JS/Python predicate to branch.
-    Edge          = data/control flow from node → node.
+---
 
-    ────────────────────────────────────────
-    3.  Road‑map (six incremental milestones)
-    ────────────────────────────────────────
-    M0  “Low‑hanging UX polish”  (1–2 weeks)
-    • Finish scheduling in UI
-      – Dashboard card shows next‑run / last‑run.
-      – In Agent modal & Canvas side‑panel allow cron expr + “Enable schedule” toggle.
-      – Wire REST PATCH /agents/{id} to update schedule.
-    • ALWAYS create a Thread row for any run (manual or cron) and surface it in Chat view (read‑only).
-      Rationale: uniform data model simplifies analytics & debugging.
+## 2. Current System State (Snapshot as of 2025-05-03)
 
-    M1  “Triggers v1 – Inbound WebHooks”  (1 week)
-    Backend  ✅  (delivered)
-      – Trigger DB table, router & event flow shipped; tests green.
-    DB       ✅
-    Frontend
-      – Canvas gets “Webhook Trigger” node (auto‑generates URL + secret).
-      – Dashboard > Agent details lists its triggers with copy‑URL button.
-    Value  – real users can wire Zapier, GitHub, Terraform Cloud, etc.
+*Key: ✅ = Shipped & Verified | 🟡 = Partially Done | ❌ = Not Started*
 
-    M2  “Workflow Execution Engine”  (3–4 weeks)
-    Backend
-      – Replace current LangGraph single‑node graph with multi‑node DAG built from Canvas JSON:
-          Trigger → (zero⁺ Tool | Agent | Condition)* → (Action Tool)
-      – Persist Canvas JSON per agent (already partly there in Agent.config).
-      – Each node type implements an async execute(context) -> context.
-      – Streaming still only originates from Agent nodes.
-    Frontend
-      – Canvas editor must let users add the new node types and connect edges; export to JSON schema.
-      – Minimal run‑time visualisation: highlight node that’s currently executing.
-    Tests
-      – Add end‑to‑end test that fires webhook and sees Slack‑mock message.
+**Backend:**
+*   Agents / Threads / Messages CRUD: ✅
+*   LangGraph Agent Runtime (Single Node): ✅
+    *   Streaming ChatCompletion → EventBus → WebSocket: ✅
+*   APScheduler Service (Cron Runs, `next/last_run_at` persistence): ✅
+*   Topic-based WebSocket Hub (Auto DB event publishing via decorators): ✅
+*   Webhook Triggers (DB Table, `POST /api/triggers`, `POST /api/triggers/{id}/events`, `EventType.TRIGGER_FIRED`, Scheduler hook): ✅
+*   Webhook Triggers (`DELETE /api/triggers/{id}` endpoint): ❌
+*   Webhook Triggers (HMAC Secret Verification on fire event): ❌
+*   Workflow DAG Execution Engine (Multi-node LangGraph from Canvas JSON): ❌
+*   Testing: >180 tests, covering CRUD, services, events, triggers (create/fire). Green ✅
 
-    M3  “Toolbox Expansion”  (ongoing)
-    Ship small deterministic helpers as separate nodes/packages:
-      • Slack send_message, Slack fetch_channel_history
-      • Email (IMAP fetch, SMTP send)
-      • GitHub create_issue / comment
-      • DockerHub alert listener (maps to Trigger v1)
-    Guideline: Tools never call LLM, must finish <10 s, return JSON.
+**Frontend:**
+*   Core Views (Dashboard, Chat, Canvas): ✅
+*   Networking Layer (`api_client.rs`, `ws_client_v2.rs` - REST CRUD, WS Subscribe/Topics): ✅
+*   Scheduling UX (Display `next/last_run` badges, Cron Input, Enable Toggle, PATCH `/agents/{id}`): ✅
+*   Dashboard: Agent Table (with run/pause/edit): ✅
+*   Dashboard: Agent Details Drawer (Overview Tab, Raw JSON Tab): ✅
+*   Dashboard: List Agent Triggers (Read-only, Copy URL button): 🟡 (Create/Delete UI missing)
+*   Chat: Real-time conversation view per agent/thread: ✅
+*   Chat: Surface Threads from *all* runs (manual, scheduled, trigger-fired): 🟡 (Data exists; UI currently filters/hides some)
+*   Canvas: Node Editor foundational component: ✅
+*   Canvas: Only "Agent" nodes currently placeable/editable: ✅
+*   Canvas: Add/Connect other node types (Webhook Trigger, Tool, Condition, Input/Output): ❌
+*   Canvas: Export workflow definition to JSON: ❌
+*   Canvas: Runtime Execution Highlighting (visualizing active node): ❌
+*   Canvas: Specific UI for "Webhook Trigger" node type (displaying URL/secret): ❌
 
-    M4  “Multi‑tenant & Auth”  (2–3 weeks)
-    • Auth0 / Clerk / your‑choice JWT guard on all routes.
-    • DB “workspace_id” column on Agent/Thread/Message/Trigger.
-    • Frontend login screen; WS handshake passes token.
-    This unlocks inviting alpha users safely.
+**Cross-Cutting / Ops:**
+*   Auth & Multi-tenancy (JWT, `workspace_id`, Login): ❌
+*   Usage Metering / Cost Tracking (Tokens, Duration): ❌
+*   Observability (Per-Run Metrics, Grafana/Admin UI): ❌
 
-    M5  “Observability & Cost”  (nice‑to‑have)
-    • per‑Run metrics table: token_in/out, OpenAI cost, duration, errors.
-    • Simple Grafana or /admin/metrics JSON.
-    • Surface usage graphs on Dashboard.
+---
 
-    ────────────────────────────────────────
-    4.  Suggested priorities (why this order)
-    ────────────────────────────────────────
+## 3. Roadmap & Milestones
 
-        1. Finish scheduling UX because it shows immediate progress and exercises EventBus → WS → UI loop.
-        2. Triggers (webhooks) deliver the first “real‑world” integration without Canvas changes.
-        3. Only after 1 & 2 is solid, invest in full workflow engine—otherwise it’s plumbing nobody yet uses.
-        4. Expand toolbox continuously; each new integration is user‑visible value and good marketing.
-        5. Auth once you need external testers; earlier if security is mandatory.
+**(Overall Goal Reminder):** To enable users to visually build, execute, and monitor event-driven workflows combining AI agents and tools.
 
-    ────────────────────────────────────────
-    5.  Implementation hints
-    ────────────────────────────────────────
-    • Keep the EventBus central—Triggers just publish new events, SchedulerService already listens.
-    • Store Canvas JSON as a dedicated Agent.workflow column; version it for migrations.
-    • Use Pydantic v2 BaseModel for node schemas and graph validation.
-    • In Rust Canvas editor, each new node type is an enum variant; serde_wasm_bindgen already in tree can serialise directly to the backend schema.
-    • Treat every Agent run as immutable; derive analytics offline rather than mutating rows.
+**Milestone Definitions:**
 
-    ────────────────────────────────────────
-    6.  Immediate next steps (actionable)  — April 2025 status (post‑M0)
-    ────────────────────────────────────────
+*   **M0: “Low‑hanging UX polish”** (Status: ✅ Completed ~2025-04-21)
+    *   *Summary:* Implemented frontend UI for viewing and editing agent schedules (cron expression, enable/disable toggle). Wired up PATCH API. Ensured `next_run_at`/`last_run_at` display correctly. Ensured all runs create a persistent `Thread`.
+*   **M1: “Triggers v1 – Inbound WebHooks”** (Status: 🟡 In Progress)
+    *   *Summary:* Allow external systems (Zapier, GitHub Actions, etc.) to trigger agent runs via unique webhook URLs.
+    *   *Status Breakdown:* Backend API (Create/Fire ✅), Frontend UI (List ✅, Create/Delete ❌), Backend Polish (Delete API ❌, HMAC ❌), Canvas Node ❌.
+*   **M2: “Workflow Execution Engine”** (Status: ❌ Not Started)
+    *   *Summary:* Execute multi-step workflows defined on the Canvas (DAGs of Trigger, Agent, Tool, Condition nodes). Persist Canvas JSON. Basic runtime visualization.
+*   **M3: “Toolbox Expansion”** (Status: ❌ Not Started)
+    *   *Summary:* Ship initial set of deterministic "Tool" nodes (e.g., Slack message, Email send/fetch, GitHub issue). Define Tool node contract.
+*   **M4: “Multi‑tenant & Auth”** (Status: ❌ Not Started)
+    *   *Summary:* Implement user authentication (e.g., Auth0/Clerk JWT) and data isolation (`workspace_id`) to support multiple users securely.
+*   **M5: “Observability & Cost”** (Status: ❌ Not Started)
+    *   *Summary:* Track key metrics per agent run (token usage, cost, duration, errors) and expose them via API and/or dashboard.
 
-        ✅ Scheduling UX completed – M0 closed.
+**Prioritization Rationale:**
 
-        Now kicking off M1 (Triggers WebHooks):
+1.  **Scheduling UX (M0 - Done):** Delivered immediate user value and exercised the core backend->frontend eventing loop.
+2.  **Triggers (M1 - Current):** Provides the first real-world integration point, unlocking practical use cases without requiring the full workflow engine.
+3.  **Workflow Engine (M2):** Foundational for complex automations, but requires M1 (Triggers) and M3 (Tools) to be truly useful. Build the plumbing only once there's something to plumb.
+4.  **Toolbox (M3):** Each tool adds concrete, marketable value. Can be developed incrementally alongside/after M2.
+5.  **Auth/Multi-tenancy (M4):** Necessary for onboarding external alpha users or offering a SaaS product. Timing depends on user rollout plan.
+6.  **Observability (M5):** Crucial for production use and optimization, but less critical than core execution functionality for early stages.
 
-        1. Frontend – create Trigger node in Canvas
-           • Node palette entry “Webhook Trigger”.
-           • Auto‑generate URL + secret (display copy buttons in side‑panel).
-           • Allow deleting trigger.
+---
 
-        2. Dashboard – full Trigger management
-           • In agent details drawer: list triggers, create new, delete, copy URL.
+## 4. Current Focus & Action Items (Targeting: M1 Completion)
 
-        3. Backend polish
-           • Add `/api/triggers/{id}` DELETE + tests.
-           • Secret HMAC verification endpoint (optional hardening).
+**Current Goal:** Finish all remaining M1 tasks (Webhook Trigger functionality) and perform initial design for M2 (Workflow Engine).
 
-        4. QA / Docs
-           • Add end‑to‑end pytest: POST trigger event → Scheduler runs agent.
-           • README snippet: how to curl a trigger.
+**Backend Tasks (M1 Polish):**
+*   `[ ]` Implement `DELETE /api/triggers/{id}` endpoint allowing users to remove webhook triggers.
+*   `[ ]` Add `pytest` tests covering the trigger deletion flow (create, verify exists, delete, verify gone, check permissions).
+*   `[ ]` **(Hardening/Optional):** Implement HMAC secret generation on trigger creation and verification logic within the `POST /api/triggers/{id}/events` endpoint. Requires storing the secret hash/salt.
+*   `[ ]` Add tests for HMAC verification (valid signature, invalid signature, missing signature header).
 
-    Let me know which milestone you’d like to dive into first, and I can sketch the detailed technical tasks or start sending PRs.
+**Frontend Tasks (M1 Features & Polish):**
+*   `[ ]` **Dashboard:** Add a "Create New Trigger" button within the Agent Details drawer (likely near the existing trigger list). This should likely open a small modal or inline form.
+*   `[ ]` **Dashboard:** Add a "Delete" icon/button next to each trigger listed in the Agent Details drawer. Add confirmation dialog.
+*   `[ ]` **Dashboard:** Wire up the necessary `api_client.rs` calls (`create_trigger`, `delete_trigger`) and corresponding `Message`/`Command` flows in `update.rs` for the Create/Delete UI elements. Refresh trigger list on success.
+*   `[ ]` **Canvas:** Add a new node type "Webhook Trigger" to the node palette in `canvas_editor.rs`.
+*   `[ ]` **Canvas:** When a "Webhook Trigger" node is selected, its side-panel should display the associated (read-only) webhook URL and potentially the secret (with copy-to-clipboard buttons). If a trigger hasn't been created for this node yet, prompt to create one.
+*   `[ ]` **Canvas:** Ensure the unique ID of the associated Trigger DB row is stored as part of the Webhook Trigger node's configuration in the (future) Canvas JSON export structure (preparation for M2).
+*   `[ ]` **Chat/Dashboard:** Modify data fetching or filtering logic to ensure *all* `Thread` rows associated with an agent (regardless of how the run was initiated - manual, schedule, trigger) are potentially visible in the Chat view's thread list or a dedicated run history view.
 
+**QA & Documentation:**
+*   `[ ]` Refine/add end-to-end `pytest`: Create Agent -> Use API to Create Trigger -> `POST` valid data to trigger URL -> Verify `AgentRun` record created / `Thread` updated / `last_run_at` timestamp updated / expected `Message` appears. Test invalid trigger post (e.g., wrong ID, bad secret if HMAC enabled).
+*   `[ ]` Update `README.md` or create `docs/triggers.md` explaining how to create, manage, and use Webhook Triggers (including `curl` examples).
 
-----
-NOTES FROM ONGOING WORK
+**Planning for M2 (Workflow Engine):**
+*   `[ ]` **Schema Design:** Draft the initial Pydantic models (backend) and corresponding Rust structs (frontend) for representing the Canvas workflow DAG as JSON (e.g., `nodes: List[Union[TriggerNode, AgentNode, ToolNode...]]`, `edges: List[Edge]`). Consider versioning. Store in `Agent.workflow_definition` column (needs migration).
+*   `[ ]` **Execution Interface:** Outline a common async `execute(context: WorkflowContext) -> WorkflowContext` method signature or interface that each node type (Agent, Tool, Condition) will need to implement in the backend. Define the structure of `WorkflowContext` (carrying state between nodes).
 
+---
 
-    0. TL;DR
-    Backend = FastAPI + SQLAlchemy + LangGraph, WS via EventBus.
-    Frontend = Rust/Yew WASM SPA (Dashboard, Chat, Canvas).
-    You are picking up after milestone 0 (schedule metadata shipped).
+## 5. Development Guide
 
-    1. Skeleton you should open first
-    backend/
-      • zerg/app/models/models.py  – DB schema (Agents, Threads, Messages).
-      • zerg/app/services/scheduler_service.py  – APScheduler + event listeners.
-      • zerg/app/events/  – tiny pub/sub bus.
-      • zerg/app/routers/agents.py  – CRUD + run‑task endpoint.
-      • tests/ (good reading; >180 tests show expected behaviour).
+**Key Code Locations:**
+*   **Backend:**
+    *   Models: `backend/zerg/app/models/models.py`
+    *   Services: `backend/zerg/app/services/` (esp. `scheduler_service.py`, `agent_service.py`)
+    *   Events: `backend/zerg/app/events/`
+    *   API Routers: `backend/zerg/app/routers/` (esp. `agents.py`, `triggers.py`)
+    *   Main App: `backend/zerg/main.py`
+    *   Tests: `backend/tests/`
+*   **Frontend:**
+    *   Networking: `frontend/src/network/` (`api_client.rs`, `ws_client_v2.rs`, `topic_manager.rs`)
+    *   Components: `frontend/src/components/` (`dashboard/`, `chat/`, `canvas_editor.rs`)
+    *   State Management: `frontend/src/` (`update.rs`, `messages.rs`, `state.rs`)
+    *   Main App: `frontend/src/app.rs`
+*   **Documentation:**
+    *   `README.md` (Project Overview)
+    *   `DATABASE.md` (DB Schema Details)
+    *   This document (`project_context.md` or similar)
 
-    frontend/
-      • src/network/ws_client_v2.rs + topic_manager.rs – WS client.
-      • src/components/dashboard/ – Agent cards UI.
-      • src/components/canvas_editor.rs – node editor entry point.
-      • src/update.rs & messages.rs – Elm‑style state update.
+**Environment Setup:**
+*   **Dependencies:** Uses `uv` for Python environment and package management. Ensure `uv` is installed.
+*   **Environment Variables:**
+    *   `DATABASE_URL`: Connection string for PostgreSQL (e.g., `postgresql+asyncpg://user:pass@host:port/db`) or SQLite (e.g., `sqlite+aiosqlite:///./zerg_dev.db`)
+    *   `OPENAI_API_KEY`: Required for agent runs. Can be a dummy value like `sk-dummy` if only testing non-LLM parts or using mocks.
+*   **Running Backend:**
+    ```bash
+    cd backend
+    uv sync # Installs/updates dependencies from pyproject.toml
+    uv run python -m uvicorn zerg.main:app --reload --port 8001
+    ```
+*   **Running Frontend:**
+    ```bash
+    cd frontend
+    ./build-debug.sh # Runs trunk build and serves on http://localhost:8002
+    ```
+*   **Running Tests:**
+    ```bash
+    cd backend
+    uv run pytest tests
+    ```
 
-    docs & road‑map
-      • README.md – full project overview.
-      • project_goals.md – agreed roadmap (M0‑M5).
-      • DATABASE.md – table cheat‑sheet.
+**Core Conventions & Patterns:**
+*   **Database:** Uses SQLAlchemy 2.0 async (`asyncio`, `asyncpg`/`aiosqlite`). Session management via `default_session_factory`. Tests override with an in-memory SQLite DB. `expire_on_commit=False` is set on the sessionmaker; be mindful that objects are not automatically refreshed after commit – use `session.refresh(obj)` if needed.
+*   **Backend Events:** The `EventBus` (`zerg/app/events/bus.py`) is central. Use `await event_bus.publish(Event(type=EventType.XYZ, data={...}))`. Callbacks registered via `event_bus.subscribe()` are async. REST routes that mutate state should use the `@publish_event()` decorator to automatically broadcast changes over WebSockets.
+*   **Frontend State:** Follows the Elm Architecture: User interaction -> `Message` enum -> `update(msg, state)` function -> updates `AppState` -> potentially returns `Command` enum -> Command executed (e.g., API call) -> Result yields new `Message` -> cycle repeats. Never mutate `AppState` directly outside `update.rs`. `TopicManager` handles incoming WebSocket messages and translates them into `Message`s.
+*   **API Schemas:** Use Pydantic V2 `BaseModel` for defining API request/response bodies and for data validation.
+*   **Workflow Definition:** Canvas graph structure will be stored as JSON in a dedicated `Agent.workflow_definition` column (planned). Schema definitions should exist in both Python (Pydantic) and Rust (Serde) for consistency, ideally generated or kept closely in sync. Plan for schema versioning early.
+*   **Immutability:** Treat `AgentRun` and `Message` records as immutable logs of past activity. Derive analytics or summaries offline/on-demand rather than modifying historical records.
+*   **Rust/WASM:** Use `serde` for serialization and `serde_wasm_bindgen` to pass complex types between Rust frontend and JS/backend (via JSON). Frontend node types for the Canvas should map clearly to backend execution logic, likely using enums in Rust.
 
-    2. Current backend state (after M0)
-    • Agent now has next_run_at / last_run_at.
-    • scheduler_service persists those on schedule & after each run.
-    • Session maker uses expire_on_commit=False to avoid detached errors in tests.
-    • All tests pass via: cd backend && uv run pytest tests.
+**Implementation Hints:**
+*   Keep the `EventBus` central for decoupling. New features (like Triggers) should publish relevant events. Services (like `SchedulerService`) listen for events they care about.
+*   Use Pydantic models rigorously on the backend for validating the structure of the incoming Canvas JSON before saving/executing.
+*   In the Rust Canvas editor, represent each distinct node type (Agent, Tool, Trigger, Condition) as a variant of a Rust `enum`. This makes pattern matching and serialization clean.
 
-    3. Immediate tasks in backlog (see project_goals.md)
-    Frontend
-      ‑ show next/last run on Dashboard card & Agent modal.
-      ‑ add cron editing UI and PATCH /agents/{id} call (schedule + run_on_schedule).
+---
 
-    Backend
-      ‑ Trigger table + router skeleton (M1 start).
-      ‑ POST /api/triggers/{id}/events publishes EventType.TRIGGER_FIRED.
-      ‑ SchedulerService listens and enqueues run_agent_task.
+## 6. Terminology
 
-    Testing
-      ‑ new pytest for trigger flow (create trigger row → POST event → assert run called).
-      ‑ Add assertions in existing scheduler_service tests for next_run_at/last_run_at.
+*   **Thread:** A chronological log of messages associated with a specific context or conversation. A thread always exists, even for scheduled or triggered runs (though it might be initially empty). It's the primary input/output context for an Agent.
+*   **Run:** A single, discrete execution instance of an Agent or a Workflow, operating against a specific Thread. Can be triggered manually, by schedule, or by an external event (webhook).
+*   **Trigger node:** A node type on the Canvas that initiates a workflow run based on an external event (e.g., incoming Webhook, new email matching criteria, Kafka message, cron schedule). It produces an initial data payload for the workflow.
+*   **Agent node:** A node type on the Canvas that typically consumes context from the associated Thread, interacts with a Language Model (LLM) based on its configuration and input, and produces new messages back to the Thread. Streaming output originates here.
+*   **Tool node:** A node type on the Canvas representing a deterministic function or API call (e.g., send a Slack message, create a Jira ticket, fetch data from a database, read an email via IMAP). Tools generally do not call LLMs directly, should execute quickly (<10s), and return structured data (usually JSON).
+*   **Condition node:** A node type on the Canvas that allows branching in the workflow based on evaluating data from the preceding node (e.g., using a simple JS/Python predicate: `input.value > 10`).
+*   **Edge:** A connection on the Canvas representing the flow of data and/or control between two nodes.
 
-    4. Gotchas / conventions
-    • DB sessions via default_session_factory; tests override with in‑memory session.
-    • EventBus callbacks are async; always await publish().
-    • Any REST route that mutates state is decorated with @publish_event to fan out WS messages.
-    • Frontend never mutates state directly – dispatch Message → update.rs → Command executor.
-    • LangGraph integration currently single‑node; you’ll extend to DAG later.
-    • Use uv run pytest instead of pip installs – uv handles virtual env + deps.
-    • sessionmaker(expire_on_commit=False) means objects stay live after commit—handy but remember to refresh() if you need latest DB values.
+---
 
-    5. Environment
-    Set DATABASE_URL (sqlite path ok) and OPENAI_API_KEY (can be dummy during tests).
-    Run backend: uv run python -m uvicorn zerg.main:app --reload --port 8001
-    Run frontend: ./frontend/build-debug.sh (spawns simple http server on :8002).
+## 7. Status History / Log
 
-    6. Where to start coding
+*(Older status updates and detailed completion notes are archived here)*
 
-        1. frontend/src/components/dashboard/agent_card.rs (doesn’t exist yet – add).
-        2. backend/zerg/app/routers/triggers.py (new).
-        3. tests/test_triggers.py (new).
+**2025-04-21 - M0 Completed / M1 Started**
 
-    Ping project_goals.md after each PR so roadmap stays current.
+*   **Work Completed for M0 (Scheduling UX & Thread Persistence):**
+    *   **Frontend Models:** `ApiAgent`, `ApiAgentCreate`, `ApiAgentUpdate` structs in Rust now include `schedule: Option<String>`, `run_on_schedule: bool`, `next_run_at: Option<String>`, `last_run_at: Option<String>`.
+    *   **Frontend UI (Display):** Dashboard agent cards/table now render "Next run: ..." / "Last run: ..." using local timezone formatting (via `chrono` crate). Handles null values gracefully.
+    *   **Frontend UI (Edit):** Agent modal (via Dashboard Edit button) and Canvas side-panel (when Agent node selected) now include:
+        *   A text input field for the `schedule` cron expression.
+        *   An "Enable schedule" toggle switch bound to the `run_on_schedule` boolean field.
+    *   **Frontend State & Actions:**
+        *   Added `Message` variants like `SetSchedule(AgentId, String)`, `ToggleRunOnSchedule(AgentId, bool)`.
+        *   Augmented `update.rs` logic to handle these messages, updating local state optimistically or on API success.
+        *   Added `Command::SaveAgentSchedule(AgentId, ApiAgentUpdate)` which is executed by the command handler.
+        *   The command executor now performs a `PATCH /api/agents/{id}` request, sending only the `schedule` and `run_on_schedule` fields in the `ApiAgentUpdate` payload.
+    *   **Frontend Real-time Updates:** The `TopicManager`'s reducer for `AGENT_UPDATED` WebSocket events now correctly merges incoming `next_run_at` and `last_run_at` fields into the local `AppState`, ensuring the UI updates live after scheduled runs occur.
+    *   **Backend:** Ensured `AgentService.run_agent_task` consistently creates or retrieves a `Thread` record for *every* run, regardless of trigger source (manual, schedule).
+    *   **Testing:** Added frontend component tests for display/edit UI. Added backend tests verifying `PATCH /agents/{id}` updates the schedule fields correctly and that the scheduler picks up changes. Verified threads are created.
 
-    Welcome aboard & happy hacking!
+**2025-05-02 - Status Review Snapshot**
 
-
-## BEGIN TASK LIST
-
-
-    Proposed work‑plan (what I will do)
-
-        1. Front‑end ‑ Surface scheduling metadata  ✅ (completed 2025‑04‑21)
-           a. ApiAgent(+Create/+Update) models now include:
-              • schedule :String?   • run_on_schedule :bool
-              • next_run_at :String?   • last_run_at :String?
-           b. Dashboard table and cards render “Next run / Last run” using local‑timezone formatting.
-           c. Agent‑modal & Canvas side‑panel expose:
-              • Cron expression input field.
-              • “Enable schedule” toggle bound to run_on_schedule.
-           d. Elm‑style Message / update.rs augmented with
-              • SetSchedule(String)  • ToggleRunOnSchedule(bool)
-              • Command::SaveAgentSchedule(agent_id, ApiAgentUpdate).
-           e. Command executor PATCHes /api/agents/{id} carrying schedule & run_on_schedule.
-           f. TopicManager reducer merges AGENT_UPDATED events and updates next_run_at/last_run_at live.
-
-        2. Front‑end – Cron editing PATCH flow  ✅ (completed)
-           • PUT/PATCH /api/agents/{id} hooked up; successful save auto‑closes modal & shows toast.
-           • Basic cron string validation (regex) added; backend still the source of truth.
-        3. Backend – Trigger MVP  ✅ (previous PR)
-        4. Front‑end – expose triggers (read‑only)  ✅ (completed)
-           • Dashboard agent‑details drawer now lists existing webhook URLs with copy‑button.
-
-    Order of execution (✔ means finished)
-
-        ✔ 1. Implement & test front‑end model changes + display fields.
-        ✔ 2. Wire edit UI + PATCH flow.
-        ✔ 3. Land Trigger DB + router + tests.
-        ✔ 4. Basic read‑only trigger list in UI.
-
-    Deliverables per PR
-       • Code + passing pytest & wasm build.
-       • Short update in project_goals.md marking M0 complete and M1 started.
-
-    Estimated time
-       – Scheduling UX: 1–2 sessions.
-       – Trigger MVP: 1 session backend, ½ session tests, ½ session UI list.
+*   *(Content of original Section 7 "Status review – 02 May 2025" was integrated into Section 2 "Current System State" above)*
