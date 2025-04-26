@@ -191,6 +191,9 @@ pub enum Message {
     ReceiveStreamChunk {               // Chunk of streaming response
         thread_id: u32,
         content: String,
+        chunk_type: Option<String>,    // "tool_output" or "assistant_message"
+        tool_name: Option<String>,
+        tool_call_id: Option<String>,
     },
     ReceiveStreamEnd(u32),            // End of streaming response for thread_id
     // Using UpdateConversation for thread history
@@ -231,6 +234,9 @@ pub enum Message {
     HideAgentDebugModal,
     /// Backend payload with full AgentDetails has arrived.
     ReceiveAgentDetails(ApiAgentDetails),
+
+    // Switch active tab in Agent Debug Modal
+    SetAgentDebugTab(crate::state::DebugTab),
 
     // Add the DeleteAgentApi command inside the enum
     DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion

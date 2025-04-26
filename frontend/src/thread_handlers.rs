@@ -39,6 +39,10 @@ pub fn handle_send_thread_message(
         role: "user".to_string(),
         content: content.clone(),
         created_at: Some(now),
+        // Default fields for tool message metadata
+        message_type: None,
+        tool_name: None,
+        tool_call_id: None,
     };
     
     // Prepare data for UI updates

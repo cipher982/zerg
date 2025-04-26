@@ -12,11 +12,15 @@ use crate::models::{ApiThreadMessage, ApiThread}; // Added ApiThread here
 /// Helper to convert network message data to the application model
 fn convert_network_message_to_model(network_msg: ThreadMessageData) -> ApiThreadMessage {
     ApiThreadMessage {
-        id: network_msg.id.map(|i| i as u32), // Convert Option<i32> to Option<u32>
-        thread_id: network_msg.thread_id as u32, // Convert i32 to u32
+        id: network_msg.id.map(|i| i as u32),  // Convert Option<i32> to Option<u32>
+        thread_id: network_msg.thread_id as u32,
         role: network_msg.role,
         content: network_msg.content,
-        created_at: network_msg.timestamp, // Use timestamp as created_at
+        created_at: network_msg.timestamp,     // Use timestamp as created_at
+        // Default fields for tool‐message metadata
+        message_type: None,
+        tool_name: None,
+        tool_call_id: None,
     }
 }
 
@@ -122,8 +126,39 @@ impl ChatViewWsManager {
                     "stream_chunk" => {
                         if let Some(content_val) = data.get("content") {
                             if let Some(content) = content_val.as_str() {
-                                web_sys::console::log_1(&format!("WS Handler (Thread {}): Stream Chunk received: '{}'", thread_id, content).into());
-                                dispatch_global_message(Message::ReceiveStreamChunk { thread_id, content: content.to_string() });
+                                // Extract tool metadata (guaranteed to be present from backend)
+                                let chunk_type = data.get("chunk_type")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string())
+                                    .expect("Backend must provide chunk_type");
+                                
+                                // Get tool_name and tool_call_id (required for tool_output)
+                                let tool_name = if chunk_type == "tool_output" {
+                                    data.get("tool_name")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string())
+                                } else {
+                                    None // For assistant_message, these are always None
+                                };
+                                
+                                let tool_call_id = if chunk_type == "tool_output" {
+                                    data.get("tool_call_id")
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.to_string())
+                                } else {
+                                    None
+                                };
+                                
+                                web_sys::console::log_1(&format!("WS Handler (Thread {}): Stream Chunk: '{}' (type: {})",
+                                    thread_id, content, chunk_type).into());
+                                
+                                dispatch_global_message(Message::ReceiveStreamChunk { 
+                                    thread_id, 
+                                    content: content.to_string(),
+                                    chunk_type: Some(chunk_type),
+                                    tool_name,
+                                    tool_call_id
+                                });
                             } else {
                                 web_sys::console::error_1(&"Stream chunk content is not a string".into());
                             }

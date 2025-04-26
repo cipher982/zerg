@@ -272,8 +272,8 @@ class AgentManager:
                 **False** so only the final assistant reply is broadcast.
 
         Yields:
-            str – incremental assistant text chunks (either individual tokens
-            or the whole response depending on *token_stream*).
+            dict – message chunks with metadata including content, chunk_type, tool_name,
+            and tool_call_id for proper UI rendering.
         """
         from zerg.crud import crud
 
@@ -348,12 +348,29 @@ class AgentManager:
                     # about assistant chunks.
                     if isinstance(event, tuple):
                         message_chunk, _metadata = event
-                        # Guard: only assistant role has content we want to
+                        # Guard: only messages with content we want to
                         # stream to the UI.
                         if hasattr(message_chunk, "content") and message_chunk.content:
                             chunk = str(message_chunk.content)
                             response_content += chunk
-                            yield chunk
+
+                            # Determine if this is a tool message and extract metadata
+                            if hasattr(message_chunk, "name") and message_chunk.name:
+                                # This is a tool message
+                                yield {
+                                    "content": chunk,
+                                    "chunk_type": "tool_output",
+                                    "tool_name": message_chunk.name,
+                                    "tool_call_id": getattr(message_chunk, "tool_call_id", None),
+                                }
+                            else:
+                                # This is a regular assistant message
+                                yield {
+                                    "content": chunk,
+                                    "chunk_type": "assistant_message",
+                                    "tool_name": None,
+                                    "tool_call_id": None,
+                                }
                     # Ignore non-tuple events (they can be debug or other)
                     continue
 
@@ -363,7 +380,24 @@ class AgentManager:
                     if hasattr(last_message, "content"):
                         chunk = last_message.content
                         response_content += chunk
-                        yield chunk
+
+                        # For non-token stream, we still need to determine message type
+                        if hasattr(last_message, "name") and last_message.name:
+                            # Tool message
+                            yield {
+                                "content": chunk,
+                                "chunk_type": "tool_output",
+                                "tool_name": last_message.name,
+                                "tool_call_id": getattr(last_message, "tool_call_id", None),
+                            }
+                        else:
+                            # Assistant message
+                            yield {
+                                "content": chunk,
+                                "chunk_type": "assistant_message",
+                                "tool_name": None,
+                                "tool_call_id": None,
+                            }
         else:
             # Non-streaming mode
             result = graph.invoke(state)
@@ -372,7 +406,24 @@ class AgentManager:
                 last_message = result["messages"][-1]
                 if hasattr(last_message, "content"):
                     response_content = last_message.content
-                    yield response_content
+
+                    # Maintain consistency with streaming mode
+                    if hasattr(last_message, "name") and last_message.name:
+                        # Tool message
+                        yield {
+                            "content": response_content,
+                            "chunk_type": "tool_output",
+                            "tool_name": last_message.name,
+                            "tool_call_id": getattr(last_message, "tool_call_id", None),
+                        }
+                    else:
+                        # Assistant message
+                        yield {
+                            "content": response_content,
+                            "chunk_type": "assistant_message",
+                            "tool_name": None,
+                            "tool_call_id": None,
+                        }
 
         # After streaming completes, save the full response and update status
         if response_content:

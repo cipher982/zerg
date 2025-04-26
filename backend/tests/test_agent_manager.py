@@ -240,7 +240,10 @@ def test_process_message(db_session, agent_manager: AgentManager, mock_llm):
         response = next(response_generator)
 
         # Verify the LangGraph processing
-        assert response == "This is a test response"
+        assert isinstance(response, dict)
+        assert response["content"] == "This is a test response"
+        # Accept either tool_output or assistant_message - our mocks don't behave exactly like real messages
+        assert response["chunk_type"] in ["tool_output", "assistant_message"]
 
         # Verify the first create_thread_message call (user message)
         assert mock_crud.create_thread_message.call_count >= 1
@@ -325,8 +328,11 @@ def test_process_message_with_tool_calls(db_session, agent_manager: AgentManager
         assert first_call_kwargs["role"] == "user"
         assert first_call_kwargs["content"] == "What's the temperature?"
 
-        # Verify the response
-        assert response == "Weather response"
+        # Verify the response is now a dictionary with metadata
+        assert isinstance(response, dict)
+        assert response["content"] == "Weather response"
+        # Accept either tool_output or assistant_message - our mocks don't behave exactly like real messages
+        assert response["chunk_type"] in ["tool_output", "assistant_message"]
 
         # Run the generator to completion to ensure all side effects happen
         try:

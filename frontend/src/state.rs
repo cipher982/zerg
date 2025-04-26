@@ -31,7 +31,7 @@ use crate::models_config;
 // Agent Debug Pane (read-only modal) – Phase 1
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DebugTab {
     Overview,
     RawJson,

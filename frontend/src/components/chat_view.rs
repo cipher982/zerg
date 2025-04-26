@@ -361,9 +361,11 @@ pub fn update_conversation_ui(
         for message in messages.iter().filter(|m| m.role != "system") {
             let message_element = document.create_element("div")?;
             
-            // Set class based on message role
+            // Set class based on message role and type
             let mut class_name = if message.role == "user" {
                 "message user-message".to_string()
+            } else if message.role == "tool" || message.message_type.as_deref() == Some("tool_output") {
+                "message tool-message".to_string()
             } else {
                 "message assistant-message".to_string()
             };
@@ -376,6 +378,18 @@ pub fn update_conversation_ui(
             }
             
             message_element.set_class_name(&class_name);
+            
+            // For tool messages, add a tool header
+            if message.role == "tool" || message.message_type.as_deref() == Some("tool_output") {
+                let tool_header = document.create_element("div")?;
+                tool_header.set_class_name("tool-header");
+                
+                // Show the precise tool name
+                let tool_name = message.tool_name.as_deref().unwrap_or("unnamed_tool");
+                tool_header.set_inner_html(&format!("🛠️ Tool Output: {}", tool_name));
+                
+                message_element.append_child(&tool_header)?;
+            }
             
             // Create content element
             let content = document.create_element("div")?;
