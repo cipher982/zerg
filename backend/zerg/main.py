@@ -4,18 +4,18 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from zerg.app.config import AGENTS_PREFIX
-from zerg.app.config import API_PREFIX
-from zerg.app.config import MODELS_PREFIX
-from zerg.app.config import THREADS_PREFIX
-from zerg.app.database import initialize_database
-from zerg.app.routers.admin import router as admin_router
-from zerg.app.routers.agents import router as agents_router
-from zerg.app.routers.models import router as models_router
-from zerg.app.routers.threads import router as threads_router
-from zerg.app.routers.triggers import router as triggers_router
-from zerg.app.routers.websocket import router as websocket_router
-from zerg.app.services.scheduler_service import scheduler_service
+from zerg.config import AGENTS_PREFIX
+from zerg.config import API_PREFIX
+from zerg.config import MODELS_PREFIX
+from zerg.config import THREADS_PREFIX
+from zerg.database import initialize_database
+from zerg.routers.admin import router as admin_router
+from zerg.routers.agents import router as agents_router
+from zerg.routers.models import router as models_router
+from zerg.routers.threads import router as threads_router
+from zerg.routers.triggers import router as triggers_router
+from zerg.routers.websocket import router as websocket_router
+from zerg.services.scheduler_service import scheduler_service
 
 # Load environment variables
 load_dotenv()

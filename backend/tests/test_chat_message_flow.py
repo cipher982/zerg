@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from zerg.app.schemas.ws_messages import MessageType
+from zerg.schemas.ws_messages import MessageType
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 @pytest.fixture
 def test_thread(db_session, sample_agent):
     """Create a test thread for WebSocket testing"""
-    from zerg.app.models.models import Thread
+    from zerg.models.models import Thread
 
     thread = Thread(
         agent_id=sample_agent.id,

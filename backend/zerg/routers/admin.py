@@ -5,9 +5,9 @@ from fastapi import APIRouter
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
-from zerg.app.database import Base
-from zerg.app.database import default_engine
-from zerg.app.database import initialize_database
+from zerg.database import Base
+from zerg.database import default_engine
+from zerg.database import initialize_database
 
 router = APIRouter(
     prefix="/admin",

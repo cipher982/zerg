@@ -20,8 +20,8 @@ from langgraph.graph import StateGraph
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
-from zerg.app.models.models import Agent as AgentModel
-from zerg.app.models.models import Thread as ThreadModel
+from zerg.models.models import Agent as AgentModel
+from zerg.models.models import Thread as ThreadModel
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,7 @@ class AgentManager:
         # (AgentManager is instantiated on-demand per request), so this is
         # safe even though we mutate `self`.
 
-        from zerg.app.crud import crud
+        from zerg.crud import crud
 
         created = False
 
@@ -152,7 +152,7 @@ class AgentManager:
         """
         Add the system instructions as the first message in a thread.
         """
-        from zerg.app.crud import crud
+        from zerg.crud import crud
 
         # Only add if the thread is new (no messages yet)
         messages = crud.get_thread_messages(db, thread.id)
@@ -196,7 +196,7 @@ class AgentManager:
             str – incremental assistant text chunks (either individual tokens
             or the whole response depending on *token_stream*).
         """
-        from zerg.app.crud import crud
+        from zerg.crud import crud
 
         # If `content` is provided we need to append it as a new user message.
         # When `run_thread` is invoked after the frontend already created the

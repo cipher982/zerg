@@ -14,17 +14,17 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from zerg.app.crud import crud
-from zerg.app.schemas.ws_messages import AgentStateMessage
-from zerg.app.schemas.ws_messages import ErrorMessage
-from zerg.app.schemas.ws_messages import MessageType
-from zerg.app.schemas.ws_messages import PingMessage
-from zerg.app.schemas.ws_messages import PongMessage
-from zerg.app.schemas.ws_messages import SendMessageRequest
-from zerg.app.schemas.ws_messages import SubscribeThreadMessage
-from zerg.app.schemas.ws_messages import ThreadHistoryMessage
-from zerg.app.schemas.ws_messages import ThreadMessageData
-from zerg.app.websocket.manager import topic_manager
+from zerg.crud import crud
+from zerg.schemas.ws_messages import AgentStateMessage
+from zerg.schemas.ws_messages import ErrorMessage
+from zerg.schemas.ws_messages import MessageType
+from zerg.schemas.ws_messages import PingMessage
+from zerg.schemas.ws_messages import PongMessage
+from zerg.schemas.ws_messages import SendMessageRequest
+from zerg.schemas.ws_messages import SubscribeThreadMessage
+from zerg.schemas.ws_messages import ThreadHistoryMessage
+from zerg.schemas.ws_messages import ThreadMessageData
+from zerg.websocket.manager import topic_manager
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +265,7 @@ MESSAGE_HANDLERS = {
 
 # ---------------------------------------------------------------------------
 # Dedicated helpers for chat‑centric message types introduced in
-# zerg.app.schemas.ws_messages.MessageType. They wrap the existing topic
+# zerg.schemas.ws_messages.MessageType. They wrap the existing topic
 # subscription mechanism so the rest of the system (topic_manager &
 # event_bus) continues to operate unchanged.
 

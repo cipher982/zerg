@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
 
-from zerg.app.models.models import Thread
+from zerg.models.models import Thread
 
 
 @pytest.fixture

@@ -1,1 +1,0 @@
-"""Zerg application package."""

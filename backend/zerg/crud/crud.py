@@ -6,11 +6,11 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from zerg.app.models.models import Agent
-from zerg.app.models.models import AgentMessage
-from zerg.app.models.models import Thread
-from zerg.app.models.models import ThreadMessage
-from zerg.app.models.models import Trigger
+from zerg.models.models import Agent
+from zerg.models.models import AgentMessage
+from zerg.models.models import Thread
+from zerg.models.models import ThreadMessage
+from zerg.models.models import Trigger
 
 
 # Agent CRUD operations

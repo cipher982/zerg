@@ -15,18 +15,18 @@ from fastapi import HTTPException
 from fastapi import status
 from sqlalchemy.orm import Session
 
-from zerg.app.agents import AgentManager
-from zerg.app.crud import crud
-from zerg.app.database import get_db
-from zerg.app.schemas.schemas import Thread
-from zerg.app.schemas.schemas import ThreadCreate
-from zerg.app.schemas.schemas import ThreadMessageCreate
-from zerg.app.schemas.schemas import ThreadMessageResponse
-from zerg.app.schemas.schemas import ThreadUpdate
-from zerg.app.schemas.ws_messages import StreamChunkMessage
-from zerg.app.schemas.ws_messages import StreamEndMessage
-from zerg.app.schemas.ws_messages import StreamStartMessage
-from zerg.app.websocket.manager import topic_manager
+from zerg.agents import AgentManager
+from zerg.crud import crud
+from zerg.database import get_db
+from zerg.schemas.schemas import Thread
+from zerg.schemas.schemas import ThreadCreate
+from zerg.schemas.schemas import ThreadMessageCreate
+from zerg.schemas.schemas import ThreadMessageResponse
+from zerg.schemas.schemas import ThreadUpdate
+from zerg.schemas.ws_messages import StreamChunkMessage
+from zerg.schemas.ws_messages import StreamEndMessage
+from zerg.schemas.ws_messages import StreamStartMessage
+from zerg.websocket.manager import topic_manager
 
 # Set up logging
 logger = logging.getLogger(__name__)
