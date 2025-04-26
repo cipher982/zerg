@@ -1,7 +1,6 @@
 pub mod setup;
 pub mod events;
 pub mod main;
-pub mod modals;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;

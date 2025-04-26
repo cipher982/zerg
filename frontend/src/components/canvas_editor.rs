@@ -497,7 +497,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 let window = web_sys::window().expect("no global window exists");
                 let document = window.document().expect("should have a document");
                 
-                let _ = crate::ui::modals::open_agent_modal(&document, &node_id);
+                let _ = crate::components::agent_config_modal::AgentConfigModal::open(&document, &node_id);
             }
         }
     }) as Box<dyn FnMut(_)>);

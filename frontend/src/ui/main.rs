@@ -86,8 +86,8 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     app_container.append_child(&input_panel)?;
     app_container.append_child(&canvas_container)?;
     
-    // Create agent modal
-    crate::ui::setup::create_agent_input_modal(document)?;
+    // Create agent modal component
+    crate::components::agent_config_modal::AgentConfigModal::init(document)?;
     
     // Set up event handlers
     events::setup_ui_event_handlers(document)?;

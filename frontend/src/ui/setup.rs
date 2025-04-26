@@ -1,4 +1,6 @@
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use wasm_bindgen::closure::Closure;
 use web_sys::Document;
 
 pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
@@ -199,6 +201,57 @@ pub fn create_agent_input_modal(document: &Document) -> Result<(), JsValue> {
     // Add modal to the document body
     let body = document.body().ok_or(JsValue::from_str("No body found"))?;
     body.append_child(&modal)?;
+
+    // ------------------------------------------------------------------
+    // UX improvement: Allow closing the modal when clicking on the dark
+    // backdrop (i.e. outside of the `.modal-content` box).  To avoid adding
+    // duplicate event listeners when this function is called multiple times
+    // we set a data-attribute after the first registration.
+    // ------------------------------------------------------------------
+
+    if modal.get_attribute("data-overlay-listener").is_none() {
+        // Clone elements required inside the closure
+        let modal_clone = modal.clone();
+
+        // Close on backdrop click – only trigger when the actual backdrop is
+        // the event target.  Clicks on children (the content box or any of
+        // its descendants) will have a different target, so we can safely
+        // ignore them.
+        let cb = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(move |evt: web_sys::MouseEvent| {
+            // Compare raw pointers via `is_same_node` – cheaper than string
+            // ID comparison and works for any element.
+            if let Some(target) = evt.target() {
+                // `is_same_node` lives on Node, so cast first.
+                if let Ok(target_node) = target.dyn_into::<web_sys::Node>() {
+                    if modal_clone.is_same_node(Some(&target_node)) {
+                        // User clicked on backdrop → close modal.
+                        let window = web_sys::window().expect("no global window exists");
+                        if let Some(doc) = window.document() {
+                        let _ = crate::components::agent_config_modal::AgentConfigModal::close(&doc);
+                        }
+                    }
+                }
+            }
+        }));
+
+        modal.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+
+        // Mark listener attached
+        modal.set_attribute("data-overlay-listener", "true")?;
+    }
+
+    // Prevent clicks inside the content box from bubbling up to the backdrop
+    if modal_content.get_attribute("data-stop-propagation").is_none() {
+        let stopper = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(|e: web_sys::MouseEvent| {
+            e.stop_propagation();
+        }));
+
+        modal_content.add_event_listener_with_callback("click", stopper.as_ref().unchecked_ref())?;
+        stopper.forget();
+
+        modal_content.set_attribute("data-stop-propagation", "true")?;
+    }
     
     // Event handlers will be set up separately
     
