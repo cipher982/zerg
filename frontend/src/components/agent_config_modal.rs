@@ -22,13 +22,17 @@ use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
 pub struct AgentConfigModal;
 
 impl AgentConfigModal {
-    /// Ensure the modal DOM exists.  At the moment we just call the existing
-    /// `ui::setup::create_agent_input_modal` helper.  The function is
-    /// idempotent, so it is safe to call multiple times.
+    /// Ensure the modal DOM exists.  If the element with id `agent-modal`
+    /// is missing we **build the complete DOM tree here** (logic migrated
+    /// from the former `ui::setup::create_agent_input_modal` helper).
+    ///
+    /// The operation is idempotent – if the DOM already exists we skip the
+    /// heavy work and only make sure the listeners are attached once.
     pub fn init(document: &Document) -> Result<Self, JsValue> {
-        // Ensure the base DOM exists. UI startup already calls this once, but
-        // it is idempotent so calling it again is safe.
-        crate::ui::setup::create_agent_input_modal(document)?;
+        // Build DOM on-demand
+        if document.get_element_by_id("agent-modal").is_none() {
+            Self::build_dom(document)?;
+        }
 
         // Attach local event listeners only once – use a data attribute on
         // the modal root to mark completion.
@@ -39,6 +43,201 @@ impl AgentConfigModal {
             }
         }
         Ok(Self)
+    }
+
+    // ---------------------------------------------------------------------
+    // DOM construction – migrated verbatim (with tiny tweaks) from
+    // `ui::setup::create_agent_input_modal` so that the modal component is
+    // now fully self-contained.
+    // ---------------------------------------------------------------------
+    fn build_dom(document: &Document) -> Result<(), JsValue> {
+        use wasm_bindgen::closure::Closure;
+        use wasm_bindgen::JsCast;
+
+        // Create modal container
+        let modal = document.create_element("div")?;
+        modal.set_id("agent-modal");
+        modal.set_class_name("modal");
+        modal.set_attribute("style", "display: none;")?;
+
+        // Create modal content
+        let modal_content = document.create_element("div")?;
+        modal_content.set_class_name("modal-content");
+
+        // Header
+        let modal_header = document.create_element("div")?;
+        modal_header.set_class_name("modal-header");
+
+        let modal_title = document.create_element("h2")?;
+        modal_title.set_id("modal-title");
+        modal_title.set_inner_html("Agent Configuration");
+
+        let close_button = document.create_element("span")?;
+        close_button.set_class_name("close");
+        close_button.set_inner_html("&times;");
+        close_button.set_id("modal-close");
+
+        modal_header.append_child(&modal_title)?;
+        modal_header.append_child(&close_button)?;
+
+        // Tabs: Main / History
+        let tab_container = document.create_element("div")?;
+        tab_container.set_class_name("tab-container");
+
+        let main_tab = document.create_element("button")?;
+        main_tab.set_class_name("tab-button active");
+        main_tab.set_id("main-tab");
+        main_tab.set_inner_html("Main");
+
+        let history_tab = document.create_element("button")?;
+        history_tab.set_class_name("tab-button");
+        history_tab.set_id("history-tab");
+        history_tab.set_inner_html("History");
+
+        tab_container.append_child(&main_tab)?;
+        tab_container.append_child(&history_tab)?;
+
+        // Main content
+        let main_content = document.create_element("div")?;
+        main_content.set_class_name("tab-content");
+        main_content.set_id("main-content");
+
+        // --- Agent name ---
+        let name_label = document.create_element("label")?;
+        name_label.set_inner_html("Agent Name:");
+        name_label.set_attribute("for", "agent-name")?;
+
+        let name_input = document.create_element("input")?;
+        name_input.set_id("agent-name");
+        name_input.set_attribute("type", "text")?;
+        name_input.set_attribute("placeholder", "Enter agent name...")?;
+
+        // --- System instructions ---
+        let system_label = document.create_element("label")?;
+        system_label.set_inner_html("System Instructions:");
+        system_label.set_attribute("for", "system-instructions")?;
+
+        let system_textarea = document.create_element("textarea")?;
+        system_textarea.set_id("system-instructions");
+        system_textarea.set_attribute("rows", "6")?;
+        system_textarea.set_attribute("placeholder", "Enter system-level instructions for this agent...")?;
+
+        // --- Task instructions ---
+        let default_task_label = document.create_element("label")?;
+        default_task_label.set_inner_html("Task Instructions:");
+        default_task_label.set_attribute("for", "default-task-instructions")?;
+
+        let default_task_textarea = document.create_element("textarea")?;
+        default_task_textarea.set_id("default-task-instructions");
+        default_task_textarea.set_attribute("rows", "4")?;
+        default_task_textarea.set_attribute("placeholder", "Optional task instructions that will be used when running this agent. If empty, a default 'begin' prompt will be used.")?;
+
+        // Append to main_content
+        main_content.append_child(&name_label)?;
+        main_content.append_child(&name_input)?;
+        main_content.append_child(&system_label)?;
+        main_content.append_child(&system_textarea)?;
+        main_content.append_child(&default_task_label)?;
+        main_content.append_child(&default_task_textarea)?;
+
+        // --- Schedule controls ---
+        let schedule_label = document.create_element("label")?;
+        schedule_label.set_inner_html("Schedule (Cron expression):");
+        schedule_label.set_attribute("for", "agent-schedule")?;
+
+        let schedule_input = document.create_element("input")?;
+        schedule_input.set_id("agent-schedule");
+        schedule_input.set_attribute("type", "text")?;
+        schedule_input.set_attribute("placeholder", "*/15 * * * * (min hour day month weekday)")?;
+
+        let schedule_help = document.create_element("div")?;
+        schedule_help.set_class_name("help-text");
+        schedule_help.set_inner_html("Format: minute(0-59) hour(0-23) day(1-31) month(1-12) weekday(0-6). Example: */15 * * * * runs every 15 minutes.");
+        schedule_help.set_attribute("style", "font-size: 0.6em; color: #666; margin-bottom: 10px;")?;
+
+        let enable_label = document.create_element("label")?;
+        enable_label.set_inner_html("Enable schedule:");
+
+        let enable_checkbox = document.create_element("input")?;
+        enable_checkbox.set_id("agent-run-on-schedule");
+        enable_checkbox.set_attribute("type", "checkbox")?;
+
+        // Append schedule controls
+        main_content.append_child(&schedule_label)?;
+        main_content.append_child(&schedule_input)?;
+        main_content.append_child(&schedule_help)?;
+        main_content.append_child(&enable_label)?;
+        main_content.append_child(&enable_checkbox)?;
+
+        // --- History content ---
+        let history_content = document.create_element("div")?;
+        history_content.set_class_name("tab-content");
+        history_content.set_id("history-content");
+        history_content.set_attribute("style", "display: none;")?;
+
+        let history_container = document.create_element("div")?;
+        history_container.set_id("history-container");
+        history_container.set_inner_html("<p>No history available.</p>");
+
+        history_content.append_child(&history_container)?;
+
+        // --- Buttons ---
+        let button_container = document.create_element("div")?;
+        button_container.set_class_name("modal-buttons");
+
+        let save_button = document.create_element("button")?;
+        save_button.set_id("save-agent");
+        save_button.set_inner_html("Save");
+
+        button_container.append_child(&save_button)?;
+
+        // Assemble content hierarchy
+        modal_content.append_child(&modal_header)?;
+        modal_content.append_child(&tab_container)?;
+        modal_content.append_child(&main_content)?;
+        modal_content.append_child(&history_content)?;
+        modal_content.append_child(&button_container)?;
+
+        modal.append_child(&modal_content)?;
+
+        // Inject into DOM (body)
+        let body = document.body().ok_or(JsValue::from_str("No body found"))?;
+        body.append_child(&modal)?;
+
+        // ------------------------------------------------------------------
+        // UX: Close when clicking on backdrop (outside modal-content)
+        // ------------------------------------------------------------------
+        if modal.get_attribute("data-overlay-listener").is_none() {
+            let modal_clone = modal.clone();
+            let cb = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(move |evt: web_sys::MouseEvent| {
+                if let Some(target) = evt.target() {
+                    if let Ok(target_node) = target.dyn_into::<web_sys::Node>() {
+                        if modal_clone.is_same_node(Some(&target_node)) {
+                            if let Some(window) = web_sys::window() {
+                                if let Some(doc) = window.document() {
+                                    let _ = Self::close(&doc);
+                                }
+                            }
+                        }
+                    }
+                }
+            }));
+            modal.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+            cb.forget();
+            modal.set_attribute("data-overlay-listener", "true")?;
+        }
+
+        // Stop propagation inside content box
+        if modal_content.get_attribute("data-stop-propagation").is_none() {
+            let stopper = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(|e: web_sys::MouseEvent| {
+                e.stop_propagation();
+            }));
+            modal_content.add_event_listener_with_callback("click", stopper.as_ref().unchecked_ref())?;
+            stopper.forget();
+            modal_content.set_attribute("data-stop-propagation", "true")?;
+        }
+
+        Ok(())
     }
 
     /// Internal helper – adds event listeners to modal controls.  Calling it
