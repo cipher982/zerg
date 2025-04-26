@@ -369,8 +369,8 @@ pub fn update_conversation_ui(
                 (Some(aid), Some(bid)) => aid.cmp(&bid),
                 _ => {
                     // Fallback to timestamp comparison if IDs aren't available
-                    let a_time = a.created_at.as_deref().unwrap_or("");
-                    let b_time = b.created_at.as_deref().unwrap_or("");
+                    let a_time = a.timestamp.as_deref().unwrap_or("");
+                    let b_time = b.timestamp.as_deref().unwrap_or("");
                     a_time.cmp(b_time)
                 }
             }
@@ -451,21 +451,6 @@ pub fn update_conversation_ui(
                         click_more.forget();
                         details.append_child(&toggle)?;
                     }
-                    // Copy to clipboard button
-                    {
-                        let copy_btn = document.create_element("button")?;
-                        copy_btn.set_class_name("copy-btn");
-                        // Use set_text_content for text nodes
-                        copy_btn.set_text_content(Some("Copy"));
-                        let text_to_copy = full_output.clone();
-                        let click_copy = Closure::wrap(Box::new(move |_e: web_sys::Event| {
-                            // Log the text to copy as a placeholder for clipboard functionality
-                            web_sys::console::log_1(&JsValue::from_str(&text_to_copy));
-                        }) as Box<dyn FnMut(_)>);
-                        copy_btn.add_event_listener_with_callback("click", click_copy.as_ref().unchecked_ref())?;
-                        click_copy.forget();
-                        details.append_child(&copy_btn)?;
-                    }
                     messages_container.append_child(&details)?;
                 }
                 // Skip default rendering for tool messages
@@ -494,7 +479,7 @@ pub fn update_conversation_ui(
             timestamp.set_class_name("message-time");
             
             // Always use the timestamp, regardless of message state
-            let time_text = format_timestamp(&message.created_at.clone().unwrap_or_default());
+            let time_text = format_timestamp(&message.timestamp.clone().unwrap_or_default());
             
             timestamp.set_text_content(Some(&time_text));
             
