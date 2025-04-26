@@ -44,7 +44,7 @@ def test_webhook_trigger_flow(client):
         # execute the `asyncio.create_task` that the trigger handler spawned.
         import time
 
-        time.sleep(0.05)
+        time.sleep(0.01)
 
         assert called["flag"], "run_agent_task should have been invoked by trigger"
         assert called["agent_id"] == agent_id

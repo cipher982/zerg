@@ -467,11 +467,9 @@ class AgentManager:
             # ------------------------------------------------------------------
 
             # ------------------------------------------------------------
-            # Persist the final assistant answer *before* tool messages so
-            # the call order (user -> assistant) stays compatible with unit
-            # tests that capture create_thread_message invocations.
+            # Persist the final assistant answer *before* tool messages so we can use its id as parent_id.
             # ------------------------------------------------------------
-            self._safe_create_thread_message(
+            assistant_row = self._safe_create_thread_message(
                 crud,
                 db=db,
                 thread_id=thread.id,
@@ -479,11 +477,10 @@ class AgentManager:
                 content=response_content,
                 processed=True,  # Assistant responses are always processed
             )
+            assistant_id = getattr(assistant_row, "id", None)
 
             # ------------------------------------------------------------
-            # Persist each *tool* response (after assistant).  When the
-            # crud layer is mocked (unit tests) we skip these calls so the
-            # expected call-count remains unchanged.
+            # Persist each *tool* response (after assistant), setting parent_id to assistant_id.
             # ------------------------------------------------------------
             for tc_id, data in tool_output_map.items():
                 self._safe_create_thread_message(
@@ -495,6 +492,7 @@ class AgentManager:
                     tool_call_id=tc_id,
                     name=data["name"],
                     processed=True,
+                    parent_id=assistant_id,
                 )
 
             # Mark the originating user message as processed (if we have one)

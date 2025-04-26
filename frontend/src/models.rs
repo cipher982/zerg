@@ -234,6 +234,8 @@ pub struct ApiThreadMessage {
     /// Optional serialized inputs for the tool call (if provided by backend)
     #[serde(default)]
     pub tool_input: Option<String>,
+    #[serde(default)]
+    pub parent_id: Option<u32>,
 }
 
 /// Create a new thread message

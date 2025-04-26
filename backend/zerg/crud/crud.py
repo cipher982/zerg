@@ -284,6 +284,7 @@ def create_thread_message(
     tool_call_id: Optional[str] = None,
     name: Optional[str] = None,
     processed: bool = False,
+    parent_id: Optional[int] = None,
 ):
     """Create a new message for a thread"""
     db_message = ThreadMessage(
@@ -294,6 +295,7 @@ def create_thread_message(
         tool_call_id=tool_call_id,
         name=name,
         processed=processed,
+        parent_id=parent_id,
     )
     db.add(db_message)
     db.commit()
