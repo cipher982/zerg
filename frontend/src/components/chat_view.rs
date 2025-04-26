@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{Document, Event, HtmlInputElement};
-use crate::state::dispatch_global_message;
+use web_sys::{Document, Event, HtmlInputElement, HtmlElement};
+use crate::state::{dispatch_global_message, APP_STATE, ToolUiState};
 use crate::messages::Message;
 use crate::models::{ApiThread, ApiThreadMessage};
 use wasm_bindgen::JsCast;
@@ -357,39 +357,132 @@ pub fn update_conversation_ui(
         // Clear existing messages
         messages_container.set_inner_html("");
         
+        // ------------------------------------------------------------------
+        // Stable chronological ordering - simplified
+        // ------------------------------------------------------------------
+        // Sort messages by ID (which corresponds to insertion order in the database)
+        // Fall back to timestamp ordering only when IDs aren't available
+        
+        let mut sorted_messages = messages.to_vec();
+        sorted_messages.sort_by(|a, b| {
+            match (a.id, b.id) {
+                (Some(aid), Some(bid)) => aid.cmp(&bid),
+                _ => {
+                    // Fallback to timestamp comparison if IDs aren't available
+                    let a_time = a.created_at.as_deref().unwrap_or("");
+                    let b_time = b.created_at.as_deref().unwrap_or("");
+                    a_time.cmp(b_time)
+                }
+            }
+        });
+        
         // Display thread messages, but filter out system messages
-        for message in messages.iter().filter(|m| m.role != "system") {
-            let message_element = document.create_element("div")?;
+        for message in sorted_messages.iter().filter(|m| m.role != "system") {
+            // Handle tool call messages with a collapsible indicator
+            if message.role == "tool" || message.message_type.as_deref() == Some("tool_output") {
+                // Determine UI state for this tool call
+                let tool_call_id = message.tool_call_id.clone().unwrap_or_default();
+                let (expanded, show_full) = APP_STATE.with(|s| {
+                    let state = s.borrow();
+                    state.tool_ui_states.get(&tool_call_id)
+                        .map(|ts| (ts.expanded, ts.show_full))
+                        .unwrap_or((false, false))
+                });
+                // Create the collapsed indicator
+                let indicator = document.create_element("div")?;
+                indicator.set_class_name("tool-indicator");
+                if expanded {
+                    // Add expanded class for tool indicator
+                    indicator.set_class_name("tool-indicator expanded");
+                }
+                indicator.set_attribute("data-tool-call-id", &tool_call_id)?;
+                let tool_name = message.tool_name.as_deref().unwrap_or("tool");
+                indicator.set_inner_html(&format!("🛠️ Tool Used: {} <span class=\"arrow\">▸</span>", tool_name));
+                // Click to expand/collapse
+                {
+                    let tcid = tool_call_id.clone();
+                    let click = Closure::wrap(Box::new(move |_e: web_sys::Event| {
+                        dispatch_global_message(Message::ToggleToolExpansion { tool_call_id: tcid.clone() });
+                    }) as Box<dyn FnMut(_)>);
+                    indicator.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
+                    click.forget();
+                }
+                messages_container.append_child(&indicator)?;
+                // If expanded, show details panel
+                if expanded {
+                    let details = document.create_element("div")?;
+                    details.set_class_name("tool-details");
+                    details.set_attribute("data-tool-call-id", &tool_call_id)?;
+                    // Tool name row
+                    let row_tool = document.create_element("div")?;
+                    row_tool.set_class_name("tool-detail-row");
+                    row_tool.set_inner_html(&format!("<strong>Tool:</strong> {}", tool_name));
+                    details.append_child(&row_tool)?;
+                    // Inputs row
+                    let input_val = message.tool_input.clone().unwrap_or_else(|| "None".to_string());
+                    let row_args = document.create_element("div")?;
+                    row_args.set_class_name("tool-detail-row");
+                    row_args.set_inner_html(&format!("<strong>Inputs:</strong> <pre>{}</pre>", input_val.replace("\n", "<br>")));
+                    details.append_child(&row_args)?;
+                    // Output row with truncation
+                    let full_output = message.content.clone();
+                    let truncated = full_output.chars().count() > 200;
+                    let output_text = if truncated && !show_full {
+                        full_output.chars().take(200).collect::<String>() + "..."
+                    } else {
+                        full_output.clone()
+                    };
+                    let row_out = document.create_element("div")?;
+                    row_out.set_class_name("tool-detail-row output-row");
+                    row_out.set_inner_html(&format!("<strong>Output:</strong> <pre>{}</pre>", output_text.replace("\n", "<br>")));
+                    details.append_child(&row_out)?;
+                    // Show more / show less toggle
+                    if truncated {
+                        let more = if show_full { "Show Less" } else { "Show More" };
+                        let toggle = document.create_element("span")?;
+                        toggle.set_class_name("show-more");
+                        // Use set_text_content for text nodes
+                        toggle.set_text_content(Some(more));
+                        let tcid2 = tool_call_id.clone();
+                        let click_more = Closure::wrap(Box::new(move |_e: web_sys::Event| {
+                            dispatch_global_message(Message::ToggleToolShowMore { tool_call_id: tcid2.clone() });
+                        }) as Box<dyn FnMut(_)>);
+                        toggle.add_event_listener_with_callback("click", click_more.as_ref().unchecked_ref())?;
+                        click_more.forget();
+                        details.append_child(&toggle)?;
+                    }
+                    // Copy to clipboard button
+                    {
+                        let copy_btn = document.create_element("button")?;
+                        copy_btn.set_class_name("copy-btn");
+                        // Use set_text_content for text nodes
+                        copy_btn.set_text_content(Some("Copy"));
+                        let text_to_copy = full_output.clone();
+                        let click_copy = Closure::wrap(Box::new(move |_e: web_sys::Event| {
+                            // Log the text to copy as a placeholder for clipboard functionality
+                            web_sys::console::log_1(&JsValue::from_str(&text_to_copy));
+                        }) as Box<dyn FnMut(_)>);
+                        copy_btn.add_event_listener_with_callback("click", click_copy.as_ref().unchecked_ref())?;
+                        click_copy.forget();
+                        details.append_child(&copy_btn)?;
+                    }
+                    messages_container.append_child(&details)?;
+                }
+                // Skip default rendering for tool messages
+                continue;
+            }
             
-            // Set class based on message role and type
-            let mut class_name = if message.role == "user" {
+            // Create the container for user/assistant message bubble
+            let message_element = document.create_element("div")?;
+            // Set class based on message role and type (user vs assistant)
+            let class_name = if message.role == "user" {
                 "message user-message".to_string()
-            } else if message.role == "tool" || message.message_type.as_deref() == Some("tool_output") {
-                "message tool-message".to_string()
             } else {
                 "message assistant-message".to_string()
             };
             
-            // Check for optimistic messages (they have IDs close to u32::MAX)
-            if let Some(id) = &message.id {
-                if *id > 4_000_000_000 { // Close to u32::MAX (4,294,967,295)
-                    class_name = format!("{} pending", class_name);
-                }
-            }
-            
             message_element.set_class_name(&class_name);
             
-            // For tool messages, add a tool header
-            if message.role == "tool" || message.message_type.as_deref() == Some("tool_output") {
-                let tool_header = document.create_element("div")?;
-                tool_header.set_class_name("tool-header");
-                
-                // Show the precise tool name
-                let tool_name = message.tool_name.as_deref().unwrap_or("unnamed_tool");
-                tool_header.set_inner_html(&format!("🛠️ Tool Output: {}", tool_name));
-                
-                message_element.append_child(&tool_header)?;
-            }
             
             // Create content element
             let content = document.create_element("div")?;
@@ -400,15 +493,8 @@ pub fn update_conversation_ui(
             let timestamp = document.create_element("div")?;
             timestamp.set_class_name("message-time");
             
-            let time_text = if let Some(id) = &message.id {
-                if *id > 4_000_000_000 { // Close to u32::MAX
-                    "Sending...".to_string()
-                } else {
-                    format_timestamp(&message.created_at.clone().unwrap_or_default())
-                }
-            } else {
-                format_timestamp(&message.created_at.clone().unwrap_or_default())
-            };
+            // Always use the timestamp, regardless of message state
+            let time_text = format_timestamp(&message.created_at.clone().unwrap_or_default());
             
             timestamp.set_text_content(Some(&time_text));
             
@@ -470,7 +556,7 @@ fn get_current_agent_id(state: &std::cell::Ref<crate::state::AppState>) -> Optio
 fn format_timestamp(timestamp: &str) -> String {
     // Basic formatting - in a real app you'd want more sophisticated date handling
     if timestamp.is_empty() {
-        return "Just now".to_string();
+        return "[Missing timestamp]".to_string();
     }
     
     // Parse the timestamp (assuming ISO format)
@@ -492,7 +578,7 @@ fn truncate_text(text: &str, max_graphemes: usize) -> String {
 
     // Collect the string into user-perceived grapheme clusters so we do not
     // slice through multi-byte characters or emoji sequences ("😎", "🇨🇦",
-    // "👨‍👩‍👧‍👦", etc.).
+    // "��‍👩‍👧‍👦", etc.).
     let graphemes: Vec<&str> = text.graphemes(true).collect();
 
     if graphemes.len() <= max_graphemes {

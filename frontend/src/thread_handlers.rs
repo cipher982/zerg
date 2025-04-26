@@ -17,10 +17,10 @@ pub enum MessageStatus {
 }
 
 /// Handles when a user sends a new message to a thread
-/// Implements the optimistic UI pattern:
-/// 1. Immediately display the message in the UI with pending status
-/// 2. Send the message to the backend
-/// 3. Update the message with the confirmed status when the server responds
+/// Instead of using optimistic UI pattern, we'll use a loading state
+/// 1. Show loading state during API call
+/// 2. Wait for the server response
+/// 3. Update UI with confirmed data from the server
 pub fn handle_send_thread_message(
     thread_id: u32,
     content: String,
@@ -28,75 +28,55 @@ pub fn handle_send_thread_message(
     threads: &HashMap<u32, ApiThread>,
     current_thread_id: Option<u32>,
 ) -> Box<dyn FnOnce()> {
-    // Create an optimistic message with a client-generated ID for tracking
-    // Use negative numbers to indicate optimistic messages
-    let now = chrono::Utc::now().to_rfc3339();
-    let client_id: u32 = u32::MAX - rand::random::<u32>() % 1000; // Generate a random large negative-like number
-    
-    let user_message = ApiThreadMessage {
-        id: Some(client_id), // Use the numeric ID to track this message
-        thread_id,
-        role: "user".to_string(),
-        content: content.clone(),
-        created_at: Some(now),
-        // Default fields for tool message metadata
-        message_type: None,
-        tool_name: None,
-        tool_call_id: None,
-    };
-    
-    // Prepare data for UI updates
-    let mut conversation_messages = Vec::new();
-    let current_thread_id_opt = current_thread_id;
-    let thread_messages_map = thread_messages.clone();
-    let threads_data: Vec<ApiThread> = threads.values().cloned().collect();
-    
-    // Add optimistic message to state
-    if let Some(messages) = thread_messages.get_mut(&thread_id) {
-        messages.push(user_message.clone());
-        conversation_messages = messages.clone();
-    } else {
-        thread_messages.insert(thread_id, vec![user_message.clone()]);
-        conversation_messages = vec![user_message.clone()];
-    }
-    
     // Clone data for async operations
     let content_clone = content.clone();
     
     // Return a closure to be executed after the borrow is released
     Box::new(move || {
-        // Update the UI with the optimistic message
+        // Show loading state in the UI
         if let Some(_document) = web_sys::window().and_then(|w| w.document()) {
-            dispatch_global_message(Message::UpdateConversation(conversation_messages));
-            dispatch_global_message(Message::UpdateThreadList(
-                threads_data,
-                current_thread_id_opt,
-                thread_messages_map
-            ));
+            dispatch_global_message(Message::UpdateLoadingState(true));
         }
         
-        // Send the message to the backend
+        // Send the message to the backend - NO optimistic UI
         spawn_local(async move {
             match crate::network::api_client::ApiClient::create_thread_message(thread_id, &content_clone).await {
                 Ok(response) => {
-                    // Dispatch a message with the sent message and the client ID for tracking
-                    dispatch_global_message(Message::ThreadMessageSent(response, client_id.to_string()));
-                    
-                    // Now trigger the thread to run and process the message
-                    web_sys::console::log_1(&format!("Now running thread {} to process the message", thread_id).into());
-                    match crate::network::api_client::ApiClient::run_thread(thread_id).await {
-                        Ok(_) => {
-                            web_sys::console::log_1(&format!("Successfully triggered thread {} to process message", thread_id).into());
-                        },
-                        Err(e) => {
-                            web_sys::console::error_1(&format!("Failed to run thread: {:?}", e).into());
+                    // Parse the response and update the UI directly with the server data
+                    if let Ok(thread_message) = serde_json::from_str::<ApiThreadMessage>(&response) {
+                        // Reload thread messages from the server to get the most accurate state
+                        match crate::network::api_client::ApiClient::get_thread_messages(thread_id, 0, 100).await {
+                            Ok(messages_json) => {
+                                if let Ok(messages) = serde_json::from_str::<Vec<ApiThreadMessage>>(&messages_json) {
+                                    // Update the UI with the confirmed messages from the server
+                                    dispatch_global_message(Message::ThreadMessagesLoaded(thread_id, messages));
+                                    dispatch_global_message(Message::UpdateLoadingState(false));
+                                }
+                            },
+                            Err(e) => {
+                                web_sys::console::error_1(&format!("Failed to reload messages: {:?}", e).into());
+                                dispatch_global_message(Message::UpdateLoadingState(false));
+                            }
                         }
+                        
+                        // Now trigger the thread to run and process the message
+                        web_sys::console::log_1(&format!("Now running thread {} to process the message", thread_id).into());
+                        match crate::network::api_client::ApiClient::run_thread(thread_id).await {
+                            Ok(_) => {
+                                web_sys::console::log_1(&format!("Successfully triggered thread {} to process message", thread_id).into());
+                            },
+                            Err(e) => {
+                                web_sys::console::error_1(&format!("Failed to run thread: {:?}", e).into());
+                            }
+                        }
+                    } else {
+                        web_sys::console::error_1(&"Failed to parse thread message response".into());
+                        dispatch_global_message(Message::UpdateLoadingState(false));
                     }
                 },
                 Err(e) => {
                     web_sys::console::error_1(&format!("Failed to send thread message: {:?}", e).into());
-                    // Could dispatch a message to mark the message as failed
-                    dispatch_global_message(Message::ThreadMessageFailed(thread_id, client_id.to_string()));
+                    dispatch_global_message(Message::UpdateLoadingState(false));
                 }
             }
         });

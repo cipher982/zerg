@@ -10,6 +10,70 @@
     color: var(--text-primary);
 }
 
+/* Collapsible tool call indicator */
+.tool-indicator {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    margin: 4px 0;
+    cursor: pointer;
+    border-radius: 4px;
+    background: rgba(200,200,200,0.1);
+    display: inline-block;
+    transition: background 0.1s;
+}
+.tool-indicator:hover {
+    background: rgba(200,200,200,0.2);
+}
+.tool-indicator .arrow {
+    margin-left: 4px;
+    transition: transform 0.2s;
+}
+.tool-indicator.expanded .arrow {
+    transform: rotate(90deg);
+}
+
+/* Details panel for expanded tool call */
+.tool-details {
+    background: rgba(200,200,200,0.05);
+    border-left: 2px solid #888;
+    padding: 8px;
+    margin: 4px 0 12px 12px;
+    font-family: monospace;
+    font-size: 0.85em;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+}
+/* When indicator is expanded, reveal details */
+.tool-indicator.expanded + .tool-details {
+    max-height: 400px;
+}
+.tool-detail-row {
+    margin-bottom: 4px;
+}
+.tool-detail-row pre {
+    margin: 4px 0;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+.output-row {
+    position: relative;
+}
+.show-more {
+    color: var(--color-primary);
+    cursor: pointer;
+    font-size: 0.8em;
+    position: absolute;
+    bottom: 4px;
+    right: 8px;
+}
+.copy-btn {
+    font-size: 0.8em;
+    margin-left: 8px;
+    cursor: pointer;
+}
+
 /* Header styles */
 .chat-header {
     display: flex;
@@ -284,12 +348,20 @@
 }
 
 .send-button {
-    width: 40px;
+    min-width: 64px;
     height: 40px;
-    border-radius: 50%;
+    border-radius: 20px;
     margin-left: 10px;
     background-color: var(--color-primary);
     color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    font-size: 16px;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
 }
 
 .send-button:hover {

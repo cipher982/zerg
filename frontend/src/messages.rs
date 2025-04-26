@@ -196,6 +196,10 @@ pub enum Message {
         tool_call_id: Option<String>,
     },
     ReceiveStreamEnd(u32),            // End of streaming response for thread_id
+    /// Toggle collapse/expand of a tool call indicator
+    ToggleToolExpansion { tool_call_id: String },
+    /// Toggle show full vs truncated tool output for a tool call
+    ToggleToolShowMore { tool_call_id: String },
     // Using UpdateConversation for thread history
     // --- END NEW WebSocket Received Messages ---
 
