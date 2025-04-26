@@ -23,14 +23,15 @@ Why do we need it?
 
 ```bash
 # From the repository root
-uv run python tools/mcp_test_runner/server.py
+python tools/mcp_test_runner/server.py
 
 # You should immediately see the header:
 # mcp:1
 
 # 👉  The process now waits for newline-delimited JSON requests on stdin.  For
 # a manual test you could open another terminal and do:
-echo '{"id":"1","tool":"run_backend_tests","params":{}}' | nc -U /proc/$(pgrep -f mcp_test_runner)/fd/0
+# simple stdin test:
+echo '{"id":"1","tool":"run_backend_tests","params":{}}' | python tools/mcp_test_runner/server.py
 ```
 
 In practice you **never** have to talk to the server by hand – modern IDEs
