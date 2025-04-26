@@ -180,7 +180,7 @@ pub struct ApiMessage {
     pub agent_id: u32,
     pub role: String,
     pub content: String,
-    pub created_at: Option<String>,
+    pub timestamp: Option<String>,
 }
 
 /// ApiMessageCreate is used when creating a new message
@@ -223,7 +223,7 @@ pub struct ApiThreadMessage {
     pub thread_id: u32,
     pub role: String,
     pub content: String,
-    pub created_at: Option<String>,
+    pub timestamp: Option<String>,
     // New fields for tool message display
     #[serde(default)]
     pub message_type: Option<String>,  // "tool_output" or "assistant_message"

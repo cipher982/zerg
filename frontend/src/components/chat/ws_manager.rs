@@ -16,7 +16,7 @@ fn convert_network_message_to_model(network_msg: ThreadMessageData) -> ApiThread
         thread_id: network_msg.thread_id as u32,
         role: network_msg.role,
         content: network_msg.content,
-        created_at: network_msg.timestamp,     // Use timestamp as created_at
+        timestamp: network_msg.timestamp,
         // Default fields for tool‐message metadata
         message_type: None,
         tool_name: None,
