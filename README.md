@@ -461,18 +461,18 @@ I read every top‑level source file and the entire test‑suite so that what fo
   * creates tables, mounts routers, starts/stops SchedulerService.
 
 ### 2.1 Persistence layer
-- backend/zerg/app/database.py
+- backend/zerg/database.py
   - Standard SQLAlchemy engine/session helpers.
-- backend/zerg/app/models/models.py
+- backend/zerg/models/models.py
   - Three tables: Agent, Thread, *Message (two subclasses for agent‑ and thread‑scope but share columns).
   - All models expose JSON columns for flexible config.
 
 ### 2.2 CRUD helpers (thin)
-- backend/zerg/app/crud/crud.py
+- backend/zerg/crud/crud.py
   - Pure SQLAlchemy operations, no business logic.
 
 ### 2.3 Event bus
-- backend/zerg/app/events/event_bus.py
+- backend/zerg/events/event_bus.py
   - Very small async pub/sub written from scratch.
   - Decorator publish_event(event_type) lets router functions emit automatically.
 
@@ -485,7 +485,7 @@ I read every top‑level source file and the entire test‑suite so that what fo
 All routers are version‑less but live under prefix "/api".
 
 ### 2.5 Agent runtime
-- backend/zerg/app/agents.py
+- backend/zerg/agents.py
   - Wraps an Agent row and hides LangGraph plumbing.
   - get_or_create_thread() lazily builds Thread.
   - process_message() builds a LangGraph state machine:
@@ -494,14 +494,14 @@ All routers are version‑less but live under prefix "/api".
   - Supports streaming via generator: yields chunks to caller.
 
 ### 2.6 SchedulerService
-- backend/zerg/app/services/scheduler_service.py
+- backend/zerg/services/scheduler_service.py
   - AsyncIOScheduler.
   - On startup loads all agents where run_on_schedule=True and schedule ≠ NULL, converts cron strings to CronTrigger.
   - Subscribes to agent‑events so schedule stays in sync.
   - run_agent_task(): gets (or creates) a thread, injects system message, then calls process_message(stream=False).
 
 ### 2.7 WebSocket layer
-- backend/zerg/app/websocket/manager.py
+- backend/zerg/websocket/manager.py
   - Keeps {client_id → websocket}, {topic → set(client_id)}.
   - Topics are plain strings: "agent:{id}", "thread:{id}", etc.
   - EventBus handlers turn internal events into outbound JSON.
