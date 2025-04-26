@@ -1,6 +1,6 @@
 # Project Context & Roadmap: Zerg Automation Platform
 
-**Document Purpose:** Provides essential context, current status, roadmap, and development guidelines for the Zerg project, intended for both human developers and AI coding assistants.
+**Document Purpose:** Provides essential context, current status, roadmap, development guidelines, and future ideas for the Zerg project, intended for both human developers and AI coding assistants.
 
 **Last Updated:** 2025-05-03 *(Remember to update this date regularly!)*
 
@@ -17,7 +17,7 @@
     *   A central `EventBus` facilitates decoupled communication between services.
     *   A WebSocket Hub (`ws_manager`) pushes real-time updates (DB changes, agent streaming) to connected frontends based on topic subscriptions.
     *   The `AgentService` uses LangGraph to execute agent logic (currently single-node, planned for multi-node DAGs).
-    *   The `SchedulerService` manages cron-based job scheduling via APScheduler.
+    *   The `SchedulerService` manages cron-based job scheduling via APScheduler. *(Note: For future scaling beyond a single process, consider task queues like Celery or RQ - see Sec 5).*
 
 ---
 
@@ -72,13 +72,13 @@
     *   *Summary:* Allow external systems (Zapier, GitHub Actions, etc.) to trigger agent runs via unique webhook URLs.
     *   *Status Breakdown:* Backend API (Create/Fire ✅), Frontend UI (List ✅, Create/Delete ❌), Backend Polish (Delete API ❌, HMAC ❌), Canvas Node ❌.
 *   **M2: “Workflow Execution Engine”** (Status: ❌ Not Started)
-    *   *Summary:* Execute multi-step workflows defined on the Canvas (DAGs of Trigger, Agent, Tool, Condition nodes). Persist Canvas JSON. Basic runtime visualization.
+    *   *Summary:* Execute multi-step workflows defined on the Canvas (DAGs of Trigger, Agent, Tool, Condition nodes). Persist Canvas JSON. Basic runtime visualization. *Scalability Note: May require evaluating dedicated task queues (Celery/RQ) if APScheduler proves insufficient for high concurrency.*
 *   **M3: “Toolbox Expansion”** (Status: ❌ Not Started)
-    *   *Summary:* Ship initial set of deterministic "Tool" nodes (e.g., Slack message, Email send/fetch, GitHub issue). Define Tool node contract.
+    *   *Summary:* Ship initial set of deterministic "Tool" nodes (e.g., Slack message, Email send/fetch, GitHub issue, basic HTTP Request). Define Tool node contract (input/output schema, execution guarantees). *Future Enhancement: Consider tool-specific access controls.*
 *   **M4: “Multi‑tenant & Auth”** (Status: ❌ Not Started)
-    *   *Summary:* Implement user authentication (e.g., Auth0/Clerk JWT) and data isolation (`workspace_id`) to support multiple users securely.
+    *   *Summary:* Implement user authentication (e.g., Auth0/Clerk JWT) and data isolation (`workspace_id`) to support multiple users securely. *This may include managing permissions for accessing specific tools or agents.*
 *   **M5: “Observability & Cost”** (Status: ❌ Not Started)
-    *   *Summary:* Track key metrics per agent run (token usage, cost, duration, errors) and expose them via API and/or dashboard.
+    *   *Summary:* Track key metrics per agent run (token usage, cost, duration, errors) and expose them via API and/or dashboard analytics panel.
 
 **Prioritization Rationale:**
 
@@ -170,11 +170,13 @@
 *   **Workflow Definition:** Canvas graph structure will be stored as JSON in a dedicated `Agent.workflow_definition` column (planned). Schema definitions should exist in both Python (Pydantic) and Rust (Serde) for consistency, ideally generated or kept closely in sync. Plan for schema versioning early.
 *   **Immutability:** Treat `AgentRun` and `Message` records as immutable logs of past activity. Derive analytics or summaries offline/on-demand rather than modifying historical records.
 *   **Rust/WASM:** Use `serde` for serialization and `serde_wasm_bindgen` to pass complex types between Rust frontend and JS/backend (via JSON). Frontend node types for the Canvas should map clearly to backend execution logic, likely using enums in Rust.
+*   **Task Execution & Scaling:** Currently uses APScheduler for cron jobs and direct execution for triggered/manual runs. For high-volume or long-running tasks in the future (esp. post-M2), consider integrating a distributed task queue like [Celery](https://docs.celeryproject.org/) or [Redis Queue (RQ)](https://python-rq.org/) with dedicated worker processes.
 
 **Implementation Hints:**
 *   Keep the `EventBus` central for decoupling. New features (like Triggers) should publish relevant events. Services (like `SchedulerService`) listen for events they care about.
 *   Use Pydantic models rigorously on the backend for validating the structure of the incoming Canvas JSON before saving/executing.
 *   In the Rust Canvas editor, represent each distinct node type (Agent, Tool, Trigger, Condition) as a variant of a Rust `enum`. This makes pattern matching and serialization clean.
+*   When implementing Tools (M3), consider simple, common examples first like sending email (`smtplib`), making HTTP requests (`httpx`), or posting to Slack.
 
 ---
 
@@ -184,33 +186,47 @@
 *   **Run:** A single, discrete execution instance of an Agent or a Workflow, operating against a specific Thread. Can be triggered manually, by schedule, or by an external event (webhook).
 *   **Trigger node:** A node type on the Canvas that initiates a workflow run based on an external event (e.g., incoming Webhook, new email matching criteria, Kafka message, cron schedule). It produces an initial data payload for the workflow.
 *   **Agent node:** A node type on the Canvas that typically consumes context from the associated Thread, interacts with a Language Model (LLM) based on its configuration and input, and produces new messages back to the Thread. Streaming output originates here.
-*   **Tool node:** A node type on the Canvas representing a deterministic function or API call (e.g., send a Slack message, create a Jira ticket, fetch data from a database, read an email via IMAP). Tools generally do not call LLMs directly, should execute quickly (<10s), and return structured data (usually JSON).
+*   **Tool node:** A node type on the Canvas representing a deterministic function or API call (e.g., send a Slack message, create a Jira ticket, fetch data from a database, read an email via IMAP, simple HTTP GET/POST). Tools generally do not call LLMs directly, should execute quickly (<10s), and return structured data (usually JSON).
 *   **Condition node:** A node type on the Canvas that allows branching in the workflow based on evaluating data from the preceding node (e.g., using a simple JS/Python predicate: `input.value > 10`).
 *   **Edge:** A connection on the Canvas representing the flow of data and/or control between two nodes.
 
 ---
 
-## 7. Status History / Log
+## 7. Future Considerations & Idea Backlog
+
+*(This section captures valuable ideas beyond the current M0-M5 roadmap for potential future implementation.)*
+
+*   **Enhanced Output Presentation:**
+    *   **Structured Output Panels:** Allow nodes (Agents, Tools) to output structured data (e.g., JSON, potentially simple HTML) and render it appropriately in the UI (e.g., interactive tables, formatted lists, simple charts) instead of just raw text.
+    *   **"Result Panel" Concept:** Visually distinguish the final, summarized result of a workflow run from the detailed, step-by-step execution log (Thread Log) in the UI.
+*   **Data Handling & Usability:**
+    *   **Export Features:** Allow users to export Thread logs or final results (e.g., as JSON, CSV, plain text).
+    *   **Automatic Summaries:** Add an optional feature (perhaps a dedicated "Summarize" tool node or button) to generate a concise summary of a long thread using an LLM call.
+*   **Tooling & Orchestration:**
+    *   **Notifications:** Implement a dedicated "Notification" tool (or use Email/Slack tools) to alert users on workflow completion, failure, or specific events.
+    *   **Multi-Agent Orchestration:** Explore enabling one agent/workflow to trigger another, allowing for complex chaining (requires careful design regarding context passing, error handling, and cycle detection).
+*   **Advanced Configuration:**
+    *   **Fine-Tuning Support:** Allow users to specify custom fine-tuned model identifiers for Agent nodes (if using platforms like OpenAI that support this).
+*   **UI/UX Polish:**
+    *   Add tooltips for icons and controls.
+    *   Implement smoother animations or transitions in the Canvas editor.
+    *   Improve responsive design for different screen sizes.
+
+---
+
+## 8. Status History / Log
 
 *(Older status updates and detailed completion notes are archived here)*
 
 **2025-04-21 - M0 Completed / M1 Started**
-
-*   **Work Completed for M0 (Scheduling UX & Thread Persistence):**
-    *   **Frontend Models:** `ApiAgent`, `ApiAgentCreate`, `ApiAgentUpdate` structs in Rust now include `schedule: Option<String>`, `run_on_schedule: bool`, `next_run_at: Option<String>`, `last_run_at: Option<String>`.
-    *   **Frontend UI (Display):** Dashboard agent cards/table now render "Next run: ..." / "Last run: ..." using local timezone formatting (via `chrono` crate). Handles null values gracefully.
-    *   **Frontend UI (Edit):** Agent modal (via Dashboard Edit button) and Canvas side-panel (when Agent node selected) now include:
-        *   A text input field for the `schedule` cron expression.
-        *   An "Enable schedule" toggle switch bound to the `run_on_schedule` boolean field.
-    *   **Frontend State & Actions:**
-        *   Added `Message` variants like `SetSchedule(AgentId, String)`, `ToggleRunOnSchedule(AgentId, bool)`.
-        *   Augmented `update.rs` logic to handle these messages, updating local state optimistically or on API success.
-        *   Added `Command::SaveAgentSchedule(AgentId, ApiAgentUpdate)` which is executed by the command handler.
-        *   The command executor now performs a `PATCH /api/agents/{id}` request, sending only the `schedule` and `run_on_schedule` fields in the `ApiAgentUpdate` payload.
-    *   **Frontend Real-time Updates:** The `TopicManager`'s reducer for `AGENT_UPDATED` WebSocket events now correctly merges incoming `next_run_at` and `last_run_at` fields into the local `AppState`, ensuring the UI updates live after scheduled runs occur.
-    *   **Backend:** Ensured `AgentService.run_agent_task` consistently creates or retrieves a `Thread` record for *every* run, regardless of trigger source (manual, schedule).
-    *   **Testing:** Added frontend component tests for display/edit UI. Added backend tests verifying `PATCH /agents/{id}` updates the schedule fields correctly and that the scheduler picks up changes. Verified threads are created.
+*   *(Details of work completed for M0 - Scheduling UX & Thread Persistence - remain the same as in the previous version)*
+    *   **Frontend Models:** `ApiAgent` structs updated...
+    *   **Frontend UI (Display):** Dashboard cards show next/last run...
+    *   **Frontend UI (Edit):** Agent modal / Canvas panel have cron input & toggle...
+    *   **Frontend State & Actions:** `Message`/`Command`/`update.rs` logic added...
+    *   **Frontend Real-time Updates:** `TopicManager` merges `AGENT_UPDATED` events...
+    *   **Backend:** `AgentService.run_agent_task` ensures Thread creation...
+    *   **Testing:** Relevant frontend/backend tests added/updated...
 
 **2025-05-02 - Status Review Snapshot**
-
 *   *(Content of original Section 7 "Status review – 02 May 2025" was integrated into Section 2 "Current System State" above)*
