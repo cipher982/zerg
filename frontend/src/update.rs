@@ -1382,45 +1382,83 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // Mark thread as streaming in local state
             state.streaming_threads.insert(thread_id);
 
-            // Create a new message entry for the assistant's response
-            let now = chrono::Utc::now().to_rfc3339();
-            let assistant_message = ApiThreadMessage {
-                id: None, // ID might be set later or not needed for streaming display
-                thread_id,
-                role: "assistant".to_string(),
-                content: "".to_string(), // Start with empty content
-                created_at: Some(now),
-            };
-
-            // Add the new message to the state
-            let messages = state.thread_messages.entry(thread_id).or_default();
-            messages.push(assistant_message);
-
-            // If this is the current thread, trigger an immediate UI update 
-            // to show the new (empty) assistant message bubble.
-            if state.current_thread_id == Some(thread_id) {
-                let messages_clone = messages.clone();
-                state.pending_ui_updates = Some(Box::new(move || {
-                    dispatch_global_message(Message::UpdateConversation(messages_clone));
-                }));
-            }
-
-            web_sys::console::log_1(&format!("Stream started for thread {}: Created empty assistant message.", thread_id).into());
+            // Mark thread as streaming; assistant bubble will be created on first content chunk
+            web_sys::console::log_1(&format!("Stream started for thread {}.", thread_id).into());
         },
 
-        Message::ReceiveStreamChunk { thread_id, content } => {
-            // Append chunk to the last message if it's for the current thread
-            if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
+        Message::ReceiveStreamChunk { thread_id, content, chunk_type, tool_name, tool_call_id } => {
+            if chunk_type.as_deref() == Some("tool_output") {
+                // For tool messages, create a new standalone message instead of appending
+                let now = chrono::Utc::now().to_rfc3339();
+                let tool_message = ApiThreadMessage {
+                    id: None,
+                    thread_id,
+                    role: "tool".to_string(),
+                    content: content.clone(),
+                    created_at: Some(now),
+                    message_type: chunk_type,
+                    tool_name,
+                    tool_call_id,
+                };
+                
+                // Insert the new tool message before the assistant bubble (which is the last in the list)
+                let messages = state.thread_messages.entry(thread_id).or_default();
+                if messages.is_empty() {
+                    // Fallback: no assistant bubble yet, just push
+                    messages.push(tool_message);
+                } else {
+                    // Preserve assistant message at end by inserting before it
+                    let insert_idx = messages.len().saturating_sub(1);
+                    messages.insert(insert_idx, tool_message);
+                }
+                
+                web_sys::console::log_1(&format!("Added tool message for thread {}: {}", thread_id, content).into());
+            } else {
+                // For assistant messages: append to existing assistant bubble or start a new one
+                let messages = state.thread_messages.entry(thread_id).or_default();
                 if let Some(last_message) = messages.last_mut() {
-                    last_message.content.push_str(&content);
-
-                    // If this is the current thread, update the conversation UI
-                    if state.current_thread_id == Some(thread_id) {
-                        let messages_clone = messages.clone();
-                        state.pending_ui_updates = Some(Box::new(move || {
-                            dispatch_global_message(Message::UpdateConversation(messages_clone));
-                        }));
+                    if last_message.role == "assistant" {
+                        // Append to existing assistant bubble
+                        last_message.content.push_str(&content);
+                    } else {
+                        // Previous message was not assistant; start a new assistant bubble
+                        let now = chrono::Utc::now().to_rfc3339();
+                        let assistant_message = ApiThreadMessage {
+                            id: None,
+                            thread_id,
+                            role: "assistant".to_string(),
+                            content: content.clone(),
+                            created_at: Some(now),
+                            message_type: chunk_type.clone(),
+                            tool_name: None,
+                            tool_call_id: None,
+                        };
+                        messages.push(assistant_message);
                     }
+                } else {
+                    // No messages yet; first assistant message
+                    let now = chrono::Utc::now().to_rfc3339();
+                    let assistant_message = ApiThreadMessage {
+                        id: None,
+                        thread_id,
+                        role: "assistant".to_string(),
+                        content: content.clone(),
+                        created_at: Some(now),
+                        message_type: chunk_type.clone(),
+                        tool_name: None,
+                        tool_call_id: None,
+                    };
+                    messages.push(assistant_message);
+                }
+            }
+            
+            // If this is the current thread, update the conversation UI
+            if state.current_thread_id == Some(thread_id) {
+                if let Some(messages) = state.thread_messages.get(&thread_id) {
+                    let messages_clone = messages.clone();
+                    state.pending_ui_updates = Some(Box::new(move || {
+                        dispatch_global_message(Message::UpdateConversation(messages_clone));
+                    }));
                 }
             }
         },
@@ -1614,6 +1652,33 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     }
                 }
             })));
+
+            needs_refresh = false;
+        },
+
+        // ------------------------------------------------------------------
+        // Agent Debug Modal – tab switching
+        // ------------------------------------------------------------------
+
+        Message::SetAgentDebugTab(tab) => {
+            if let Some(pane) = state.agent_debug_pane.as_mut() {
+                // Only trigger UI update if the tab actually changed to avoid
+                // unnecessary re-renders.
+                if pane.active_tab != tab {
+                    pane.active_tab = tab.clone();
+
+                    commands.push(Command::UpdateUI(Box::new(|| {
+                        if let Some(window) = web_sys::window() {
+                            if let Some(doc) = window.document() {
+                                crate::state::APP_STATE.with(|s| {
+                                    let app_state = s.borrow();
+                                    let _ = crate::components::agent_debug_modal::render_agent_debug_modal(&app_state, &doc);
+                                });
+                            }
+                        }
+                    })));
+                }
+            }
 
             needs_refresh = false;
         },

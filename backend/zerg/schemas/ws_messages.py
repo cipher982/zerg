@@ -114,6 +114,10 @@ class StreamChunkMessage(BaseMessage):
     type: MessageType = MessageType.STREAM_CHUNK
     thread_id: int
     content: str
+    # Fields to identify message source
+    chunk_type: str  # "tool_output" or "assistant_message"
+    tool_name: Optional[str] = None  # Required for tool_output, None for assistant_message
+    tool_call_id: Optional[str] = None
 
 
 class StreamEndMessage(BaseMessage):
