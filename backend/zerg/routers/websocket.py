@@ -15,10 +15,10 @@ from fastapi import WebSocketDisconnect
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
-from zerg.app.database import default_session_factory
-from zerg.app.schemas.ws_messages import ErrorMessage
-from zerg.app.websocket.handlers import dispatch_message
-from zerg.app.websocket.manager import topic_manager
+from zerg.database import default_session_factory
+from zerg.schemas.ws_messages import ErrorMessage
+from zerg.websocket.handlers import dispatch_message
+from zerg.websocket.manager import topic_manager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

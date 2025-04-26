@@ -6,11 +6,11 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
 
-from zerg.app.events import EventType
-from zerg.app.events import event_bus
-from zerg.app.models.models import Agent
-from zerg.app.models.models import Thread
-from zerg.app.websocket.manager import TopicConnectionManager
+from zerg.events import EventType
+from zerg.events import event_bus
+from zerg.models.models import Agent
+from zerg.models.models import Thread
+from zerg.websocket.manager import TopicConnectionManager
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

@@ -14,9 +14,9 @@ from unittest.mock import patch
 
 import pytest
 
-from zerg.app.events import EventType
-from zerg.app.models.models import Agent
-from zerg.app.services.scheduler_service import SchedulerService
+from zerg.events import EventType
+from zerg.models.models import Agent
+from zerg.services.scheduler_service import SchedulerService
 
 
 class TestAgentErrorHandling:
@@ -59,9 +59,9 @@ class TestAgentErrorHandling:
         scheduler.scheduler.get_job = MagicMock(return_value=None)
         return scheduler
 
-    @patch("zerg.app.services.scheduler_service.crud")
-    @patch("zerg.app.services.scheduler_service.AgentManager")
-    @patch("zerg.app.services.scheduler_service.event_bus")
+    @patch("zerg.services.scheduler_service.crud")
+    @patch("zerg.services.scheduler_service.AgentManager")
+    @patch("zerg.services.scheduler_service.event_bus")
     async def test_scheduler_successful_run(
         self, mock_event_bus, mock_agent_manager, mock_crud, scheduler_service, mock_db_session, mock_agent
     ):
@@ -94,9 +94,9 @@ class TestAgentErrorHandling:
         assert "idle" in str(kwargs["args"][1]["status"])
         assert kwargs["args"][1]["last_error"] is None
 
-    @patch("zerg.app.services.scheduler_service.crud")
-    @patch("zerg.app.services.scheduler_service.AgentManager")
-    @patch("zerg.app.services.scheduler_service.event_bus")
+    @patch("zerg.services.scheduler_service.crud")
+    @patch("zerg.services.scheduler_service.AgentManager")
+    @patch("zerg.services.scheduler_service.event_bus")
     async def test_scheduler_error_handling(
         self, mock_event_bus, mock_agent_manager, mock_crud, scheduler_service, mock_db_session, mock_agent
     ):
@@ -132,13 +132,13 @@ class TestAgentErrorHandling:
         assert "error" in str(kwargs["args"][1]["status"])
         assert error_message in str(kwargs["args"][1]["last_error"])
 
-    @patch("zerg.app.routers.agents.crud")
-    @patch("zerg.app.routers.agents.AgentManager")
-    @patch("zerg.app.routers.agents.event_bus")
+    @patch("zerg.routers.agents.crud")
+    @patch("zerg.routers.agents.AgentManager")
+    @patch("zerg.routers.agents.event_bus")
     async def test_manual_run_error_handling(self, mock_event_bus, mock_agent_manager, mock_crud):
         """Test that errors during manual runs properly update agent status and error message."""
         # Import locally to avoid circular imports
-        from zerg.app.routers.agents import run_agent_task
+        from zerg.routers.agents import run_agent_task
 
         # Setup
         agent_id = 1
@@ -186,13 +186,13 @@ class TestAgentErrorHandling:
         else:
             pytest.fail("No error status update was published to the event bus")
 
-    @patch("zerg.app.routers.agents.crud")
-    @patch("zerg.app.routers.agents.AgentManager")
-    @patch("zerg.app.routers.agents.event_bus")
+    @patch("zerg.routers.agents.crud")
+    @patch("zerg.routers.agents.AgentManager")
+    @patch("zerg.routers.agents.event_bus")
     async def test_manual_run_success(self, mock_event_bus, mock_agent_manager, mock_crud):
         """Test that successful manual runs properly update agent status and clear errors."""
         # Import locally to avoid circular imports
-        from zerg.app.routers.agents import run_agent_task
+        from zerg.routers.agents import run_agent_task
 
         # Setup
         agent_id = 1

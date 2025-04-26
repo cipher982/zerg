@@ -13,11 +13,11 @@ from datetime import datetime
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from zerg.app.agents import AgentManager
-from zerg.app.crud import crud
-from zerg.app.database import default_session_factory
-from zerg.app.events import EventType
-from zerg.app.events.event_bus import event_bus
+from zerg.agents import AgentManager
+from zerg.crud import crud
+from zerg.database import default_session_factory
+from zerg.events import EventType
+from zerg.events.event_bus import event_bus
 
 logger = logging.getLogger(__name__)
 

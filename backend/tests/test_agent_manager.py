@@ -11,10 +11,10 @@ from unittest.mock import patch
 
 import pytest
 
-from zerg.app.agents import AgentManager
-from zerg.app.models.models import Agent
-from zerg.app.models.models import Thread
-from zerg.app.models.models import ThreadMessage
+from zerg.agents import AgentManager
+from zerg.models.models import Agent
+from zerg.models.models import Thread
+from zerg.models.models import ThreadMessage
 
 
 @pytest.fixture
@@ -31,14 +31,14 @@ def mock_llm():
 @pytest.fixture
 def agent_manager(sample_agent: Agent, mock_llm):
     """Create an AgentManager instance with a mock LLM"""
-    with patch("zerg.app.agents.ChatOpenAI", return_value=mock_llm):
+    with patch("zerg.agents.ChatOpenAI", return_value=mock_llm):
         agent_manager = AgentManager(sample_agent)
         return agent_manager
 
 
 def test_agent_manager_init(sample_agent: Agent):
     """Test initializing an AgentManager instance"""
-    with patch("zerg.app.agents.ChatOpenAI") as mock_chat_openai:
+    with patch("zerg.agents.ChatOpenAI") as mock_chat_openai:
         agent_manager = AgentManager(sample_agent)
         assert agent_manager.agent_model == sample_agent
         # Check that the LLM was initialized with the correct model
@@ -49,7 +49,7 @@ def test_agent_manager_init(sample_agent: Agent):
 
 def test_build_graph(agent_manager: AgentManager):
     """Test building a LangGraph state machine"""
-    with patch("zerg.app.agents.StateGraph") as mock_state_graph:
+    with patch("zerg.agents.StateGraph") as mock_state_graph:
         # Setup the mock graph builder: get the builder mock from return_value
         mock_builder = mock_state_graph.return_value
 
@@ -91,7 +91,7 @@ def test_chatbot_node(agent_manager: AgentManager, mock_llm):
 
 def test_get_or_create_thread_new(db_session, agent_manager: AgentManager):
     """Test creating a new thread"""
-    with patch("zerg.app.crud.crud") as mock_crud:
+    with patch("zerg.crud.crud") as mock_crud:
         # Mock crud.get_thread to return None (no existing thread)
         mock_crud.get_thread.return_value = None
         # Mock crud.get_active_thread to return None (no active thread)
@@ -122,7 +122,7 @@ def test_get_or_create_thread_new(db_session, agent_manager: AgentManager):
 
 def test_get_or_create_thread_existing(db_session, agent_manager: AgentManager):
     """Test getting an existing thread"""
-    with patch("zerg.app.crud.crud") as mock_crud:
+    with patch("zerg.crud.crud") as mock_crud:
         # Create a mock thread
         mock_thread = MagicMock(spec=Thread)
         mock_thread.id = 1
@@ -144,7 +144,7 @@ def test_get_or_create_thread_existing(db_session, agent_manager: AgentManager):
 
 def test_add_system_message(db_session, agent_manager: AgentManager):
     """Test adding a system message to a thread"""
-    with patch("zerg.app.crud.crud") as mock_crud:
+    with patch("zerg.crud.crud") as mock_crud:
         # Create a mock thread
         mock_thread = MagicMock(spec=Thread)
         mock_thread.id = 1
@@ -167,7 +167,7 @@ def test_add_system_message(db_session, agent_manager: AgentManager):
 
 def test_add_system_message_with_existing_messages(db_session, agent_manager: AgentManager):
     """Test not adding a system message when messages already exist"""
-    with patch("zerg.app.crud.crud") as mock_crud:
+    with patch("zerg.crud.crud") as mock_crud:
         # Create a mock thread
         mock_thread = MagicMock(spec=Thread)
         mock_thread.id = 1
@@ -187,7 +187,7 @@ def test_add_system_message_with_existing_messages(db_session, agent_manager: Ag
 
 def test_process_message(db_session, agent_manager: AgentManager, mock_llm):
     """Test processing a message through the LangGraph agent"""
-    with patch("zerg.app.crud.crud") as mock_crud, patch.object(agent_manager, "_build_graph") as mock_build_graph:
+    with patch("zerg.crud.crud") as mock_crud, patch.object(agent_manager, "_build_graph") as mock_build_graph:
         # Create mock objects
         mock_thread = MagicMock(spec=Thread)
         mock_thread.id = 1
@@ -251,7 +251,7 @@ def test_process_message(db_session, agent_manager: AgentManager, mock_llm):
 
 def test_process_message_with_tool_calls(db_session, agent_manager: AgentManager):
     """Test processing a message with tool calls"""
-    with patch("zerg.app.crud.crud") as mock_crud, patch.object(agent_manager, "_build_graph") as mock_build_graph:
+    with patch("zerg.crud.crud") as mock_crud, patch.object(agent_manager, "_build_graph") as mock_build_graph:
         # Create mock objects
         mock_thread = MagicMock(spec=Thread)
         mock_thread.id = 1

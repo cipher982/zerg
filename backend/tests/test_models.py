@@ -2,11 +2,11 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from zerg.app.models.models import Agent
-from zerg.app.models.models import AgentMessage
-from zerg.app.schemas.schemas import AgentCreate
-from zerg.app.schemas.schemas import AgentUpdate
-from zerg.app.schemas.schemas import MessageCreate
+from zerg.models.models import Agent
+from zerg.models.models import AgentMessage
+from zerg.schemas.schemas import AgentCreate
+from zerg.schemas.schemas import AgentUpdate
+from zerg.schemas.schemas import MessageCreate
 
 
 def test_agent_model(db_session: Session):

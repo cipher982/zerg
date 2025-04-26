@@ -3,9 +3,9 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from zerg.app.events import EventType
-from zerg.app.events import event_bus
-from zerg.app.models import Agent
+from zerg.events import EventType
+from zerg.events import event_bus
+from zerg.models import Agent
 
 
 @pytest.fixture

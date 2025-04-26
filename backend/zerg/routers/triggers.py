@@ -15,13 +15,13 @@ from fastapi import Path
 from fastapi import status
 from sqlalchemy.orm import Session
 
-from zerg.app.crud import crud
-from zerg.app.database import get_db
-from zerg.app.events import EventType
-from zerg.app.events import event_bus
-from zerg.app.schemas.schemas import Trigger as TriggerSchema
-from zerg.app.schemas.schemas import TriggerCreate
-from zerg.app.services.scheduler_service import scheduler_service
+from zerg.crud import crud
+from zerg.database import get_db
+from zerg.events import EventType
+from zerg.events import event_bus
+from zerg.schemas.schemas import Trigger as TriggerSchema
+from zerg.schemas.schemas import TriggerCreate
+from zerg.services.scheduler_service import scheduler_service
 
 logger = logging.getLogger(__name__)
 

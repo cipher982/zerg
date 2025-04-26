@@ -7,7 +7,7 @@ from typing import Union
 
 from pydantic import BaseModel
 
-from zerg.app.schemas.schemas import Agent  # Use absolute import for Agent schema
+from zerg.schemas.schemas import Agent  # Use absolute import for Agent schema
 
 
 class MessageType(str, Enum):

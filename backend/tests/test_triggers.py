@@ -1,4 +1,4 @@
-from zerg.app.services.scheduler_service import scheduler_service
+from zerg.services.scheduler_service import scheduler_service
 
 
 def test_webhook_trigger_flow(client):
