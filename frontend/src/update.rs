@@ -1397,6 +1397,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     tool_name,
                     tool_call_id,
                     tool_input: None,
+                    parent_id: None,
                 };
                 
                 // Get the messages for this thread and just push the new tool message
@@ -1424,6 +1425,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                             tool_name: None,
                             tool_call_id: None,
                             tool_input: None,
+                            parent_id: None,
                         };
                         messages.push(assistant_message);
                     }
@@ -1440,6 +1442,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         tool_name: None,
                         tool_call_id: None,
                         tool_input: None,
+                        parent_id: None,
                     };
                     messages.push(assistant_message);
                 }

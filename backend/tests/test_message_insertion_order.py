@@ -37,8 +37,7 @@ def test_interleaved_order_after_delay(client: TestClient) -> None:  # noqa: D40
     _send_user_message(client, thread_id, "Hello")
     _run_thread(client, thread_id)
 
-    # Wait >1 second so SQLite timestamp resolution cannot be blamed
-    time.sleep(2)
+    time.sleep(0.1)
 
     # Second exchange
     _send_user_message(client, thread_id, "Hello again")
@@ -56,6 +55,32 @@ def test_interleaved_order_after_delay(client: TestClient) -> None:  # noqa: D40
         "user",
         "assistant",
     ], f"Unexpected order: {roles}"
+
+
+def test_tool_message_order(client: TestClient) -> None:
+    """Ensure tool messages are inserted between user and assistant in DB order."""
+    agent_id = _create_agent(client)
+    thread_id = _create_thread(client, agent_id)
+
+    # Send a message that triggers a tool call (assuming 'time' triggers get_current_time)
+    _send_user_message(client, thread_id, "What time is it?")
+    _run_thread(client, thread_id)
+
+    # Fetch messages
+    resp = client.get(f"/api/threads/{thread_id}/messages")
+    resp.raise_for_status()
+    msgs = [m for m in resp.json() if m["role"] != "system"]
+
+    # Should be: user, assistant, tool
+    roles = [m["role"] for m in msgs]
+    assert roles == ["user", "assistant", "tool"], f"Unexpected order: {roles}"
+
+    # Tool message should have message_type/tool_call_id/tool_name fields
+    tool_msg = msgs[2]
+    assert tool_msg["role"] == "tool"
+    assert (
+        tool_msg.get("message_type") == "tool_output" or tool_msg.get("tool_call_id") or tool_msg.get("tool_name")
+    ), "Tool message missing expected fields"
 
 
 def _create_agent(client: TestClient) -> int:

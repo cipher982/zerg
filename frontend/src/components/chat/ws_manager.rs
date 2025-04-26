@@ -22,6 +22,7 @@ fn convert_network_message_to_model(network_msg: ThreadMessageData) -> ApiThread
         tool_name: None,
         tool_call_id: None,
         tool_input: None,
+        parent_id: None,
     }
 }
 

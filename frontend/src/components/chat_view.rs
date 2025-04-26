@@ -376,87 +376,14 @@ pub fn update_conversation_ui(
             }
         });
         
+        // Build a map from parent_id to tool messages for grouping
+        let mut tool_messages_by_parent: std::collections::HashMap<Option<u32>, Vec<ApiThreadMessage>> = std::collections::HashMap::new();
+        for msg in sorted_messages.iter().filter(|m| m.role == "tool" && m.parent_id.is_some()) {
+            tool_messages_by_parent.entry(msg.parent_id).or_default().push(msg.clone());
+        }
+
         // Display thread messages, but filter out system messages
-        for message in sorted_messages.iter().filter(|m| m.role != "system") {
-            // Handle tool call messages with a collapsible indicator
-            if message.role == "tool" || message.message_type.as_deref() == Some("tool_output") {
-                // Determine UI state for this tool call
-                let tool_call_id = message.tool_call_id.clone().unwrap_or_default();
-                let (expanded, show_full) = APP_STATE.with(|s| {
-                    let state = s.borrow();
-                    state.tool_ui_states.get(&tool_call_id)
-                        .map(|ts| (ts.expanded, ts.show_full))
-                        .unwrap_or((false, false))
-                });
-                // Create the collapsed indicator
-                let indicator = document.create_element("div")?;
-                indicator.set_class_name("tool-indicator");
-                if expanded {
-                    // Add expanded class for tool indicator
-                    indicator.set_class_name("tool-indicator expanded");
-                }
-                indicator.set_attribute("data-tool-call-id", &tool_call_id)?;
-                let tool_name = message.tool_name.as_deref().unwrap_or("tool");
-                indicator.set_inner_html(&format!("🛠️ Tool Used: {} <span class=\"arrow\">▸</span>", tool_name));
-                // Click to expand/collapse
-                {
-                    let tcid = tool_call_id.clone();
-                    let click = Closure::wrap(Box::new(move |_e: web_sys::Event| {
-                        dispatch_global_message(Message::ToggleToolExpansion { tool_call_id: tcid.clone() });
-                    }) as Box<dyn FnMut(_)>);
-                    indicator.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
-                    click.forget();
-                }
-                messages_container.append_child(&indicator)?;
-                // If expanded, show details panel
-                if expanded {
-                    let details = document.create_element("div")?;
-                    details.set_class_name("tool-details");
-                    details.set_attribute("data-tool-call-id", &tool_call_id)?;
-                    // Tool name row
-                    let row_tool = document.create_element("div")?;
-                    row_tool.set_class_name("tool-detail-row");
-                    row_tool.set_inner_html(&format!("<strong>Tool:</strong> {}", tool_name));
-                    details.append_child(&row_tool)?;
-                    // Inputs row
-                    let input_val = message.tool_input.clone().unwrap_or_else(|| "None".to_string());
-                    let row_args = document.create_element("div")?;
-                    row_args.set_class_name("tool-detail-row");
-                    row_args.set_inner_html(&format!("<strong>Inputs:</strong> <pre>{}</pre>", input_val.replace("\n", "<br>")));
-                    details.append_child(&row_args)?;
-                    // Output row with truncation
-                    let full_output = message.content.clone();
-                    let truncated = full_output.chars().count() > 200;
-                    let output_text = if truncated && !show_full {
-                        full_output.chars().take(200).collect::<String>() + "..."
-                    } else {
-                        full_output.clone()
-                    };
-                    let row_out = document.create_element("div")?;
-                    row_out.set_class_name("tool-detail-row output-row");
-                    row_out.set_inner_html(&format!("<strong>Output:</strong> <pre>{}</pre>", output_text.replace("\n", "<br>")));
-                    details.append_child(&row_out)?;
-                    // Show more / show less toggle
-                    if truncated {
-                        let more = if show_full { "Show Less" } else { "Show More" };
-                        let toggle = document.create_element("span")?;
-                        toggle.set_class_name("show-more");
-                        // Use set_text_content for text nodes
-                        toggle.set_text_content(Some(more));
-                        let tcid2 = tool_call_id.clone();
-                        let click_more = Closure::wrap(Box::new(move |_e: web_sys::Event| {
-                            dispatch_global_message(Message::ToggleToolShowMore { tool_call_id: tcid2.clone() });
-                        }) as Box<dyn FnMut(_)>);
-                        toggle.add_event_listener_with_callback("click", click_more.as_ref().unchecked_ref())?;
-                        click_more.forget();
-                        details.append_child(&toggle)?;
-                    }
-                    messages_container.append_child(&details)?;
-                }
-                // Skip default rendering for tool messages
-                continue;
-            }
-            
+        for message in sorted_messages.iter().filter(|m| m.role != "system" && m.role != "tool") {
             // Create the container for user/assistant message bubble
             let message_element = document.create_element("div")?;
             // Set class based on message role and type (user vs assistant)
@@ -465,32 +392,96 @@ pub fn update_conversation_ui(
             } else {
                 "message assistant-message".to_string()
             };
-            
             message_element.set_class_name(&class_name);
-            
-            
             // Create content element
             let content = document.create_element("div")?;
             content.set_class_name("message-content");
             content.set_inner_html(&message.content.replace("\n", "<br>"));
-            
             // Create timestamp element
             let timestamp = document.create_element("div")?;
             timestamp.set_class_name("message-time");
-            
-            // Always use the timestamp, regardless of message state
             let time_text = format_timestamp(&message.timestamp.clone().unwrap_or_default());
-            
             timestamp.set_text_content(Some(&time_text));
-            
             // Add content and timestamp to message element
             message_element.append_child(&content)?;
             message_element.append_child(&timestamp)?;
-            
             // Add message to container
             messages_container.append_child(&message_element)?;
+
+            // If this is an assistant message, render any child tool messages
+            if message.role == "assistant" {
+                if let Some(id) = message.id {
+                    if let Some(tool_msgs) = tool_messages_by_parent.get(&Some(id)) {
+                        for tool_msg in tool_msgs {
+                            // Render tool message as before (collapsible indicator)
+                            let tool_call_id = tool_msg.tool_call_id.clone().unwrap_or_default();
+                            let (expanded, show_full) = APP_STATE.with(|s| {
+                                let state = s.borrow();
+                                state.tool_ui_states.get(&tool_call_id)
+                                    .map(|ts| (ts.expanded, ts.show_full))
+                                    .unwrap_or((false, false))
+                            });
+                            let indicator = document.create_element("div")?;
+                            indicator.set_class_name("tool-indicator");
+                            if expanded {
+                                indicator.set_class_name("tool-indicator expanded");
+                            }
+                            indicator.set_attribute("data-tool-call-id", &tool_call_id)?;
+                            let tool_name = tool_msg.tool_name.as_deref().unwrap_or("tool");
+                            indicator.set_inner_html(&format!("🛠️ Tool Used: {} <span class=\"arrow\">▸</span>", tool_name));
+                            {
+                                let tcid = tool_call_id.clone();
+                                let click = Closure::wrap(Box::new(move |_e: web_sys::Event| {
+                                    dispatch_global_message(Message::ToggleToolExpansion { tool_call_id: tcid.clone() });
+                                }) as Box<dyn FnMut(_)>);
+                                indicator.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
+                                click.forget();
+                            }
+                            messages_container.append_child(&indicator)?;
+                            if expanded {
+                                let details = document.create_element("div")?;
+                                details.set_class_name("tool-details");
+                                details.set_attribute("data-tool-call-id", &tool_call_id)?;
+                                let row_tool = document.create_element("div")?;
+                                row_tool.set_class_name("tool-detail-row");
+                                row_tool.set_inner_html(&format!("<strong>Tool:</strong> {}", tool_name));
+                                details.append_child(&row_tool)?;
+                                let input_val = tool_msg.tool_input.clone().unwrap_or_else(|| "None".to_string());
+                                let row_args = document.create_element("div")?;
+                                row_args.set_class_name("tool-detail-row");
+                                row_args.set_inner_html(&format!("<strong>Inputs:</strong> <pre>{}</pre>", input_val.replace("\n", "<br>")));
+                                details.append_child(&row_args)?;
+                                let full_output = tool_msg.content.clone();
+                                let truncated = full_output.chars().count() > 200;
+                                let output_text = if truncated && !show_full {
+                                    full_output.chars().take(200).collect::<String>() + "..."
+                                } else {
+                                    full_output.clone()
+                                };
+                                let row_out = document.create_element("div")?;
+                                row_out.set_class_name("tool-detail-row output-row");
+                                row_out.set_inner_html(&format!("<strong>Output:</strong> <pre>{}</pre>", output_text.replace("\n", "<br>")));
+                                details.append_child(&row_out)?;
+                                if truncated {
+                                    let more = if show_full { "Show Less" } else { "Show More" };
+                                    let toggle = document.create_element("span")?;
+                                    toggle.set_class_name("show-more");
+                                    toggle.set_text_content(Some(more));
+                                    let tcid2 = tool_call_id.clone();
+                                    let click_more = Closure::wrap(Box::new(move |_e: web_sys::Event| {
+                                        dispatch_global_message(Message::ToggleToolShowMore { tool_call_id: tcid2.clone() });
+                                    }) as Box<dyn FnMut(_)>);
+                                    toggle.add_event_listener_with_callback("click", click_more.as_ref().unchecked_ref())?;
+                                    click_more.forget();
+                                    details.append_child(&toggle)?;
+                                }
+                                messages_container.append_child(&details)?;
+                            }
+                        }
+                    }
+                }
+            }
         }
-        
         // Scroll to the bottom
         messages_container.set_scroll_top(messages_container.scroll_height());
     }

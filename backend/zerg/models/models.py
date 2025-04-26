@@ -117,6 +117,7 @@ class ThreadMessage(Base):
     timestamp = Column(DateTime, server_default=func.now())
     processed = Column(Boolean, default=False, nullable=False)  # Track if message has been processed by agent
     message_metadata = Column(JSON, nullable=True)  # Store additional metadata
+    parent_id = Column(Integer, ForeignKey("thread_messages.id"), nullable=True)
 
     # Define relationship with Thread
     thread = relationship("Thread", back_populates="messages")
