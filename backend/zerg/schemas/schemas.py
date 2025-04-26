@@ -114,6 +114,28 @@ class Agent(AgentBase):
         from_attributes = True
 
 
+# ---------------------------------------------------------------------------
+# Agent Details schema (wrapper used by /agents/{id}/details endpoint)
+# ---------------------------------------------------------------------------
+
+
+class AgentDetails(BaseModel):
+    """Envelope object returned by the Agent *details* REST endpoint.
+
+    In Phase 1 we only populate the mandatory ``agent`` field.  The optional
+    ``threads``, ``runs`` and ``stats`` keys are included so that the response
+    shape is forwards-compatible with the richer payloads planned for future
+    phases (see *agent_debug_modal_design.md*).
+    """
+
+    agent: Agent
+    # The following fields will be filled in future phases when the client
+    # requests additional includes via the `include` query param.
+    threads: Optional[List[Thread]] = None  # noqa: F821 – Thread is declared later in this file
+    runs: Optional[List[Any]] = None  # Placeholder for run log entries
+    stats: Optional[Dict[str, Any]] = None
+
+
 # Message schemas
 class MessageCreate(BaseModel):
     role: str
