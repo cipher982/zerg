@@ -5,6 +5,7 @@ This module provides the AgentManager class that handles all LangGraph-based age
 It abstracts the underlying LLM calls and thread state management.
 """
 
+import datetime
 import logging
 import os
 from typing import Annotated
@@ -13,6 +14,9 @@ from typing import Dict
 from typing import Optional
 from typing import Tuple
 
+from langchain_core.messages import AIMessage
+from langchain_core.messages import ToolMessage
+from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END
 from langgraph.graph import START
@@ -24,6 +28,16 @@ from zerg.models.models import Agent as AgentModel
 from zerg.models.models import Thread as ThreadModel
 
 logger = logging.getLogger(__name__)
+
+
+# --- Tool Definition ---
+@tool
+def get_current_time():
+    """Returns the current date and time."""
+    return datetime.datetime.now().isoformat()
+
+
+# --- End Tool Definition ---
 
 
 class AgentManagerState(TypedDict):
@@ -50,7 +64,8 @@ class AgentManager:
     def __init__(self, agent_model: AgentModel):
         """Initialize the AgentManager with an agent model."""
         self.agent_model = agent_model
-
+        # Define available tools
+        self.tools = [get_current_time]
         # Set up the LLM
         self.llm = ChatOpenAI(
             model=agent_model.model,
@@ -58,45 +73,109 @@ class AgentManager:
             streaming=True,
             api_key=os.environ.get("OPENAI_API_KEY"),
         )
+        # Prepare the LLM bound with tools for later use
+        self.llm_with_tools = self.llm.bind_tools(self.tools)
+        # Map tool names to their functions
+        self.tool_map = {tool.name: tool for tool in self.tools}
 
     def _build_graph(self) -> StateGraph:
         """
-        Build the LangGraph state machine.
-
-        Currently, this creates a simple chatbot, but it can be extended
-        with more complex flows, tools, and conditional routing.
+        Build the LangGraph state machine with tool handling.
         """
-        # Create a StateGraph with the schema defined in AgentManagerState
         graph_builder = StateGraph(AgentManagerState)
 
-        # Add a chatbot node that will process messages
+        # Add nodes
         graph_builder.add_node("chatbot", self._chatbot_node)
+        graph_builder.add_node("call_tool", self._call_tool_node)  # New tool node
 
-        # Define the flow: START -> chatbot -> END
+        # Start at the chatbot
         graph_builder.add_edge(START, "chatbot")
-        graph_builder.add_edge("chatbot", END)
 
-        # Compile the graph
+        # Add conditional logic after chatbot
+        graph_builder.add_conditional_edges(
+            "chatbot",
+            self._decide_next_step,  # Function to decide where to go next
+            {
+                "call_tool": "call_tool",  # If decision is "call_tool", go to call_tool node
+                END: END,  # If decision is END, finish the graph
+            },
+        )
+
+        # Add edge from tool call back to chatbot to continue the loop
+        graph_builder.add_edge("call_tool", "chatbot")
+
         return graph_builder.compile()
 
     def _chatbot_node(self, state: AgentManagerState) -> Dict:
-        """LangGraph node that processes messages with the LLM.
+        """LangGraph node that processes messages with the LLM, now aware of tools."""
 
-        We purposefully call :pymeth:`ChatOpenAI.invoke` here *even when* we
-        want token streaming.  With ``streaming=True`` set on the LLM
-        instance LangChain will internally call the streaming OpenAI
-        endpoint, surface each token through the callback system, and—when
-        *stream_mode="messages"* is used on ``graph.stream``—LangGraph will
-        emit every token chunk to the outer event loop.  Finally
-        ``invoke`` returns the fully-assembled answer so we can persist it
-        in the database.
-        """
-
-        # Direct, blocking LLM call – token-level callbacks are handled by
-        # LangChain/LLM instrumentation, not by yielding generator chunks
-        # ourselves.
-        response = self.llm.invoke(state["messages"])
+        # Use the LLM bound with tools
+        response = self.llm_with_tools.invoke(state["messages"])
         return {"messages": [response]}
+
+    def _decide_next_step(self, state: AgentManagerState) -> str:
+        """Decides whether to call a tool or end the execution."""
+        messages = state["messages"]
+        last_message = messages[-1]
+
+        # Check if the last message is an AIMessage with tool_calls
+        if isinstance(last_message, AIMessage) and last_message.tool_calls:
+            logger.debug("Decision: Call tool")
+            return "call_tool"
+        else:
+            logger.debug("Decision: End")
+            return END
+
+    def _call_tool_node(self, state: AgentManagerState) -> Dict:
+        """Executes the tool requested by the LLM."""
+        messages = state["messages"]
+        last_message = messages[-1]
+
+        # Ensure the last message has tool calls
+        if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
+            # Should not happen if routing logic is correct, but good practice
+            logger.error("Tool node called without tool calls in the last message.")
+            return {}
+
+        tool_messages = []
+        for tool_call in last_message.tool_calls:
+            tool_name = tool_call["name"]
+            logger.info(f"Executing tool: {tool_name} with args {tool_call['args']}")
+            if tool_name in self.tool_map:
+                try:
+                    # Execute the tool
+                    tool_func = self.tool_map[tool_name]
+                    observation = tool_func.invoke(tool_call["args"])
+                    # Create ToolMessage with result
+                    tool_messages.append(
+                        ToolMessage(
+                            content=str(observation),  # Ensure content is string
+                            tool_call_id=tool_call["id"],
+                            name=tool_name,
+                        )
+                    )
+                except Exception as e:
+                    logger.error(f"Error executing tool {tool_name}: {e}", exc_info=True)
+                    # Create error message
+                    tool_messages.append(
+                        ToolMessage(
+                            content=f"Error executing tool {tool_name}: {e}",
+                            tool_call_id=tool_call["id"],
+                            name=tool_name,
+                        )
+                    )
+            else:
+                logger.warning(f"Tool {tool_name} not found.")
+                tool_messages.append(
+                    ToolMessage(
+                        content=f"Tool {tool_name} not found.",
+                        tool_call_id=tool_call["id"],
+                        name=tool_name,
+                    )
+                )
+
+        # Return the results to be added to the state
+        return {"messages": tool_messages}
 
     def get_or_create_thread(
         self, db, thread_id: Optional[int] = None, title: str = "New Thread"
