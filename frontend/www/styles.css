@@ -692,6 +692,35 @@ button {
     background-color: var(--bg-darker);
 }
 
+/* ------------------------------------------------------------------*/
+/* Agent Debug Modal (read-only info modal)                          */
+/* ------------------------------------------------------------------*/
+
+.overview-list {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.overview-list li {
+    margin-bottom: var(--spacing-sm);
+}
+
+.raw-json {
+    background: var(--bg-darker);
+    color: var(--text-primary);
+    padding: var(--spacing-sm);
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+}
+
+.tab-body {
+    margin-top: var(--spacing-md);
+}
+
+
 .agent-detail-container {
     padding: var(--spacing-md);
     display: flex;

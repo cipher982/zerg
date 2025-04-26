@@ -676,6 +676,23 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     chat_callback.forget();
     
     actions_cell.append_child(&edit_btn)?;
+    
+    // Debug (info) button – new 🐞 icon
+    let debug_btn = document.create_element("button")?;
+    debug_btn.set_class_name("action-btn debug-btn");
+    debug_btn.set_inner_html("🐞");
+    debug_btn.set_attribute("title", "Debug / Info")?;
+
+    let agent_id = agent.id;
+    let debug_cb = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+        crate::state::dispatch_global_message(crate::messages::Message::ShowAgentDebugModal { agent_id });
+    }) as Box<dyn FnMut(_)>);
+    debug_btn.dyn_ref::<HtmlElement>()
+        .unwrap()
+        .add_event_listener_with_callback("click", debug_cb.as_ref().unchecked_ref())?;
+    debug_cb.forget();
+    
+    actions_cell.append_child(&debug_btn)?;
     actions_cell.append_child(&chat_btn)?;
     
     // More options button

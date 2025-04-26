@@ -2,6 +2,7 @@ use wasm_bindgen_futures;
 use web_sys;
 use crate::messages::{Message, Command};
 use crate::models::{ApiThread, ApiAgent, ApiThreadMessage};
+use crate::models::ApiAgentDetails;
 use crate::state::{APP_STATE, dispatch_global_message};
 use crate::network::api_client::ApiClient;
 use serde_json;
@@ -62,6 +63,23 @@ pub fn execute_fetch_command(cmd: Command) {
                         }
                     },
                     Err(e) => web_sys::console::error_1(&format!("Failed to fetch agents: {:?}", e).into())
+                }
+            });
+        },
+
+        Command::FetchAgentDetails(agent_id) => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_agent_details(agent_id).await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<ApiAgentDetails>(&json_str) {
+                            Ok(details) => dispatch_global_message(Message::ReceiveAgentDetails(details)),
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse agent details: {:?}", e).into()),
+                        }
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to fetch agent details: {:?}", e).into());
+                        // Could choose to dispatch HideAgentDebugModal or error state
+                    }
                 }
             });
         },

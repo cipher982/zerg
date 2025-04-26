@@ -3,7 +3,7 @@
 // The events that can occur in your UI. Expand as needed.
 //
 use crate::storage::ActiveView;
-use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent};
+use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent, ApiAgentDetails};
 use crate::network::messages::AgentEventData;
 use std::collections::HashMap;
 
@@ -221,6 +221,17 @@ pub enum Message {
     ReceiveAgentDelete(i32),
     ReceiveThreadHistory(Vec<ApiThreadMessage>),
 
+    // -------------------------------------------------------------------
+    // Agent Debug / Info Modal (Phase 1)
+    // -------------------------------------------------------------------
+
+    /// Open the read-only debug modal for the specified agent.
+    ShowAgentDebugModal { agent_id: u32 },
+    /// Close/hide the debug modal.
+    HideAgentDebugModal,
+    /// Backend payload with full AgentDetails has arrived.
+    ReceiveAgentDetails(ApiAgentDetails),
+
     // Add the DeleteAgentApi command inside the enum
     DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion
 
@@ -313,6 +324,9 @@ pub enum Command {
     DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion
 
     FetchAgents,                     // Command to fetch agents from API
+
+    /// Fetch detailed debug info for an agent
+    FetchAgentDetails(u32), // agent_id
 }
 
 impl Command {
