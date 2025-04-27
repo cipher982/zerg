@@ -13,7 +13,6 @@ use web_sys::Document;
 use wasm_bindgen::JsValue;
 use std::collections::HashMap;
 use crate::components::chat_view::{update_thread_list_ui, update_conversation_ui};
-use crate::thread_handlers;
 use serde_json;
 use rand;
 use chrono;
@@ -988,13 +987,13 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // Also update thread list to reflect changes
             let threads_data: Vec<ApiThread> = state.threads.values().cloned().collect();
             let current_thread_id = state.current_thread_id;
-            let thread_messages_map = state.thread_messages.clone();
+            let thread_messages = state.thread_messages.clone();
             
             commands.push(Command::UpdateUI(Box::new(move || {
                 dispatch_global_message(Message::UpdateThreadList(
                     threads_data.clone(),
                     current_thread_id,
-                    thread_messages_map.clone()
+                    thread_messages.clone()
                 ));
             })));
         },
@@ -1006,13 +1005,13 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             web_sys::console::warn_1(&"Received legacy SendThreadMessage; ignoring to avoid duplicate network call".into());
         },
        
-        Message::ThreadMessageSent(response, client_id) => {
+        Message::ThreadMessageSent(_response, _client_id) => {
             // This handler is deprecated as we no longer use optimistic UI
             // Just log a warning and do nothing
             web_sys::console::warn_1(&"ThreadMessageSent is deprecated, use ThreadMessagesLoaded instead".into());
         },
        
-        Message::ThreadMessageFailed(thread_id, client_id) => {
+        Message::ThreadMessageFailed(_thread_id, _client_id) => {
             // This handler is deprecated as we no longer use optimistic UI
             // Just log a warning and do nothing
             web_sys::console::warn_1(&"ThreadMessageFailed is deprecated".into());
@@ -1459,11 +1458,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
         },
 
-        Message::ReceiveStreamEnd(thread_id) => {
-            // Handle stream end
-            web_sys::console::log_1(&format!("Stream ended for thread: {}", thread_id).into());
-        },
-
         // --- NEW WebSocket Received Messages ---
         Message::ReceiveNewMessage(message) => {
             // Get thread_id directly (it's guaranteed to be u32 based on model)
@@ -1791,6 +1785,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 }
 
 // Update thread list UI
+#[allow(dead_code)]
 pub fn update_thread_list(document: &Document) -> Result<(), JsValue> {
     APP_STATE.with(|state| {
         let state = state.borrow();
@@ -1802,6 +1797,7 @@ pub fn update_thread_list(document: &Document) -> Result<(), JsValue> {
 }
 
 // A version of update_thread_list that accepts data directly instead of accessing APP_STATE
+#[allow(dead_code)]
 pub fn update_thread_list_with_data(
     document: &Document,
     threads: &[ApiThread],
@@ -1812,6 +1808,7 @@ pub fn update_thread_list_with_data(
 }
 
 // Update conversation UI
+#[allow(dead_code)]
 pub fn update_conversation(document: &Document) -> Result<(), JsValue> {
     APP_STATE.with(|state| {
         let state = state.borrow();

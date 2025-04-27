@@ -152,6 +152,7 @@ impl DashboardWsManager {
 
     /// Clean up WebSocket subscriptions for the dashboard.
     // Change signature to accept the trait object
+    #[allow(dead_code)]
     pub fn cleanup(&mut self, topic_manager_rc: Rc<RefCell<dyn ITopicManager>>) -> Result<(), JsValue> {
         let mut topic_manager = topic_manager_rc.borrow_mut();
         
@@ -210,6 +211,7 @@ pub fn init_dashboard_ws() -> Result<(), JsValue> {
 }
 
 /// Cleanup the dashboard WebSocket manager singleton subscriptions
+#[allow(dead_code)]
 pub fn cleanup_dashboard_ws() -> Result<(), JsValue> {
     DASHBOARD_WS.with(|cell| {
         let mut manager_opt = cell.borrow_mut();

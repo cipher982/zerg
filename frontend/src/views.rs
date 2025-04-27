@@ -11,6 +11,7 @@ use wasm_bindgen::JsCast;
 use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
 
 // Render the appropriate view based on the active view in the state
+#[allow(dead_code)]
 pub fn render_active_view(state: &mut AppState, document: &Document) -> Result<(), JsValue> {
     match state.active_view {
         ActiveView::Dashboard => render_dashboard_view(state, document)?,
@@ -111,6 +112,7 @@ fn render_dashboard_view(_state: &AppState, document: &Document) -> Result<(), J
 }
 
 // Render the canvas view
+#[allow(dead_code)]
 fn render_canvas_view(state: &AppState, document: &Document) -> Result<(), JsValue> {
     // Show canvas container, hide dashboard container
     if let Some(dashboard) = document.get_element_by_id("dashboard-container") {

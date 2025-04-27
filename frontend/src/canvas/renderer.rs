@@ -6,6 +6,7 @@ use super::shapes;
 use js_sys::Date;
 use std::collections::HashMap;
 
+#[allow(dead_code)]
 pub fn draw_nodes(state: &AppState) {
     if let (Some(canvas), Some(context)) = (&state.canvas, &state.context) {
         // Clear the canvas
@@ -41,6 +42,7 @@ pub fn draw_nodes(state: &AppState) {
     }
 }
 
+#[allow(dead_code)]
 fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
     for (_, node) in &state.nodes {
         if let Some(parent_id) = &node.parent_id {

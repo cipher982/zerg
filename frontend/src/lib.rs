@@ -21,8 +21,6 @@ mod thread_handlers;
 mod command_executors;
 mod models_config;
 
-#[macro_use]
-extern crate lazy_static;
 
 // Main entry point for the WASM application
 #[wasm_bindgen(start)]

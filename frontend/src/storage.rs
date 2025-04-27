@@ -9,6 +9,7 @@ use wasm_bindgen::closure::Closure;
 use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
 
 // Add API URL configuration
+#[allow(dead_code)]
 const API_BASE_URL: &str = "http://localhost:8001/api";
 
 // Structure to store viewport data
@@ -321,6 +322,7 @@ pub fn save_agent_messages_to_api(node_id: &str, messages: &[crate::models::Mess
 }
 
 /// Load agent messages from the API
+#[allow(dead_code)]
 pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
     // Extract the agent ID from the node ID
     if let Some(agent_id_str) = node_id.strip_prefix("agent-") {
@@ -350,7 +352,7 @@ pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
                                     crate::state::APP_STATE.with(|app_state_ref| {
                                         let mut app_state = app_state_ref.borrow_mut();
                                         if let Some(node) = app_state.nodes.get_mut(&node_id) {
-                                            node.set_history(Some(messages));
+                                            node._set_history(Some(messages));
                                             app_state.state_modified = true;
                                         }
                                     });
@@ -371,6 +373,7 @@ pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
 }
 
 /// Helper function to save just the nodes to the API
+#[allow(dead_code)]
 fn save_nodes_to_api(nodes: &HashMap<String, Node>) -> Result<(), JsValue> {
     // Implementation to save nodes to API
     web_sys::console::log_1(&format!("Saving {} nodes to API", nodes.len()).into());

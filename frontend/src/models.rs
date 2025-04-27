@@ -246,9 +246,10 @@ pub struct ApiThreadMessageCreate {
 }
 
 /// Extension methods for Node to provide backward compatibility with legacy code
+#[allow(dead_code)] // These methods are kept for backward compatibility
 impl Node {
     // Property getters that map old field names to new ones
-    pub fn id(&self) -> String {
+    pub fn _id(&self) -> String {
         self.node_id.clone()
     }
     
@@ -284,7 +285,7 @@ impl Node {
     }
     
     // Setters for backward compatibility
-    pub fn set_id(&mut self, id: String) {
+    pub fn _set_id(&mut self, id: String) {
         self.node_id = id;
     }
     
@@ -293,11 +294,11 @@ impl Node {
         // This should be done through an explicit agent update message
     }
     
-    pub fn set_task_instructions(&mut self, _instructions: Option<String>) {
+    pub fn _set_task_instructions(&mut self, _instructions: Option<String>) {
         // No direct mapping in new model
     }
     
-    pub fn set_history(&mut self, _history: Option<Vec<crate::models::Message>>) {
+    pub fn _set_history(&mut self, _history: Option<Vec<crate::models::Message>>) {
         // No direct mapping in new model
     }
     

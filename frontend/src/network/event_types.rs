@@ -109,11 +109,13 @@ impl fmt::Display for EventType {
 /// Helper functions for topic formatting
 pub mod topics {
     /// Creates a topic string for an agent subscription
+    #[allow(dead_code)]
     pub fn agent_topic(id: i32) -> String {
         format!("agent:{}", id)
     }
 
     /// Creates a topic string for a thread subscription
+    #[allow(dead_code)]
     pub fn thread_topic(id: i32) -> String {
         format!("thread:{}", id)
     }

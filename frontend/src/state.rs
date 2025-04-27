@@ -14,18 +14,12 @@ use crate::constants::{
     DEFAULT_NODE_WIDTH,
     DEFAULT_NODE_HEIGHT,
     DEFAULT_AGENT_NODE_COLOR,
-    CANVAS_BACKGROUND_COLOR,
 };
-use crate::components::chat;
 use js_sys::Date;
 use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
-use wasm_bindgen_futures;
-use serde_json;
 use crate::update;
-use crate::command_executors;
-use crate::models_config;
 
 // ---------------------------------------------------------------------------
 // Agent Debug Pane (read-only modal) – Phase 1
@@ -77,6 +71,7 @@ pub struct AppState {
     pub drag_start_y: f64,
     pub drag_last_x: f64,
     pub drag_last_y: f64,
+    #[allow(dead_code)]
     pub websocket: Option<WebSocket>,
     // Canvas dimensions
     pub canvas_width: f64,
@@ -577,13 +572,13 @@ impl AppState {
         self.message_id_to_node_id.insert(message_id, node_id);
     }
     
-    // Get the node ID for a message ID
-    pub fn get_node_id_for_message(&self, message_id: &str) -> Option<String> {
+    // Function to get node ID for a message ID
+    pub fn _get_node_id_for_message(&self, message_id: &str) -> Option<String> {
         self.message_id_to_node_id.get(message_id).cloned()
     }
     
-    // Enforce viewport boundaries to prevent panning too far from content
-    pub fn enforce_viewport_boundaries(&mut self) {
+    // Enforce boundaries for viewport to prevent going out of range
+    pub fn _enforce_viewport_boundaries(&mut self) {
         if self.nodes.is_empty() {
             return;
         }
@@ -732,18 +727,26 @@ impl AppState {
     }
 
     // Update to set the selected node ID and load messages if it's an agent
-    pub fn select_node(&mut self, node_id: Option<String>) {
-        self.selected_node_id = node_id.clone();
-        
-        // If a node was selected and it's an agent, load its messages
-        if let Some(node_id) = &node_id {
-            if let Some(node) = self.nodes.get(node_id) {
-                if let crate::models::NodeType::AgentIdentity = node.node_type {
-                    // Load messages for this agent from the API
-                    crate::storage::load_agent_messages_from_api(node_id, 1); // Using default agent ID of 1 for now
-                }
+    pub fn _select_node(&mut self, node_id: Option<String>) {
+        // First unselect any currently selected node
+        if let Some(current_id) = &self.selected_node_id {
+            if let Some(node) = self.nodes.get_mut(current_id) {
+                node.is_selected = false;
             }
         }
+        
+        // Set the new selected node
+        self.selected_node_id = node_id.clone();
+        
+        // Mark the new node as selected
+        if let Some(id) = &node_id {
+            if let Some(node) = self.nodes.get_mut(id) {
+                node.is_selected = true;
+            }
+        }
+        
+        // Redraw the canvas
+        self.draw_nodes();
     }
 
     /// Creates a new node linked to an optional agent
@@ -847,6 +850,7 @@ thread_local! {
 }
 
 // Add a public function to update the app state with data from the API
+#[allow(dead_code)]
 pub fn update_app_state_from_api(nodes: HashMap<String, Node>) -> Result<(), JsValue> {
     // Get access to the global APP_STATE
     APP_STATE.with(|app_state_ref| {
@@ -873,6 +877,7 @@ pub fn update_app_state_from_api(nodes: HashMap<String, Node>) -> Result<(), JsV
 }
 
 // Helper function to update node IDs after API creation
+#[allow(dead_code)]
 pub fn update_node_id(old_id: &str, new_id: &str) {
     APP_STATE.with(|state_ref| {
         let mut state = state_ref.borrow_mut();
@@ -881,7 +886,7 @@ pub fn update_node_id(old_id: &str, new_id: &str) {
         if let Some(node) = state.nodes.remove(old_id) {
             // Insert it with the new ID
             let mut updated_node = node.clone();
-            updated_node.set_id(new_id.to_string());
+            updated_node._set_id(new_id.to_string());
             state.nodes.insert(new_id.to_string(), updated_node);
             
             web_sys::console::log_1(&format!("Updated node ID from {} to {}", old_id, new_id).into());

@@ -79,6 +79,7 @@ impl TopicManager {
     ///
     /// If handlers existed for the topic, an "unsubscribe" message is sent to the backend.
     /// Note: This removes *all* handlers for the given topic.
+    #[allow(dead_code)]
     pub fn unsubscribe(&mut self, topic: &Topic) -> Result<(), JsValue> {
         web_sys::console::warn_1(&"Using unsubscribe by topic - this removes ALL handlers. Consider using unsubscribe_handler.".into());
         // Remove handlers only if the topic exists in our handler map
@@ -99,6 +100,7 @@ impl TopicManager {
     /// Unsubscribes a specific handler from a topic.
     ///
     /// If this was the last handler for the topic, an "unsubscribe" message is sent to the backend.
+    #[allow(dead_code)]
     pub fn unsubscribe_handler(&mut self, topic: &Topic, handler_to_remove: &TopicHandler) -> Result<(), JsValue> {
         let mut removed = false;
         let mut topic_is_empty = false;

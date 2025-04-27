@@ -14,6 +14,7 @@ use crate::state::dispatch_global_message;
 
 // New type to represent either a mutable or immutable reference to AppState
 pub enum AppStateRef<'a> {
+    #[allow(dead_code)]
     Mutable(&'a mut AppState),
     Immutable(&'a AppState),
     None

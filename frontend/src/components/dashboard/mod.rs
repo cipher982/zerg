@@ -6,22 +6,15 @@ pub use ws_manager::{init_dashboard_ws, cleanup_dashboard_ws};
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{Document, Element, HtmlElement, Event};
-use crate::state::{APP_STATE, dispatch_global_message};
-use crate::messages::{Message, Command};
-use crate::models::{ApiAgent, NodeType};
+use web_sys::{Document, Element, HtmlElement};
+use crate::state::APP_STATE;
 use crate::constants::{
     DEFAULT_AGENT_NAME, 
     DEFAULT_SYSTEM_INSTRUCTIONS, 
     DEFAULT_TASK_INSTRUCTIONS,
-    DEFAULT_THREAD_TITLE
+    // DEFAULT_THREAD_TITLE (unused)
 };
-use crate::network::api_client;
-use crate::network::ws_client_v2::send_thread_message;
-use crate::storage::ActiveView;
 use wasm_bindgen::closure::Closure;
-use serde_json;
-use uuid;
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -75,6 +68,7 @@ pub struct Agent {
 }
 
 impl Agent {
+    #[allow(dead_code)]
     pub fn new(id: u32, name: String) -> Self {
         Self {
             id,
@@ -195,6 +189,7 @@ pub fn setup_dashboard(document: &Document) -> Result<(), JsValue> {
 }
 
 // Function to clean up the dashboard
+#[allow(dead_code)]
 pub fn cleanup_dashboard() -> Result<(), JsValue> {
     // Clean up WebSocket manager
     cleanup_dashboard_ws()?;
