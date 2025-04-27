@@ -34,6 +34,7 @@ impl ApiConfig {
     }
 
     /// Get a full API URL for a given path
+    #[allow(dead_code)]
     pub fn url(&self, path: &str) -> String {
         format!("{}/api{}", self.base_url, path)
     }

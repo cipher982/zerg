@@ -10,6 +10,7 @@ pub struct ModelConfig {
 }
 
 // Parse models from API response
+#[allow(dead_code)]
 pub fn parse_models_from_api(models: Vec<ModelConfig>) -> Vec<(String, String)> {
     models
         .into_iter()

@@ -8,7 +8,6 @@ use crate::network::api_client::ApiClient;
 use serde_json;
 use std::rc::Rc;
 use std::cell::RefCell;
-use serde_json::json;
 
 pub fn execute_fetch_command(cmd: Command) {
     match cmd {

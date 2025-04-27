@@ -10,6 +10,7 @@ use crate::messages::Message; // Import main Message enum
 use crate::models::{ApiThreadMessage, ApiThread}; // Added ApiThread here
 
 /// Helper to convert network message data to the application model
+#[allow(dead_code)]
 fn convert_network_message_to_model(network_msg: ThreadMessageData) -> ApiThreadMessage {
     ApiThreadMessage {
         id: network_msg.id.map(|i| i as u32),  // Convert Option<i32> to Option<u32>
@@ -237,6 +238,7 @@ pub fn init_chat_view_ws(thread_id: u32, topic_manager: Rc<RefCell<dyn ITopicMan
 }
 
 /// Cleanup the chat view WebSocket manager singleton subscriptions
+#[allow(dead_code)]
 pub fn cleanup_chat_view_ws(topic_manager: Rc<RefCell<dyn ITopicManager>>) -> Result<(), JsValue> {
     CHAT_VIEW_WS.with(|cell| {
         let mut manager_opt = cell.borrow_mut();

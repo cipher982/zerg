@@ -2,6 +2,7 @@
 pub const DEFAULT_AGENT_NAME: &str = "New Agent";
 pub const DEFAULT_SYSTEM_INSTRUCTIONS: &str = "You are a helpful AI assistant.";
 pub const DEFAULT_TASK_INSTRUCTIONS: &str = "These are the default task instructions. Begin your job now based on prompt.";
+#[allow(dead_code)]
 pub const DEFAULT_TEMPERATURE: f64 = 0.3;
 pub const DEFAULT_THREAD_TITLE: &str = "New Thread";
 
@@ -16,8 +17,11 @@ pub const DEFAULT_AGENT_NODE_COLOR: &str = "#ffecb3"; // Light amber color
 pub const CANVAS_BACKGROUND_COLOR: &str = "#2a2a3a"; // Match dashboard background color
 
 // Node Fill Colors
+#[allow(dead_code)]
 pub const NODE_COLOR_USER_INPUT: &str = "#3498db";    // Blue
+#[allow(dead_code)]
 pub const NODE_COLOR_RESPONSE: &str = "#d5f5e3";      // Light green
+#[allow(dead_code)]
 pub const NODE_COLOR_GENERIC: &str = "#95a5a6";       // Gray
 pub const NODE_FILL_AGENT_IDENTITY: &str = "rgba(255, 255, 255, 0.1)"; // Semi-transparent white
 
@@ -32,5 +36,6 @@ pub const NODE_BORDER_AGENT_PAUSED: &str = "rgba(243, 156, 18, 0.8)";  // Orange
 
 // Other Elements
 pub const NODE_TEXT_COLOR: &str = "#DDDDDD";         // Light gray for text on dark background
+#[allow(dead_code)]
 pub const CONNECTION_LINE_COLOR: &str = "#95a5a6";    // Gray for connection lines/arrows
 pub const SHADOW_COLOR: &str = "rgba(0, 0, 0, 0.2)"; // Shadow for nodes 

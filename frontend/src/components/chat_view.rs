@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{Document, Event, HtmlInputElement, HtmlElement};
-use crate::state::{dispatch_global_message, APP_STATE, ToolUiState};
+use web_sys::{Document, Event, HtmlInputElement};
+use crate::state::{dispatch_global_message, APP_STATE};
 use crate::messages::Message;
 use crate::models::{ApiThread, ApiThreadMessage};
 use wasm_bindgen::JsCast;
@@ -192,6 +192,7 @@ pub fn show_chat_view(document: &Document, agent_id: u32) -> Result<(), JsValue>
 }
 
 // Update agent info in the UI when received
+#[allow(dead_code)]
 pub fn update_agent_info(document: &Document, agent_name: &str) -> Result<(), JsValue> {
     if let Some(agent_name_el) = document.query_selector(".agent-name").ok().flatten() {
         agent_name_el.set_text_content(Some(agent_name));
@@ -490,7 +491,8 @@ pub fn update_conversation_ui(
 }
 
 // Update the thread title in the header
-pub fn update_thread_title(document: &Document) -> Result<(), JsValue> {
+#[allow(dead_code)]
+pub fn update_thread_title(_document: &Document) -> Result<(), JsValue> {
     // Instead of accessing APP_STATE directly, dispatch a message to get the current title
     // This prevents borrowing conflicts since state access will happen in update()
     
@@ -511,6 +513,7 @@ pub fn update_thread_title_with_data(document: &Document, title: &str) -> Result
 }
 
 // Helper function to get the current agent ID from the state
+#[allow(dead_code)]
 fn get_current_agent_id(state: &std::cell::Ref<crate::state::AppState>) -> Option<u32> {
     // Get the selected agent ID based on the current thread
     if let Some(thread_id) = state.current_thread_id {

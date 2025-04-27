@@ -292,6 +292,7 @@ pub enum Command {
     },
     
     /// Run a thread to process messages
+    #[allow(dead_code)]
     RunThread(u32), // thread_id
     
     /// Update thread title
@@ -309,6 +310,7 @@ pub enum Command {
     },
     
     /// Load agent info
+    #[allow(dead_code)]
     LoadAgentInfo(u32),
     
     /// Generic network call
@@ -321,6 +323,7 @@ pub enum Command {
     },
     
     /// WebSocket operation
+    #[allow(dead_code)]
     WebSocketAction {
         action: String,
         topic: Option<String>,
@@ -341,16 +344,19 @@ pub enum Command {
 
 impl Command {
     /// Helper to create a SendMessage command
+    #[allow(dead_code)]
     pub fn send(msg: Message) -> Self {
         Command::SendMessage(msg)
     }
 
     /// Helper to create a NoOp command
+    #[allow(dead_code)]
     pub fn none() -> Self {
         Command::NoOp
     }
     
     /// Helper to create an UpdateUI command
+    #[allow(dead_code)]
     pub fn update_ui<F>(f: F) -> Self 
     where 
         F: FnOnce() + 'static 
@@ -359,6 +365,7 @@ impl Command {
     }
     
     /// Helper to create a NetworkCall command
+    #[allow(dead_code)]
     pub fn network_call(
         endpoint: String,
         method: String,

@@ -147,6 +147,7 @@ pub struct ThreadDeletedEventData {
 
 /// Data payload for THREAD_MESSAGE_CREATED event
 /// This reuses the ThreadMessageData structure
+#[allow(dead_code)]
 pub type ThreadMessageCreatedEventData = ThreadMessageData;
 
 /// Agent State Message (sent on successful agent topic subscription)
@@ -203,6 +204,7 @@ pub mod builders {
         }
     }
     
+    #[allow(dead_code)]
     pub fn create_models_request() -> BaseMessage {
         BaseMessage {
             message_type: MessageType::Models,
@@ -245,6 +247,7 @@ pub mod handlers {
 /// Trait for common message functionality
 pub trait WsMessage: std::fmt::Debug {
     fn message_type(&self) -> MessageType;
+    #[allow(dead_code)]
     fn message_id(&self) -> Option<String>;
 }
 

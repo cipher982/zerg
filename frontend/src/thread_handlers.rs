@@ -3,10 +3,11 @@ use crate::messages::Message;
 use crate::state::dispatch_global_message;
 use std::collections::HashMap;
 use wasm_bindgen_futures::spawn_local;
-use rand;
+// Removed unused import
 
 /// Message status for optimistic UI updates
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum MessageStatus {
     /// Message is pending confirmation from the server
     Pending,
@@ -24,9 +25,9 @@ pub enum MessageStatus {
 pub fn handle_send_thread_message(
     thread_id: u32,
     content: String,
-    thread_messages: &mut HashMap<u32, Vec<ApiThreadMessage>>,
-    threads: &HashMap<u32, ApiThread>,
-    current_thread_id: Option<u32>,
+    _thread_messages: &mut HashMap<u32, Vec<ApiThreadMessage>>,
+    _threads: &HashMap<u32, ApiThread>,
+    _current_thread_id: Option<u32>,
 ) -> Box<dyn FnOnce()> {
     // Clone data for async operations
     let content_clone = content.clone();
@@ -43,7 +44,7 @@ pub fn handle_send_thread_message(
             match crate::network::api_client::ApiClient::create_thread_message(thread_id, &content_clone).await {
                 Ok(response) => {
                     // Parse the response and update the UI directly with the server data
-                    if let Ok(thread_message) = serde_json::from_str::<ApiThreadMessage>(&response) {
+                    if let Ok(_thread_message) = serde_json::from_str::<ApiThreadMessage>(&response) {
                         // Reload thread messages from the server to get the most accurate state
                         match crate::network::api_client::ApiClient::get_thread_messages(thread_id, 0, 100).await {
                             Ok(messages_json) => {
@@ -85,6 +86,7 @@ pub fn handle_send_thread_message(
 
 /// Handles the response from the server after sending a message
 /// Updates the optimistic message with the confirmed one from the server
+#[allow(dead_code)]
 pub fn handle_thread_message_sent(
     response: String,
     client_id: String,
@@ -122,6 +124,7 @@ pub fn handle_thread_message_sent(
 }
 
 /// Handles marking a message as failed
+#[allow(dead_code)]
 pub fn handle_thread_message_failed(
     thread_id: u32,
     client_id: String,
@@ -154,6 +157,7 @@ pub fn handle_thread_message_failed(
 }
 
 /// Handles when a message is received from the websocket
+#[allow(dead_code)]
 pub fn handle_thread_message_received(
     message_str: String,
     thread_messages: &mut HashMap<u32, Vec<ApiThreadMessage>>,
@@ -221,6 +225,8 @@ pub fn handle_thread_message_received(
                         
                         // Variables to collect data for UI updates
                         let mut conversation_messages = Vec::new();
+                        // Suppress unused assignment warning by reading the initial value
+                        let _ = &conversation_messages;
                         let threads_data: Vec<ApiThread> = threads.values().cloned().collect();
                         let current_thread_id_opt = current_thread_id;
                         let mut thread_messages_map = thread_messages.clone();

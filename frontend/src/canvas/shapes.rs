@@ -34,6 +34,7 @@ pub fn draw_rounded_rect(context: &CanvasRenderingContext2d, node: &Node) {
     context.restore();
 }
 
+#[allow(dead_code)]
 pub fn draw_arrow(context: &CanvasRenderingContext2d, x: f64, y: f64, dx: f64, dy: f64) {
     let head_len = 10.0; // length of arrow head
     let angle = f64::atan2(dy, dx);

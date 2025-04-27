@@ -10,6 +10,7 @@ use super::messages::{builders, handlers};
 use super::event_types::MessageType;
 
 /// Trait defining the WebSocket client interface
+#[allow(dead_code)]
 pub trait IWsClient: Any {
     fn connect(&mut self) -> Result<(), JsValue>;
     fn send_serialized_message(&self, message_json: &str) -> Result<(), JsValue>;
@@ -27,6 +28,7 @@ pub enum ConnectionState {
     Disconnected,
     Connecting,
     Connected,
+    #[allow(dead_code)]
     Error(String),
 }
 
@@ -222,7 +224,6 @@ impl WsClientV2 {
         onopen_closure.forget();
 
         // Set up error handler (simple logging for now)
-        let state_clone = self.state.clone();
         let onerror_closure = Closure::wrap(Box::new(move |e: web_sys::Event| {
             web_sys::console::error_1(&format!("WebSocket error: {:?}", e).into());
             // Error often leads to close, state change handled in onclose
@@ -529,6 +530,8 @@ mod tests {
     }
 }
 
+// Helper function to send a message to a thread via WebSocket
+#[allow(dead_code)]
 pub fn send_thread_message(text: &str, message_id: String) {
     web_sys::console::log_1(&format!("Network: Sending thread message: '{}', message_id: {}", text, message_id).into());
 

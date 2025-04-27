@@ -6,10 +6,10 @@
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{Document, Element, HtmlElement};
+use web_sys::{Document, Element};
 use wasm_bindgen::closure::Closure;
 
-use crate::state::{AgentDebugPane, DebugTab, AppState, dispatch_global_message};
+use crate::state::{DebugTab, AppState, dispatch_global_message};
 use crate::messages::Message;
 
 /// Public entry – create or refresh the modal based on current pane state.

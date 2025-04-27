@@ -4,7 +4,6 @@ use web_sys::{RequestMode};
 use super::ui_updates::flash_activity;
 use crate::constants::{DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT};
 use std::rc::Rc;
-use crate::components::dashboard::ws_manager;
 
 // REST API Client for Agent operations
 pub struct ApiClient;
@@ -34,6 +33,7 @@ impl ApiClient {
     }
 
     // Create a new agent
+    #[allow(dead_code)]
     pub async fn create_agent(agent_data: &str) -> Result<String, JsValue> {
         let url = format!("{}/api/agents", Self::api_base_url());
         Self::fetch_json(&url, "POST", Some(agent_data)).await
@@ -53,6 +53,7 @@ impl ApiClient {
     }
 
     // Get messages for a specific agent
+    #[allow(dead_code)]
     pub async fn get_agent_messages(agent_id: u32) -> Result<String, JsValue> {
         let url = format!("{}/api/agents/{}/messages", Self::api_base_url(), agent_id);
         Self::fetch_json(&url, "GET", None).await
@@ -95,6 +96,7 @@ impl ApiClient {
         Self::fetch_json(&url, "GET", None).await
     }
 
+    #[allow(dead_code)]
     pub async fn get_thread(thread_id: u32) -> Result<String, JsValue> {
         let url = format!("{}/api/threads/{}", Self::api_base_url(), thread_id);
         Self::fetch_json(&url, "GET", None).await
