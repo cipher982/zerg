@@ -65,11 +65,20 @@ mock_openai.return_value = mock_client
 sys.modules["openai"] = MagicMock()
 sys.modules["openai.OpenAI"] = mock_openai
 
-# Mock LangGraph modules
-sys.modules["langgraph"] = MagicMock()
-sys.modules["langgraph.graph"] = MagicMock()
-sys.modules["langgraph.graph.message"] = MagicMock()
-sys.modules["langchain_openai"] = MagicMock()
+# Don't completely mock langgraph, just patch specific functionality
+# This allows importing langgraph and accessing attributes like __version__
+# while still mocking functionality used in tests
+# First import the real modules to preserve their behavior
+import langchain_openai  # noqa: E402
+import langgraph  # noqa: E402
+import langgraph.graph  # noqa: E402
+import langgraph.graph.message  # noqa: E402
+
+# Then patch specific classes or functions rather than entire modules
+langgraph.graph.StateGraph = MagicMock()
+langgraph.func = MagicMock()
+langgraph.graph.message.add_messages = MagicMock()
+langchain_openai.ChatOpenAI = MagicMock()
 
 # Import app after all engine setup and mocks are in place
 from zerg.main import app  # noqa: E402

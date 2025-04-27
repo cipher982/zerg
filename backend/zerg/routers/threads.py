@@ -15,9 +15,10 @@ from fastapi import HTTPException
 from fastapi import status
 from sqlalchemy.orm import Session
 
-from zerg.agents import AgentManager
+# DB/CRUD helpers
 from zerg.crud import crud
 from zerg.database import get_db
+from zerg.managers.agent_runner import AgentRunner
 from zerg.schemas.schemas import Thread
 from zerg.schemas.schemas import ThreadCreate
 from zerg.schemas.schemas import ThreadMessageCreate
@@ -26,6 +27,9 @@ from zerg.schemas.schemas import ThreadUpdate
 from zerg.schemas.ws_messages import StreamChunkMessage
 from zerg.schemas.ws_messages import StreamEndMessage
 from zerg.schemas.ws_messages import StreamStartMessage
+
+# New higher-level ThreadService façade
+from zerg.services.thread_service import ThreadService
 from zerg.websocket.manager import topic_manager
 
 # Set up logging
@@ -50,19 +54,33 @@ def read_threads(agent_id: Optional[int] = None, skip: int = 0, limit: int = 100
 @router.post("", response_model=Thread, status_code=status.HTTP_201_CREATED)
 def create_thread(thread: ThreadCreate, db: Session = Depends(get_db)):
     """Create a new thread"""
-    # First check if agent exists
-    if not crud.get_agent(db, agent_id=thread.agent_id):
+    # Ensure agent exists and fetch row
+    agent_row = crud.get_agent(db, agent_id=thread.agent_id)
+    if agent_row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    return crud.create_thread(
-        db=db,
-        agent_id=thread.agent_id,
+    # Delegate creation to ThreadService so the mandatory system message is
+    # inserted atomically.
+    created_thread = ThreadService.create_thread_with_system_message(
+        db,
+        agent_row,
         title=thread.title,
+        thread_type=thread.thread_type or "chat",
         active=thread.active,
-        agent_state=thread.agent_state,
-        memory_strategy=thread.memory_strategy,
-        thread_type=thread.thread_type,
     )
+
+    # If the request supplied agent_state or memory_strategy we update the
+    # thread accordingly (ThreadService currently doesn't take those extras
+    # to keep the helper minimal).
+    if thread.agent_state or thread.memory_strategy != "buffer":
+        _ = crud.update_thread(
+            db,
+            thread_id=created_thread.id,
+            agent_state=thread.agent_state,
+            memory_strategy=thread.memory_strategy,
+        )
+
+    return created_thread
 
 
 @router.get("/{thread_id}", response_model=Thread)
@@ -145,37 +163,27 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
     if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    agent_manager = AgentManager(agent)
+    runner = AgentRunner(agent)
 
     topic = f"thread:{thread_id}"
 
-    # Notify clients that a streamed response is starting
+    # Notify start of (non token) stream
     await topic_manager.broadcast_to_topic(topic, StreamStartMessage(thread_id=thread_id).model_dump())
 
-    # Stream the assistant response chunk‑by‑chunk using the new process_thread method
-    for chunk in agent_manager.process_thread(
-        db,
-        thread,
-        stream=True,
-        token_stream=True,
-    ):
-        chunk_content = chunk["content"]
-        chunk_type = chunk["chunk_type"]
-        tool_name = chunk["tool_name"]
-        tool_call_id = chunk["tool_call_id"]
+    assistant_text = runner.run_thread(db, thread)
 
+    if assistant_text:
         await topic_manager.broadcast_to_topic(
             topic,
             StreamChunkMessage(
                 thread_id=thread_id,
-                content=chunk_content,
-                chunk_type=chunk_type,
-                tool_name=tool_name,
-                tool_call_id=tool_call_id,
+                content=assistant_text,
+                chunk_type="assistant_message",
+                tool_name=None,
+                tool_call_id=None,
             ).model_dump(),
         )
 
-    # Signal the end of the stream
     await topic_manager.broadcast_to_topic(topic, StreamEndMessage(thread_id=thread_id).model_dump())
 
     return {"status": "ok"}
