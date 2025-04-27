@@ -675,28 +675,45 @@ impl AppState {
             state.active_view.clone() // Clone to avoid borrowing issues
         });
         
+        web_sys::console::log_1(&format!("Refreshing UI for active view: {:?}", active_view).into());
+        
         // First render the active view to ensure proper display of containers
         crate::views::render_active_view_by_type(&active_view, &document)?;
         
-        // Check if we need to refresh canvas in a separate borrow scope
-        let has_canvas = APP_STATE.with(|state| {
-            let state = state.borrow();
-            state.canvas.is_some() && state.context.is_some()
-        });
-        
-        if has_canvas {
-            // Refresh canvas in a separate borrow scope
-            APP_STATE.with(|state| {
-                let state = state.borrow_mut();
-                state.draw_nodes();
-            });
+        // Only refresh components relevant to the current view
+        match active_view {
+            crate::storage::ActiveView::Dashboard => {
+                // For Dashboard view, only refresh the dashboard component
+                web_sys::console::log_1(&"Refreshing dashboard components".into());
+                crate::components::dashboard::refresh_dashboard(&document)?;
+            },
+            crate::storage::ActiveView::Canvas => {
+                // For Canvas view, refresh the canvas and agent shelf
+                web_sys::console::log_1(&"Refreshing canvas components".into());
+                
+                // Check if we need to refresh canvas in a separate borrow scope
+                let has_canvas = APP_STATE.with(|state| {
+                    let state = state.borrow();
+                    state.canvas.is_some() && state.context.is_some()
+                });
+                
+                if has_canvas {
+                    // Refresh canvas in a separate borrow scope
+                    APP_STATE.with(|state| {
+                        let state = state.borrow_mut();
+                        state.draw_nodes();
+                    });
+                }
+                
+                // Only refresh the agent shelf for Canvas view
+                let _ = crate::components::agent_shelf::refresh_agent_shelf(&document);
+            },
+            crate::storage::ActiveView::ChatView => {
+                // For Chat view, refresh chat components
+                web_sys::console::log_1(&"Refreshing chat components".into());
+                // Chat view refreshes are handled by its own code
+            }
         }
-        
-        // Always refresh the dashboard to ensure it has the latest data
-        crate::components::dashboard::refresh_dashboard(&document)?;
-
-        // Refresh Agent Shelf (ignoring errors so we don't block other UI)
-        let _ = crate::components::agent_shelf::refresh_agent_shelf(&document);
         
         Ok(())
     }

@@ -25,13 +25,21 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
     match msg {
         Message::ToggleView(view) => {
+            let view_clone = view.clone();
             state.active_view = view;
             state.state_modified = true;
             
-            // Add a command to refresh the UI after view change
+            // Use a command to update the UI after this function returns
+            // This avoids borrowing issues by executing after the current state borrow is released
             commands.push(Command::UpdateUI(Box::new(move || {
-                if let Err(e) = AppState::refresh_ui_after_state_change() {
-                    web_sys::console::error_1(&format!("Failed to refresh UI after view change: {:?}", e).into());
+                // Get window and document without borrowing state
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        // Directly call render_active_view_by_type without using refresh_ui_after_state_change
+                        if let Err(e) = crate::views::render_active_view_by_type(&view_clone, &document) {
+                            web_sys::console::error_1(&format!("Failed to switch view: {:?}", e).into());
+                        }
+                    }
                 }
             })));
         },

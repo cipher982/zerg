@@ -20,6 +20,7 @@ mod constants;
 mod thread_handlers;
 mod command_executors;
 mod models_config;
+mod pages;
 
 
 // Main entry point for the WASM application
@@ -50,8 +51,8 @@ pub fn start() -> Result<(), JsValue> {
         let state = state_ref.borrow();
         (state.ws_client.clone(), state.topic_manager.clone())
     });
-
-    // Setup callbacks
+    
+    // Setup callbacks for WebSocket
     {
         let topic_manager_clone = topic_manager_rc.clone();
         let ws_client_clone = ws_client_rc.clone();
@@ -59,30 +60,8 @@ pub fn start() -> Result<(), JsValue> {
         // Borrow mutably to set callbacks
         let mut ws_client = ws_client_clone.borrow_mut();
 
-        // Set on_connect: Call topic_manager.resubscribe_all_topics
-        let tm_on_connect = topic_manager_clone.clone();
-        ws_client.set_on_connect(move || {
-            web_sys::console::log_1(&"on_connect callback triggered".into());
-            if let Err(e) = tm_on_connect.borrow().resubscribe_all_topics() {
-                web_sys::console::error_1(&format!("Failed to resubscribe topics: {:?}", e).into());
-            }
-            // Update UI status
-            ui_updates::update_connection_status("Connected", "green");
-        });
-
-        // Set on_message: Call topic_manager.route_incoming_message
-        let tm_on_message = topic_manager_clone.clone();
-        ws_client.set_on_message(move |json_value| {
-            // Route the message using the topic manager
-            tm_on_message.borrow().route_incoming_message(json_value);
-        });
-
-        // Set on_disconnect (optional, e.g., update UI status)
-        ws_client.set_on_disconnect(|| {
-            web_sys::console::warn_1(&"WebSocket disconnected (on_disconnect callback)".into());
-            // Update UI status
-            ui_updates::update_connection_status("Disconnected", "red");
-        });
+        // Set callbacks for websocket events
+        setup_websocket_callbacks(&mut ws_client, topic_manager_clone.clone())?;
         
         // Set initial status before attempting connection
         ui_updates::update_connection_status("Connecting", "yellow");
@@ -92,25 +71,14 @@ pub fn start() -> Result<(), JsValue> {
              web_sys::console::error_1(&format!("Initial WebSocket connect failed: {:?}", e).into());
              // Update UI status on initial connection error
              ui_updates::update_connection_status("Error", "red");
-             // Handle initial connection failure if necessary
         }
     } // Mutable borrow of ws_client ends here
     
     // Create the tab navigation
     create_tab_navigation(&document)?;
     
-    // Set up the UI components and canvas but don't show them initially
+    // Set up shared UI components
     ui::main::setup_ui(&document)?;
-    components::canvas_editor::setup_canvas(&document)?;
-    
-    // Hide canvas container initially as we'll show dashboard by default
-    if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
-        canvas_container.set_attribute("style", "display: none;")?;
-    }
-    
-    if let Some(input_panel) = document.get_element_by_id("input-panel") {
-        input_panel.set_attribute("style", "display: none;")?;
-    }
     
     // Show initial loading spinner
     if let Some(loading_spinner) = document.get_element_by_id("loading-spinner") {
@@ -119,7 +87,59 @@ pub fn start() -> Result<(), JsValue> {
         }
     }
     
-    // Initialize loading of both models, legacy data and new agent data
+    // Initialize data loading
+    initialize_data_loading();
+    
+    // By default, start with dashboard view
+    web_sys::console::log_1(&"Setting initial view to Dashboard".into());
+    
+    // Set active view in app state first
+    state::APP_STATE.with(|state_ref| {
+        let mut state = state_ref.borrow_mut();
+        state.active_view = storage::ActiveView::Dashboard;
+    });
+    
+    // Then render the dashboard view
+    views::render_active_view_by_type(&storage::ActiveView::Dashboard, &document)?;
+    
+    Ok(())
+}
+
+// Helper function to setup WebSocket callbacks
+fn setup_websocket_callbacks(
+    ws_client: &mut network::WsClientV2, 
+    topic_manager: std::rc::Rc<std::cell::RefCell<network::TopicManager>>
+) -> Result<(), JsValue> {
+    // Set on_connect: Call topic_manager.resubscribe_all_topics
+    let tm_on_connect = topic_manager.clone();
+    ws_client.set_on_connect(move || {
+        web_sys::console::log_1(&"on_connect callback triggered".into());
+        if let Err(e) = tm_on_connect.borrow().resubscribe_all_topics() {
+            web_sys::console::error_1(&format!("Failed to resubscribe topics: {:?}", e).into());
+        }
+        // Update UI status
+        ui_updates::update_connection_status("Connected", "green");
+    });
+
+    // Set on_message: Call topic_manager.route_incoming_message
+    let tm_on_message = topic_manager.clone();
+    ws_client.set_on_message(move |json_value| {
+        // Route the message using the topic manager
+        tm_on_message.borrow().route_incoming_message(json_value);
+    });
+
+    // Set on_disconnect
+    ws_client.set_on_disconnect(|| {
+        web_sys::console::warn_1(&"WebSocket disconnected (on_disconnect callback)".into());
+        // Update UI status
+        ui_updates::update_connection_status("Disconnected", "red");
+    });
+    
+    Ok(())
+}
+
+// Helper function to initialize data loading
+fn initialize_data_loading() {
     spawn_local(async {
         // Fetch available models from API
         let models_json = match network::api_client::ApiClient::fetch_available_models().await {
@@ -176,8 +196,6 @@ pub fn start() -> Result<(), JsValue> {
             web_sys::console::error_1(&format!("Failed to setup auto-save: {:?}", e).into());
         }
     });
-    
-    Ok(())
 }
 
 // Create tab navigation for switching between dashboard and canvas

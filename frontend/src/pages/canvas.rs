@@ -1,0 +1,165 @@
+// frontend/src/pages/canvas.rs
+//
+// This file contains the Canvas page component, responsible for
+// mounting and unmounting the canvas view with its sidebar and toolbar.
+//
+use web_sys::{Document, Element};
+use wasm_bindgen::JsValue;
+use wasm_bindgen::JsCast;
+
+/// Mount the canvas view by creating necessary DOM elements
+/// This function is called when switching to the canvas view
+pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
+    web_sys::console::log_1(&"CANVAS: Starting mount".into());
+    
+    // Get app container for proper layout
+    let app_container = document
+        .get_element_by_id("app-container")
+        .ok_or(JsValue::from_str("Could not find app-container"))?;
+    
+    // Add canvas-view class for flexbox layout
+    web_sys::console::log_1(&"CANVAS: Setting app-container to canvas-view class".into());
+    app_container.set_class_name("canvas-view");
+    
+    // First create/ensure agent shelf exists (sidebar)
+    web_sys::console::log_1(&"CANVAS: Creating/refreshing agent shelf".into());
+    crate::components::agent_shelf::refresh_agent_shelf(document)?;
+    
+    // Ensure agent shelf is a direct child of app_container
+    let agent_shelf = document.get_element_by_id("agent-shelf")
+        .ok_or(JsValue::from_str("Agent shelf not found after refresh"))?;
+    
+    // If agent shelf is not already a child of app_container, append it
+    if agent_shelf.parent_node().map_or(true, |p| p.node_name() != "DIV" || 
+            p.dyn_ref::<Element>().map_or(true, |e| e.id() != "app-container")) {
+        web_sys::console::log_1(&"CANVAS: Appending agent shelf to app container".into());
+        app_container.append_child(&agent_shelf)?;
+    }
+    
+    // Create main content area if it doesn't exist
+    web_sys::console::log_1(&"CANVAS: Creating/finding main content area".into());
+    let main_content = if let Some(content) = document.get_element_by_id("main-content-area") {
+        content
+    } else {
+        let content = document.create_element("div")?;
+        content.set_id("main-content-area");
+        content.set_class_name("main-content-area");
+        app_container.append_child(&content)?;
+        content
+    };
+    
+    // Create input panel (toolbar) if needed
+    web_sys::console::log_1(&"CANVAS: Creating/finding input panel".into());
+    let input_panel = if let Some(panel) = document.get_element_by_id("input-panel") {
+        panel
+    } else {
+        crate::ui::main::create_input_panel(document)?
+    };
+    
+    // Add input panel to main content if not already there
+    if input_panel.parent_node().map_or(true, |p| p.node_name() != "DIV" || 
+           p.dyn_ref::<Element>().map_or(true, |e| e.id() != "main-content-area")) {
+        web_sys::console::log_1(&"CANVAS: Appending input panel to main content".into());
+        main_content.append_child(&input_panel)?;
+    }
+    
+    // Make sure input panel is visible
+    input_panel.set_attribute("style", "display: block;")?;
+    
+    // Create canvas container if needed
+    web_sys::console::log_1(&"CANVAS: Creating/finding canvas container".into());
+    let canvas_container = if let Some(container) = document.get_element_by_id("canvas-container") {
+        container
+    } else {
+        let container = document.create_element("div")?;
+        container.set_id("canvas-container");
+        container.set_class_name("canvas-container");
+        
+        // Create canvas element
+        let canvas = document.create_element("canvas")?;
+        canvas.set_id("node-canvas");
+        container.append_child(&canvas)?;
+        
+        // Add container to main content
+        main_content.append_child(&container)?;
+        
+        // Setup canvas once it's created
+        crate::components::canvas_editor::setup_canvas(document)?;
+        
+        container
+    };
+    
+    // Ensure canvas container is visible
+    canvas_container.set_attribute("style", "display: block;")?;
+    
+    web_sys::console::log_1(&"CANVAS: Setup canvas drawing (no state borrowed)".into());
+    // Set up canvas resizing and drawing (without borrowing APP_STATE)
+    if let Some(canvas_elem) = document.get_element_by_id("node-canvas") {
+        if let Ok(canvas) = canvas_elem.dyn_into::<web_sys::HtmlCanvasElement>() {
+            // Resize canvas explicitly without borrowing the app state
+            if let Err(e) = crate::components::canvas_editor::resize_canvas(&canvas, crate::components::canvas_editor::AppStateRef::None) {
+                web_sys::console::error_1(&format!("Failed to resize canvas: {:?}", e).into());
+            }
+        }
+    }
+    
+    web_sys::console::log_1(&"CANVAS: Mount complete".into());
+    Ok(())
+}
+
+/// Unmount the canvas view by removing it from the DOM
+/// This function is called when switching away from the canvas view
+pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
+    web_sys::console::log_1(&"CANVAS: Starting unmount".into());
+    
+    // Remove input panel
+    if let Some(panel) = document.get_element_by_id("input-panel") {
+        web_sys::console::log_1(&"CANVAS: Removing input panel".into());
+        if let Some(parent) = panel.parent_node() {
+            parent.remove_child(&panel)?;
+        }
+    }
+    
+    // Remove canvas container
+    if let Some(container) = document.get_element_by_id("canvas-container") {
+        web_sys::console::log_1(&"CANVAS: Removing canvas container".into());
+        if let Some(parent) = container.parent_node() {
+            parent.remove_child(&container)?;
+        }
+    }
+    
+    // Remove main content area
+    if let Some(content) = document.get_element_by_id("main-content-area") {
+        web_sys::console::log_1(&"CANVAS: Removing main content area".into());
+        if let Some(parent) = content.parent_node() {
+            parent.remove_child(&content)?;
+        }
+    }
+    
+    // Remove agent shelf - critical to ensure it doesn't appear in dashboard view
+    if let Some(shelf) = document.get_element_by_id("agent-shelf") {
+        web_sys::console::log_1(&"CANVAS: Removing agent shelf".into());
+        if let Some(parent) = shelf.parent_node() {
+            parent.remove_child(&shelf)?;
+        }
+    }
+    
+    // Reset app-container class back to default (remove canvas-view)
+    if let Some(app_container) = document.get_element_by_id("app-container") {
+        web_sys::console::log_1(&"CANVAS: Resetting app container class".into());
+        app_container.set_class_name("");
+    }
+    
+    web_sys::console::log_1(&"CANVAS: Unmount complete".into());
+    Ok(())
+}
+
+/// Get a reference to the canvas container element if it exists
+pub fn get_canvas_container(document: &Document) -> Option<Element> {
+    document.get_element_by_id("canvas-container")
+}
+
+/// Check if the canvas is currently mounted
+pub fn is_canvas_mounted(document: &Document) -> bool {
+    document.get_element_by_id("canvas-container").is_some()
+} 
