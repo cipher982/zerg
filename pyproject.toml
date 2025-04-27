@@ -16,4 +16,15 @@ multiline-quotes = "double"
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
-line-ending = "lf" 
+line-ending = "lf"
+
+[tool.pytest.ini_options]
+# Tell pytest where to find tests when run from the root
+testpaths = ["backend/tests"]
+
+# Add the backend directory to sys.path so imports work
+# Use "." if backend code is directly in 'backend', or "backend/src" if using a src layout
+pythonpath = ["backend"]
+
+# Recommended import mode for cleaner behavior
+addopts = "--import-mode=importlib" 

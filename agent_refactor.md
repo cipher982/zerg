@@ -219,7 +219,7 @@ Use the checklist below to track the refactor.  Mark items as **[x]** when compl
 
 ### Phase 0 – Safety Nets
 
-- [ ] 0.1 Add smoke test: fake-LLM → `/threads/{id}/run` → WS round-trip
+- [x] 0.1 Add smoke test: fake-LLM → `/threads/{id}/run` → WS round-trip (covered by `tests/test_thread_run_smoke.py`)
 
 ### Phase 1 – Persistence Isolation
 
@@ -253,6 +253,9 @@ Use the checklist below to track the refactor.  Mark items as **[x]** when compl
 ---
 
 ### Completed Work (details)
+
+*2025-04-28  – Phase 0.1*  
+• Consolidated smoke tests: confirmed `tests/test_thread_run_smoke.py` covers HTTP+WS round-trip for `/threads/{id}/run`, and removed redundant `backend/tests/test_threads_smoke.py`.
 
 *2025-04-27  – Phase 1.1*  
 • Added `backend/zerg/services/thread_service.py` (CRUD façade + converters)  

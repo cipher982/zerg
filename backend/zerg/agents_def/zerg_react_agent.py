@@ -133,3 +133,33 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
     """Return a compiled LangGraph runnable for the given Agent ORM row."""
 
     return build_react_graph(agent_row)
+
+
+# ---------------------------------------------------------------------------
+# Utility for extracting tool messages from an AIMessage
+# ---------------------------------------------------------------------------
+def get_tool_messages(message):  # pragma: no cover
+    """
+    Given an AIMessage with potential .tool_calls, invoke each tool and
+    return the corresponding ToolMessage list.
+    """
+    from langchain_core.messages import AIMessage
+    from langchain_core.messages import ToolMessage
+
+    if not isinstance(message, AIMessage) or not getattr(message, "tool_calls", None):
+        return []
+
+    tool_msgs = []
+    # Available tools
+    tools = [get_current_time]
+    lookup = {tool.name: tool for tool in tools}
+    for tc in message.tool_calls:
+        name = tc.get("name")
+        args = tc.get("args", [])
+        tool_func = lookup.get(name)
+        try:
+            outcome = tool_func.invoke(args)
+        except Exception as exc:
+            outcome = f"<tool-error> {exc}"
+        tool_msgs.append(ToolMessage(content=str(outcome), tool_call_id=tc.get("id"), name=name))
+    return tool_msgs
