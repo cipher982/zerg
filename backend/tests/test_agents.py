@@ -155,10 +155,10 @@ def test_run_agent(client: TestClient, sample_agent: Agent, db_session):
         mock_agent_manager = MagicMock()
         mock_agent_manager_class.return_value = mock_agent_manager
 
-        def mock_process_message(*args, **kwargs):
-            yield "Test response"
+        def mock_process_thread(*args, **kwargs):
+            yield {"content": "Test response", "chunk_type": "assistant_message"}
 
-        mock_agent_manager.process_message.return_value = mock_process_message()
+        mock_agent_manager.process_thread.return_value = mock_process_thread()
 
         # Run the thread
         response = client.post(f"/api/threads/{thread['id']}/run", json={"content": "Test message"})
@@ -194,12 +194,11 @@ def test_run_agent_task(client: TestClient, sample_agent: Agent, db_session):
         mock_agent_manager = MagicMock()
         mock_agent_manager_class.return_value = mock_agent_manager
 
-        def mock_process_message(*args, **kwargs):
-            yield "Task result"
+        # Create a mock thread to be returned
+        mock_thread = MagicMock(id=123)
 
-        mock_agent_manager.process_message.return_value = mock_process_message()
-        mock_agent_manager.get_or_create_thread.return_value = (MagicMock(id=123), True)
-        mock_agent_manager.add_system_message.return_value = None
+        # execute_task should yield the thread object, matching production code
+        mock_agent_manager.execute_task.return_value = iter([mock_thread])
 
         response = client.post(f"/api/agents/{sample_agent.id}/task")
         assert response.status_code == 202

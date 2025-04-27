@@ -231,10 +231,12 @@ def test_process_message(db_session, agent_manager: AgentManager, mock_llm):
         mock_graph.invoke.return_value = {"messages": [mock_response]}
         mock_build_graph.return_value = mock_graph
 
-        # Call the method to process a message (non-streaming)
-        response_generator = agent_manager.process_message(
-            db=db_session, thread=mock_thread, content="Test message", stream=False
+        # Create the user message (new API)
+        mock_crud.create_thread_message(
+            db=db_session, thread_id=mock_thread.id, role="user", content="Test message", processed=False
         )
+        # Call the method to process the thread (non-streaming)
+        response_generator = agent_manager.process_thread(db=db_session, thread=mock_thread, stream=False)
 
         # Consume the generator to get the response
         response = next(response_generator)
@@ -312,10 +314,12 @@ def test_process_message_with_tool_calls(db_session, agent_manager: AgentManager
         mock_graph.stream.return_value = [{"chatbot": {"messages": [mock_response]}}]
         mock_build_graph.return_value = mock_graph
 
-        # Call the method to process a message
-        response_generator = agent_manager.process_message(
-            db=db_session, thread=mock_thread, content="What's the temperature?", stream=True
+        # Create the user message (new API)
+        mock_crud.create_thread_message(
+            db=db_session, thread_id=mock_thread.id, role="user", content="What's the temperature?", processed=False
         )
+        # Call the method to process the thread
+        response_generator = agent_manager.process_thread(db=db_session, thread=mock_thread, stream=True)
 
         # Consume the generator to get the response
         response = next(response_generator)

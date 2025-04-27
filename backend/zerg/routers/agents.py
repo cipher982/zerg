@@ -18,6 +18,7 @@ from zerg.crud import crud
 from zerg.database import get_db
 from zerg.events import EventType
 from zerg.events.decorators import publish_event
+from zerg.events.event_bus import event_bus
 from zerg.schemas.schemas import Agent
 from zerg.schemas.schemas import AgentCreate
 from zerg.schemas.schemas import AgentDetails
@@ -226,55 +227,46 @@ def create_agent_message(agent_id: int, message: MessageCreate, db: Session = De
 
 @router.post("/{agent_id}/task", status_code=status.HTTP_202_ACCEPTED)
 async def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
-    """Run the agent's main task (task_instructions) in a new thread, matching scheduled run behavior."""
+    """Run the agent's main task (task_instructions) in a new thread."""
     from zerg.agents import AgentManager
 
-    agent = crud.get_agent(db, agent_id=agent_id)
+    # ------------------------------------------------------------------
+    # 1. Get the agent and create an AgentManager instance.
+    # ------------------------------------------------------------------
+    agent = crud.get_agent(db, agent_id)
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    agent_manager = AgentManager(agent)
-
-    # Sanity‑check: ensure stored model is still valid (defence‑in‑depth)
-    try:
-        _validate_model_or_400(agent.model)
-    except HTTPException as exc:
-        raise exc  # propagate 400 to caller
+    if not agent.task_instructions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Agent has no task instructions defined",
+        )
 
     # ------------------------------------------------------------------
-    # 1. Mark the agent as *running* and broadcast the change so that the
-    #    dashboard can flip the status badge immediately.
+    # 2. Mark the agent as *running* and create a thread.
     # ------------------------------------------------------------------
-    from zerg.events.event_bus import EventType
-    from zerg.events.event_bus import event_bus
-
     crud.update_agent(db, agent_id, status="running")
-    # We need to commit before publishing so that other DB readers (e.g.
-    # websocket handlers that fetch agent state) observe the change.
     db.commit()
 
-    # Fire-and‑forget publish (no await-able subscribers need the result
-    # synchronously).  Because we are inside an *async* route we can await.
+    # Notify UI immediately that agent is running
     await event_bus.publish(EventType.AGENT_UPDATED, {"id": agent_id, "status": "running"})
 
-    # ------------------------------------------------------------------
-    # 2. Kick off the actual task run inside its own thread context.
-    # ------------------------------------------------------------------
+    agent_manager = AgentManager(agent)
+
+    # Create a title for the thread
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    thread_title = f"Manual Task Run - {timestamp}"
-    thread, created = agent_manager.get_or_create_thread(db, title=thread_title)
-    if created:
-        agent_manager.add_system_message(db, thread)
+    thread_title = f"Manual Task Run - {agent.name} - {timestamp}"
+
     # Run the agent's task instructions (non-streaming)
     try:
-        result_chunks = agent_manager.process_message(
-            db=db,
-            thread=thread,
-            content=agent.task_instructions,
-            stream=False,
+        # Execute the task which creates a new thread and processes it
+        result_generator = agent_manager.execute_task(
+            db=db, task_instructions=agent.task_instructions, thread_type="manual", title=thread_title, stream=False
         )
-        # process_message yields the result, so get the first (and only) chunk
-        _ = next(result_chunks, "")  # materialise generator so errors propagate
+
+        # Get the result to materialize the generator
+        thread = next(result_generator, None)
 
         # ------------------------------------------------------------------
         # 3. Mark the agent back to *idle*, persist last_run_at, and publish
@@ -295,8 +287,7 @@ async def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
             },
         )
 
-        # The response message is already created in process_message; return
-        # the thread so the caller (frontend) can open it if desired.
+        # Return the thread ID so the caller (frontend) can open it if desired
         return {"thread_id": thread.id}
     except Exception as e:
         error_msg = str(e)
