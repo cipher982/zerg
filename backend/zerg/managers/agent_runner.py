@@ -23,6 +23,8 @@ import logging
 from typing import List
 from typing import Sequence
 
+# Message classes
+from langchain_core.messages import AIMessage
 from langchain_core.messages import BaseMessage
 from sqlalchemy.orm import Session
 
@@ -66,21 +68,26 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
         state = {"messages": original_msgs}
         result = self._runnable.invoke(state)
 
-        try:
-            new_messages: Sequence[BaseMessage] = result.get("messages", [])  # type: ignore[arg-type]
-        except AttributeError:
-            # *result* may be a MagicMock in the mocked test environment –
-            # synthesize a minimal assistant reply so downstream logic works.
-            from langchain_core.messages import AIMessage
+        # Validate result structure – we expect a mapping with "messages" key
+        # containing a list of LangChain *BaseMessage* objects.  Any deviation
+        # is treated as a programmer error: we raise to surface the bug
+        # instead of silently papering over it.
 
-            new_messages = [AIMessage(content="mock-response")]
+        if not isinstance(result, dict) or "messages" not in result:
+            raise TypeError("Agent runnable returned unexpected value – expected dict with 'messages' key")
 
-        if not new_messages:
-            from langchain_core.messages import AIMessage
+        new_messages_raw = result["messages"]
 
-            # Ensure at least one assistant reply is persisted so message
-            # ordering tests pass even with heavy mocking.
-            new_messages = [AIMessage(content="mock-response")]
+        if not isinstance(new_messages_raw, (list, tuple)):
+            raise TypeError("'messages' must be a list of BaseMessage instances")
+
+        if not all(isinstance(m, BaseMessage) for m in new_messages_raw):
+            raise TypeError("All items in 'messages' must be LangChain BaseMessage instances")
+
+        if not new_messages_raw:
+            raise ValueError("Agent produced no messages – violating contract")
+
+        new_messages: Sequence[BaseMessage] = list(new_messages_raw)
 
         # 3. Persist
         self.thread_service.save_new_messages(db, thread_id=thread.id, messages=new_messages, processed=True)
