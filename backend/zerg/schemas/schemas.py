@@ -75,6 +75,7 @@ class ThreadBase(BaseModel):
     agent_state: Optional[Dict[str, Any]] = None
     memory_strategy: Optional[str] = "buffer"
     active: Optional[bool] = True
+    thread_type: Optional[str] = "chat"  # Types: chat, scheduled, manual
 
 
 class ThreadCreate(ThreadBase):
@@ -86,6 +87,7 @@ class ThreadUpdate(BaseModel):
     agent_state: Optional[Dict[str, Any]] = None
     memory_strategy: Optional[str] = None
     active: Optional[bool] = None
+    thread_type: Optional[str] = None
 
 
 class Thread(ThreadBase):

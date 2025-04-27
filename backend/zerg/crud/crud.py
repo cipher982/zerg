@@ -193,6 +193,7 @@ def create_thread(
     active: bool = True,
     agent_state: Optional[Dict[str, Any]] = None,
     memory_strategy: Optional[str] = "buffer",
+    thread_type: Optional[str] = "chat",
 ):
     """Create a new thread for an agent"""
     # If this is set as active, deactivate any other active threads
@@ -205,6 +206,7 @@ def create_thread(
         active=active,
         agent_state=agent_state,
         memory_strategy=memory_strategy,
+        thread_type=thread_type,
     )
     db.add(db_thread)
     db.commit()

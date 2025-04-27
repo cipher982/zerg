@@ -63,6 +63,7 @@ class Thread(Base):
     # Store additional metadata like agent state
     agent_state = Column(JSON, nullable=True)
     memory_strategy = Column(String, default="buffer", nullable=True)
+    thread_type = Column(String, default="chat", nullable=False)  # Types: chat, scheduled, manual
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

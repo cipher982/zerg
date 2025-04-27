@@ -61,6 +61,7 @@ def create_thread(thread: ThreadCreate, db: Session = Depends(get_db)):
         active=thread.active,
         agent_state=thread.agent_state,
         memory_strategy=thread.memory_strategy,
+        thread_type=thread.thread_type,
     )
 
 
@@ -151,19 +152,13 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
     # Notify clients that a streamed response is starting
     await topic_manager.broadcast_to_topic(topic, StreamStartMessage(thread_id=thread_id).model_dump())
 
-    # Stream the assistant response chunk‑by‑chunk.  We already have the
-    # latest user message stored in the DB (`latest_message`).  Passing
-    # `content=None` avoids creating a duplicate copy of the same user
-    # message inside `AgentManager.process_message`.
-
-    for chunk in agent_manager.process_message(
+    # Stream the assistant response chunk‑by‑chunk using the new process_thread method
+    for chunk in agent_manager.process_thread(
         db,
         thread,
-        content=None,
         stream=True,
         token_stream=True,
     ):
-        # Always expect the new dictionary format with metadata
         chunk_content = chunk["content"]
         chunk_type = chunk["chunk_type"]
         tool_name = chunk["tool_name"]
@@ -182,9 +177,5 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
 
     # Signal the end of the stream
     await topic_manager.broadcast_to_topic(topic, StreamEndMessage(thread_id=thread_id).model_dump())
-
-    # Mark all consumed messages as processed
-    for msg in messages:
-        crud.mark_message_processed(db, msg.id)
 
     return {"status": "ok"}

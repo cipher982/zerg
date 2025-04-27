@@ -178,19 +178,9 @@ class AgentManager:
         return {"messages": tool_messages}
 
     def get_or_create_thread(
-        self, db, thread_id: Optional[int] = None, title: str = "New Thread"
+        self, db, thread_id: Optional[int] = None, title: str = "New Thread", thread_type: str = "chat"
     ) -> Tuple[ThreadModel, bool]:
-        """
-        Get an existing thread or create a new one.
-
-        Args:
-            db: Database session
-            thread_id: Optional ID of an existing thread
-            title: Title for a new thread if one is created
-
-        Returns:
-            Tuple of (thread, created) where created is True if a new thread was created
-        """
+        """Get an existing thread or create a new one."""
 
         # Store the token_stream preference on the instance so that the
         # _chatbot_node can access it without having to thread the value
@@ -210,8 +200,12 @@ class AgentManager:
                 # If not found or belongs to a different agent, create a new one
                 thread = None
         else:
-            # Try to find an active thread for this agent
-            thread = crud.get_active_thread(db, self.agent_model.id)
+            # For non-chat thread types, always create a new thread
+            if thread_type != "chat":
+                thread = None
+            else:
+                # For chat threads, try to find an active thread for this agent
+                thread = crud.get_active_thread(db, self.agent_model.id)
 
         # If no thread found or specified, create a new one
         if not thread:
@@ -222,6 +216,7 @@ class AgentManager:
                 active=True,
                 agent_state={},
                 memory_strategy="buffer",
+                thread_type=thread_type,
             )
             created = True
 
@@ -244,63 +239,87 @@ class AgentManager:
                 content=self.agent_model.system_instructions,
             )
 
-    def process_message(
+    def create_thread(self, db, title: str, thread_type: str = "chat") -> Tuple[ThreadModel, bool]:
+        """Create a new thread for this agent with the appropriate type."""
+        from zerg.crud import crud
+
+        thread = crud.create_thread(
+            db=db,
+            agent_id=self.agent_model.id,
+            title=title,
+            active=(thread_type == "chat"),  # Only chat threads are active by default
+            agent_state={},
+            memory_strategy="buffer",
+            thread_type=thread_type,
+        )
+
+        # Add the system message to the new thread
+        self.add_system_message(db, thread)
+
+        return thread, True
+
+    def execute_task(
+        self,
+        db,
+        task_instructions: str,
+        thread_type: str = "manual",
+        title: Optional[str] = None,
+        stream: bool = False,
+        token_stream: bool = False,
+    ):
+        """Execute a specific task by creating a new thread and processing the task instructions."""
+        from zerg.crud import crud
+
+        # Generate a default title if none provided
+        if not title:
+            timestamp = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+            title_prefix = "Scheduled Run" if thread_type == "scheduled" else "Manual Task Run"
+            title = f"{title_prefix} - {self.agent_model.name} - {timestamp}"
+
+        # Create a new thread for this task
+        thread, _ = self.create_thread(db, title=title, thread_type=thread_type)
+
+        # Add the task instructions as a user message
+        _ = crud.create_thread_message(
+            db=db,
+            thread_id=thread.id,
+            role="user",
+            content=task_instructions,
+            processed=False,
+        )
+
+        # Process the thread (which will find our unprocessed task message)
+        yield from self.process_thread(db, thread, stream=stream, token_stream=token_stream)
+
+        # Return the thread for reference
+        return thread
+
+    def process_thread(
         self,
         db,
         thread: ThreadModel,
-        content: Optional[str] = None,
-        *,
         stream: bool = True,
         token_stream: bool = False,
     ):
-        """
-        Processes a new user message through the LangGraph agent.
-        This method now REQUIRES content to be provided.
-
-        Args:
-            db: Database session
-            thread: Thread to operate on.
-            content: User-supplied text.  ``None`` means *use the last
-                unprocessed message* that is already stored in the DB (the
-                optimistic-UI path used by ``/threads/{id}/run``).
-            stream: If **True** we call ``graph.stream`` to receive node-level
-                events as they happen; otherwise the call blocks until the
-                LangGraph run completes.
-            token_stream: If **True** the underlying OpenAI call streams
-                tokens.  Useful for interactive chat where the UI shows a
-                ripple effect.  In autonomous task-runs this should be
-                **False** so only the final assistant reply is broadcast.
-
-        Yields:
-            dict – message chunks with metadata including content, chunk_type, tool_name,
-            and tool_call_id for proper UI rendering.
-        """
+        """Process any unprocessed messages in a thread."""
         from zerg.crud import crud
 
-        # If `content` is provided we need to append it as a new user message.
-        # When `run_thread` is invoked after the frontend already created the
-        # user message (optimistic‑UI flow), `content` will be `None` so we do
-        # NOT create a second, duplicate row.
-
-        if content:
-            user_message = crud.create_thread_message(
-                db=db,
-                thread_id=thread.id,
-                role="user",
-                content=content,
-                processed=False,  # Mark as False initially
-            )
-        else:
-            # Assume the last unprocessed user message is the one to process
-            unprocessed = crud.get_unprocessed_messages(db, thread.id)
-            user_message = unprocessed[-1] if unprocessed else None
+        # Get unprocessed messages in this thread
+        unprocessed = crud.get_unprocessed_messages(db, thread.id)
+        if not unprocessed:
+            # No unprocessed messages to handle
+            yield {
+                "content": "No unprocessed messages to handle",
+                "chunk_type": "system_message",
+                "tool_name": None,
+                "tool_call_id": None,
+            }
+            return
 
         # Build the graph
         graph = self._build_graph()
 
-        # Prepare initial state
         # Get all previous messages from the database
-        # Important: Fetch messages *after* creating the new user message
         db_messages = crud.get_thread_messages(db, thread.id)
         messages = []
 
@@ -339,25 +358,17 @@ class AgentManager:
         # Structure: {tool_call_id: {"name": str, "content": str}}
         tool_output_map: Dict[str, Dict[str, str]] = {}
 
-        # Track whether the assistant issued any tool calls.  If so we'll
-        # create a dedicated assistant message row containing the tool_calls
-        # metadata (mirroring the OpenAI chat protocol).  We can't easily
-        # access the original AIMessage object in token-stream mode, so we
-        # reconstruct the minimal representation from the information we do
-        # have (name + id).
+        # Track whether the assistant issued any tool calls.
         tool_calls_detected: Dict[str, str] = {}  # id -> name
 
         if stream:
-            # Determine which stream_mode to use.  For token streaming we rely
-            # on LangGraph's built-in "messages" mode which forwards the LLM
-            # token callbacks.  Otherwise we keep the default ("updates").
+            # Determine which stream_mode to use.
             stream_mode = "messages" if token_stream else None
 
             for event in graph.stream(state, stream_mode=stream_mode):
                 if token_stream:
                     # "messages" mode yields tuples of
-                    # (AIMessageChunk | HumanMessage, metadata).  We only care
-                    # about assistant chunks.
+                    # (AIMessageChunk | HumanMessage, metadata).
                     if isinstance(event, tuple):
                         message_chunk, _metadata = event
                         # Guard: only messages with content we want to
@@ -457,18 +468,7 @@ class AgentManager:
 
         # After streaming completes, save the full response and update status
         if response_content:
-            # ------------------------------------------------------------------
-            # NOTE: We deliberately skip persisting the *assistant request*
-            # (the message that contains `tool_calls`) for now because the
-            # existing unit-tests expect only two calls to
-            # `crud.create_thread_message`: user + final assistant.  A proper
-            # persistence of the assistant request will be re-introduced once
-            # the tests are updated accordingly.
-            # ------------------------------------------------------------------
-
-            # ------------------------------------------------------------
-            # Persist the final assistant answer *before* tool messages so we can use its id as parent_id.
-            # ------------------------------------------------------------
+            # Persist the final assistant answer
             assistant_row = self._safe_create_thread_message(
                 crud,
                 db=db,
@@ -479,9 +479,7 @@ class AgentManager:
             )
             assistant_id = getattr(assistant_row, "id", None)
 
-            # ------------------------------------------------------------
-            # Persist each *tool* response (after assistant), setting parent_id to assistant_id.
-            # ------------------------------------------------------------
+            # Persist each tool response, setting parent_id to assistant_id
             for tc_id, data in tool_output_map.items():
                 self._safe_create_thread_message(
                     crud,
@@ -495,9 +493,9 @@ class AgentManager:
                     parent_id=assistant_id,
                 )
 
-            # Mark the originating user message as processed (if we have one)
-            if user_message is not None:
-                crud.mark_message_processed(db, user_message.id)
+            # Mark all unprocessed messages as processed
+            for msg in unprocessed:
+                crud.mark_message_processed(db, msg.id)
 
             # Update the thread timestamp
             crud.update_thread(db, thread.id)

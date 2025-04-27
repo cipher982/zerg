@@ -225,10 +225,11 @@ class SchedulerService:
         It handles:
         - Getting a DB session
         - Loading the agent
-        - Creating or getting a thread
+        - Creating a new thread for this run using the execute_task method
         - Running the agent's task instructions
         """
         start_time = datetime.utcnow()
+        timestamp = start_time.strftime("%Y-%m-%d %H:%M:%S")
 
         db_session = self.session_factory()
         try:
@@ -247,24 +248,21 @@ class SchedulerService:
             # Create the agent manager
             agent_manager = AgentManager(agent)
 
-            # Get or create a thread for this scheduled run
-            thread, created = agent_manager.get_or_create_thread(db_session, title=f"Scheduled Run - {agent.name}")
+            # Create a title for the thread
+            thread_title = f"Scheduled Run - {agent.name} - {timestamp}"
 
-            # If it's a new thread, add the system message
-            if created:
-                agent_manager.add_system_message(db_session, thread)
-
-            # Run the agent's task instructions
+            # Execute the task which creates a new thread and processes it
             logger.info(f"Running scheduled task for agent {agent_id}")
-            # Fix: process_message returns a generator, which needs to be consumed, not awaited
-            result_chunks = agent_manager.process_message(
+            result_generator = agent_manager.execute_task(
                 db=db_session,
-                thread=thread,
-                content=agent.task_instructions,
+                task_instructions=agent.task_instructions,
+                thread_type="scheduled",
+                title=thread_title,
                 stream=False,  # Don't stream for scheduled runs
             )
-            # Consume the generator to get the result
-            _ = next(result_chunks, "")  # materialise generator so errors propagate
+
+            # Get the first (and only) result item to materialize the generator
+            thread = next(result_generator, None)
 
             # Update last_run_at and next_run_at after successful run
             job = self.scheduler.get_job(f"agent_{agent_id}")
@@ -283,6 +281,7 @@ class SchedulerService:
                     "last_run_at": start_time.isoformat(),
                     "next_run_at": agent.next_run_at.isoformat() if agent.next_run_at else None,
                     "last_error": None,
+                    "thread_id": thread.id,  # Include thread_id so UI can show the result
                 },
             )
 
