@@ -75,10 +75,73 @@ import langgraph.graph  # noqa: E402
 import langgraph.graph.message  # noqa: E402
 
 # Then patch specific classes or functions rather than entire modules
-langgraph.graph.StateGraph = MagicMock()
-langgraph.func = MagicMock()
-langgraph.graph.message.add_messages = MagicMock()
-langchain_openai.ChatOpenAI = MagicMock()
+# ----------------------------------------------------------------------
+# LangGraph / LLM stubs
+# ----------------------------------------------------------------------
+from langchain_core.messages import AIMessage  # noqa: E402
+
+
+class _FakeRunnable:
+    """Minimal runnable that returns a deterministic assistant reply."""
+
+    def invoke(self, _state):  # noqa: D401 – interface mimic
+        return {"messages": [AIMessage(content="stub-response")]}
+
+
+class _FakeStateGraph(MagicMock):
+    """Replacement for ``langgraph.graph.StateGraph`` used in tests.
+
+    We inherit from MagicMock so existing attribute access patterns in the
+    agent definition code still work (``add_node``, ``add_edge``, etc.), but
+    we override ``compile`` to return our deterministic runnable instead of a
+    plain MagicMock.  This removes the need for *any* fallback logic in
+    production code.
+    """
+
+    def compile(self):  # noqa: D401 – mimic real API
+        return _FakeRunnable()
+
+
+# Patch the modules
+# We now run the *real* LangGraph StateGraph implementation so the agent
+# definition code executes unmodified.  We only patch *ChatOpenAI* because it
+# performs an external network call.  ``add_messages`` is a pure helper; no
+# need to mock it.
+
+# Remove previous mocks if they were set by earlier lines in this file.
+try:
+    import importlib
+
+    # Re-import the real sub-module to ensure we restored original symbols.
+    importlib.reload(langgraph.graph)
+    importlib.reload(langgraph.func)
+    importlib.reload(langgraph.graph.message)
+except Exception:  # pragma: no cover – defensive; tests still proceed
+    pass
+
+# Patch StateGraph.compile to return our fake runnable – this avoids spinning
+# up actual tool execution yet still keeps the graph building logic intact.
+
+real_state_graph_cls = langgraph.graph.StateGraph
+
+
+class _PassthroughStateGraph(real_state_graph_cls):
+    """Subclass that behaves identically except *compile()* returns stub."""
+
+    def compile(self):  # type: ignore[override]
+        from langchain_core.messages import AIMessage
+
+        class _Runnable:
+            def invoke(self, _state):
+                return {"messages": [AIMessage(content="stub-response")]}
+
+        return _Runnable()
+
+
+langgraph.graph.StateGraph = _PassthroughStateGraph
+
+# Patch ChatOpenAI so no external network call happens
+langchain_openai.ChatOpenAI = MagicMock(return_value=MagicMock(bind_tools=MagicMock(return_value=MagicMock())))
 
 # Import app after all engine setup and mocks are in place
 from zerg.main import app  # noqa: E402
