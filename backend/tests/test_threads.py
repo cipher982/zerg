@@ -5,9 +5,6 @@ This module contains tests for the /api/threads endpoints,
 including CRUD operations for threads and messages.
 """
 
-from unittest.mock import MagicMock
-from unittest.mock import patch
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -105,31 +102,25 @@ def test_create_thread(client: TestClient, sample_agent: Agent):
         "agent_state": {"test": "value"},
     }
 
-    # Test with patched AgentManager to avoid actual LLM calls
-    with patch("zerg.routers.threads.AgentManager") as mock_agent_manager:
-        # Configure the mock
-        mock_instance = MagicMock()
-        mock_agent_manager.return_value = mock_instance
-        mock_instance.add_system_message.return_value = None
+    # No need to patch AgentRunner for thread creation
+    response = client.post("/api/threads", json=thread_data)
+    assert response.status_code == 201
+    created_thread = response.json()
+    assert created_thread["title"] == thread_data["title"]
+    assert created_thread["agent_id"] == thread_data["agent_id"]
+    assert created_thread["active"] == thread_data["active"]
+    assert created_thread["memory_strategy"] == thread_data["memory_strategy"]
+    assert created_thread["agent_state"] == thread_data["agent_state"]
+    assert "id" in created_thread
+    assert "created_at" in created_thread
+    assert "updated_at" in created_thread
 
-        response = client.post("/api/threads", json=thread_data)
-        assert response.status_code == 201
-        created_thread = response.json()
-        assert created_thread["title"] == thread_data["title"]
-        assert created_thread["agent_id"] == thread_data["agent_id"]
-        assert created_thread["active"] == thread_data["active"]
-        assert created_thread["memory_strategy"] == thread_data["memory_strategy"]
-        assert created_thread["agent_state"] == thread_data["agent_state"]
-        assert "id" in created_thread
-        assert "created_at" in created_thread
-        assert "updated_at" in created_thread
-
-        # Verify the thread was created in the database by fetching it
-        response = client.get(f"/api/threads/{created_thread['id']}")
-        assert response.status_code == 200
-        fetched_thread = response.json()
-        assert fetched_thread["id"] == created_thread["id"]
-        assert fetched_thread["title"] == thread_data["title"]
+    # Verify the thread was created in the database by fetching it
+    response = client.get(f"/api/threads/{created_thread['id']}")
+    assert response.status_code == 200
+    fetched_thread = response.json()
+    assert fetched_thread["id"] == created_thread["id"]
+    assert fetched_thread["title"] == thread_data["title"]
 
 
 def test_create_thread_with_nonexistent_agent(client: TestClient):
@@ -267,26 +258,19 @@ def test_create_thread_message_not_found(client: TestClient):
 
 def test_run_thread(client: TestClient, sample_thread: Thread, db_session):
     """Test the POST /api/threads/{thread_id}/run endpoint"""
-    # Mock the AgentManager to avoid actual LLM calls
-    with patch("zerg.routers.threads.AgentManager") as mock_agent_manager:
-        # Configure the mock
-        mock_instance = MagicMock()
-        mock_agent_manager.return_value = mock_instance
 
-        # Define a mock process_message function that yields chunks
-        def mock_process_message(*args, **kwargs):
-            yield "Test"
-            yield " response"
-            yield " chunks"
+    # Add a user message
+    message = ThreadMessage(thread_id=sample_thread.id, role="user", content="Hello, assistant", processed=False)
+    db_session.add(message)
+    db_session.commit()
 
-        mock_instance.process_message = mock_process_message
+    # Run the thread
+    response = client.post(f"/api/threads/{sample_thread.id}/run")
+    assert response.status_code == 202
 
-        # Send a test message
-        response = client.post(
-            f"/api/threads/{sample_thread.id}/run",
-            json={"content": "Test message"},
-        )
-        assert response.status_code == 202  # Changed from 200 to 202 for async operation
+    # Check if message was marked as processed
+    db_session.refresh(message)
+    assert message.processed is True
 
 
 def test_run_thread_no_unprocessed_messages(client: TestClient, sample_thread: Thread):
