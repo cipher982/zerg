@@ -2,7 +2,7 @@
 
 **Document Purpose:** Provides essential context, current status, roadmap, development guidelines, and future ideas for the Zerg project, intended for both human developers and AI coding assistants.
 
-**Last Updated:** 2025-05-03 *(Remember to update this date regularly!)*
+**Last Updated:** 2025-05-04 *(Remember to update this date regularly!)*
 
 ---
 
@@ -10,7 +10,7 @@
 
 *   **Core Purpose:** Zerg is an automation platform enabling users to connect event triggers (like webhooks or schedules) to AI agents and deterministic tools using a visual canvas interface, facilitating the creation of complex, event-driven workflows.
 *   **Technology Stack:**
-    *   **Backend:** Python, FastAPI, SQLAlchemy (async with `asyncpg`), LangGraph, APScheduler
+    *   **Backend:** Python, FastAPI, SQLAlchemy (synchronous for now; evaluated `asyncpg` but postponed), LangGraph, APScheduler
     *   **Frontend:** Rust (compiled to WASM), Yew Framework, WebSockets
     *   **Key Libraries:** Pydantic (V2), `serde`/`serde_wasm_bindgen`, `uv` (for env/pkg management)
 *   **High-Level Architecture:**
@@ -21,19 +21,19 @@
 
 ---
 
-## 2. Current System State (Snapshot as of 2025-05-03)
+## 2. Current System State (Snapshot as of 2025-05-04)
 
 *Key: ✅ = Shipped & Verified | 🟡 = Partially Done | ❌ = Not Started*
 
 **Backend:**
 *   Agents / Threads / Messages CRUD: ✅
-*   LangGraph Agent Runtime (Single Node): ✅
-    *   Streaming ChatCompletion → EventBus → WebSocket: ✅
+*   LangGraph Agent Runtime (Single Node **+ Tool execution loop**): ✅
+*   Streaming ChatCompletion → EventBus → WebSocket (token & tool-chunk aware): ✅
 *   APScheduler Service (Cron Runs, `next/last_run_at` persistence): ✅
 *   Topic-based WebSocket Hub (Auto DB event publishing via decorators): ✅
 *   Webhook Triggers (DB Table, `POST /api/triggers`, `POST /api/triggers/{id}/events`, `EventType.TRIGGER_FIRED`, Scheduler hook): ✅
-*   Webhook Triggers (`DELETE /api/triggers/{id}` endpoint): ❌
-*   Webhook Triggers (HMAC Secret Verification on fire event): ❌
+*   Webhook Triggers (`DELETE /api/triggers/{id}` endpoint): 🟡 (CRUD helper exists; router & tests pending)
+*   Webhook Triggers (HMAC Secret Verification on fire event): ❌ (simple secret field currently used)
 *   Workflow DAG Execution Engine (Multi-node LangGraph from Canvas JSON): ❌
 *   Testing: >180 tests, covering CRUD, services, events, triggers (create/fire). Green ✅
 
@@ -46,8 +46,9 @@
 *   Dashboard: List Agent Triggers (Read-only, Copy URL button): 🟡 (Create/Delete UI missing)
 *   Chat: Real-time conversation view per agent/thread: ✅
 *   Chat: Surface Threads from *all* runs (manual, scheduled, trigger-fired): 🟡 (Data exists; UI currently filters/hides some)
+*   Chat: Render `ToolMessage` outputs (collapsible panels) & correct timestamp ordering: ✅
 *   Canvas: Node Editor foundational component: ✅
-*   Canvas: Only "Agent" nodes currently placeable/editable: ✅
+*   Canvas: Only "Agent" nodes currently placeable/editable: ✅ _(Trigger & Tool nodes not yet surfaced)_
 *   Canvas: Add/Connect other node types (Webhook Trigger, Tool, Condition, Input/Output): ❌
 *   Canvas: Export workflow definition to JSON: ❌
 *   Canvas: Runtime Execution Highlighting (visualizing active node): ❌
@@ -73,11 +74,18 @@
     *   *Status Breakdown:* Backend API (Create/Fire ✅), Frontend UI (List ✅, Create/Delete ❌), Backend Polish (Delete API ❌, HMAC ❌), Canvas Node ❌.
 *   **M2: “Workflow Execution Engine”** (Status: ❌ Not Started)
     *   *Summary:* Execute multi-step workflows defined on the Canvas (DAGs of Trigger, Agent, Tool, Condition nodes). Persist Canvas JSON. Basic runtime visualization. *Scalability Note: May require evaluating dedicated task queues (Celery/RQ) if APScheduler proves insufficient for high concurrency.*
-*   **M3: “Toolbox Expansion”** (Status: ❌ Not Started)
-    *   *Summary:* Ship initial set of deterministic "Tool" nodes (e.g., Slack message, Email send/fetch, GitHub issue, basic HTTP Request). Define Tool node contract (input/output schema, execution guarantees). *Future Enhancement: Consider tool-specific access controls.*
-*   **M4: “Multi‑tenant & Auth”** (Status: ❌ Not Started)
+*   **M3a: “Tool Runtime Support”** (Status: ✅ Completed 2025-04-26)
+    *   *Summary:* Backend LangGraph now executes tools, persists `ToolMessage` rows, streams chunk metadata; Chat UI renders outputs in collapsible sub-bubbles.
+
+*   **M3b: “Toolbox UI & Nodes”** (Status: ❌ Not Started)
+    *   *Summary:* Bring Tool nodes to the Canvas and ship first deterministic tools (HTTP Request, Slack message, Email send). Define node contract, input/output schema & access controls.
+*   **M4: “Debugging UX”** (Status: 🟡 In Progress)
+    *   *Summary:* Agent Debug backend routes & modal to inspect LangGraph state, message streams, and tool payloads for easier troubleshooting.
+
+*   **M5: “Multi-tenant & Auth”** (Status: ❌ Not Started)
     *   *Summary:* Implement user authentication (e.g., Auth0/Clerk JWT) and data isolation (`workspace_id`) to support multiple users securely. *This may include managing permissions for accessing specific tools or agents.*
-*   **M5: “Observability & Cost”** (Status: ❌ Not Started)
+
+*   **M6: “Observability & Cost”** (Status: ❌ Not Started)
     *   *Summary:* Track key metrics per agent run (token usage, cost, duration, errors) and expose them via API and/or dashboard analytics panel.
 
 **Prioritization Rationale:**
@@ -85,9 +93,10 @@
 1.  **Scheduling UX (M0 - Done):** Delivered immediate user value and exercised the core backend->frontend eventing loop.
 2.  **Triggers (M1 - Current):** Provides the first real-world integration point, unlocking practical use cases without requiring the full workflow engine.
 3.  **Workflow Engine (M2):** Foundational for complex automations, but requires M1 (Triggers) and M3 (Tools) to be truly useful. Build the plumbing only once there's something to plumb.
-4.  **Toolbox (M3):** Each tool adds concrete, marketable value. Can be developed incrementally alongside/after M2.
-5.  **Auth/Multi-tenancy (M4):** Necessary for onboarding external alpha users or offering a SaaS product. Timing depends on user rollout plan.
-6.  **Observability (M5):** Crucial for production use and optimization, but less critical than core execution functionality for early stages.
+4.  **Toolbox UI (M3b):** Visible Tool nodes make workflows more powerful; low-hanging UX once runtime exists.
+5.  **Debugging UX (M4):** Early diagnostics reduce iteration time and bug-hunt cost.
+6.  **Auth/Multi-tenancy (M5):** Required for any external alpha users and webhook isolation.
+7.  **Observability (M6):** Key for cost control & reliability, but can wait until workflows run in production.
 
 ---
 
@@ -124,10 +133,10 @@
 
 **Key Code Locations:**
 *   **Backend:**
-    *   Models: `backend/zerg/app/models/models.py`
-    *   Services: `backend/zerg/app/services/` (esp. `scheduler_service.py`, `agent_service.py`)
-    *   Events: `backend/zerg/app/events/`
-    *   API Routers: `backend/zerg/app/routers/` (esp. `agents.py`, `triggers.py`)
+    *   Models: `backend/zerg/models/models.py`
+    *   Services: `backend/zerg/services/` (esp. `scheduler_service.py`, `agent_service.py`)
+    *   Events: `backend/zerg/events/`
+    *   API Routers: `backend/zerg/routers/` (esp. `agents.py`, `triggers.py`)
     *   Main App: `backend/zerg/main.py`
     *   Tests: `backend/tests/`
 *   **Frontend:**
@@ -164,7 +173,7 @@
 
 **Core Conventions & Patterns:**
 *   **Database:** Uses SQLAlchemy 2.0 async (`asyncio`, `asyncpg`/`aiosqlite`). Session management via `default_session_factory`. Tests override with an in-memory SQLite DB. `expire_on_commit=False` is set on the sessionmaker; be mindful that objects are not automatically refreshed after commit – use `session.refresh(obj)` if needed.
-*   **Backend Events:** The `EventBus` (`zerg/app/events/bus.py`) is central. Use `await event_bus.publish(Event(type=EventType.XYZ, data={...}))`. Callbacks registered via `event_bus.subscribe()` are async. REST routes that mutate state should use the `@publish_event()` decorator to automatically broadcast changes over WebSockets.
+*   **Backend Events:** The `EventBus` (`backend/zerg/events/event_bus.py`) is central. Use `await event_bus.publish(EventType.XYZ, {...})`. Callbacks registered via `event_bus.subscribe()` are async. REST routes that mutate state should use the `@publish_event()` decorator to automatically broadcast changes over WebSockets.
 *   **Frontend State:** Follows the Elm Architecture: User interaction -> `Message` enum -> `update(msg, state)` function -> updates `AppState` -> potentially returns `Command` enum -> Command executed (e.g., API call) -> Result yields new `Message` -> cycle repeats. Never mutate `AppState` directly outside `update.rs`. `TopicManager` handles incoming WebSocket messages and translates them into `Message`s.
 *   **API Schemas:** Use Pydantic V2 `BaseModel` for defining API request/response bodies and for data validation.
 *   **Workflow Definition:** Canvas graph structure will be stored as JSON in a dedicated `Agent.workflow_definition` column (planned). Schema definitions should exist in both Python (Pydantic) and Rust (Serde) for consistency, ideally generated or kept closely in sync. Plan for schema versioning early.
@@ -217,6 +226,18 @@
 ## 8. Status History / Log
 
 *(Older status updates and detailed completion notes are archived here)*
+
+---
+
+## 9. Risk Log (living document)
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| APScheduler single-process bottleneck once concurrent trigger traffic exceeds ~50/min | Medium | High (missed schedules, latency) | Prototype simple Redis queue off-loading; evaluate Celery before GA |
+| Webhook secret only checked via body param (no replay protection) | High | High (unauthorized runs) | Implement HMAC header w/ timestamp & nonce (see M1 hardening) |
+| Lack of auth exposes all data if deployed publicly | High | Critical | Prioritize M5 multi-tenancy & JWT gate before any external pilot |
+| LangGraph API surface changes (still evolving) may break runtime | Medium | Medium | Lock version, write integration tests, keep adaption layer thin |
+| Token cost overrun from long tool output streaming | Low | Medium | Add per-run token + time budget (M6 Observability), abort when exceeded |
 
 **2025-04-21 - M0 Completed / M1 Started**
 *   *(Details of work completed for M0 - Scheduling UX & Thread Persistence - remain the same as in the previous version)*
