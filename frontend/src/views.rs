@@ -289,18 +289,22 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
         }
     }
 
+    // Get app container for class manipulation
+    let app_container = document
+        .get_element_by_id("app-container")
+        .ok_or(JsValue::from_str("Could not find app-container"))?;
+
     match view_type {
         ActiveView::Dashboard => {
+            // Remove canvas-view class for dashboard view
+            app_container.set_class_name("");
+            
             // Create dashboard container if needed
             if document.get_element_by_id("dashboard-container").is_none() {
                 let dashboard_container = document.create_element("div")?;
                 dashboard_container.set_id("dashboard-container");
                 dashboard_container.set_class_name("dashboard-container");
                 dashboard_container.set_attribute("style", "display: block;")?;
-                
-                let app_container = document
-                    .get_element_by_id("app-container")
-                    .ok_or(JsValue::from_str("Could not find app-container"))?;
                 
                 app_container.append_child(&dashboard_container)?;
                 
@@ -309,27 +313,62 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
                 dashboard.set_id("dashboard");
                 dashboard.set_class_name("dashboard");
                 dashboard_container.append_child(&dashboard)?;
+            } else {
+                // Just show the existing dashboard container
+                if let Some(dashboard) = document.get_element_by_id("dashboard-container") {
+                    dashboard.set_attribute("style", "display: block;")?;
+                }
             }
-            render_dashboard_view(&AppState::new(), document)?
+            
+            // Make sure input panel is hidden in dashboard view
+            if let Some(input_panel) = document.get_element_by_id("input-panel") {
+                input_panel.set_attribute("style", "display: none;")?;
+            }
+            
+            // Update tab styling
+            if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
+                dashboard_tab.set_class_name("tab-button active");
+            }
+            
+            if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
+                canvas_tab.set_class_name("tab-button");
+            }
+            
+            // Initialize or refresh the dashboard content
+            crate::components::dashboard::refresh_dashboard(document)?;
         },
         ActiveView::Canvas => {
-            // Create canvas container if needed
+            // Add canvas-view class for flex layout
+            app_container.set_class_name("canvas-view");
+            
+            // Create canvas container if needed 
             if document.get_element_by_id("canvas-container").is_none() {
+                // Create main content area wrapper
+                let main_content = document.create_element("div")?;
+                main_content.set_class_name("main-content-area");
+                
                 let canvas_container = document.create_element("div")?;
                 canvas_container.set_id("canvas-container");
                 canvas_container.set_class_name("canvas-container");
-                canvas_container.set_attribute("style", "display: block;")?;
-                
-                let app_container = document
-                    .get_element_by_id("app-container")
-                    .ok_or(JsValue::from_str("Could not find app-container"))?;
-                
-                app_container.append_child(&canvas_container)?;
                 
                 // Create canvas
                 let canvas = document.create_element("canvas")?;
                 canvas.set_id("node-canvas");
                 canvas_container.append_child(&canvas)?;
+                
+                // Create input panel if needed
+                if document.get_element_by_id("input-panel").is_none() {
+                    // Create input panel using existing code from ui/main.rs
+                    let input_panel = crate::ui::main::create_input_panel(document)?;
+                    main_content.append_child(&input_panel)?;
+                } else if let Some(panel) = document.get_element_by_id("input-panel") {
+                    // Move existing panel to main content
+                    panel.set_attribute("style", "display: block;")?;
+                    main_content.append_child(&panel)?;
+                }
+                
+                main_content.append_child(&canvas_container)?;
+                app_container.append_child(&main_content)?;
                 
                 // Set up the canvas once it's created
                 crate::components::canvas_editor::setup_canvas(document)?;
@@ -338,11 +377,11 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
                 if let Some(canvas) = document.get_element_by_id("canvas-container") {
                     canvas.set_attribute("style", "display: block;")?;
                 }
-            }
-            
-            // Show input panel for canvas view
-            if let Some(input_panel) = document.get_element_by_id("input-panel") {
-                input_panel.set_attribute("style", "display: block;")?;
+                
+                // Show input panel for canvas view
+                if let Some(input_panel) = document.get_element_by_id("input-panel") {
+                    input_panel.set_attribute("style", "display: block;")?;
+                }
             }
             
             // Update tab styling
@@ -353,6 +392,9 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
             if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
                 canvas_tab.set_class_name("tab-button active");
             }
+            
+            // Refresh the agent shelf
+            let _ = crate::components::agent_shelf::refresh_agent_shelf(document);
         },
         ActiveView::ChatView => {
             // Setup the chat view if needed

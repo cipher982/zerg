@@ -694,6 +694,9 @@ impl AppState {
         
         // Always refresh the dashboard to ensure it has the latest data
         crate::components::dashboard::refresh_dashboard(&document)?;
+
+        // Refresh Agent Shelf (ignoring errors so we don't block other UI)
+        let _ = crate::components::agent_shelf::refresh_agent_shelf(&document);
         
         Ok(())
     }

@@ -118,51 +118,78 @@ body {
     z-index: 100;
 }
 
+/* Ensure we have room for the dashboard */
+#app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding-top: 60px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Canvas view layout - for sidebar + main structure */
+#app-container.canvas-view {
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+    padding-top: 60px;
+    box-sizing: border-box;
+}
+
+/* Agent shelf - left sidebar */
+#agent-shelf {
+    width: 240px;
+    flex-shrink: 0;
+    background: #252535;
+    border-right: 1px solid #3d3d5c;
+    padding: 8px;
+    box-sizing: border-box;
+    display: block;
+    overflow-y: auto;
+}
+
+/* Main content area */
+.main-content-area {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
 /* Canvas styles */
 #canvas-container {
     flex: 1;
-    position: relative;
-    overflow: hidden;
-    /* background-color: #2a2a3a; */
-}
-
-/* UI Panel */
-#input-panel {
-    position: fixed;
-    top: 110px; /* Adjusted to account for tabs */
-    left: 20px;
-    background-color: rgba(255, 255, 255, 0.9);
-    padding: 15px;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-    z-index: 100;
+    min-height: 0;
     display: flex;
-    flex-wrap: wrap;
+}
+
+/* UI Panel - Now a toolbar, not floating */
+#input-panel {
+    display: flex;
     align-items: center;
+    padding: 10px 15px;
+    background: rgba(42, 42, 58, 0.9);
+    border-bottom: 1px solid #3d3d5c;
 }
 
-/* Dashboard container */
-#dashboard-container {
-    position: absolute;
-    top: 110px; /* Adjusted to account for tabs */
-    left: 0;
-    right: 0;
-    bottom: 30px;
-    padding: 20px;
-    overflow: auto;
-}
-
-/* Instruction text */
-.instruction-text {
-    position: fixed;
-    top: 140px;
-    left: 0;
-    right: 0;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.7);
+/* Agent pills within the shelf */
+.agent-pill {
+    cursor: pointer;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    background-color: #2a2a3a;
+    border: 1px solid #3d3d5c;
+    border-radius: 4px;
     font-size: 14px;
-    pointer-events: none;
-    z-index: 50;
+    color: #e0e0e0;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.agent-pill:hover {
+    background-color: #3d3d5c;
+    transform: translateY(-2px);
 }
 
 /* Form controls */
@@ -189,6 +216,14 @@ button {
 
 #center-button {
     background-color: #2980b9;
+    color: white;
+}
+
+#center-button:disabled {
+    background-color: #bbb;
+    color: #fff;
+    opacity: 0.7;
+    cursor: not-allowed;
 }
 
 #clear-button {
@@ -261,21 +296,19 @@ button {
     transform: translateX(20px);
 }
 
-/* Responsive design */
+/* Responsive design for canvas view */
 @media (max-width: 768px) {
-    #input-panel {
-        width: calc(100% - 40px);
+    #app-container.canvas-view {
         flex-direction: column;
-        align-items: stretch;
     }
-    
-    #input-panel > * {
-        margin: 5px 0 !important;
+    #agent-shelf {
+        width: 100%;
+        max-height: 130px;
+        border-right: none;
+        border-bottom: 1px solid #3d3d5c;
     }
-    
-    #user-input {
-        width: 100% !important;
-        box-sizing: border-box;
+    .main-content-area {
+        min-width: 0;
     }
 }
 
@@ -858,16 +891,6 @@ button {
 .view-tab-button.active {
     color: #3498db;
     border-bottom: 3px solid #3498db;
-}
-
-/* Ensure we have room for the dashboard */
-#app-container {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    padding-top: 60px;
-    box-sizing: border-box;
-    overflow: hidden;
 }
 
 /* Responsive table styles */
