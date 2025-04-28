@@ -78,7 +78,6 @@ import langgraph.graph.message  # noqa: E402
 # ---------------------------------------------------------------------------
 # Async-friendly stub for ChatOpenAI
 # ---------------------------------------------------------------------------
-
 from langchain_core.messages import AIMessage  # noqa: E402
 
 
@@ -110,7 +109,6 @@ class _StubChatOpenAI:
 # ----------------------------------------------------------------------
 # LangGraph / LLM stubs
 # ----------------------------------------------------------------------
-from langchain_core.messages import AIMessage  # noqa: E402
 
 
 class _FakeRunnable:

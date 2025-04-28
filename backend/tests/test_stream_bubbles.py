@@ -21,7 +21,9 @@ def two_assistant_rows():
     return [r1, r2]
 
 
-def test_multiple_assistant_messages_emit_multiple_sequences(monkeypatch, client: TestClient, sample_agent, two_assistant_rows):
+def test_multiple_assistant_messages_emit_multiple_sequences(
+    monkeypatch, client: TestClient, sample_agent, two_assistant_rows
+):
     """Monkey-patch AgentRunner so we can control its output."""
 
     # 1. Create thread
