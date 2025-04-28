@@ -1390,7 +1390,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             needs_refresh = true;
         },
 
-        Message::ReceiveStreamChunk { thread_id, content, chunk_type, tool_name, tool_call_id } => {
+        Message::ReceiveStreamChunk { thread_id, content, chunk_type, tool_name, tool_call_id, message_id } => {
             if chunk_type.as_deref() == Some("tool_output") {
                 // For tool messages, create a new standalone message instead of appending
                 let now = chrono::Utc::now().to_rfc3339();
@@ -1413,17 +1413,21 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 
                 web_sys::console::log_1(&format!("Added tool message for thread {}: {}", thread_id, content).into());
             } else {
-                // For assistant messages: append to existing assistant bubble or start a new one
+                // For assistant messages: decide new vs append based on
+                // the *active_streams* tracker. We create a new bubble when
+                // the message_id changes (or is empty at the start of a
+                // stream).
                 let messages = state.thread_messages.entry(thread_id).or_default();
-                if let Some(last_message) = messages.last_mut() {
-                    if last_message.role == "assistant" {
-                        // Append to existing assistant bubble
-                        last_message.content.push_str(&content);
-                    } else {
-                        // Previous message was not assistant; start a new assistant bubble
+
+                let mid_str = message_id.clone().unwrap_or_default();
+                let current_mid = state.active_streams.get(&thread_id);
+                let start_new = current_mid.map(|id| id != &mid_str).unwrap_or(true);
+
+                if start_new {
+                    web_sys::console::log_1(&"Update: starting NEW assistant bubble".into());
                         let now = chrono::Utc::now().to_rfc3339();
                         let assistant_message = ApiThreadMessage {
-                            id: None,
+                            id: message_id.and_then(|s| s.parse::<u32>().ok()),
                             thread_id,
                             role: "assistant".to_string(),
                             content: content.clone(),
@@ -1435,23 +1439,12 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                             parent_id: None,
                         };
                         messages.push(assistant_message);
-                    }
-                } else {
-                    // No messages yet; first assistant message
-                    let now = chrono::Utc::now().to_rfc3339();
-                    let assistant_message = ApiThreadMessage {
-                        id: None,
-                        thread_id,
-                        role: "assistant".to_string(),
-                        content: content.clone(),
-                        timestamp: Some(now),
-                        message_type: chunk_type.clone(),
-                        tool_name: None,
-                        tool_call_id: None,
-                        tool_input: None,
-                        parent_id: None,
-                    };
-                    messages.push(assistant_message);
+
+                        // Remember this message_id as the current one for this stream
+                        state.active_streams.insert(thread_id, mid_str);
+                } else if let Some(last_message) = messages.last_mut() {
+                    web_sys::console::log_1(&format!("Update: appending to existing assistant bubble (prev len {}, new chunk len {})", last_message.content.len(), content.len()).into());
+                    last_message.content.push_str(&content);
                 }
             }
             
@@ -1505,7 +1498,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // Mark thread as streaming in local state
             state.streaming_threads.insert(thread_id);
 
-            // Mark thread as streaming; assistant bubble will be created on first content chunk
+            // Reset current assistant-message tracker for this thread so that
+            // the first chunk starts a new bubble.
+            state.active_streams.insert(thread_id, String::new());
+
             web_sys::console::log_1(&format!("Stream started for thread {}.", thread_id).into());
         },
 

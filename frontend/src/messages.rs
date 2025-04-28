@@ -194,6 +194,7 @@ pub enum Message {
         chunk_type: Option<String>,    // "tool_output" or "assistant_message"
         tool_name: Option<String>,
         tool_call_id: Option<String>,
+        message_id: Option<String>,
     },
     ReceiveStreamEnd(u32),            // End of streaming response for thread_id
     /// Toggle collapse/expand of a tool call indicator
