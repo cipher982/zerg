@@ -148,6 +148,9 @@ def test_thread_run_emits_stream_messages(client: TestClient, sample_agent):
         assert chunk_msg["thread_id"] == thread_id
         assert chunk_msg["chunk_type"] == "assistant_message"
         assert chunk_msg["content"] == "stub-response"
+        # Each assistant message must carry a unique DB message_id so the
+        # frontend starts a new chat bubble.
+        assert chunk_msg["message_id"] is not None
 
         end_msg = _recv_until(ws, {MessageType.STREAM_END})
         assert end_msg["thread_id"] == thread_id

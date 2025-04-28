@@ -66,10 +66,8 @@ impl ChatViewWsManager {
 
         // Create a handler for thread events
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
-            web_sys::console::log_1(&format!("WS Handler (Thread {}): Received data: {:?}", thread_id, data).into()); 
-
+            // High-volume per-frame logs removed; we keep event-type level logs
             if let Some(event_type) = data.get("type").and_then(|t| t.as_str()) {
-                web_sys::console::log_1(&format!("WS Handler (Thread {}): Processing type: '{}'", thread_id, event_type).into()); 
 
                 match event_type {
                     "thread_history" => {
@@ -152,15 +150,17 @@ impl ChatViewWsManager {
                                     None
                                 };
                                 
-                                web_sys::console::log_1(&format!("WS Handler (Thread {}): Stream Chunk: '{}' (type: {})",
-                                    thread_id, content, chunk_type).into());
+                                let message_id = data.get("message_id").and_then(|v| v.as_str()).unwrap_or("<null>");
+                                web_sys::console::log_1(&format!("WS Handler (Thread {}): Stream Chunk: '{}' (type: {}, msg_id: {})",
+                                    thread_id, content, chunk_type, message_id).into());
                                 
                                 dispatch_global_message(Message::ReceiveStreamChunk { 
                                     thread_id, 
                                     content: content.to_string(),
                                     chunk_type: Some(chunk_type),
                                     tool_name,
-                                    tool_call_id
+                                    tool_call_id,
+                                    message_id: Some(message_id.to_string()),
                                 });
                             } else {
                                 web_sys::console::error_1(&"Stream chunk content is not a string".into());
