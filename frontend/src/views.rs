@@ -127,39 +127,30 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
     // First log which view we're switching to for debugging
     web_sys::console::log_1(&format!("Switching to view: {:?}", view_type).into());
     
-    // Start fresh by unmounting ALL views first
-    web_sys::console::log_1(&"Unmounting all views".into());
-    
     // Unmount dashboard if it's mounted
     if crate::pages::dashboard::is_dashboard_mounted(document) {
-        web_sys::console::log_1(&"Unmounting dashboard".into());
         crate::pages::dashboard::unmount_dashboard(document)?;
     }
     
     // Unmount canvas if it's mounted
     if crate::pages::canvas::is_canvas_mounted(document) {
-        web_sys::console::log_1(&"Unmounting canvas".into());
         crate::pages::canvas::unmount_canvas(document)?;
     }
     
     // Hide chat view if it exists
     if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
-        web_sys::console::log_1(&"Hiding chat view".into());
         chat_container.set_attribute("style", "display: none;")?;
     }
     
     // Now mount the requested view
     match view_type {
         ActiveView::Dashboard => {
-            web_sys::console::log_1(&"Mounting dashboard view".into());
             crate::pages::dashboard::mount_dashboard(document)?;
         },
         ActiveView::Canvas => {
-            web_sys::console::log_1(&"Mounting canvas view".into());
             crate::pages::canvas::mount_canvas(document)?;
         },
         ActiveView::ChatView => {
-            web_sys::console::log_1(&"Mounting chat view".into());
             // Setup the chat view if needed
             crate::components::chat_view::setup_chat_view(document)?;
             
