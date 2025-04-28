@@ -957,8 +957,9 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
     for cmd in commands {
         match cmd {
             Command::SendMessage(msg) => dispatch_global_message(msg),
+            // UI update closures – comment out verbose log that fired on
+            // every incremental render.
             Command::UpdateUI(ui_fn) => {
-                web_sys::console::log_1(&"Executing UI update function".into());
                 ui_fn();
             },
             
