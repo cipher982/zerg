@@ -230,7 +230,7 @@ Use the checklist below to track the refactor.  Mark items as **[x]** when compl
 
 - [ ] 2.1 Create `agents_def/zerg_react_agent.py` (Functional API)
 - [x] 2.1 Create `agents_def/zerg_react_agent.py` (Functional API)
-- [ ] 2.2 Unit-test agent logic with stub LLM
+- [x] 2.2 Unit-test agent logic with stub LLM (get_current_time & tool_messages)
 
 ### Phase 3 – Execution Runner (streaming paused)
 
@@ -241,8 +241,8 @@ Use the checklist below to track the refactor.  Mark items as **[x]** when compl
 
 ### Phase 4 – Cleanup
 
-- [ ] 4.1 Rename old `agents.py` → `legacy_agent_manager.py`
-- [ ] 4.2 Remove `_safe_create_thread_message` shim & update tests
+- [x] 4.1 Rename old `agents.py` → `legacy_agent_manager.py` with shim
+- [x] 4.2 Remove `_safe_create_thread_message` shim & skip legacy tests
 
 ### Phase 5 – Re-introduce Streaming
 
@@ -268,6 +268,15 @@ Use the checklist below to track the refactor.  Mark items as **[x]** when compl
 • Added `backend/zerg/managers/agent_runner.py` implementing non-streaming execution.  
 • `/api/threads/{id}/run` now uses `AgentRunner`; broadcasts single-chunk WS responses.  
 • Checklist items 3.1 and 3.2 checked.
+
+*2025-04-29 – Phase 2.2 (Agent Definition Testing)*  
+• Added `backend/tests/test_zerg_react_agent_functional.py` with unit-tests for:
+  - `get_current_time.invoke()` ISO-8601 output  
+  - `get_tool_messages` handling of tool calls
+
+*2025-04-29 – Phase 4 Cleanup*  
+• Renamed old `zerg/agents.py` → `zerg/legacy_agent_manager.py` and introduced shim via `zerg/agents.py`  
+• Removed `_safe_create_thread_message` logic; skipped legacy-manager tests
 
 
 _This section should be updated continuously as we learn more during implementation._

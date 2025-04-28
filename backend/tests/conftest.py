@@ -69,10 +69,42 @@ sys.modules["openai.OpenAI"] = mock_openai
 # This allows importing langgraph and accessing attributes like __version__
 # while still mocking functionality used in tests
 # First import the real modules to preserve their behavior
+# The real modules are imported so we can selectively patch.
 import langchain_openai  # noqa: E402
 import langgraph  # noqa: E402
 import langgraph.graph  # noqa: E402
 import langgraph.graph.message  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Async-friendly stub for ChatOpenAI
+# ---------------------------------------------------------------------------
+
+from langchain_core.messages import AIMessage  # noqa: E402
+
+
+class _StubLlm:
+    """Stub LLM that returns deterministic response for both sync and async APIs."""
+
+    def invoke(self, _messages):  # noqa: D401 – sync path used in production
+        return AIMessage(content="stub-response")
+
+    # Async variants retained for completeness (never awaited in current tests)
+    async def ainvoke(self, _messages):  # noqa: D401 – preferred async method
+        return AIMessage(content="stub-response")
+
+    async def invoke_async(self, _messages):  # noqa: D401 – legacy async method
+        return AIMessage(content="stub-response")
+
+
+class _StubChatOpenAI:
+    """Replacement for ChatOpenAI constructor used in tests."""
+
+    def __init__(self, *args, **kwargs):  # noqa: D401 – signature irrelevant
+        pass
+
+    def bind_tools(self, _tools):  # noqa: D401
+        return _StubLlm()
+
 
 # Then patch specific classes or functions rather than entire modules
 # ----------------------------------------------------------------------
@@ -135,13 +167,18 @@ class _PassthroughStateGraph(real_state_graph_cls):
             def invoke(self, _state):
                 return {"messages": [AIMessage(content="stub-response")]}
 
+            async def ainvoke(self, _state):  # noqa: D401 – async counterpart
+                return {"messages": [AIMessage(content="stub-response")]}
+
         return _Runnable()
 
 
 langgraph.graph.StateGraph = _PassthroughStateGraph
 
 # Patch ChatOpenAI so no external network call happens
-langchain_openai.ChatOpenAI = MagicMock(return_value=MagicMock(bind_tools=MagicMock(return_value=MagicMock())))
+# Replace with async-friendly stub so that code under test can *await* LLM responses.
+
+langchain_openai.ChatOpenAI = _StubChatOpenAI  # type: ignore[attr-defined]
 
 # Import app after all engine setup and mocks are in place
 from zerg.main import app  # noqa: E402
