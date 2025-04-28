@@ -168,8 +168,6 @@ impl TopicManager {
     /// Routes an incoming message (parsed JSON) to the appropriate topic handlers.
     /// Determines the topic based on message content (e.g., `type` and `data` fields).
     pub fn route_incoming_message(&self, message: serde_json::Value) {
-        web_sys::console::log_1(&format!("TopicManager received message: {:?}", message).into());
-
         // Handle administrative messages that don't belong to a topic
         if let Some("unsubscribe_success") = message.get("type").and_then(|t| t.as_str()) {
             web_sys::console::debug_1(&"Received unsubscribe confirmation".into());
@@ -211,7 +209,6 @@ impl TopicManager {
 
         // --- Call Handlers --- 
         if let Some(topic_str) = topic_str_option {
-             web_sys::console::log_1(&format!("Routing message to handlers for topic: {}", topic_str).into());
             if let Some(handlers) = self.topic_handlers.get(&topic_str) {
                 // Pass the entire original message Value to the handlers
                 // The handler itself will decide how to parse based on message type

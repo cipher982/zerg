@@ -170,20 +170,25 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
     # Notify start of (non token) stream
     await topic_manager.broadcast_to_topic(topic, StreamStartMessage(thread_id=thread_id).model_dump())
 
-    assistant_text = runner.run_thread(db, thread)
+    # Execute the agent turn – *await* the async runner to get the assistant reply
+    assistant_rows = await runner.run_thread(db, thread)
 
-    if assistant_text:
+    # Broadcast all assistant messages within the same stream sequence
+    # Instead of multiple start/end sequences, broadcast all messages in one sequence
+    for row in assistant_rows:
         await topic_manager.broadcast_to_topic(
             topic,
             StreamChunkMessage(
                 thread_id=thread_id,
-                content=assistant_text,
+                message_id=str(row.id),
+                content=row.content,
                 chunk_type="assistant_message",
                 tool_name=None,
                 tool_call_id=None,
             ).model_dump(),
         )
 
+    # Close the stream sequence at the end
     await topic_manager.broadcast_to_topic(topic, StreamEndMessage(thread_id=thread_id).model_dump())
 
     return {"status": "ok"}

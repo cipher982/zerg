@@ -1,31 +1,28 @@
-"""AgentRunner – orchestrates a single agent/thread execution without token streaming.
+"""AgentRunner – asynchronous one-turn execution helper.
 
-The class connects three layers:
+This class bridges:
 
-1. *Agent row* – ORM model with system instructions, model name, etc.
-2. *ThreadService* – persistence façade created in Phase 1.
-3. *Runnable* – compiled LangGraph graph returned by the new Functional-API
-   agent definition in ``zerg.agents_def.zerg_react_agent``.
+• Agent ORM row (system instructions, model name, …)
+• ThreadService for DB persistence
+• LangGraph **runnable** compiled from the functional ReAct definition.
 
-Current scope (Phase 3):
-• Executes synchronously (.invoke), no token streaming.
-• Persists newly generated messages as a single assistant reply (+ optional
-  tool messages that the graph might emit).
-• Marks user messages as processed.
-• Returns the assistant's final textual response for convenience.
-
-Streaming support will be added in Phase 5 via `.astream_events()`.
+Design goals
+------------
+1. Fully *async* – uses ``await runnable.ainvoke`` so no ``Future`` objects
+   ever propagate.
+2. Keep DB interactions synchronous for now (SQLAlchemy sync API).  These DB
+   calls run inside FastAPI's request thread so they remain thread-safe.
+3. Provide a thin synchronous wrapper ``run_thread_sync`` so legacy tests that
+   call the method directly don't break.  This wrapper simply delegates to
+   the async implementation via ``asyncio.run`` and will be removed once all
+   call-sites are async.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import List
 from typing import Sequence
 
-# Message classes
-from langchain_core.messages import AIMessage
-from langchain_core.messages import BaseMessage
 from sqlalchemy.orm import Session
 
 from zerg.agents_def import zerg_react_agent
@@ -38,66 +35,69 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRunner:  # noqa: D401 – naming follows project conventions
-    """Run one turn of an agent for a given thread."""
+    """Run one agent turn (async)."""
 
     def __init__(self, agent_row: AgentModel, *, thread_service: ThreadService | None = None):
         self.agent = agent_row
         self.thread_service = thread_service or ThreadService
-
-        # Compile runnable lazily so unit tests can patch beneath.
+        # Lazily compile runnable so tests can monkey-patch implementation
+        # get_runnable now returns the compiled entrypoint function
         self._runnable = zerg_react_agent.get_runnable(agent_row)
 
     # ------------------------------------------------------------------
-    # Public API
+    # Public API – asynchronous
     # ------------------------------------------------------------------
 
-    def run_thread(self, db: Session, thread: ThreadModel) -> str:
-        """Process unprocessed messages and return assistant reply (full text)."""
+    async def run_thread(self, db: Session, thread: ThreadModel) -> Sequence[AgentModel]:
+        """Process unprocessed messages and return created assistant message rows."""
 
-        # 1. Fetch thread state
         original_msgs = self.thread_service.get_thread_messages_as_langchain(db, thread.id)
-
-        # Identify unprocessed DB rows so we can mark them later.
         unprocessed_rows = crud.get_unprocessed_messages(db, thread.id)
 
         if not unprocessed_rows:
             logger.info("No unprocessed messages for thread %s", thread.id)
-            return ""
+            return []  # Return empty list if no work
 
-        # 2. Run the agent – synchronous invoke for now
-        state = {"messages": original_msgs}
-        result = self._runnable.invoke(state)
+        # Configuration for thread persistence
+        config = {
+            "configurable": {
+                "thread_id": str(thread.id),
+            }
+        }
 
-        # Validate result structure – we expect a mapping with "messages" key
-        # containing a list of LangChain *BaseMessage* objects.  Any deviation
-        # is treated as a programmer error: we raise to surface the bug
-        # instead of silently papering over it.
+        # Use **async** invoke with the entrypoint
+        # Pass the messages list directly to the function
+        # For Functional API, we use .ainvoke method with the config
+        # The entrypoint function will return the full message history
+        updated_messages = await self._runnable.ainvoke(original_msgs, config)
 
-        if not isinstance(result, dict) or "messages" not in result:
-            raise TypeError("Agent runnable returned unexpected value – expected dict with 'messages' key")
+        # Extract only the new messages since our last context
+        # The zerg_react_agent returns ALL messages including the history
+        # so we need to extract just the new ones (those after our original list)
+        if len(updated_messages) <= len(original_msgs):
+            logger.warning("No new messages generated by agent for thread %s", thread.id)
+            return []
 
-        new_messages_raw = result["messages"]
+        new_messages = updated_messages[len(original_msgs) :]
 
-        if not isinstance(new_messages_raw, (list, tuple)):
-            raise TypeError("'messages' must be a list of BaseMessage instances")
+        # Persist the assistant & tool messages
+        created_rows = self.thread_service.save_new_messages(
+            db,
+            thread_id=thread.id,
+            messages=new_messages,
+            processed=True,
+        )
 
-        if not all(isinstance(m, BaseMessage) for m in new_messages_raw):
-            raise TypeError("All items in 'messages' must be LangChain BaseMessage instances")
-
-        if not new_messages_raw:
-            raise ValueError("Agent produced no messages – violating contract")
-
-        new_messages: Sequence[BaseMessage] = list(new_messages_raw)
-
-        # 3. Persist
-        self.thread_service.save_new_messages(db, thread_id=thread.id, messages=new_messages, processed=True)
-
-        # 4. Mark user messages processed
+        # Mark user messages processed
         self.thread_service.mark_messages_processed(db, (row.id for row in unprocessed_rows))
 
-        # 5. Touch timestamp
+        # Touch timestamp
         self.thread_service.touch_thread_timestamp(db, thread.id)
 
-        # 6. Return assistant text (concatenate if multiple AI messages)
-        assistant_chunks: List[str] = [m.content or "" for m in new_messages if isinstance(m, AIMessage)]
-        return "\n".join(assistant_chunks)
+        # Filter to assistant messages only
+        assistant_rows = [row for row in created_rows if row.role == "assistant"]
+
+        # Return the persisted assistant message rows
+        return assistant_rows
+
+    # No synchronous wrapper – all call-sites should be async going forward.

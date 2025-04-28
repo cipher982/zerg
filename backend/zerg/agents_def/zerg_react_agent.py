@@ -8,20 +8,18 @@ AgentRunner.
 import datetime as _dt
 import logging
 import os
-from typing import Annotated
 from typing import List
+from typing import Optional
 
 from langchain_core.messages import AIMessage
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.func import entrypoint
 from langgraph.func import task
-from langgraph.graph import END
-from langgraph.graph import START
-from langgraph.graph import StateGraph
 from langgraph.graph.message import add_messages
-from typing_extensions import TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -39,127 +37,101 @@ def get_current_time() -> str:  # noqa: D401 – imperative description fits too
 
 
 # ---------------------------------------------------------------------------
-# State definition for the functional API
-# ---------------------------------------------------------------------------
-
-
-class AgentState(TypedDict):
-    messages: Annotated[List[BaseMessage], add_messages]
-
-
-# ---------------------------------------------------------------------------
-# Graph tasks (Functional API)
+# LLM Factory (remains similar, adjusted docstring/comment)
 # ---------------------------------------------------------------------------
 
 
 def _make_llm(agent_row, tools):
     """Factory to create a streaming-capable ChatOpenAI bound to *tools*."""
 
+    # Non-streaming LLM for synchronous invocation (streaming handled separately by runner)
     llm = ChatOpenAI(
         model=agent_row.model,
         temperature=0,
-        streaming=True,
+        streaming=False,  # Streaming is handled by the runner typically
         api_key=os.environ.get("OPENAI_API_KEY"),
     )
 
     return llm.bind_tools(tools)
 
 
-def build_react_graph(agent_row):
-    """Return a compiled LangGraph runnable representing the ReAct loop."""
-
-    tools = [get_current_time]
-    llm_with_tools = _make_llm(agent_row, tools)
-
-    # ----------------------------- tasks ----------------------------------
-
-    @task
-    def call_llm(state: AgentState):  # noqa: D401 – descriptive naming is fine
-        """Run the chat model; may emit tool calls."""
-
-        response = llm_with_tools.invoke(state["messages"])
-        return {"messages": [response]}
-
-    @task
-    def call_tool(state: AgentState):
-        """Execute tool requested in the last AIMessage (if any)."""
-
-        last_msg = state["messages"][-1]
-        if not (isinstance(last_msg, AIMessage) and last_msg.tool_calls):
-            # Defensive – nothing to do, edge logic should prevent this
-            return {}
-
-        tool_msgs: List[ToolMessage] = []
-
-        for tc in last_msg.tool_calls:
-            tool_name = tc["name"]
-            try:
-                outcome = {tool.name: tool for tool in tools}[tool_name].invoke(tc["args"])
-            except Exception as exc:  # pragma: no cover – unlikely but log
-                logger.exception("Error executing tool %s", tool_name)
-                outcome = f"<tool-error> {exc}"
-
-            tool_msgs.append(ToolMessage(content=str(outcome), tool_call_id=tc["id"], name=tool_name))
-
-        return {"messages": tool_msgs}
-
-    # ----------------------------- graph ----------------------------------
-
-    gb = StateGraph(AgentState)
-    gb.add_node("llm", call_llm)
-    gb.add_node("tool", call_tool)
-
-    gb.add_edge(START, "llm")
-
-    def _router(state: AgentState):
-        last = state["messages"][-1]
-        if isinstance(last, AIMessage) and last.tool_calls:
-            return "tool"
-        return END
-
-    gb.add_conditional_edges("llm", _router, {"tool": "tool", END: END})
-    gb.add_edge("tool", "llm")
-
-    runnable = gb.compile()
-    return runnable
-
-
 # ---------------------------------------------------------------------------
-# Public helper
+# Main Agent Implementation
 # ---------------------------------------------------------------------------
 
 
 def get_runnable(agent_row):  # noqa: D401 – matches public API naming
-    """Return a compiled LangGraph runnable for the given Agent ORM row."""
-
-    return build_react_graph(agent_row)
-
-
-# ---------------------------------------------------------------------------
-# Utility for extracting tool messages from an AIMessage
-# ---------------------------------------------------------------------------
-def get_tool_messages(message):  # pragma: no cover
     """
-    Given an AIMessage with potential .tool_calls, invoke each tool and
-    return the corresponding ToolMessage list.
+    Return a compiled LangGraph runnable using the Functional API
+    for the given Agent ORM row.
     """
-    from langchain_core.messages import AIMessage
-    from langchain_core.messages import ToolMessage
-
-    if not isinstance(message, AIMessage) or not getattr(message, "tool_calls", None):
-        return []
-
-    tool_msgs = []
-    # Available tools
+    # --- Define tools and model within scope ---
     tools = [get_current_time]
-    lookup = {tool.name: tool for tool in tools}
-    for tc in message.tool_calls:
-        name = tc.get("name")
-        args = tc.get("args", [])
-        tool_func = lookup.get(name)
-        try:
-            outcome = tool_func.invoke(args)
-        except Exception as exc:
-            outcome = f"<tool-error> {exc}"
-        tool_msgs.append(ToolMessage(content=str(outcome), tool_call_id=tc.get("id"), name=name))
-    return tool_msgs
+    tools_by_name = {tool.name: tool for tool in tools}
+    llm_with_tools = _make_llm(agent_row, tools)
+
+    # Create a simple memory saver for persistence
+    checkpointer = MemorySaver()
+
+    # --- Define Tasks ---
+    @task
+    def call_model(messages: List[BaseMessage]):
+        """Call model with a sequence of messages."""
+        response = llm_with_tools.invoke(messages)
+        return response
+
+    @task
+    def call_tool(tool_call: dict):
+        """Execute a single tool call."""
+        tool_name = tool_call["name"]
+        tool_to_call = tools_by_name.get(tool_name)
+
+        if not tool_to_call:
+            observation = f"Error: Tool '{tool_name}' not found."
+            logger.error(observation)
+        else:
+            try:
+                observation = tool_to_call.invoke(tool_call["args"])
+            except Exception as exc:
+                observation = f"<tool-error> {exc}"
+                logger.exception("Error executing tool %s", tool_name)
+
+        return ToolMessage(content=str(observation), tool_call_id=tool_call["id"], name=tool_name)
+
+    # --- Define main entrypoint ---
+    @entrypoint(checkpointer=checkpointer)
+    def agent_executor(
+        messages: List[BaseMessage], *, previous: Optional[List[BaseMessage]] = None
+    ) -> List[BaseMessage]:
+        """
+        Main entrypoint for the agent. This is a simple ReAct loop:
+        1. Call the model to get a response
+        2. If the model calls a tool, execute it and append the result
+        3. Repeat until the model generates a final response
+        """
+        # Initialize message history from previous or use the input messages
+        current_messages = previous or messages
+
+        # Start by calling the model with the current context
+        llm_response = call_model(current_messages).result()
+
+        # Until the model stops calling tools, continue the loop
+        while isinstance(llm_response, AIMessage) and llm_response.tool_calls:
+            # Execute tools in parallel
+            tool_futures = [call_tool(tc) for tc in llm_response.tool_calls]
+            tool_results = [fut.result() for fut in tool_futures]
+
+            # Update message history with the model response and tool results
+            current_messages = add_messages(current_messages, [llm_response] + tool_results)
+
+            # Call model again with updated messages
+            llm_response = call_model(current_messages).result()
+
+        # Add the final response to history
+        final_messages = add_messages(current_messages, [llm_response])
+
+        # Return the full conversation history
+        return final_messages
+
+    # Return the compiled entrypoint
+    return agent_executor
