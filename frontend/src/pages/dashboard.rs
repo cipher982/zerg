@@ -8,9 +8,7 @@ use wasm_bindgen::JsValue;
 
 /// Mount the dashboard view by creating necessary DOM elements
 /// This function is called when switching to the dashboard view
-pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {
-    web_sys::console::log_1(&"DASHBOARD: Starting mount".into());
-    
+pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {    
     // Get app container for adding dashboard
     let app_container = document
         .get_element_by_id("app-container")
@@ -21,11 +19,9 @@ pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {
 
     // Create dashboard container if needed
     let dashboard_container = if let Some(container) = document.get_element_by_id("dashboard-container") {
-        web_sys::console::log_1(&"DASHBOARD: Found existing container".into());
         container
     } else {
         // Create the container
-        web_sys::console::log_1(&"DASHBOARD: Creating new container".into());
         let container = document.create_element("div")?;
         container.set_id("dashboard-container");
         container.set_class_name("dashboard-container");
@@ -41,12 +37,10 @@ pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {
     };
 
     // Ensure the dashboard is visible with proper styling
-    web_sys::console::log_1(&"DASHBOARD: Making visible".into());
     dashboard_container.set_attribute("style", "display: block;")?;
     
     // Verify the dashboard inner element exists
     if document.get_element_by_id("dashboard").is_none() {
-        web_sys::console::log_1(&"DASHBOARD: Creating inner element".into());
         let dashboard = document.create_element("div")?;
         dashboard.set_id("dashboard");
         dashboard.set_class_name("dashboard");
@@ -63,10 +57,8 @@ pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {
     }
     
     // Initialize or refresh the dashboard content
-    web_sys::console::log_1(&"DASHBOARD: Refreshing content".into());
     crate::components::dashboard::refresh_dashboard(document)?;
     
-    web_sys::console::log_1(&"DASHBOARD: Mount complete".into());
     Ok(())
 }
 
