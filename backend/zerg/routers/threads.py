@@ -171,22 +171,37 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
     await topic_manager.broadcast_to_topic(topic, StreamStartMessage(thread_id=thread_id).model_dump())
 
     # Execute the agent turn – *await* the async runner to get the assistant reply
-    assistant_rows = await runner.run_thread(db, thread)
+    created_rows = await runner.run_thread(db, thread)
 
-    # Broadcast all assistant messages within the same stream sequence
-    # Instead of multiple start/end sequences, broadcast all messages in one sequence
-    for row in assistant_rows:
-        await topic_manager.broadcast_to_topic(
-            topic,
-            StreamChunkMessage(
-                thread_id=thread_id,
-                message_id=str(row.id),
-                content=row.content,
-                chunk_type="assistant_message",
-                tool_name=None,
-                tool_call_id=None,
-            ).model_dump(),
-        )
+    # We maintain a single *stream* sequence for the entire agent turn so the
+    # frontend can group chunks under one progress indicator.
+
+    for row in created_rows:
+        if row.role == "assistant":
+            await topic_manager.broadcast_to_topic(
+                topic,
+                StreamChunkMessage(
+                    thread_id=thread_id,
+                    message_id=str(row.id),
+                    content=row.content,
+                    chunk_type="assistant_message",
+                    tool_name=None,
+                    tool_call_id=None,
+                ).model_dump(),
+            )
+
+        elif row.role == "tool":
+            await topic_manager.broadcast_to_topic(
+                topic,
+                StreamChunkMessage(
+                    thread_id=thread_id,
+                    message_id=str(row.id) if row.id else None,
+                    content=row.content,
+                    chunk_type="tool_output",
+                    tool_name=getattr(row, "name", None),
+                    tool_call_id=getattr(row, "tool_call_id", None),
+                ).model_dump(),
+            )
 
     # Close the stream sequence at the end
     await topic_manager.broadcast_to_topic(topic, StreamEndMessage(thread_id=thread_id).model_dump())

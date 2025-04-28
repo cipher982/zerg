@@ -94,10 +94,10 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
         # Touch timestamp
         self.thread_service.touch_thread_timestamp(db, thread.id)
 
-        # Filter to assistant messages only
-        assistant_rows = [row for row in created_rows if row.role == "assistant"]
+        # Return *all* created rows so callers can decide how to emit them
+        # over WebSocket (assistant **and** tool messages).  The caller can
+        # easily derive subsets by inspecting the ``role`` field.
 
-        # Return the persisted assistant message rows
-        return assistant_rows
+        return created_rows
 
     # No synchronous wrapper – all call-sites should be async going forward.
