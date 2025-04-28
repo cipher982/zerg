@@ -1394,6 +1394,20 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             if chunk_type.as_deref() == Some("tool_output") {
                 // For tool messages, create a new standalone message instead of appending
                 let now = chrono::Utc::now().to_rfc3339();
+                // Attempt to associate this tool output with the *current*
+                // assistant message being streamed for the same thread.  The
+                // active_streams map stores the `message_id` (as a string)
+                // for the assistant bubble that is currently receiving
+                // chunks.  Converting that ID back to `u32` lets the chat UI
+                // link the tool output to its parent.  If parsing fails we
+                // fall back to `None` so the UI will still display the tool
+                // message as a standalone bubble (see chat_view.rs).
+
+                let parent_id = state
+                    .active_streams
+                    .get(&thread_id)
+                    .and_then(|mid| mid.parse::<u32>().ok());
+
                 let tool_message = ApiThreadMessage {
                     id: None,
                     thread_id,
@@ -1404,7 +1418,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     tool_name,
                     tool_call_id,
                     tool_input: None,
-                    parent_id: None,
+                    parent_id,
                 };
                 
                 // Get the messages for this thread and just push the new tool message

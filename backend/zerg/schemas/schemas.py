@@ -64,6 +64,7 @@ class ThreadMessageResponse(ThreadMessageBase):
     thread_id: int
     timestamp: datetime
     processed: bool = False
+    parent_id: Optional[int] = None
 
     class Config:
         from_attributes = True

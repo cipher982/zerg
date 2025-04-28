@@ -187,12 +187,28 @@ class ThreadService:
         """Persist *messages* to the DB and return the created rows."""
 
         created_rows: List[ThreadMessageModel] = []
+
+        # Track the *last* assistant row so we can back-fill parent_id for
+        # subsequent tool messages.  This lets the UI reliably group tool
+        # outputs under the correct assistant bubble even after a full page
+        # reload (history endpoint).
+
+        current_parent_id: int | None = parent_id
+
         for msg in messages:
             kwargs = _langchain_to_create_kwargs(msg)
             kwargs.setdefault("processed", processed)
-            kwargs.setdefault("parent_id", parent_id)
 
-            created_rows.append(crud.create_thread_message(db=db, thread_id=thread_id, **kwargs))
+            # Associate tool rows with the latest assistant message.
+            if kwargs.get("role") == "tool":
+                kwargs["parent_id"] = current_parent_id
+
+            row = crud.create_thread_message(db=db, thread_id=thread_id, **kwargs)
+            created_rows.append(row)
+
+            # Update parent tracker whenever we hit a new assistant row.
+            if row.role == "assistant":
+                current_parent_id = row.id
 
         return created_rows
 
