@@ -405,8 +405,8 @@ fn get_agents_from_app_state() -> Vec<Agent> {
                         _ => AgentStatus::Idle, // Default to Idle if status is None or unknown
                     };
 
-                    // Override with Scheduled if backend marks run_on_schedule=true
-                    if api_agent.run_on_schedule.unwrap_or(false) && matches!(status, AgentStatus::Idle) {
+                    // Determine scheduled state solely from present `schedule` field
+                    if api_agent.is_scheduled() && matches!(status, AgentStatus::Idle) {
                         status = AgentStatus::Scheduled;
                     }
 

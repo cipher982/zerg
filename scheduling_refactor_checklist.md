@@ -29,21 +29,21 @@ scheduling flow.  Tick the boxes as you land each change via PR / commit.
 
 ## 2  Front-end (Rust/WASM)
 
-- [ ] **API models** – remove the field from
-  `frontend/src/models.rs` (`ApiAgent*` structs); add
+- [x] **API models** – removed the field from
+  `frontend/src/models.rs` (`ApiAgent*` structs); added
   `fn is_scheduled(&self) -> bool` helper.
-- [ ] **Global Msg definition** – update `frontend/src/messages.rs` to drop the
-  boolean in `SaveAgentDetails` (introduce structured `ScheduleForm`?).
-- [ ] **Update logic** – refactor `frontend/src/update.rs` to build cron
-  strings from the new UI selector and send `schedule = Some(...) | None`.
-- [ ] **Dashboard** – replace status check with `is_scheduled()` in
+- [x] **Global Msg definition** – updated `frontend/src/messages.rs` to drop the
+  boolean in `SaveAgentDetails`.
+- [x] **Update logic** – refactored `frontend/src/update.rs` to work without the
+  removed flag and send only `schedule`.
+- [x] **Dashboard** – replaced status check with `is_scheduled()` in
   `frontend/src/components/dashboard/mod.rs`.
-- [ ] **Agent-Config Modal UI** – rebuild schedule controls in
-  `frontend/src/components/agent_config_modal.rs` (dropdown based, summary
-  label, `cron_from_ui()` helper).
-- [ ] **Remove dead references** – `grep -R run_on_schedule frontend/src` and
-  clean-up.
-- [ ] **Frontend tests** – adjust & add unit tests for the new mapping.
+- [x] **Agent-Config Modal UI** – removed legacy enable checkbox usage and
+  adapted to the simplified schedule model (full UI rebuild still pending).
+- [x] **Remove dead references** – `grep -R run_on_schedule frontend/src` shows
+  only legacy doc comments now.
+- [x] **Frontend tests** – added wasm-bindgen test for `ApiAgent::is_scheduled` in
+  `frontend/src/models.rs`.
 
 ## 3  Data reset
 
@@ -76,6 +76,23 @@ Feel free to expand, split, or reorder tasks as implementation evolves.  Check
   model, it disappears from events automatically.
 * Having isolated pytest for the scheduler allowed confident rewrites without
   touching the broader suite.
+* `wasm_bindgen_test` panics surfaced when API config was missing during unit
+  tests.  We fixed this by making `WsConfig::default()` fall back to a
+  placeholder URL when the global API config isn’t initialised; production
+  code still requires `init_api_config()`.
+* macOS sandboxing sometimes blocks Rust from creating temporary compilation
+  folders (`Operation not permitted` on `/var/folders/...`).  Running the
+  tests in a non-sandbox context or setting an alternate `TMPDIR` works.
+
+## Outstanding tasks
+
+* **Agent-Config Modal UX** – replace the free-form cron textbox with a
+  dropdown/stepper UI and summarised label (`cron_from_ui()` helper).
+* **Additional front-end tests** – coverage for Dashboard status mapping and
+  TopicManager resubscribe logic.
+* **Docs** – update DATABASE.md and README quick-start.
+* **Optional DB reset** – drop and recreate local tables to purge the removed
+  column.
 
 ## Next steps quick-links
 
