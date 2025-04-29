@@ -115,8 +115,6 @@ pub struct ApiAgent {
     // -------- Scheduling metadata (Milestone 0) --------
     /// Cron expression defining when the agent should run (None means not scheduled)
     pub schedule: Option<String>,
-    /// If true the backend scheduler will actually run the agent on its schedule
-    pub run_on_schedule: Option<bool>,
     /// ISO‑8601 timestamp of the next scheduled run (set by backend)
     pub next_run_at: Option<String>,
     /// ISO‑8601 timestamp when the agent last finished a run
@@ -126,6 +124,63 @@ pub struct ApiAgent {
     /// `None` or empty string means the agent is healthy.
     #[serde(default)]
     pub last_error: Option<String>,
+}
+
+// -----------------------------------------------------------------------------
+// Convenience impls
+// -----------------------------------------------------------------------------
+
+impl ApiAgent {
+    /// Returns `true` if the `schedule` field contains a non-empty cron string.
+    ///
+    /// The backend no longer stores a separate `run_on_schedule` flag – an
+    /// agent is considered *scheduled* whenever the cron expression is set.
+    pub fn is_scheduled(&self) -> bool {
+        self.schedule
+            .as_ref()
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false)
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn test_is_scheduled() {
+        // Case 1: None -> not scheduled
+        let agent_none = ApiAgent {
+            id: Some(1),
+            name: "A".to_string(),
+            status: None,
+            system_instructions: None,
+            model: None,
+            temperature: None,
+            created_at: None,
+            updated_at: None,
+            schedule: None,
+            next_run_at: None,
+            last_run_at: None,
+            last_error: None,
+        };
+        assert!(!agent_none.is_scheduled());
+
+        // Case 2: Empty string -> not scheduled
+        let agent_empty = ApiAgent { schedule: Some("   ".to_string()), ..agent_none.clone() };
+        assert!(!agent_empty.is_scheduled());
+
+        // Case 3: Valid cron -> scheduled
+        let agent_cron = ApiAgent { schedule: Some("0 * * * *".to_string()), ..agent_none };
+        assert!(agent_cron.is_scheduled());
+    }
 }
 
 /// Wrapper returned by `/api/agents/{id}/details`
@@ -152,7 +207,6 @@ pub struct ApiAgentCreate {
     pub task_instructions: String,
     pub model: Option<String>,
     pub schedule: Option<String>,
-    pub run_on_schedule: Option<bool>,
     pub config: Option<serde_json::Value>,
 }
 
@@ -165,7 +219,6 @@ pub struct ApiAgentUpdate {
     pub task_instructions: Option<String>,
     pub model: Option<String>,
     pub schedule: Option<String>,
-    pub run_on_schedule: Option<bool>,
     pub config: Option<serde_json::Value>,
 
     /// Optional error string – only present if we need to update/clear it.

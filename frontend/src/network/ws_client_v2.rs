@@ -60,12 +60,19 @@ pub struct WsConfig {
 
 impl Default for WsConfig {
     fn default() -> Self {
+        let url = super::get_ws_url().unwrap_or_else(|_| {
+            // Provide a sane fallback during unit tests where API config may
+            // not be initialised.  At runtime `init_api_config()` should have
+            // been called long before we reach this code.
+            "ws://localhost/placeholder".to_string()
+        });
+
         Self {
-            url: super::get_ws_url().expect("WebSocket URL must be set via API_BASE_URL environment variable"),
+            url,
             max_reconnect_attempts: None,
             initial_backoff_ms: 1000,
             max_backoff_ms: 30000,
-            ping_interval_ms: Some(30000), // 30 second ping interval
+            ping_interval_ms: Some(30000), // 30-second ping interval
         }
     }
 }

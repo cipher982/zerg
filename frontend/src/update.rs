@@ -250,7 +250,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.draw_nodes();
         },
        
-        Message::SaveAgentDetails { name, system_instructions, task_instructions: _task_instructions, model, schedule, run_on_schedule } => {
+        Message::SaveAgentDetails { name, system_instructions, task_instructions: _task_instructions, model, schedule } => {
             // Get the current node ID from the modal
             let node_id = if let Some(window) = web_sys::window() {
                 if let Some(document) = window.document() {
@@ -293,7 +293,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         agent.system_instructions = Some(system_instructions.clone());
                         agent.model = Some(model.clone());
                         agent.schedule = schedule.clone();
-                        agent.run_on_schedule = Some(run_on_schedule);
                         
                         // Build update struct
                         use crate::models::ApiAgentUpdate;
@@ -304,7 +303,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                             task_instructions: None,
                             model: Some(model.clone()),
                             schedule: schedule.clone(),
-                            run_on_schedule: Some(run_on_schedule),
                             config: None,
                             last_error: None,
                         };
@@ -576,7 +574,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                             task_instructions: None,
                             model: None,
                             schedule: None,
-                            run_on_schedule: None,
+                            
                             config: None,
                             last_error: None,
                         };
@@ -700,7 +698,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         task_instructions: None,
                         model: None,
                         schedule: None,
-                        run_on_schedule: None,
+                        
                         config: None,
                         last_error: None,
                     };

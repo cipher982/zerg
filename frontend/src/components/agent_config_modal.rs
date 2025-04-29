@@ -312,12 +312,6 @@ impl AgentConfigModal {
                     })
                     .flatten();
 
-                let run_on_schedule_flag = document
-                    .get_element_by_id("agent-run-on-schedule")
-                    .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
-                    .map(|i| i.checked())
-                    .unwrap_or(false);
-
                 let selected_model = crate::state::APP_STATE.with(|s| s.borrow().selected_model.clone());
 
                 dispatch(crate::messages::Message::SaveAgentDetails {
@@ -326,7 +320,6 @@ impl AgentConfigModal {
                     task_instructions,
                     model: selected_model,
                     schedule: schedule_value_opt,
-                    run_on_schedule: run_on_schedule_flag,
                 });
 
                 // feedback
@@ -391,8 +384,8 @@ impl AgentConfigModal {
                 }
             });
 
-        // Fetch schedule values if present
-        let (schedule_value, run_on_schedule_flag) = APP_STATE.with(|state| {
+        // Fetch schedule value if present
+        let schedule_value = APP_STATE.with(|state| {
             let state = state.borrow();
             if let Some(node) = state.nodes.get(node_id) {
                 let agent_id_opt = node
@@ -401,14 +394,11 @@ impl AgentConfigModal {
 
                 if let Some(agent_id) = agent_id_opt {
                     if let Some(agent) = state.agents.get(&agent_id) {
-                        return (
-                            agent.schedule.clone().unwrap_or_default(),
-                            agent.run_on_schedule.unwrap_or(false),
-                        );
+                        return agent.schedule.clone().unwrap_or_default();
                     }
                 }
             }
-            (String::new(), false)
+            String::new()
         });
 
         // --------------------------------------------------------------
@@ -465,10 +455,11 @@ impl AgentConfigModal {
             }
         }
 
-        // run_on_schedule checkbox
+        // (Legacy) Ensure the run_on_schedule checkbox is unchecked to reflect
+        // the simplified scheduling model.
         if let Some(elem) = document.get_element_by_id("agent-run-on-schedule") {
             if let Some(cb) = elem.dyn_ref::<web_sys::HtmlInputElement>() {
-                cb.set_checked(run_on_schedule_flag);
+                cb.set_checked(false);
             }
         }
 
