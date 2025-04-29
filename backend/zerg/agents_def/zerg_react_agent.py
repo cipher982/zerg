@@ -15,11 +15,16 @@ from langchain_core.messages import AIMessage
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
+
+# External dependencies
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.func import entrypoint
 from langgraph.func import task
 from langgraph.graph.message import add_messages
+
+# Local imports (late to avoid circulars)
+from zerg.callbacks.token_stream import WsTokenCallback
 
 logger = logging.getLogger(__name__)
 
@@ -42,15 +47,29 @@ def get_current_time() -> str:  # noqa: D401 – imperative description fits too
 
 
 def _make_llm(agent_row, tools):
-    """Factory to create a streaming-capable ChatOpenAI bound to *tools*."""
+    """Factory that returns a *tool-bound* ``ChatOpenAI`` instance.
 
-    # Non-streaming LLM for synchronous invocation (streaming handled separately by runner)
-    llm = ChatOpenAI(
-        model=agent_row.model,
-        temperature=0,
-        streaming=False,  # Streaming is handled by the runner typically
-        api_key=os.environ.get("OPENAI_API_KEY"),
-    )
+    If the :pydataattr:`zerg.config.LLM_TOKEN_STREAM` flag is enabled the LLM
+    will be configured for *streaming* and the ``WsTokenCallback`` will be
+    attached so each new token is forwarded to the WebSocket layer.
+    """
+
+    # Feature flag parsed directly from environment – evaluated at runtime so
+    # changes in .env are respected on reload without indirection.
+    enable_token_stream = os.getenv("LLM_TOKEN_STREAM", "false").strip().lower() in {"1", "true", "yes", "y"}
+
+    # Attach the token stream callback only when the feature flag is enabled.
+    kwargs: dict = {
+        "model": agent_row.model,
+        "temperature": 0,
+        "streaming": enable_token_stream,
+        "api_key": os.environ.get("OPENAI_API_KEY"),
+    }
+
+    if enable_token_stream:
+        kwargs["callbacks"] = [WsTokenCallback()]
+
+    llm = ChatOpenAI(**kwargs)
 
     return llm.bind_tools(tools)
 

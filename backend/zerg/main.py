@@ -4,10 +4,10 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from zerg.config import AGENTS_PREFIX
-from zerg.config import API_PREFIX
-from zerg.config import MODELS_PREFIX
-from zerg.config import THREADS_PREFIX
+from zerg.constants import AGENTS_PREFIX
+from zerg.constants import API_PREFIX
+from zerg.constants import MODELS_PREFIX
+from zerg.constants import THREADS_PREFIX
 from zerg.database import initialize_database
 from zerg.routers.admin import router as admin_router
 from zerg.routers.agents import router as agents_router
