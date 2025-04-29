@@ -94,7 +94,11 @@ def test_get_tool_messages_with_call(monkeypatch):
     from zerg.agents_def.zerg_react_agent import get_tool_messages
 
     # Replace the get_current_time tool with a dummy implementation
-    DummyTool = type("DummyTool", (), {"name": mod.get_current_time.name, "invoke": staticmethod(lambda args: "NOW")})
+    DummyTool = type(
+        "DummyTool",
+        (),
+        {"name": mod.get_current_time.name, "invoke": staticmethod(lambda args: "NOW")},
+    )
     monkeypatch.setattr(mod, "get_current_time", DummyTool)
 
     # Create an AIMessage with one tool call referencing our DummyTool

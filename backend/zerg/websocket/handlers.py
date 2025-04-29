@@ -191,7 +191,11 @@ async def handle_subscribe(client_id: str, message: Dict[str, Any], db: Session)
                         subscribe_msg.message_id,
                     )
             except ValueError as e:
-                await send_error(client_id, f"Invalid topic format: {topic}. Error: {str(e)}", subscribe_msg.message_id)
+                await send_error(
+                    client_id,
+                    f"Invalid topic format: {topic}. Error: {str(e)}",
+                    subscribe_msg.message_id,
+                )
 
     except ValueError as e:
         await send_error(client_id, f"Invalid topic format: {str(e)}", message.get("message_id", ""))
@@ -215,7 +219,12 @@ async def handle_unsubscribe(client_id: str, message: Dict[str, Any], _: Session
 
         # Send confirmation message back to client
         await send_to_client(
-            client_id, {"type": "unsubscribe_success", "message_id": message_id, "topics": message.get("topics", [])}
+            client_id,
+            {
+                "type": "unsubscribe_success",
+                "message_id": message_id,
+                "topics": message.get("topics", []),
+            },
         )
     except Exception as e:
         logger.error(f"Error handling unsubscribe: {str(e)}")
@@ -285,7 +294,11 @@ async def handle_send_message(client_id: str, message: Dict[str, Any], db: Sessi
             "processed": db_msg.processed,
         }
 
-        outgoing = ThreadMessageData(thread_id=send_req.thread_id, message=msg_dict, message_id=send_req.message_id)
+        outgoing = ThreadMessageData(
+            thread_id=send_req.thread_id,
+            message=msg_dict,
+            message_id=send_req.message_id,
+        )
 
         topic = f"thread:{send_req.thread_id}"
         await topic_manager.broadcast_to_topic(topic, outgoing.model_dump())

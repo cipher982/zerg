@@ -42,7 +42,12 @@ router = APIRouter(
 
 @router.get("/", response_model=List[Thread])
 @router.get("", response_model=List[Thread])
-def read_threads(agent_id: Optional[int] = None, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_threads(
+    agent_id: Optional[int] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
     """Get all threads, optionally filtered by agent_id"""
     threads = crud.get_threads(db, agent_id=agent_id, skip=skip, limit=limit)
     if not threads:
@@ -162,7 +167,11 @@ def read_thread_messages(thread_id: int, skip: int = 0, limit: int = 100, db: Se
     return result
 
 
-@router.post("/{thread_id}/messages", response_model=ThreadMessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{thread_id}/messages",
+    response_model=ThreadMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_thread_message(thread_id: int, message: ThreadMessageCreate, db: Session = Depends(get_db)):
     """Create a new message in a thread"""
     logger.info(f"Creating message in thread {thread_id}: role={message.role}, content={message.content}")

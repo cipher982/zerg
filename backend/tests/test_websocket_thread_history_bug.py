@@ -35,4 +35,9 @@ def test_read_thread_messages_via_rest_returns_history(
         assert msg.get("id") is not None
         assert msg.get("thread_id") == sample_thread.id
         assert msg.get("content") is not None
-        assert msg.get("message_type") in {"user_message", "assistant_message", "tool_output", "system_message"}
+        assert msg.get("message_type") in {
+            "user_message",
+            "assistant_message",
+            "tool_output",
+            "system_message",
+        }

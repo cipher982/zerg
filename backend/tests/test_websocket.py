@@ -48,7 +48,13 @@ class TestTopicBasedWebSocket:
     async def test_subscribe_to_thread(self, ws_client, sample_thread: Thread):
         """Test subscribing to a thread topic."""
         # Subscribe to thread
-        ws_client.send_json({"type": "subscribe", "topics": [f"thread:{sample_thread.id}"], "message_id": "test-sub-1"})
+        ws_client.send_json(
+            {
+                "type": "subscribe",
+                "topics": [f"thread:{sample_thread.id}"],
+                "message_id": "test-sub-1",
+            }
+        )
 
         # Should receive thread history
         response = ws_client.receive_json()
@@ -59,7 +65,10 @@ class TestTopicBasedWebSocket:
         # Publish a thread event
         await event_bus.publish(
             EventType.THREAD_MESSAGE_CREATED,
-            {"thread_id": sample_thread.id, "message": {"content": "Test message", "role": "user"}},
+            {
+                "thread_id": sample_thread.id,
+                "message": {"content": "Test message", "role": "user"},
+            },
         )
 
         # Should receive the event
@@ -72,7 +81,13 @@ class TestTopicBasedWebSocket:
         logger.info("START: test_subscribe_to_agent")
         # Subscribe to agent
         logger.info(f"Subscribing to agent: {sample_agent.id}")
-        ws_client.send_json({"type": "subscribe", "topics": [f"agent:{sample_agent.id}"], "message_id": "test-sub-2"})
+        ws_client.send_json(
+            {
+                "type": "subscribe",
+                "topics": [f"agent:{sample_agent.id}"],
+                "message_id": "test-sub-2",
+            }
+        )
         logger.info("Subscription message sent")
 
         # Should receive current agent state
@@ -85,7 +100,11 @@ class TestTopicBasedWebSocket:
         logger.info("Agent state assertion passed")
 
         # Publish an agent event
-        event_data = {"id": sample_agent.id, "name": sample_agent.name, "status": "processing"}
+        event_data = {
+            "id": sample_agent.id,
+            "name": sample_agent.name,
+            "status": "processing",
+        }
         logger.info(f"Publishing AGENT_UPDATED event: {event_data}")
         await event_bus.publish(EventType.AGENT_UPDATED, event_data)
         logger.info("AGENT_UPDATED event published")
@@ -120,16 +139,29 @@ class TestTopicBasedWebSocket:
         assert "agent_state" in response_types
 
     async def test_unsubscribe(
-        self, ws_client: WebSocketTestSession, sample_thread: Thread, topic_manager: TopicConnectionManager
+        self,
+        ws_client: WebSocketTestSession,
+        sample_thread: Thread,
+        topic_manager: TopicConnectionManager,
     ):
         """Test unsubscribing from a topic."""
         # First subscribe
-        ws_client.send_json({"type": "subscribe", "topics": [f"thread:{sample_thread.id}"], "message_id": "test-sub-4"})
+        ws_client.send_json(
+            {
+                "type": "subscribe",
+                "topics": [f"thread:{sample_thread.id}"],
+                "message_id": "test-sub-4",
+            }
+        )
         ws_client.receive_json()  # Consume history response
 
         # Then unsubscribe
         ws_client.send_json(
-            {"type": "unsubscribe", "topics": [f"thread:{sample_thread.id}"], "message_id": "test-unsub-1"}
+            {
+                "type": "unsubscribe",
+                "topics": [f"thread:{sample_thread.id}"],
+                "message_id": "test-unsub-1",
+            }
         )
 
         # Wait for unsubscribe confirmation
@@ -146,7 +178,11 @@ class TestTopicBasedWebSocket:
         """Test handling of invalid topic formats."""
         # Try to subscribe to invalid topic
         ws_client.send_json(
-            {"type": "subscribe", "topics": ["invalid:123", "also:invalid"], "message_id": "test-invalid-1"}
+            {
+                "type": "subscribe",
+                "topics": ["invalid:123", "also:invalid"],
+                "message_id": "test-invalid-1",
+            }
         )
 
         # Should receive error for each invalid topic
@@ -158,7 +194,11 @@ class TestTopicBasedWebSocket:
         """Test subscribing to non-existent thread/agent."""
         # Try to subscribe to non-existent resources
         ws_client.send_json(
-            {"type": "subscribe", "topics": ["thread:99999", "agent:99999"], "message_id": "test-invalid-2"}
+            {
+                "type": "subscribe",
+                "topics": ["thread:99999", "agent:99999"],
+                "message_id": "test-invalid-2",
+            }
         )
 
         # Should receive error messages

@@ -51,7 +51,11 @@ class TestChatMessageFlow:
         logger.info("Starting chat message flow test")
 
         # 1. Subscribe to thread first
-        sub_msg = {"type": MessageType.SUBSCRIBE_THREAD, "thread_id": test_thread.id, "message_id": "test-sub-1"}
+        sub_msg = {
+            "type": MessageType.SUBSCRIBE_THREAD,
+            "thread_id": test_thread.id,
+            "message_id": "test-sub-1",
+        }
         logger.info(f"Subscribing to thread: {test_thread.id}")
         ws_client.send_json(sub_msg)
 
@@ -83,7 +87,11 @@ class TestChatMessageFlow:
         # First subscribe to thread
         logger.info(f"Subscribing to thread: {test_thread.id}")
         ws_client.send_json(
-            {"type": MessageType.SUBSCRIBE_THREAD, "thread_id": test_thread.id, "message_id": "test-sub-2"}
+            {
+                "type": MessageType.SUBSCRIBE_THREAD,
+                "thread_id": test_thread.id,
+                "message_id": "test-sub-2",
+            }
         )
 
         # Send multiple messages

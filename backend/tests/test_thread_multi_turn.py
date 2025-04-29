@@ -36,7 +36,13 @@ def test_two_turns_emit_distinct_assistant_messages(client: TestClient, sample_a
     ws_client = StarletteTestClient(client.app, backend="asyncio")
 
     with ws_client.websocket_connect("/api/ws") as ws:
-        ws.send_json({"type": "subscribe", "topics": [f"thread:{thread_id}"], "message_id": "sub"})
+        ws.send_json(
+            {
+                "type": "subscribe",
+                "topics": [f"thread:{thread_id}"],
+                "message_id": "sub",
+            }
+        )
 
         assistant_ids = []
 
