@@ -61,7 +61,13 @@ class TestWebSocketIntegration:
         """Test subscribing to a thread"""
         # Subscribe to thread topic with explicit thread ID
         logger.info(f"Subscribing to thread: {test_thread.id}")
-        ws_client.send_json({"type": "subscribe", "topics": [f"thread:{test_thread.id}"], "message_id": "test-sub-1"})
+        ws_client.send_json(
+            {
+                "type": "subscribe",
+                "topics": [f"thread:{test_thread.id}"],
+                "message_id": "test-sub-1",
+            }
+        )
 
         # Should receive thread history
         response = ws_client.receive_json()
@@ -82,7 +88,11 @@ class TestWebSocketIntegration:
         invalid_thread_id = 999999
         logger.info(f"Attempting to subscribe to invalid thread: {invalid_thread_id}")
         ws_client.send_json(
-            {"type": "subscribe", "topics": [f"thread:{invalid_thread_id}"], "message_id": "test-sub-2"}
+            {
+                "type": "subscribe",
+                "topics": [f"thread:{invalid_thread_id}"],
+                "message_id": "test-sub-2",
+            }
         )
 
         response = ws_client.receive_json()
@@ -95,7 +105,11 @@ class TestWebSocketIntegration:
         # First subscribe to thread
         logger.info(f"Subscribing to thread: {test_thread.id}")
         ws_client.send_json(
-            {"type": MessageType.SUBSCRIBE_THREAD, "thread_id": test_thread.id, "message_id": "test-sub-3"}
+            {
+                "type": MessageType.SUBSCRIBE_THREAD,
+                "thread_id": test_thread.id,
+                "message_id": "test-sub-3",
+            }
         )
         history = ws_client.receive_json()  # Consume history
         logger.info(f"Received history: {history}")
@@ -140,7 +154,11 @@ class TestWebSocketIntegration:
             # Subscribe both clients to the same thread
             for i, ws in enumerate(clients):
                 ws.send_json(
-                    {"type": MessageType.SUBSCRIBE_THREAD, "thread_id": test_thread.id, "message_id": f"test-sub-{i}"}
+                    {
+                        "type": MessageType.SUBSCRIBE_THREAD,
+                        "thread_id": test_thread.id,
+                        "message_id": f"test-sub-{i}",
+                    }
                 )
                 history = ws.receive_json()  # Consume history
                 logger.info(f"Client {i} received history: {history}")

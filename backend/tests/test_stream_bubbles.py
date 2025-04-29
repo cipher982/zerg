@@ -45,7 +45,13 @@ def test_multiple_assistant_messages_emit_multiple_sequences(
     ws_client = StarletteTestClient(client.app, backend="asyncio")
 
     with ws_client.websocket_connect("/api/ws") as ws:
-        ws.send_json({"type": "subscribe", "topics": [f"thread:{thread_id}"], "message_id": "sub"})
+        ws.send_json(
+            {
+                "type": "subscribe",
+                "topics": [f"thread:{thread_id}"],
+                "message_id": "sub",
+            }
+        )
 
         # 4. Insert a user message so the /run endpoint has work to do
         client.post(

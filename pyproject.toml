@@ -7,6 +7,7 @@ ignore = []
 
 # Ignore E402 (import not at top of file) for all test files
 [tool.ruff.lint.per-file-ignores]
+"**/tests/**/*.py" = ["E402"]
 "backend/tests/**/*.py" = ["E402"]
 
 [tool.ruff.lint.isort]
