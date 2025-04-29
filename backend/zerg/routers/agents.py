@@ -2,7 +2,6 @@
 
 import logging
 import os
-from datetime import datetime
 from typing import Any
 from typing import List
 
@@ -18,7 +17,6 @@ from zerg.crud import crud
 from zerg.database import get_db
 from zerg.events import EventType
 from zerg.events.decorators import publish_event
-from zerg.events.event_bus import event_bus
 from zerg.schemas.schemas import Agent
 from zerg.schemas.schemas import AgentCreate
 from zerg.schemas.schemas import AgentDetails
@@ -228,79 +226,20 @@ def create_agent_message(agent_id: int, message: MessageCreate, db: Session = De
 @router.post("/{agent_id}/task", status_code=status.HTTP_202_ACCEPTED)
 async def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
     """Run the agent's main task (task_instructions) in a new thread."""
-    from zerg.agents import AgentManager
-
     # ------------------------------------------------------------------
-    # 1. Get the agent and create an AgentManager instance.
+    # Delegate to the new TaskRunner helper.
     # ------------------------------------------------------------------
     agent = crud.get_agent(db, agent_id)
-    if not agent:
+    if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    if not agent.task_instructions:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Agent has no task instructions defined",
-        )
+    # Import locally to avoid circular dependencies at module import time.
+    from zerg.services.task_runner import execute_agent_task
 
-    # ------------------------------------------------------------------
-    # 2. Mark the agent as *running* and create a thread.
-    # ------------------------------------------------------------------
-    crud.update_agent(db, agent_id, status="running")
-    db.commit()
-
-    # Notify UI immediately that agent is running
-    await event_bus.publish(EventType.AGENT_UPDATED, {"id": agent_id, "status": "running"})
-
-    agent_manager = AgentManager(agent)
-
-    # Create a title for the thread
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    thread_title = f"Manual Task Run - {agent.name} - {timestamp}"
-
-    # Run the agent's task instructions (non-streaming)
     try:
-        # Execute the task which creates a new thread and processes it
-        result_generator = agent_manager.execute_task(
-            db=db, task_instructions=agent.task_instructions, thread_type="manual", title=thread_title, stream=False
-        )
+        thread = await execute_agent_task(db, agent, thread_type="manual")
+    except ValueError as ve:
+        # Validation error translated to 400 for HTTP callers.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve)) from ve
 
-        # Get the result to materialize the generator
-        thread = next(result_generator, None)
-
-        # ------------------------------------------------------------------
-        # 3. Mark the agent back to *idle*, persist last_run_at, and publish
-        #    another update so the dashboard can refresh.
-        # ------------------------------------------------------------------
-        now = datetime.utcnow()
-        crud.update_agent(db, agent_id, status="idle", last_run_at=now, last_error=None)
-        db.commit()
-
-        await event_bus.publish(
-            EventType.AGENT_UPDATED,
-            {
-                "id": agent_id,
-                "status": "idle",
-                "last_run_at": now.isoformat(),
-                "thread_id": thread.id,
-                "last_error": None,
-            },
-        )
-
-        # Return the thread ID so the caller (frontend) can open it if desired
-        return {"thread_id": thread.id}
-    except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Error running agent task for agent {agent_id}: {error_msg}")
-
-        # Update agent status and error message
-        crud.update_agent(db, agent_id, status="error", last_error=error_msg)
-        db.commit()
-
-        # Publish error state
-        await event_bus.publish(
-            EventType.AGENT_UPDATED,
-            {"id": agent_id, "status": "error", "last_error": error_msg},
-        )
-
-        raise HTTPException(status_code=500, detail=error_msg)
+    return {"thread_id": thread.id}

@@ -190,18 +190,17 @@ def test_run_agent_not_found(client: TestClient):
 
 def test_run_agent_task(client: TestClient, sample_agent: Agent, db_session):
     """Test running an agent's main task via the /api/agents/{id}/task endpoint."""
-    with patch("zerg.agents.AgentManager") as mock_agent_manager_class:
-        mock_agent_manager = MagicMock()
-        mock_agent_manager_class.return_value = mock_agent_manager
-
-        # Create a mock thread to be returned
+    # Patch the new helper so the test is independent of AgentRunner logic
+    with patch("zerg.services.task_runner.execute_agent_task", autospec=True) as mock_exec:
         mock_thread = MagicMock(id=123)
 
-        # execute_task should yield the thread object, matching production code
-        mock_agent_manager.execute_task.return_value = iter([mock_thread])
+        async def _fake_execute(db, agent, thread_type="manual"):
+            return mock_thread
+
+        mock_exec.side_effect = _fake_execute
 
         response = client.post(f"/api/agents/{sample_agent.id}/task")
+
         assert response.status_code == 202
         data = response.json()
-        assert "thread_id" in data
         assert data["thread_id"] == 123

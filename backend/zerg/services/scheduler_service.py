@@ -8,16 +8,20 @@ This module provides the SchedulerService class that handles:
 """
 
 import logging
-from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from zerg.agents import AgentManager
+# Legacy AgentManager no longer required – all logic goes through TaskRunner
 from zerg.crud import crud
 from zerg.database import default_session_factory
+
+# EventBus remains for UI notifications
 from zerg.events import EventType
 from zerg.events.event_bus import event_bus
+
+# New unified task runner helper
+from zerg.services.task_runner import execute_agent_task
 
 logger = logging.getLogger(__name__)
 
@@ -228,78 +232,43 @@ class SchedulerService:
         - Creating a new thread for this run using the execute_task method
         - Running the agent's task instructions
         """
-        start_time = datetime.utcnow()
-        timestamp = start_time.strftime("%Y-%m-%d %H:%M:%S")
-
         db_session = self.session_factory()
         try:
-            # Get the agent
             agent = crud.get_agent(db_session, agent_id)
-            if not agent:
-                logger.error(f"Agent {agent_id} not found")
+            if agent is None:
+                logger.error("Agent %s not found", agent_id)
                 return
 
-            # Immediately mark agent as running so dashboards can react.
-            crud.update_agent(db_session, agent_id, status="running")
-            db_session.commit()
+            # ------------------------------------------------------------------
+            # Delegate to shared helper (handles status flips & events).
+            # ------------------------------------------------------------------
+            logger.info("Running scheduled task for agent %s", agent_id)
+            thread = await execute_agent_task(db_session, agent, thread_type="scheduled")
 
-            await event_bus.publish(EventType.AGENT_UPDATED, {"id": agent_id, "status": "running"})
-
-            # Create the agent manager
-            agent_manager = AgentManager(agent)
-
-            # Create a title for the thread
-            thread_title = f"Scheduled Run - {agent.name} - {timestamp}"
-
-            # Execute the task which creates a new thread and processes it
-            logger.info(f"Running scheduled task for agent {agent_id}")
-            result_generator = agent_manager.execute_task(
-                db=db_session,
-                task_instructions=agent.task_instructions,
-                thread_type="scheduled",
-                title=thread_title,
-                stream=False,  # Don't stream for scheduled runs
-            )
-
-            # Get the first (and only) result item to materialize the generator
-            thread = next(result_generator, None)
-
-            # Update last_run_at and next_run_at after successful run
+            # ------------------------------------------------------------------
+            # Update *next_run_at* after successful run so dashboards show when
+            # the task will fire next.  We do *not* touch last_run_at – helper
+            # already set it.
+            # ------------------------------------------------------------------
             job = self.scheduler.get_job(f"agent_{agent_id}")
-            agent.last_run_at = start_time
-            agent.next_run_at = getattr(job, "next_run_time", None) if job else None
-            agent.status = "idle"
-            agent.last_error = None  # Clear any previous error on success
-
-            db_session.commit()
-
-            await event_bus.publish(
-                EventType.AGENT_UPDATED,
-                {
-                    "id": agent_id,
-                    "status": "idle",
-                    "last_run_at": start_time.isoformat(),
-                    "next_run_at": agent.next_run_at.isoformat() if agent.next_run_at else None,
-                    "last_error": None,
-                    "thread_id": thread.id,  # Include thread_id so UI can show the result
-                },
-            )
-
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Error running scheduled task for agent {agent_id}: {error_msg}")
-            # Reset the agent status to avoid it getting stuck in "running"
-            try:
-                crud.update_agent(db_session, agent_id, status="error", last_error=error_msg)
+            next_run_time = getattr(job, "next_run_time", None) if job else None
+            if next_run_time:
+                crud.update_agent(db_session, agent_id, next_run_at=next_run_time)
                 db_session.commit()
 
-                # Also notify via event bus so UI updates immediately
                 await event_bus.publish(
                     EventType.AGENT_UPDATED,
-                    {"id": agent_id, "status": "error", "last_error": error_msg},
+                    {
+                        "id": agent_id,
+                        "next_run_at": next_run_time.isoformat(),
+                        "thread_id": thread.id,
+                    },
                 )
-            except Exception as status_error:
-                logger.error(f"Failed to reset agent status after error: {status_error}")
+
+        except Exception as exc:
+            # execute_agent_task already flipped status to *error* and
+            # broadcasted so here we just log.
+            logger.exception("Scheduled task failed for agent %s: %s", agent_id, exc)
         finally:
             db_session.close()
 
