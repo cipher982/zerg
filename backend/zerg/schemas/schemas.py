@@ -15,7 +15,6 @@ class AgentBase(BaseModel):
     model: str
     schedule: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
-    run_on_schedule: Optional[bool] = False
     last_error: Optional[str] = None
 
 
@@ -31,7 +30,6 @@ class AgentUpdate(BaseModel):
     status: Optional[str] = None
     schedule: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
-    run_on_schedule: Optional[bool] = False
     last_error: Optional[str] = None
 
 
@@ -111,7 +109,7 @@ class Agent(AgentBase):
     created_at: datetime
     updated_at: datetime
     messages: List[AgentMessage] = []
-    run_on_schedule: Optional[bool] = False
+    # Deprecated field removed – scheduling is implied by `schedule`.
     next_run_at: Optional[datetime] = None
     last_run_at: Optional[datetime] = None
     last_error: Optional[str] = None

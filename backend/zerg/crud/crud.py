@@ -32,7 +32,6 @@ def create_agent(
     model: str,
     schedule: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
-    run_on_schedule: Optional[bool] = False,
 ):
     """Create a new agent"""
     db_agent = Agent(
@@ -43,7 +42,6 @@ def create_agent(
         status="idle",
         schedule=schedule,
         config=config,
-        run_on_schedule=run_on_schedule if run_on_schedule is not None else False,
         next_run_at=None,
         last_run_at=None,
     )
@@ -63,7 +61,6 @@ def update_agent(
     status: Optional[str] = None,
     schedule: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
-    run_on_schedule: Optional[bool] = None,
     next_run_at: Optional[datetime] = None,
     last_run_at: Optional[datetime] = None,
     last_error: Optional[str] = None,
@@ -88,8 +85,6 @@ def update_agent(
         db_agent.schedule = schedule
     if config is not None:
         db_agent.config = config
-    if run_on_schedule is not None:
-        db_agent.run_on_schedule = run_on_schedule
     if next_run_at is not None:
         db_agent.next_run_at = next_run_at
     if last_run_at is not None:

@@ -72,7 +72,7 @@ class SchedulerService:
 
     async def _handle_agent_created(self, data):
         """Handle agent created events by scheduling if needed."""
-        if data.get("run_on_schedule") and data.get("schedule"):
+        if data.get("schedule"):
             agent_id = data.get("id")
             cron_expression = data.get("schedule")
             logger.info(f"Scheduling newly created agent {agent_id}")
@@ -81,32 +81,30 @@ class SchedulerService:
     async def _handle_agent_updated(self, data):
         """
         Handle agent updated events by updating scheduling accordingly.
-        This covers cases where run_on_schedule is toggled or the schedule is changed.
+        Re-schedule or unschedule the job when the cron expression changes.
         """
         agent_id = data.get("id")
-        run_on_schedule = data.get("run_on_schedule")
         schedule = data.get("schedule")
 
-        # If we can't determine the scheduling state, fetch the agent
-        if run_on_schedule is None or schedule is None:
+        # If we can't determine schedule, load from DB
+        if schedule is None:
             db_session = self.session_factory()
             try:
                 agent = crud.get_agent(db_session, agent_id)
                 if agent:
-                    run_on_schedule = agent.run_on_schedule
                     schedule = agent.schedule
             finally:
                 db_session.close()
 
-        # Remove any existing job
+        # Remove any existing job regardless
         self.remove_agent_job(agent_id)
 
-        # Add new job if needed
-        if run_on_schedule and schedule:
+        # Re-schedule if a cron expression is set
+        if schedule:
             logger.info(f"Updating schedule for agent {agent_id}")
             await self.schedule_agent(agent_id, schedule)
         else:
-            logger.info(f"Agent {agent_id} updated, not scheduled to run")
+            logger.info(f"Agent {agent_id} now has no schedule – unscheduled.")
 
     async def _handle_agent_deleted(self, data):
         """Handle agent deleted events by removing any scheduled jobs."""
@@ -132,18 +130,13 @@ class SchedulerService:
         await self.run_agent_task(agent_id)
 
     async def load_scheduled_agents(self):
-        """Load all agents with run_on_schedule=True from the database and schedule them."""
+        """Load all agents that define a cron schedule and register them."""
 
         db_session = self.session_factory()
         try:
-            # Get all agents with run_on_schedule=True and valid schedule
+            # Get all agents that have a non-null schedule
             agent_rows = (
-                db_session.query(crud.Agent.id, crud.Agent.schedule)
-                .filter(
-                    crud.Agent.run_on_schedule == True,  # noqa: E712
-                    crud.Agent.schedule.isnot(None),
-                )
-                .all()
+                db_session.query(crud.Agent.id, crud.Agent.schedule).filter(crud.Agent.schedule.isnot(None)).all()
             )
 
             for agent_id, cron_expr in agent_rows:

@@ -56,7 +56,7 @@ async def test_schedule_agent(service):
 
 @pytest.mark.asyncio
 async def test_load_scheduled_agents(service, db_session):
-    # Insert two agents: one with run_on_schedule=True, one with False
+    # Insert two agents: one with a cron schedule, one without
     from zerg.models.models import Agent
 
     a1 = Agent(
@@ -66,7 +66,6 @@ async def test_load_scheduled_agents(service, db_session):
         model="m1",
         status="idle",
         schedule="*/5 * * * *",
-        run_on_schedule=True,
     )
     a2 = Agent(
         name="A2",
@@ -74,8 +73,7 @@ async def test_load_scheduled_agents(service, db_session):
         task_instructions="ti",
         model="m1",
         status="idle",
-        schedule="*/5 * * * *",
-        run_on_schedule=False,
+        schedule=None,
     )
     db_session.add_all([a1, a2])
     db_session.commit()
@@ -116,7 +114,6 @@ async def test_handle_agent_created(service):
         "id": 1,
         "name": "Test Agent",
         "schedule": "*/5 * * * *",
-        "run_on_schedule": True,
     }
 
     # Process the event
@@ -139,7 +136,6 @@ async def test_handle_agent_updated_enabled(service):
     event_data = {
         "id": agent_id,
         "schedule": "*/5 * * * *",
-        "run_on_schedule": True,
     }
 
     # Process the update event
@@ -166,7 +162,7 @@ async def test_handle_agent_updated_disabled(service):
     # Update to disable scheduling
     event_data = {
         "id": agent_id,
-        "run_on_schedule": False,
+        # schedule key omitted to unset scheduling
     }
 
     # Process the update event
