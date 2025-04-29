@@ -1,43 +1,26 @@
-"""Test to verify the behavior of ChatOpenAI.invoke in a thread context.
+"""Test to verify the behavior of the globally mocked ChatOpenAI."""
 
-This test confirms whether ChatOpenAI.invoke returns a Future when
-called from a thread, simulating the LangGraph execution environment.
-"""
+# This test relies on the global patching of langchain_openai.ChatOpenAI done in conftest.py.
 
-import concurrent.futures
-import threading
-from unittest.mock import patch
-
+from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
 
-def test_chatOpenAI_returns_future_in_thread():
-    """Verify if ChatOpenAI.invoke returns a Future when called from a thread."""
-    # Create a ChatOpenAI instance with a mock API key
-    with patch.dict("os.environ", {"OPENAI_API_KEY": "mock-key"}):
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+def test_globally_mocked_chatOpenAI_behavior():
+    """Verify the globally mocked ChatOpenAI from conftest works as expected."""
+    # Instantiate ChatOpenAI - this will use the _StubChatOpenAI from conftest
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)  # Parameters are ignored by the stub
 
-        # Flag to track if a Future is returned
-        result_is_future = False
+    # The _StubChatOpenAI.bind_tools returns _StubLlm (also from conftest)
+    bound_llm = llm.bind_tools([])
+    assert hasattr(bound_llm, "invoke"), "_StubLlm should have an invoke method"
 
-        # Function to execute in thread
-        def thread_func():
-            nonlocal result_is_future
-            # Call invoke with a simple message
-            result = llm.invoke([{"type": "human", "content": "Hello"}])
-            # Check if result is a Future
-            result_is_future = isinstance(result, concurrent.futures.Future)
+    # Calling invoke on _StubLlm should return a specific AIMessage
+    result = bound_llm.invoke([{"type": "human", "content": "Hello"}])
 
-        # Execute the function in a thread
-        thread = threading.Thread(target=thread_func)
-        thread.start()
-        thread.join()
+    # Check the result from the _StubLlm in conftest
+    assert isinstance(result, AIMessage), "Expected AIMessage from _StubLlm"
+    assert result.content == "stub-response", "Expected specific content from _StubLlm"
 
-        # Assert the result
-        # If this is True, it confirms ChatOpenAI.invoke returns a Future in a thread
-        # If this is False, the defensive code in zerg_react_agent.py is unnecessary
-        print(f"ChatOpenAI.invoke returned a Future when called from a thread: {result_is_future}")
-
-        # This assertion will fail if our defensive code is unnecessary
-        # Intentionally not asserting a specific outcome to observe actual behavior
-        return result_is_future
+    # If we reached here without hanging, the basic mock interaction is working.
+    print("Globally mocked ChatOpenAI behaved as expected.")

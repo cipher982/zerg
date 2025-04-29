@@ -115,8 +115,8 @@ class StreamChunkMessage(BaseMessage):
     thread_id: int
     content: str
     # Fields to identify message source
-    chunk_type: str  # "tool_output" or "assistant_message"
-    tool_name: Optional[str] = None  # Required for tool_output, None for assistant_message
+    chunk_type: str  # "tool_output", "assistant_message", or "assistant_token"
+    tool_name: Optional[str] = None  # Required for tool_output, None for assistant_message and assistant_token
     tool_call_id: Optional[str] = None
 
 

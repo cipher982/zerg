@@ -23,6 +23,7 @@ silently drifted apart.
 | 5 | Refactor & green-light all tests | ✅ *Merged* |
 | 6 | Docs & follow-up clean-ups (this file, deprecations, metrics) | ✅ *This PR* |
 | 7 | Green-light full backend test-suite (110 tests) | ✅ *This PR* |
+| 8 | Add optional per-token streaming (env-flag) | ✅ *2025-05-02* |
 
 Remaining open items are listed in Section 8 (check-list).
 
@@ -64,9 +65,18 @@ remains useful as a case-study.
 2. **WebSocket – live updates only:**  
    • When the client subscribes to `thread:{id}` the server *does not* send any
      historical messages.  
-   • Incremental updates continue to be delivered as `stream_start` →
-     `stream_chunk` → `stream_end`, where `stream_chunk` for tools carries full
-     metadata.
+   • Incremental updates are delivered as:
+
+     `stream_start` → one or more `stream_chunk` events → `stream_end`
+
+     Depending on the **LLM_TOKEN_STREAM** environment variable:
+
+     | Flag value | Chunk sequence for **assistant** replies |
+     |------------|-------------------------------------------|
+     | `false` (default) | single `stream_chunk` with `chunk_type="assistant_message"` |
+     | `true`            | many `stream_chunk` events each with `chunk_type="assistant_token"`; **no** `assistant_message` chunk |
+
+     Tool calls are unaffected and still use `chunk_type="tool_output"`.
 
 3. **Frontend initial load:**  
    ```rust
@@ -116,6 +126,9 @@ remains useful as a case-study.
 *2025-04-28*  Added `message_type` & `tool_name` to `ThreadMessageResponse`.  
 *2025-04-29*  Deleted legacy handler in `ws_manager.rs`; first fully green test run.  
 *2025-04-29*  Updated/added tests & reinstated helpers; backend suite now **96 pass / 15 skip / 0 fail**.  
+*2025-05-02*  Introduced per-token streaming (`LLM_TOKEN_STREAM`) and new
+`assistant_token` chunk-type; deleted `zerg.config` in favour of
+`zerg.constants`; extended tests to cover both streaming modes.
 
 ---
 
