@@ -65,6 +65,9 @@ class ThreadMessageResponse(ThreadMessageBase):
     timestamp: datetime
     processed: bool = False
     parent_id: Optional[int] = None
+    # Fields for message type and tool display
+    message_type: Optional[str] = None
+    tool_name: Optional[str] = None
 
     class Config:
         from_attributes = True

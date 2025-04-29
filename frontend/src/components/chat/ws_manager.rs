@@ -70,18 +70,6 @@ impl ChatViewWsManager {
             if let Some(event_type) = data.get("type").and_then(|t| t.as_str()) {
 
                 match event_type {
-                    "thread_history" => {
-                        // Parse the messages array from the history message
-                        if let Some(messages_val) = data.get("messages") {
-                            if let Ok(messages) = serde_json::from_value::<Vec<ApiThreadMessage>>(messages_val.clone()) {
-                                dispatch_global_message(Message::ReceiveThreadHistory(messages));
-                            } else {
-                                web_sys::console::error_1(&"Failed to parse messages array from thread_history".into());
-                            }
-                        } else {
-                            web_sys::console::error_1(&"thread_history message missing 'messages' field".into());
-                        }
-                    },
                     "thread_message_created" | "thread_message" => {
                         // Handle both thread_message_created (from backend WebSocket) and thread_message (from run_thread)
                         // First, look for data field (thread_message_created format)

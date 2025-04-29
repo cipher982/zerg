@@ -39,7 +39,7 @@ def test_invoke_calls_llm(agent_row):
     # Patch ChatOpenAI so we don't hit real LLM
     with (
         patch("zerg.agents_def.zerg_react_agent.ChatOpenAI") as mock_llm_cls,
-        patch("zerg.agents_def.zerg_react_agent.StateGraph") as mock_state_graph_cls,
+        patch("zerg.agents_def.zerg_react_agent.MemorySaver", new=lambda *a, **kw: None),
     ):
         mock_instance = MagicMock()
         # When llm_with_tools.invoke is called, return AIMessage("hi")
@@ -48,17 +48,12 @@ def test_invoke_calls_llm(agent_row):
         mock_instance.bind_tools.return_value.invoke.return_value = AIMessage(content="hi")
         mock_llm_cls.return_value = mock_instance
 
-        # Stub the compiled graph so .invoke() returns our expected structure.
-        from types import SimpleNamespace
-
-        from langchain_core.messages import AIMessage
-
-        fake_graph = SimpleNamespace(invoke=lambda _state: {"messages": [AIMessage(content="hi")]})
-
-        mock_state_graph_cls.return_value.compile.return_value = fake_graph
-
         runnable = mod.get_runnable(agent_row)
 
-        res = runnable.invoke({"messages": []})
+        # We don't patch the whole graph – the real runnable should work with
+        # our stubbed LLM. It should append an AIMessage("hi").
 
-        assert res["messages"][-1].content == "hi"
+        res = runnable.invoke([])
+
+        # The runnable returns list of messages; last one should be AIMessage("hi")
+        assert res[-1].content == "hi"

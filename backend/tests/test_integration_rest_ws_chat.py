@@ -17,14 +17,17 @@ def test_http_rest_and_ws_events(sample_agent, test_client: TestClient):
     thread = create_resp.json()
     thread_id = thread["id"]
 
-    # 2. Connect WebSocket, subscribing immediately by query param
-    # Open WebSocket and subscribe via query param; use context manager
+    # 2. Fetch initial history via REST (initial load)
+    hist_resp = test_client.get(f"/api/threads/{thread_id}/messages")
+    assert hist_resp.status_code == 200, hist_resp.text
+    hist = hist_resp.json()
+    # Expect at least the system message inserted at thread creation
+    assert isinstance(hist, list)
+    assert len(hist) >= 1
+
+    # 3. Connect WebSocket for live updates
     with test_client.websocket_connect(f"/api/ws?initial_topics=thread:{thread_id}") as ws:
-        # Should receive initial history (only system message)
-        msg = ws.receive_json()
-        assert msg.get("type") == MessageType.THREAD_HISTORY.value
-        assert msg.get("thread_id") == thread_id
-        assert isinstance(msg.get("messages"), list)
+        # No initial history over WS; proceed to send and receive live events
 
         # 3. Send a user message via WS (frontend uses WebSocket send)
         send_req = {

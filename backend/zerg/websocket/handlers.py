@@ -22,7 +22,6 @@ from zerg.schemas.ws_messages import PingMessage
 from zerg.schemas.ws_messages import PongMessage
 from zerg.schemas.ws_messages import SendMessageRequest
 from zerg.schemas.ws_messages import SubscribeThreadMessage
-from zerg.schemas.ws_messages import ThreadHistoryMessage
 from zerg.schemas.ws_messages import ThreadMessageData
 from zerg.websocket.manager import topic_manager
 
@@ -124,36 +123,7 @@ async def _subscribe_thread(client_id: str, thread_id: int, message_id: str, db:
         topic = f"thread:{thread_id}"
         await topic_manager.subscribe_to_topic(client_id, topic)
 
-        # Get thread history
-        messages = crud.get_thread_messages(db, thread_id)
-
-        # Build payloads that conform to ThreadMessageData (thread_id + nested message dict)
-
-        # For *thread_history* we only need the raw message dictionaries – the
-        # frontend converts them to its own `ApiThreadMessage` struct.  Do not
-        # wrap them in ThreadMessageData (that wrapper is reserved for live
-        # incremental *thread_message* broadcasts).
-
-        message_data = [
-            {
-                "id": msg.id,
-                "thread_id": msg.thread_id,
-                "role": msg.role,
-                "content": msg.content,
-                "timestamp": msg.timestamp.isoformat() if msg.timestamp else None,
-                "processed": msg.processed,
-            }
-            for msg in messages
-        ]
-
-        # Send thread history
-        history = ThreadHistoryMessage(
-            type=MessageType.THREAD_HISTORY,
-            message_id=message_id,
-            thread_id=thread_id,
-            messages=message_data,
-        )
-        await send_to_client(client_id, history.model_dump())
+        # No longer send thread history here. REST endpoint is responsible for initial message load.
 
     except Exception as e:
         logger.error(f"Error in _subscribe_thread: {str(e)}")
@@ -273,10 +243,8 @@ MESSAGE_HANDLERS = {
 async def handle_subscribe_thread(client_id: str, message: Dict[str, Any], db: Session) -> None:  # noqa: D401
     """Handle a *subscribe_thread* request.
 
-    This is syntactic sugar on top of the generic *subscribe* flow. We keep the
-    implementation here to avoid routing the message through an extra layer
-    while still sending the required *thread_history* payload expected by the
-    higher‑level chat tests.
+    This wraps the generic *subscribe* flow for threads. Initial history
+    is now provided via the REST endpoint; WebSocket only delivers updates.
     """
     try:
         sub_msg = SubscribeThreadMessage(**message)
@@ -289,6 +257,7 @@ async def handle_subscribe_thread(client_id: str, message: Dict[str, Any], db: S
 async def handle_send_message(client_id: str, message: Dict[str, Any], db: Session) -> None:  # noqa: D401
     """Persist a new message to a thread and broadcast it."""
 
+    # Ensure ThreadMessageData is in scope for outgoing messages
     try:
         send_req = SendMessageRequest(**message)
 

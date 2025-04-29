@@ -135,3 +135,36 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
 
     # Return the compiled entrypoint
     return agent_executor
+
+
+# ---------------------------------------------------------------------------
+# Helper – preserve for unit-testing & potential reuse
+# ---------------------------------------------------------------------------
+
+
+def get_tool_messages(ai_msg: AIMessage):  # noqa: D401 – util function
+    """Return a list of ToolMessage instances for each tool call in *ai_msg*.
+
+    This helper is mainly used in unit-tests but can also aid debugging in a
+    REPL. It was removed during an earlier refactor and has been reinstated to
+    keep backwards-compatibility with the test-suite.
+    """
+
+    if not getattr(ai_msg, "tool_calls", None):
+        return []
+
+    tool_messages: List[ToolMessage] = []
+    for tc in ai_msg.tool_calls:
+        name = tc.get("name")
+        content = "<no-op>"
+        try:
+            # Try to resolve tool by name in current module globals
+            tool_fn = globals().get(name)
+            if tool_fn is not None and hasattr(tool_fn, "invoke"):
+                content = tool_fn.invoke(tc.get("args", {}))
+        except Exception as exc:  # noqa: BLE001
+            content = f"<tool-error> {exc}"
+
+        tool_messages.append(ToolMessage(content=str(content), tool_call_id=tc.get("id"), name=name))
+
+    return tool_messages
