@@ -31,7 +31,11 @@ class Agent(Base):
     last_run_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    run_on_schedule = Column(Boolean, default=False, nullable=False)
+    # --------------------------------------------------
+    # *run_on_schedule* has been removed – the presence of a non-NULL cron string
+    # in the *schedule* column now **alone** determines whether the Scheduler
+    # service will run the agent.  A NULL / empty schedule means "disabled".
+    # --------------------------------------------------
     last_error = Column(Text, nullable=True)  # Store the last error message
 
     # Define relationship with AgentMessage
