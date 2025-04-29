@@ -41,7 +41,19 @@ Agent Platform is designed for users who need to create, manage, and orchestrate
 --------------------------------------------------------------------------------
 ## Quick Start
 
-**IMPORTANT:** FOR ANY PYTHON CLI CALLS, USE `uv run` TO RUN THE COMMAND. Also NEVER use pip, use UV ONLY. IF you want to run backend tests, use 'cd backend && uv run pytest'. Or even easier, use 'cd backend && ./run_backend_tests.sh' to run the tests.
+**IMPORTANT:** FOR ANY PYTHON CLI CALLS, USE `uv run` TO RUN THE COMMAND. Also NEVER use pip, use UV ONLY.
+
+• Run the **backend** test-suite via the helper script (which already passes `-p no:warnings` so CI logs stay clean):
+  ```bash
+  cd backend && ./run_backend_tests.sh
+  ```
+
+• For quick one-off runs you can still call Pytest directly:
+  ```bash
+  cd backend && uv run pytest tests/ -p no:warnings
+  ```
+
+An experimental **MCP test-runner** that bootstraps a full local cluster lives under `tools/mcp_test_runner/` – see its README if you need integration-style smoke tests.
 
 Here's the minimal set of commands to get Agent Platform running locally:
 
@@ -106,7 +118,8 @@ The repository is divided into three main areas:
    - REST endpoints handle CRUD operations while WebSocket connections provide real-time updates.
    - Environment variables (OPENAI_API_KEY, etc.) loaded from a .env file.
    - Main entry point is backend/zerg/main.py
-   - Uses LangGraph-based AgentManager.process_message() pipeline for agent execution
+   - Uses a **ReAct-style functional agent** compiled in `zerg/agents_def/zerg_react_agent.py` and orchestrated by `zerg/managers/agent_runner.py`.
+     (The previous `legacy_agent_manager.AgentManager.process_message()` helper is still shipped but considered *deprecated* and will be removed in a future release.)
    - uvicorn or gunicorn can host the app in production.
 
 3. **Pre-Rendering (Node/Playwright)**  
@@ -210,7 +223,8 @@ The application uses a sophisticated event-based architecture for real-time comm
 3. **Real-Time UI Updates**
    - When WebSocket messages arrive, they are converted to appropriate Messages:
      • `ReceiveThreadUpdate` for thread metadata changes
-     • `ReceiveStreamChunk` for incoming streaming responses
+     • `ReceiveStreamChunk` for incoming streaming responses – covers three `chunk_type`s:
+       `assistant_message` (final message), `tool_output`, and the new `assistant_token` (token-by-token stream)
      • `ThreadMessagesLoaded` for thread history
 
 This architecture creates a seamless real-time experience: when an agent is created, a thread is created, or a message is sent, the UI updates instantly across all connected clients without polling.
@@ -222,12 +236,14 @@ This architecture creates a seamless real-time experience: when an agent is crea
   - The Dashboard is a table-like view of agent cards (showing status, quick actions, logs).  
   - The Canvas Editor (in Rust/WASM) is used for more advanced flows or multi-step instructions.  
 
-• **Real‑Time AI Streaming**  
-  - The backend streams incremental tokens from OpenAI's API to connected browsers via websockets.  
+• **Real-Time AI Streaming (token-level)**  
+  - With the `LLM_TOKEN_STREAM` feature flag the backend forwards **each individual token** as it is generated (`chunk_type="assistant_token"`).  
+  - Full message chunks (`assistant_message`, `tool_output`) are still emitted so clients without token mode remain compatible.
 
-• **Extensible "Agent" Model**  
-  - Each agent stores system instructions, thread history, and status.  
-  - Agents can be triggered manually or scheduled.  
+• **ReAct-style Functional Agents**  
+  - Pure agent definitions live in `backend/zerg/agents_def/*` and are composed with LangGraph's Functional API.  
+  - `AgentRunner` compiles the definition at runtime and handles DB persistence plus WebSocket streaming.
+  - Each agent still stores system instructions, thread history and status, and can be triggered manually or on schedule.
 
 • **SEO-Friendly Pre‑Rendering**  
   - A Node + Playwright system captures static HTML snapshots, serving them to web crawlers.  
@@ -235,8 +251,8 @@ This architecture creates a seamless real-time experience: when an agent is crea
 • **Canvas Editor written in Rust/wgpu‑free 2‑D renderer**  
   - Custom rendering for efficient performance and fluid user interactions.
 
-• **Cron‑style scheduling via SchedulerService**
-  - APScheduler-based cron scheduling for automated agent execution.
+• **Cron-style scheduling via SchedulerService**  
+  - ✅ Shipped – APScheduler now triggers `AgentRunner` on the defined CRON schedule.
 
 --------------------------------------------------------------------------------
 ## Directory Structure
@@ -244,8 +260,12 @@ This architecture creates a seamless real-time experience: when an agent is crea
 A simplified overview of notable top-level files and folders:
 
 • backend/  
-   ├── zerg/main.py (FastAPI & streaming logic)  
-   ├── run_backend_tests.sh (Test runner script)
+   ├── zerg/main.py (FastAPI & app bootstrap)  
+   ├── zerg/agents_def/ (pure functional agent definitions; ReAct example lives here)  
+   ├── zerg/managers/agent_runner.py (orchestration + DB persistence + streaming)  
+   ├── zerg/callbacks/token_stream.py (WebSocket token streaming handler)  
+   ├── zerg/legacy_agent_manager.py (deprecated – kept for backwards compatibility)  
+   ├── run_backend_tests.sh (Test runner script)  
    └── pyproject.toml (Python project config & linting)  
 
 • frontend/  
@@ -281,7 +301,7 @@ A simplified overview of notable top-level files and folders:
 2. **Backend**  
    - Python 3.12+  
    - FastAPI, uvicorn, websockets, openai, python-dotenv  
-   - langgraph, langchain, apscheduler, sqlalchemy
+   - langgraph, langchain-core, langchain-openai, apscheduler, sqlalchemy
    - uv (for dependency management and running scripts)
 
 3. **Pre-Rendering (Optional)**  
@@ -321,17 +341,20 @@ After launching the frontend (http://localhost:8002):
 
 1. **Dashboard**  
    - The default tab shows "Agent Dashboard," with existing agents in a table.  
-   - Each card shows agent name, status, quick actions (run, pause, edit), logs if available.  
-   - Clicking "Create Agent" adds a new agent node.
+   - Each card shows agent name, status, quick actions (run, pause, edit), logs if available.
 
 2. **Canvas Editor**  
    - Switch to "Canvas Editor" from the top tabs.  
-   - This view shows a node-based interface for advanced flows.  
-   - You can create "User Input" nodes and "Agent Response" nodes, connect them, drag them around, etc.  
-   - The Canvas Editor is best for complex multi-step instructions or officially "chaining" steps.
+   - This view shows a node-based interface for advanced flows.
+   - **Phase 1 limitation:** only the following node types are implemented – `AgentIdentity`, `UserInput`, `ResponseOutput`, and `GenericNode`.  Trigger / Tool / Condition nodes are on the roadmap.
+   - You can drag nodes around, connect them visually, and edit agent system instructions via the sidebar.
 
 3. **Agent Modal**  
    - In the canvas, clicking on an "Agent Identity" node opens a modal for system instructions, scheduling, advanced settings.
+
+4. **Agent Debug Modal**  
+  - From the Dashboard, choose “Details” on any agent to open a read-only modal that surfaces raw JSON returned by `/api/agents/{id}/details` (powered by the new `AgentDetails` schema).  
+  - Tabs for *Threads*, *Runs* and *Stats* are stubbed out – they will populate once those include payloads are implemented on the backend.  
 
 --------------------------------------------------------------------------------
 ## Pre‑Rendering & SEO Details
@@ -484,21 +507,20 @@ I read every top‑level source file and the entire test‑suite so that what fo
 
 All routers are version‑less but live under prefix "/api".
 
-### 2.5 Agent runtime
-- backend/zerg/agents.py
-  - Wraps an Agent row and hides LangGraph plumbing.
-  - get_or_create_thread() lazily builds Thread.
-  - process_message() builds a LangGraph state machine:
-    - START ─► chatbot node ─► END
-  - The node calls OpenAI ChatCompletion (via langchain_openai.ChatOpenAI).
-  - Supports streaming via generator: yields chunks to caller.
+### 2.5 Agent runtime (new)
+- backend/zerg/agents_def/zerg_react_agent.py – holds the **pure functional ReAct agent** built with `langgraph.func`.
+- backend/zerg/managers/agent_runner.py – orchestration layer that:
+  1. Compiles the runnable from the agent definition (first call is cached).
+  2. Persists messages to the DB and marks user messages as processed.
+  3. Pushes per-token chunks over WebSocket when the `LLM_TOKEN_STREAM` flag is enabled (thanks to `WsTokenCallback`).
+  4. Returns the newly created assistant / tool message rows.
 
 ### 2.6 SchedulerService
 - backend/zerg/services/scheduler_service.py
   - AsyncIOScheduler.
   - On startup loads all agents where run_on_schedule=True and schedule ≠ NULL, converts cron strings to CronTrigger.
   - Subscribes to agent‑events so schedule stays in sync.
-  - run_agent_task(): gets (or creates) a thread, injects system message, then calls process_message(stream=False).
+  - run_agent_task(): gets (or creates) a thread, then delegates to `AgentRunner.run_thread()` (non-streaming mode).
 
 ### 2.7 WebSocket layer
 - backend/zerg/websocket/manager.py
@@ -581,8 +603,8 @@ All routers are version‑less but live under prefix "/api".
 ## 6. Mental model cheat‑sheet
 - REST → FastAPI routers → CRUD → SQLAlchemy
 - WS → /api/ws/{client_id} → TopicConnectionManager
-- LLM → AgentManager.process_message() → LangGraph graph → OpenAI
-- Cron → APScheduler → SchedulerService → AgentManager.run_agent_task
+- LLM → AgentRunner.run_thread() → ReAct functional agent (zerg_react_agent.get_runnable) → OpenAI
+- Cron → APScheduler → SchedulerService → AgentRunner (scheduled job)
 - Browser subscribes to topics → receives JSON deltas → DOM updates via wasm-bindgen.
 
 This should give you a solid grasp of "everything" without drowning in code. Let me know if you want to zoom into any specific file, execution path or test! 
