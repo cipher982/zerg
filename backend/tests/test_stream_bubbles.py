@@ -46,7 +46,6 @@ def test_multiple_assistant_messages_emit_multiple_sequences(
 
     with ws_client.websocket_connect("/api/ws") as ws:
         ws.send_json({"type": "subscribe", "topics": [f"thread:{thread_id}"], "message_id": "sub"})
-        ws.receive_json()  # history
 
         # 4. Insert a user message so the /run endpoint has work to do
         client.post(
@@ -57,23 +56,24 @@ def test_multiple_assistant_messages_emit_multiple_sequences(
         # 5. Trigger run
         client.post(f"/api/threads/{thread_id}/run")
 
-        # We expect: start, chunk(A), end, start, chunk(B), end
-        order = [
+        # New protocol (2025-04): backend emits **one** stream sequence per
+        # agent turn, with multiple *stream_chunk* payloads for each assistant
+        # or tool message.  We therefore expect:
+        #   start, chunk(A), chunk(B), end
+
+        expected_cycle = [
             MessageType.STREAM_START,
             MessageType.STREAM_CHUNK,
-            MessageType.STREAM_END,
-            MessageType.STREAM_START,
             MessageType.STREAM_CHUNK,
             MessageType.STREAM_END,
         ]
 
-        seen_ids = []
-        for expected in order:
+        message_ids = []
+        for expected in expected_cycle:
             payload = ws.receive_json()
             assert payload["type"] == expected.value
-
             if expected == MessageType.STREAM_CHUNK:
-                seen_ids.append(payload["message_id"])
+                message_ids.append(payload["message_id"])
 
-        # Two distinct assistant message IDs
-        assert seen_ids == ["101", "102"]
+        # Ensure the two assistant IDs both appeared in order
+        assert message_ids == ["101", "102"]

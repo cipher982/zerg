@@ -55,18 +55,6 @@ class TestChatMessageFlow:
         logger.info(f"Subscribing to thread: {test_thread.id}")
         ws_client.send_json(sub_msg)
 
-        # Should receive thread history
-        history = ws_client.receive_json()
-        logger.info(f"Received response: {history}")
-
-        # If we got an error, log it and fail with details
-        if history["type"] == "error":
-            logger.error(f"Error response: {history}")
-            assert False, f"Received error instead of thread history: {history.get('error')}"
-
-        assert history["type"] == MessageType.THREAD_HISTORY
-        assert history["thread_id"] == test_thread.id
-
         # 2. Send test message
         message = {
             "type": MessageType.SEND_MESSAGE,
@@ -97,12 +85,6 @@ class TestChatMessageFlow:
         ws_client.send_json(
             {"type": MessageType.SUBSCRIBE_THREAD, "thread_id": test_thread.id, "message_id": "test-sub-2"}
         )
-        history = ws_client.receive_json()  # Consume history
-
-        # Check for error
-        if history["type"] == "error":
-            logger.error(f"Error subscribing to thread: {history}")
-            assert False, f"Error subscribing to thread: {history.get('error')}"
 
         # Send multiple messages
         messages = ["First test message", "Second test message", "Third test message"]

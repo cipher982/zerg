@@ -22,14 +22,16 @@ def test_get_current_time_returns_iso8601():
     assert isinstance(parsed, datetime)
 
 
+@pytest.fixture()
 def dummy_agent_row():
-    # A minimal object with the attributes required by get_runnable
+    """Return a minimal pseudo-ORM row compatible with get_runnable."""
+
     return SimpleNamespace(model="dummy", system_instructions="sys")
 
 
-@pytest.mark.skip(reason="Functional GraphRunnable.invoke currently yields nested Futures; full graph tests postponed")
-@pytest.mark.asyncio
-async def test_basic_llm_invoke(monkeypatch, dummy_agent_row):
+# The runnable produced by get_runnable is synchronous when tools are stubbed
+# and MemorySaver is disabled, so a plain function test is sufficient.
+def test_basic_llm_invoke(monkeypatch, dummy_agent_row):
     """
     Verify that the ReAct graph appends a single AI response when no tools are called.
     """
@@ -55,15 +57,16 @@ async def test_basic_llm_invoke(monkeypatch, dummy_agent_row):
         def invoke(self, messages):
             return AIMessage(content="res")
 
+    # Patch LLM and disable MemorySaver to avoid checkpoint config errors
     monkeypatch.setattr(mod, "ChatOpenAI", DummyLLM)
+    monkeypatch.setattr(mod, "MemorySaver", lambda *a, **kw: None)
     # Build the runnable and invoke with one HumanMessage
     runnable = mod.get_runnable(dummy_agent_row)
     user = HumanMessage(content="hi")
-    out = await runnable.invoke({"messages": [user]})
-    # The last message should be our stubbed AIMessage
-    assert isinstance(out, dict)
-    assert "messages" in out
-    assert out["messages"][-1].content == "res"
+    out = runnable.invoke([user])
+    # The runnable returns a list of messages; last one should be our AI response
+    assert isinstance(out, list)
+    assert out[-1].content == "res"
 
 
 def test_get_tool_messages_no_calls():

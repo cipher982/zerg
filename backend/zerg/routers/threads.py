@@ -123,10 +123,43 @@ def read_thread_messages(thread_id: int, skip: int = 0, limit: int = 100, db: Se
     if not crud.get_thread(db, thread_id=thread_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
 
-    messages = crud.get_thread_messages(db, thread_id=thread_id, skip=skip, limit=limit)
-    if not messages:
+    # Fetch ORM messages and map to response schema including tool metadata
+    orm_msgs = crud.get_thread_messages(db, thread_id=thread_id, skip=skip, limit=limit)
+    if not orm_msgs:
         return []
-    return messages
+    result: List[ThreadMessageResponse] = []
+    for m in orm_msgs:
+        # Determine message_type based on role
+        if m.role == "tool":
+            message_type = "tool_output"
+            tool_name = m.name
+        elif m.role == "assistant":
+            message_type = "assistant_message"
+            tool_name = None
+        elif m.role == "user":
+            message_type = "user_message"
+            tool_name = None
+        else:
+            # Fallback to raw role for unknown types
+            message_type = f"{m.role}_message"
+            tool_name = None
+        result.append(
+            ThreadMessageResponse(
+                id=m.id,
+                thread_id=m.thread_id,
+                role=m.role,
+                content=m.content,
+                tool_calls=m.tool_calls,
+                tool_call_id=m.tool_call_id,
+                name=m.name,
+                timestamp=m.timestamp,
+                processed=m.processed,
+                parent_id=m.parent_id,
+                message_type=message_type,
+                tool_name=tool_name,
+            )
+        )
+    return result
 
 
 @router.post("/{thread_id}/messages", response_model=ThreadMessageResponse, status_code=status.HTTP_201_CREATED)

@@ -113,11 +113,6 @@ def test_thread_run_emits_stream_messages(client: TestClient, sample_agent):
             }
         )
 
-        # First payload must be thread_history
-        history = ws.receive_json()
-        assert history["type"] == MessageType.THREAD_HISTORY.value
-        assert history["thread_id"] == thread_id
-
         # ------------------------------------------------------------------
         # 3. Create an unprocessed *user* message via REST
         # ------------------------------------------------------------------

@@ -5,6 +5,10 @@ line-length = 120
 select = ["I", "E", "F", "Q000"]
 ignore = []
 
+# Ignore E402 (import not at top of file) for all test files
+[tool.ruff.lint.per-file-ignores]
+"backend/tests/**/*.py" = ["E402"]
+
 [tool.ruff.lint.isort]
 force-single-line = true
 
