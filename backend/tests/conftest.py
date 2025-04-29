@@ -178,6 +178,17 @@ langgraph.graph.StateGraph = _PassthroughStateGraph
 
 langchain_openai.ChatOpenAI = _StubChatOpenAI  # type: ignore[attr-defined]
 
+# Ensure already-imported agent definition module uses the stub as well.  If
+# zerg.agents_def.zerg_react_agent was imported *before* this patch it will
+# still hold a reference to the real ChatOpenAI class.  We overwrite it here
+# defensively so no test ever triggers an external network call.
+
+import sys as _sys
+
+_zr_module = _sys.modules.get("zerg.agents_def.zerg_react_agent")
+if _zr_module is not None:  # pragma: no cover – depends on import order
+    _zr_module.ChatOpenAI = _StubChatOpenAI  # type: ignore[attr-defined]
+
 # Import app after all engine setup and mocks are in place
 from zerg.main import app  # noqa: E402
 
