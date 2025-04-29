@@ -60,6 +60,8 @@ def test_basic_llm_invoke(monkeypatch, dummy_agent_row):
     # Patch LLM and disable MemorySaver to avoid checkpoint config errors
     monkeypatch.setattr(mod, "ChatOpenAI", DummyLLM)
     monkeypatch.setattr(mod, "MemorySaver", lambda *a, **kw: None)
+    # Ensure token streaming flag is disabled so callbacks kwarg isn't added
+    monkeypatch.setenv("LLM_TOKEN_STREAM", "false")
     # Build the runnable and invoke with one HumanMessage
     runnable = mod.get_runnable(dummy_agent_row)
     user = HumanMessage(content="hi")

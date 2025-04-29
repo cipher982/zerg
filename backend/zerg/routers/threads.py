@@ -220,17 +220,19 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
 
     for row in created_rows:
         if row.role == "assistant":
-            await topic_manager.broadcast_to_topic(
-                topic,
-                StreamChunkMessage(
-                    thread_id=thread_id,
-                    message_id=str(row.id),
-                    content=row.content,
-                    chunk_type="assistant_message",
-                    tool_name=None,
-                    tool_call_id=None,
-                ).model_dump(),
-            )
+            # Skip duplicate full-message chunk when token streaming was active
+            if not runner.enable_token_stream:
+                await topic_manager.broadcast_to_topic(
+                    topic,
+                    StreamChunkMessage(
+                        thread_id=thread_id,
+                        message_id=str(row.id),
+                        content=row.content,
+                        chunk_type="assistant_message",
+                        tool_name=None,
+                        tool_call_id=None,
+                    ).model_dump(),
+                )
 
         elif row.role == "tool":
             await topic_manager.broadcast_to_topic(

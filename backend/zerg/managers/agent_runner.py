@@ -21,11 +21,15 @@ Design goals
 from __future__ import annotations
 
 import logging
+import os
 from typing import Sequence
 
 from sqlalchemy.orm import Session
 
 from zerg.agents_def import zerg_react_agent
+
+# Token streaming context helper
+from zerg.callbacks.token_stream import set_current_thread_id
 from zerg.crud import crud
 from zerg.models.models import Agent as AgentModel
 from zerg.models.models import Thread as ThreadModel
@@ -43,6 +47,9 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
         # Lazily compile runnable so tests can monkey-patch implementation
         # get_runnable now returns the compiled entrypoint function
         self._runnable = zerg_react_agent.get_runnable(agent_row)
+
+        # Whether this runner/LLM emits per-token chunks
+        self.enable_token_stream: bool = os.getenv("LLM_TOKEN_STREAM")
 
     # ------------------------------------------------------------------
     # Public API – asynchronous
@@ -65,11 +72,25 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
             }
         }
 
-        # Use **async** invoke with the entrypoint
-        # Pass the messages list directly to the function
-        # For Functional API, we use .ainvoke method with the config
-        # The entrypoint function will return the full message history
-        updated_messages = await self._runnable.ainvoke(original_msgs, config)
+        # ------------------------------------------------------------------
+        # Token-streaming context handling: set the *current* thread so the
+        # ``WsTokenCallback`` can resolve the correct topic when forwarding
+        # tokens.  We make sure to *always* reset afterwards to avoid leaking
+        # state across concurrent agent turns.
+        # ------------------------------------------------------------------
+
+        # Set the context var and keep the **token** so we can restore safely
+        _ctx_token = set_current_thread_id(thread.id)
+
+        try:
+            # Use **async** invoke with the entrypoint
+            # Pass the messages list directly to the function
+            # For Functional API, we use .ainvoke method with the config
+            # The entrypoint function will return the full message history
+            updated_messages = await self._runnable.ainvoke(original_msgs, config)
+        finally:
+            # Reset context so unrelated calls aren't attributed to this thread
+            set_current_thread_id(None)
 
         # Extract only the new messages since our last context
         # The zerg_react_agent returns ALL messages including the history
