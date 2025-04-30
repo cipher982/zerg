@@ -833,8 +833,6 @@ impl AgentConfigModal {
             }
         }
 
-        web_sys::console::log_1(&format!("[AgentConfigModal] schedule_value={:?}", schedule_value).into());
-
         // NEW schedule UI – pre-fill controls based on existing cron string
         if let Some(schedule_str) = schedule_value {
             if !schedule_str.trim().is_empty() {

@@ -281,8 +281,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
        
         Message::SaveAgentDetails { name, system_instructions, task_instructions: _task_instructions, model, schedule } => {
-            web_sys::console::log_1(&format!("[SaveAgentDetails] Starting save with schedule: {:?}", schedule).into());
-            
             // Get the current AGENT ID from the modal's data attribute
             let agent_id = if let Some(window) = web_sys::window() {
                 if let Some(document) = window.document() {
@@ -291,19 +289,15 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         modal.get_attribute("data-agent-id")
                              .and_then(|id_str| id_str.parse::<u32>().ok()) // Parse directly to u32
                     } else {
-                        web_sys::console::warn_1(&"[SaveAgentDetails] Modal element not found!".into());
+                        web_sys::console::warn_1(&"Modal element not found!".into());
                         None
                     }
                 } else { None }
             } else { None };
 
-            web_sys::console::log_1(&format!("[SaveAgentDetails] Found agent_id: {:?}", agent_id).into());
-
             // Process the save operation (NO node lookup needed)
             if let Some(id) = agent_id { // Use the agent_id directly
                 if let Some(agent) = state.agents.get_mut(&id) {
-                    web_sys::console::log_1(&format!("[SaveAgentDetails] Found agent in state, updating with schedule: {:?}", schedule).into());
-                    
                     // Update agent properties
                     agent.name = name;
                     agent.system_instructions = Some(system_instructions.clone());
@@ -325,7 +319,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
                     // Serialize to JSON
                     let update_payload = serde_json::to_string(&api_update).unwrap_or_else(|_| "{}".to_string());
-                    web_sys::console::log_1(&format!("[SaveAgentDetails] Pushing UpdateAgent command with payload: {}", update_payload).into());
 
                     // Return a command to update the agent via API
                     commands.push(Command::UpdateAgent {
@@ -335,10 +328,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         on_error: Box::new(Message::RefreshAgentsFromAPI),
                     });
                 } else {
-                    web_sys::console::warn_1(&format!("[SaveAgentDetails] Agent {} not found in state!", id).into());
+                    web_sys::console::warn_1(&format!("Agent {} not found in state!", id).into());
                 }
             } else {
-                web_sys::console::warn_1(&"[SaveAgentDetails] No agent_id found in modal data attribute!".into());
+                web_sys::console::warn_1(&"No agent_id found in modal data attribute!".into());
             }
             
             // Mark state as modified
