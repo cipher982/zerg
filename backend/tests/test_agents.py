@@ -150,15 +150,21 @@ def test_run_agent(client: TestClient, sample_agent: Agent, db_session):
     response = client.post(f"/api/threads/{thread['id']}/messages", json=message_data)
     assert response.status_code == 201
 
-    # Run the thread
-    with patch("zerg.agents.AgentManager") as mock_agent_manager_class:
-        mock_agent_manager = MagicMock()
-        mock_agent_manager_class.return_value = mock_agent_manager
+    # Run the thread with mocked AgentRunner
+    with patch("zerg.managers.agent_runner.AgentRunner") as mock_agent_runner_class:
+        mock_agent_runner = MagicMock()
+        mock_agent_runner_class.return_value = mock_agent_runner
 
-        def mock_process_thread(*args, **kwargs):
-            yield {"content": "Test response", "chunk_type": "assistant_message"}
+        # Mock the run_thread method to return a list with one message
+        mock_created_row = MagicMock()
+        mock_created_row.role = "assistant"
+        mock_created_row.content = "Test response"
 
-        mock_agent_manager.process_thread.return_value = mock_process_thread()
+        # Set up the async mock return value
+        async def mock_run_thread(*args, **kwargs):
+            return [mock_created_row]
+
+        mock_agent_runner.run_thread.side_effect = mock_run_thread
 
         # Run the thread
         response = client.post(f"/api/threads/{thread['id']}/run", json={"content": "Test message"})
