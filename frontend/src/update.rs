@@ -18,6 +18,9 @@ use rand;
 use chrono;
 use std::collections::HashSet;
 
+// Bring legacy helper trait into scope so its methods are usable on CanvasNode
+use crate::node_agent_legacy_ext::NodeAgentLegacyExt;
+
 
 pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     let mut needs_refresh = true; // We'll still track this internally for now
@@ -278,87 +281,77 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
        
         Message::SaveAgentDetails { name, system_instructions, task_instructions: _task_instructions, model, schedule } => {
-            // Get the current node ID from the modal
-            let node_id = if let Some(window) = web_sys::window() {
+            web_sys::console::log_1(&format!("[SaveAgentDetails] Starting save with schedule: {:?}", schedule).into());
+            
+            // Get the current AGENT ID from the modal's data attribute
+            let agent_id = if let Some(window) = web_sys::window() {
                 if let Some(document) = window.document() {
                     if let Some(modal) = document.get_element_by_id("agent-modal") {
-                        modal.get_attribute("data-node-id")
+                        // Read "data-agent-id" instead of "data-node-id"
+                        modal.get_attribute("data-agent-id")
+                             .and_then(|id_str| id_str.parse::<u32>().ok()) // Parse directly to u32
                     } else {
+                        web_sys::console::warn_1(&"[SaveAgentDetails] Modal element not found!".into());
                         None
                     }
+                } else { None }
+            } else { None };
+
+            web_sys::console::log_1(&format!("[SaveAgentDetails] Found agent_id: {:?}", agent_id).into());
+
+            // Process the save operation (NO node lookup needed)
+            if let Some(id) = agent_id { // Use the agent_id directly
+                if let Some(agent) = state.agents.get_mut(&id) {
+                    web_sys::console::log_1(&format!("[SaveAgentDetails] Found agent in state, updating with schedule: {:?}", schedule).into());
+                    
+                    // Update agent properties
+                    agent.name = name;
+                    agent.system_instructions = Some(system_instructions.clone());
+                    agent.model = Some(model.clone());
+                    agent.schedule = schedule.clone();
+                    
+                    // Build update struct
+                    use crate::models::ApiAgentUpdate;
+                    let api_update = ApiAgentUpdate {
+                        name: Some(agent.name.clone()),
+                        status: None,
+                        system_instructions: Some(agent.system_instructions.clone().unwrap_or_default()),
+                        task_instructions: None,
+                        model: Some(model.clone()),
+                        schedule: schedule.clone(),
+                        config: None,
+                        last_error: None,
+                    };
+
+                    // Serialize to JSON
+                    let update_payload = serde_json::to_string(&api_update).unwrap_or_else(|_| "{}".to_string());
+                    web_sys::console::log_1(&format!("[SaveAgentDetails] Pushing UpdateAgent command with payload: {}", update_payload).into());
+
+                    // Return a command to update the agent via API
+                    commands.push(Command::UpdateAgent {
+                        agent_id: id,
+                        payload: update_payload,
+                        on_success: Box::new(Message::RefreshAgentsFromAPI),
+                        on_error: Box::new(Message::RefreshAgentsFromAPI),
+                    });
                 } else {
-                    None
+                    web_sys::console::warn_1(&format!("[SaveAgentDetails] Agent {} not found in state!", id).into());
                 }
             } else {
-                None
-            };
+                web_sys::console::warn_1(&"[SaveAgentDetails] No agent_id found in modal data attribute!".into());
+            }
             
-            // Process the save operation
-            if let Some(node_id) = node_id {
-                // Extract agent_id from node_id if in format "agent-{id}"
-                let agent_id = if let Some(node) = state.nodes.get(&node_id) {
-                    // If we have a node, get its agent_id
-                    node.agent_id
-                } else if let Some(id_str) = node_id.strip_prefix("agent-") {
-                    // If no node but ID is in "agent-{id}" format, extract numeric ID
-                    id_str.parse::<u32>().ok()
-                } else {
-                    None
-                };
-                
-                // Update node if it exists
-                if let Some(node) = state.nodes.get_mut(&node_id) {
-                    // Update node's visual representation
-                    node.text = name.clone();
-                }
-                
-                // Update agent data if we have an agent ID
-                if let Some(id) = agent_id {
-                    if let Some(agent) = state.agents.get_mut(&id) {
-                        // Update agent properties
-                        agent.name = name;
-                        agent.system_instructions = Some(system_instructions.clone());
-                        agent.model = Some(model.clone());
-                        agent.schedule = schedule.clone();
-                        
-                        // Build update struct
-                        use crate::models::ApiAgentUpdate;
-                        let api_update = ApiAgentUpdate {
-                            name: Some(agent.name.clone()),
-                            status: None,
-                            system_instructions: Some(agent.system_instructions.clone().unwrap_or_default()),
-                            task_instructions: None,
-                            model: Some(model.clone()),
-                            schedule: schedule.clone(),
-                            config: None,
-                            last_error: None,
-                        };
-
-                        // Serialize to JSON
-                        let update_payload = serde_json::to_string(&api_update).unwrap_or_else(|_| "{}".to_string());
-
-                        // Return a command to update the agent via API
-                        commands.push(Command::UpdateAgent {
-                            agent_id: id,
-                            payload: update_payload,
-                            on_success: Box::new(Message::RefreshAgentsFromAPI),
-                            on_error: Box::new(Message::RefreshAgentsFromAPI),
-                        });
-                    }
-                }
-                
-                // Mark state as modified
-                state.state_modified = true;
-                
-                // Save state to API
-                let _ = state.save_if_modified();
-                
-                // Close the modal after saving
-                if let Some(window) = web_sys::window() {
-                    if let Some(document) = window.document() {
-                        if let Err(e) = crate::components::agent_config_modal::AgentConfigModal::close(&document) {
-                            web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
-                        }
+            // Mark state as modified
+            state.state_modified = true;
+            
+            // Save state to API
+            let _ = state.save_if_modified();
+            
+            // Close the modal after saving
+            if let Some(window) = web_sys::window() {
+                if let Some(document) = window.document() {
+                    if let Err(e) = crate::components::agent_config_modal::AgentConfigModal::close(&document) {
+                        web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
                     }
                 }
             }
