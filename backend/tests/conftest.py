@@ -411,9 +411,12 @@ def sample_thread_messages(db_session, sample_thread):
 @pytest.fixture
 def mock_langgraph_state_graph():
     """
-    Mock the StateGraph class from LangGraph
+    Mock the StateGraph class from LangGraph directly.
+
+    Note: Previously mocked from zerg.agents which has been removed.
+    Now mocks langgraph.graph.StateGraph directly.
     """
-    with patch("zerg.agents.StateGraph") as mock_state_graph:
+    with patch("langgraph.graph.StateGraph") as mock_state_graph:
         # Create a mock graph
         mock_graph = MagicMock()
         mock_state_graph.return_value = mock_graph

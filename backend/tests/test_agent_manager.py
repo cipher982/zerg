@@ -1,11 +1,10 @@
 import pytest
 
-pytest.skip("Legacy AgentManager tests skipped after refactor", allow_module_level=True)
+pytest.skip("Legacy AgentManager tests skipped - AgentManager has been removed", allow_module_level=True)
 """
-Test the AgentManager class.
-
-This module contains tests for the AgentManager class, which handles
-all LangGraph-based agent interactions and state management.
+These tests are for the deprecated AgentManager which has been completely removed
+from the codebase. The functionality has been replaced by AgentRunner and related 
+services.
 """
 
 from unittest.mock import ANY
