@@ -52,6 +52,7 @@ pub struct ToolUiState {
 pub struct AppState {
     // Agent domain data (business logic)
     pub agents: HashMap<u32, ApiAgent>,        // Backend agent data
+    pub agents_on_canvas: HashSet<u32>,        // Track which agents are already placed on canvas
     
     // Canvas visualization data
     pub nodes: HashMap<String, Node>,          // Visual layout nodes
@@ -138,6 +139,7 @@ impl AppState {
 
         Self {
             agents: HashMap::new(),
+            agents_on_canvas: HashSet::new(),
             nodes: HashMap::new(),
             workflows: HashMap::new(),
             current_workflow_id: None,
@@ -645,16 +647,7 @@ impl AppState {
             // Save to the API
             crate::storage::save_state_to_api(self);
             
-            // Sync agent messages
-            for (node_id, node) in &self.nodes {
-                if let crate::models::NodeType::AgentIdentity = node.node_type {
-                    if let Some(history) = &node.history() {
-                        if !history.is_empty() {
-                            crate::storage::save_agent_messages_to_api(node_id, history);
-                        }
-                    }
-                }
-            }
+            // Sync agent messages – removed as part of node/agent decoupling
             
             self.state_modified = false;
             result

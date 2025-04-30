@@ -502,8 +502,13 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 // Open the agent modal
                 let window = web_sys::window().expect("no global window exists");
                 let document = window.document().expect("should have a document");
-                
-                let _ = crate::components::agent_config_modal::AgentConfigModal::open(&document, &node_id);
+
+                // Open the agent configuration modal via the global message
+                // system – this keeps all state mutations funnelled through
+                // `update()` and avoids direct `APP_STATE` access here.
+                // Notify via message – update.rs will resolve node→agent and
+                // open the modal.  No direct state access required here.
+                crate::state::dispatch_global_message(crate::messages::Message::CanvasNodeClicked { node_id });
             }
         }
     }) as Box<dyn FnMut(_)>);
@@ -698,15 +703,24 @@ fn setup_canvas_drag_drop(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
                     let world_x = x / zoom_level + viewport_x;
                     let world_y = y / zoom_level + viewport_y;
                     
+                    // Add agent to canvas tracking and dispatch message
+                    if let Some(agent_id) = agent_id {
+                        APP_STATE.with(|state| {
+                            let mut state = state.borrow_mut();
+                            state.agents_on_canvas.insert(agent_id);
+                        });
+                    }
+                    
                     // Dispatch message to add node at drop position
-                    dispatch_global_message(crate::messages::Message::AddAgentNode {
+                    dispatch_global_message(crate::messages::Message::AddCanvasNode {
                         agent_id,
                         x: world_x,
                         y: world_y,
                         node_type: NodeType::AgentIdentity,
                         text: name,
                     });
-                    // Force UI refresh so the node appears immediately
+                    
+                    // Force UI refresh so the node appears immediately and agent shelf updates
                     let _ = crate::state::AppState::refresh_ui_after_state_change();
                 } else {
                     web_sys::console::error_1(&"Failed to parse dropped agent data".into());
