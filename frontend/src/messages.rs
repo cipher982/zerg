@@ -46,8 +46,8 @@ pub enum Message {
         response_text: String,
     },
     
-    // Node manipulation with agent references
-    AddAgentNode {
+    // Canvas node creation (may reference an agent)
+    AddCanvasNode {
         agent_id: Option<u32>,
         x: f64,
         y: f64,
@@ -57,16 +57,13 @@ pub enum Message {
     DeleteNode {
         node_id: String,
     },
+
+    // Canvas interaction – a node was clicked (no drag)
+    CanvasNodeClicked {
+        node_id: String,
+    },
     
-    // Explicit sync between agents and nodes
-    SyncNodeToAgent {
-        node_id: String,
-        agent_id: u32,
-    },
-    SyncAgentToNode {
-        agent_id: u32,
-        node_id: String,
-    },
+
     
     // Workflow management
     CreateWorkflow {

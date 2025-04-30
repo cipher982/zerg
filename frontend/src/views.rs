@@ -4,10 +4,8 @@
 // based on the current application state.
 //
 use web_sys::Document;
-use crate::state::AppState;
 use crate::storage::ActiveView;
 use wasm_bindgen::JsValue;
-use wasm_bindgen::JsCast;
 use crate::components::agent_config_modal::AgentConfigModal;
 
 
@@ -21,9 +19,9 @@ pub fn hide_agent_modal(document: &Document) -> Result<(), JsValue> {
 }
 
 // Add a function to display the agent modal
-pub fn show_agent_modal(node_id: &str, document: &Document) -> Result<(), JsValue> {
-    // Directly open the modal for the given node_id
-    AgentConfigModal::open(document, node_id)?;
+pub fn show_agent_modal(agent_id: u32, document: &Document) -> Result<(), JsValue> {
+    // Directly open the modal for the given agent
+    AgentConfigModal::open(document, agent_id)?;
     Ok(())
 }
 

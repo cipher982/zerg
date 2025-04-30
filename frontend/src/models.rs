@@ -62,10 +62,17 @@ pub struct Message {
     pub timestamp: u64,    // Unix timestamp
 }
 
-/// Node represents a visual element on the canvas with layout information
-/// This separates the visual/layout concerns from the agent business logic
+/// CanvasNode represents a visual element on the canvas with layout information
+/// and is **purely a front-end concern**.
+///
+/// Historically this struct was called `Node`, which led to confusion with
+/// backend “Agent” objects.  As part of the **nodes-vs-agents decoupling
+/// initiative** (see `node_agent_task.md`) we renamed it to `CanvasNode`.
+/// To keep the incremental refactor compilable we provide an interim type
+/// alias `pub type Node = CanvasNode;` – this will be removed once all
+/// call-sites migrate.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct Node {
+pub struct CanvasNode {
     pub node_id: String,           // Unique identifier for this node
     pub agent_id: Option<u32>,     // Optional reference to a backend agent
     pub x: f64,                    // X position on canvas
@@ -79,6 +86,12 @@ pub struct Node {
     pub is_selected: bool,
     pub is_dragging: bool,
 }
+
+// -----------------------------------------------------------------------------
+// Transitional compatibility alias
+// -----------------------------------------------------------------------------
+#[allow(dead_code)]
+pub type Node = CanvasNode;
 
 /// Edge represents a connection between two nodes in a workflow
 #[derive(Clone, Serialize, Deserialize)]
@@ -94,7 +107,7 @@ pub struct Edge {
 pub struct Workflow {
     pub id: u32,                   // Unique identifier for this workflow
     pub name: String,              // Name of the workflow
-    pub nodes: Vec<Node>,          // Nodes in this workflow
+    pub nodes: Vec<CanvasNode>,          // Nodes in this workflow
     pub edges: Vec<Edge>,          // Edges connecting nodes in this workflow
 }
 
@@ -108,6 +121,7 @@ pub struct ApiAgent {
     pub name: String,
     pub status: Option<String>,
     pub system_instructions: Option<String>,
+    pub task_instructions: Option<String>,
     pub model: Option<String>,
     pub temperature: Option<f64>,
     pub created_at: Option<String>,
@@ -162,6 +176,7 @@ mod tests {
             name: "A".to_string(),
             status: None,
             system_instructions: None,
+            task_instructions: None,
             model: None,
             temperature: None,
             created_at: None,
@@ -300,7 +315,7 @@ pub struct ApiThreadMessageCreate {
 
 /// Extension methods for Node to provide backward compatibility with legacy code
 #[allow(dead_code)] // These methods are kept for backward compatibility
-impl Node {
+impl CanvasNode {
     // Property getters that map old field names to new ones
     pub fn _id(&self) -> String {
         self.node_id.clone()

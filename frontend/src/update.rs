@@ -119,10 +119,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 // pattern we use for `ToggleView` above.
 
                 commands.push(Command::UpdateUI(Box::new({
-                    let node_id = node_id_cloned;
+                    let _node_id = node_id_cloned;
                     move || {
                         if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
-                            if let Err(e) = crate::views::show_agent_modal(&node_id, &document) {
+                            if let Err(e) = crate::views::show_agent_modal(agent_id, &document) {
                                 web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
                             }
                         }
@@ -139,10 +139,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 // Directly open the modal with this synthetic id – show_agent_modal already has logic
                 // to fall back to agent data when it receives an id of the form "agent-{id}".
                 commands.push(Command::UpdateUI(Box::new({
-                    let node_id = synthetic_node_id.clone();
+                    let _node_id = synthetic_node_id.clone();
                     move || {
                         if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
-                            if let Err(e) = crate::views::show_agent_modal(&node_id, &document) {
+                        if let Err(e) = crate::views::show_agent_modal(agent_id, &document) {
                                 web_sys::console::error_1(&format!("Failed to show modal for synthetic id: {:?}", e).into());
                             }
                         }
@@ -207,6 +207,15 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.zoom_level = 1.0;
             state.auto_fit = true;
             state.state_modified = true;
+        },
+
+        // User clicked a canvas node (no drag) – if the node is linked to an
+        // agent forward to existing EditAgent flow so that the UI opens the
+        // configuration modal via the normal command pipeline.
+        Message::CanvasNodeClicked { node_id } => {
+            if let Some(agent_id) = state.nodes.get(&node_id).and_then(|n| n.agent_id) {
+                commands.push(Command::SendMessage(Message::EditAgent(agent_id)));
+            }
         },
        
         Message::UpdateInputText(text) => {
@@ -625,20 +634,21 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::AnimationTick => {
             // Process animation updates like pulsing effect for nodes
             for (_id, node) in state.nodes.iter_mut() {
-                // Use the new method that doesn't access APP_STATE
-                let status = node.get_status_from_agents(&state.agents);
-               
-                if let Some(status_str) = status {
-                    if status_str == "processing" {
-                        // We'd update visual properties here if needed
-                        // This is called on each animation frame
+                // Look up linked agent status directly (no helper on node)
+                if let Some(agent_id) = node.agent_id {
+                    if let Some(agent) = state.agents.get(&agent_id) {
+                        if let Some(status_str) = &agent.status {
+                            if status_str == "processing" {
+                                // Update visual properties here if needed
+                            }
+                        }
                     }
                 }
             }
         },
        
         // New Canvas Node message handlers
-        Message::AddAgentNode { agent_id, x, y, node_type, text } => {
+        Message::AddCanvasNode { agent_id, x, y, node_type, text } => {
             // This method creates a Node
             let node_id = state.add_node_with_agent(agent_id, x, y, node_type, text);
             web_sys::console::log_1(&format!("Created new node: {}", node_id).into());
@@ -700,74 +710,12 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.state_modified = true;
         },
        
-        Message::SyncNodeToAgent { node_id, agent_id } => {
-            // Explicitly sync node data to agent (e.g., when node text changes and should update agent name)
-            if let Some(node) = state.nodes.get(&node_id) {
-                if let Some(agent) = state.agents.get_mut(&agent_id) {
-                    // Update agent data based on node
-                    // For now, we're just syncing the name from node.text
-                    agent.name = node.text.clone();
-                   
-                    // Create an update object for the API
-                    let update = crate::models::ApiAgentUpdate {
-                        name: Some(agent.name.clone()),
-                        status: None,
-                        system_instructions: None,
-                        task_instructions: None,
-                        model: None,
-                        schedule: None,
-                        
-                        config: None,
-                        last_error: None,
-                    };
-                   
-                    // Clone data for async use
-                    let agent_id_clone = agent_id;
-                    let update_clone = update.clone();
-                   
-                    // Update the agent via API
-                    wasm_bindgen_futures::spawn_local(async move {
-                        // Serialize the update struct to a JSON string
-                        match serde_json::to_string(&update_clone) {
-                            Ok(json_str) => {
-                                if let Err(e) = crate::network::ApiClient::update_agent(agent_id_clone, &json_str).await {
-                                    web_sys::console::error_1(&format!("Failed to update agent: {:?}", e).into());
-                                }
-                            },
-                            Err(e) => {
-                                web_sys::console::error_1(&format!("Failed to serialize agent update: {}", e).into());
-                            }
-                        }
-                    });
-                   
-                    state.state_modified = true;
-                }
-            }
-        },
-       
-        Message::SyncAgentToNode { agent_id, node_id } => {
-            // Explicitly sync agent data to node (e.g., when agent data changes and should update node display)
-            if let Some(agent) = state.agents.get(&agent_id) {
-                if let Some(node) = state.nodes.get_mut(&node_id) {
-                    // Update node data based on agent
-                    node.text = agent.name.clone();
-                   
-                    // Update node color based on agent status if desired
-                    if let Some(status) = &agent.status {
-                        // Example of how you might set node color based on agent status
-                        match status.as_str() {
-                            "idle" => node.color = "#ffecb3".to_string(),      // Light amber
-                            "processing" => node.color = "#b3e5fc".to_string(), // Light blue
-                            "complete" => node.color = "#c8e6c9".to_string(),   // Light green
-                            "error" => node.color = "#ffcdd2".to_string(),      // Light red
-                            _ => node.color = "#ffecb3".to_string(),           // Default light amber
-                        }
-                    }
-                   
-                    state.state_modified = true;
-                }
-            }
-        },
+        // The explicit node↔agent sync messages have been removed as part of
+        // the nodes-vs-agents decoupling refactor (see node_agent_task.md).
+        // Canvas nodes are now *display only*; any future synchronisation
+        // should be implemented via a dedicated command (e.g.
+        // `RefreshCanvasLabels`) driven by agent updates – never the other
+        // way around.
        
         Message::GenerateCanvasFromAgents => {
             // Loop through all agents in state.agents and create nodes for any that don't have one

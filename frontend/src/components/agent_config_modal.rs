@@ -754,9 +754,8 @@ impl AgentConfigModal {
         Ok(())
     }
 
-    /// Open the modal for the given `node_id` (agent node ID).  Delegates to
-    /// the legacy `ui::modals::open_agent_modal` for now.
-    pub fn open(document: &Document, node_id: &str) -> Result<(), JsValue> {
+    /// Open the modal for the given `agent_id`.
+    pub fn open(document: &Document, agent_id: u32) -> Result<(), JsValue> {
         // Ensure DOM exists first
         let _ = Self::init(document);
 
@@ -767,57 +766,44 @@ impl AgentConfigModal {
         // --------------------------------------------------------------
         // 1. Gather data from AppState
         // --------------------------------------------------------------
-        let (node_text, system_instructions, task_instructions, history_data) =
-            APP_STATE.with(|state| {
+        let (agent_name, system_instructions, task_instructions, schedule_value) = APP_STATE
+            .with(|state| {
                 let state = state.borrow();
-
-                if let Some(node) = state.nodes.get(node_id) {
+                if let Some(agent) = state.agents.get(&agent_id) {
                     (
-                        node.text.clone(),
-                        node.system_instructions().unwrap_or_default(),
-                        node.task_instructions().unwrap_or_default(),
-                        node.history().unwrap_or_default(),
+                        agent.name.clone(),
+                        agent.system_instructions.clone().unwrap_or_default(),
+                        agent.task_instructions.clone().unwrap_or_default(),
+                        agent.schedule.clone().unwrap_or_default(),
                     )
                 } else {
-                    (String::new(), String::new(), String::new(), Vec::new())
+                    (
+                        "Unnamed Agent".to_string(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                    )
                 }
             });
-
-        // Fetch schedule value if present
-        let schedule_value = APP_STATE.with(|state| {
-            let state = state.borrow();
-            if let Some(node) = state.nodes.get(node_id) {
-                let agent_id_opt = node
-                    .agent_id
-                    .or_else(|| node_id.strip_prefix("agent-").and_then(|s| s.parse::<u32>().ok()));
-
-                if let Some(agent_id) = agent_id_opt {
-                    if let Some(agent) = state.agents.get(&agent_id) {
-                        return agent.schedule.clone().unwrap_or_default();
-                    }
-                }
-            }
-            String::new()
-        });
 
         // --------------------------------------------------------------
         // 2. Populate DOM elements
         // --------------------------------------------------------------
 
-        // Store current node id for later
+        // Store current agent id for later
         if let Some(modal) = document.get_element_by_id("agent-modal") {
-            let _ = modal.set_attribute("data-node-id", node_id);
+            let _ = modal.set_attribute("data-agent-id", &agent_id.to_string());
         }
 
         // Title
         if let Some(modal_title) = document.get_element_by_id("modal-title") {
-            modal_title.set_inner_html(&format!("Agent: {}", node_text));
+            modal_title.set_inner_html(&format!("Agent: {}", agent_name));
         }
 
         // Name input
         if let Some(name_elem) = document.get_element_by_id("agent-name") {
             if let Some(input) = name_elem.dyn_ref::<web_sys::HtmlInputElement>() {
-                input.set_value(&node_text);
+                input.set_value(&agent_name);
             }
         }
 
@@ -971,62 +957,12 @@ impl AgentConfigModal {
                 apply_frequency_ui(&freq, &document);
             }
         } else {
-            // schedule blank – maybe agents not yet loaded. If we can determine
-            // agent_id, fetch it on-demand so the user still sees the correct
-            // schedule once the call returns.
-
-            // Try to derive agent_id from node_id
-            let node_id_owned = node_id.to_string();
-            if let Some(agent_id) = APP_STATE.with(|state| {
-                let state = state.borrow();
-                state
-                    .nodes
-                    .get(node_id)
-                    .and_then(|n| n.agent_id)
-                    .or_else(|| node_id.strip_prefix("agent-").and_then(|s| s.parse::<u32>().ok()))
-            }) {
-                let doc_clone = document.clone();
-                let node_id_clone = node_id_owned.clone();
-                wasm_bindgen_futures::spawn_local(async move {
-                    if let Ok(json_str) = crate::network::ApiClient::get_agent(agent_id).await {
-                        if let Ok(mut agent) = serde_json::from_str::<crate::models::ApiAgent>(&json_str) {
-                            if let Some(ref schedule_str) = agent.schedule {
-                                if crate::scheduling::Frequency::try_from(schedule_str.as_str()).is_ok() {
-                                    // Cache updated agent so next open uses populated schedule
-                                    crate::state::APP_STATE.with(|st| {
-                                        let mut st = st.borrow_mut();
-                                        st.agents.insert(agent_id, agent.clone());
-                                    });
-
-                                    // Re-open modal so UI reflects new schedule
-                                    let _ = Self::open(&doc_clone, &node_id_clone);
-                                }
-                            }
-                        }
-                    }
-                });
-            }
         }
 
-        // History tab content
+        // History tab – temporarily disabled until a dedicated agent history
+        // API is wired up on the backend.  Leaving the DOM empty for now.
         if let Some(container) = document.get_element_by_id("history-container") {
-            if history_data.is_empty() {
-                container.set_inner_html("<p>No history available.</p>");
-            } else {
-                container.set_inner_html("");
-
-                for message in history_data {
-                    if let Ok(msg_elem) = document.create_element("div") {
-                        msg_elem.set_class_name(&format!("history-item {}", message.role));
-
-                        if let Ok(p) = document.create_element("p") {
-                            p.set_inner_html(&message.content);
-                            let _ = msg_elem.append_child(&p);
-                            let _ = container.append_child(&msg_elem);
-                        }
-                    }
-                }
-            }
+            container.set_inner_html("<p>History view coming soon …</p>");
         }
 
         // Finally, show the modal
