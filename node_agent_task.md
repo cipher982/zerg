@@ -106,7 +106,7 @@ Use this list to track the actual implementation work.  Tick each task (`[x]`) o
 ### 1  Data model & naming
 
 - [x] Rename `Node` struct to `CanvasNode` (or equivalent) in `frontend/src/models.rs` and add a temporary type-alias for backward compatibility.
-- [ ] Remove helper methods on the struct that read/modify agent data (`history()`, `status()`, `get_status_from_agents`, etc.) or move them to a dedicated extension trait outside the struct.
+- [x] Remove helper methods on the struct that read/modify agent data (`history()`, `status()`, `get_status_from_agents`, etc.) **Moved them into a dedicated extension trait `NodeAgentLegacyExt` in `frontend/src/node_agent_legacy_ext.rs`.**
 
 ### 2  Frontend message API
 

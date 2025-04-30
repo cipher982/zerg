@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen::closure::Closure;
 use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
+// Legacy extension trait for CanvasNode helpers
+use crate::node_agent_legacy_ext::NodeAgentLegacyExt;
 
 // Add API URL configuration
 #[allow(dead_code)]

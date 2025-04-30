@@ -20,6 +20,8 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use crate::update;
+// Bring legacy helper trait into scope (methods formerly on CanvasNode)
+use crate::node_agent_legacy_ext::NodeAgentLegacyExt;
 
 // ---------------------------------------------------------------------------
 // Agent Debug Pane (read-only modal) – Phase 1
