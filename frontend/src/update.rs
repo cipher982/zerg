@@ -280,7 +280,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.draw_nodes();
         },
        
-        Message::SaveAgentDetails { name, system_instructions, task_instructions: _task_instructions, model, schedule } => {
+        Message::SaveAgentDetails { name, system_instructions, task_instructions, model, schedule } => {
             // Get the current AGENT ID from the modal's data attribute
             let agent_id = if let Some(window) = web_sys::window() {
                 if let Some(document) = window.document() {
@@ -301,6 +301,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     // Update agent properties
                     agent.name = name;
                     agent.system_instructions = Some(system_instructions.clone());
+                    agent.task_instructions = Some(task_instructions.clone());
                     agent.model = Some(model.clone());
                     agent.schedule = schedule.clone();
                     
@@ -310,7 +311,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         name: Some(agent.name.clone()),
                         status: None,
                         system_instructions: Some(agent.system_instructions.clone().unwrap_or_default()),
-                        task_instructions: None,
+                        task_instructions: Some(task_instructions.clone()),
                         model: Some(model.clone()),
                         schedule: schedule.clone(),
                         config: None,
