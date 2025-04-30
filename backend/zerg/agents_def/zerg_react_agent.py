@@ -61,7 +61,7 @@ def _make_llm(agent_row, tools):
     # Attach the token stream callback only when the feature flag is enabled.
     kwargs: dict = {
         "model": agent_row.model,
-        "temperature": 0,
+        "temperature": 0.6,
         "streaming": enable_token_stream,
         "api_key": os.environ.get("OPENAI_API_KEY"),
     }
