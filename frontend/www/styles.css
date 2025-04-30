@@ -193,13 +193,22 @@ body {
     border-radius: 4px;
     font-size: 14px;
     color: #e0e0e0;
-    transition: background-color 0.2s, transform 0.1s;
+    transition: background-color 0.2s, transform 0.1s, opacity 0.2s;
 }
 
 .agent-pill:hover {
     background-color: #3d3d5c;
-    /* Remove translateY for less button-like feedback */
-    /* transform: translateY(-2px); */
+}
+
+.agent-pill.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #1a1a2a;
+    border-color: #2d2d3c;
+}
+
+.agent-pill.disabled:hover {
+    background-color: #1a1a2a;
 }
 
 /* Drag and drop styles */
