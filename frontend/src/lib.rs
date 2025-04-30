@@ -21,6 +21,7 @@ mod thread_handlers;
 mod command_executors;
 mod models_config;
 mod pages;
+mod scheduling;
 
 
 // Main entry point for the WASM application
