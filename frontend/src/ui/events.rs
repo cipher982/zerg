@@ -103,7 +103,7 @@ fn setup_add_agent_node_button_handler(document: &Document) -> Result<(), JsValu
                 if let Ok(select) = sel_el.dyn_into::<web_sys::HtmlSelectElement>() {
                     let value = select.value();
                     if let Ok(agent_id_num) = value.parse::<u32>() {
-                        dispatch_global_message(Message::AddAgentNode {
+                        dispatch_global_message(Message::AddCanvasNode {
                             agent_id: Some(agent_id_num),
                             x: 100.0,
                             y: 100.0,

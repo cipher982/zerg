@@ -109,7 +109,7 @@ pub fn save_state_to_api(app_state: &AppState) {
                         // Create the agent update object
                         let agent_update = ApiAgentUpdate {
                             name: Some(node.text.clone()),
-                            status: node.status(),
+                            status: None,
                             system_instructions: Some(node.system_instructions()
                                 .unwrap_or_else(|| DEFAULT_SYSTEM_INSTRUCTIONS.to_string())),
                             task_instructions: Some(node.task_instructions()
