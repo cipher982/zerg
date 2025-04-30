@@ -22,7 +22,6 @@ mod command_executors;
 mod models_config;
 mod pages;
 mod scheduling;
-mod node_agent_legacy_ext;
 
 
 // Main entry point for the WASM application

@@ -19,7 +19,7 @@ use chrono;
 use std::collections::HashSet;
 
 // Bring legacy helper trait into scope so its methods are usable on CanvasNode
-use crate::node_agent_legacy_ext::NodeAgentLegacyExt;
+// Legacy helper trait no longer needed after decoupling cleanup.
 
 
 pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
@@ -366,8 +366,15 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             if let Some(agent_id) = &state.selected_node_id {
                 let agent_id_clone = agent_id.clone();
                
-                // Get the task instructions using our helper method
-                let task_text = state.get_task_instructions_with_fallback(&agent_id_clone);
+                // Fetch task instructions – abort if missing.
+                let task_text = match state.get_task_instructions(&agent_id_clone) {
+                    Ok(txt) => txt,
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Cannot send task: {}", e).into());
+                        // We bail out early; nothing to do.
+                        return commands;
+                    }
+                };
                
                 // Create a message ID
                 let message_id = state.generate_message_id();
@@ -386,8 +393,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     crate::storage::save_agent_messages_to_api(&agent_id_clone, &[user_message]);
                    
                     // Update agent status via API if it has an agent_id
-                    if let Some(_agent_id) = agent_node.agent_id {
-                        agent_node.set_status(Some("processing".to_string()));
+                    if let Some(agent_id) = agent_node.agent_id {
+                        // Update visual colour of the node to indicate processing
+                        agent_node.color = "#b3e5fc".to_string(); // light blue
+
+                        // Also update agent status in our cache
+                        if let Some(agent) = state.agents.get_mut(&agent_id) {
+                            agent.status = Some("processing".to_string());
+                        }
                     }
                 }
                
@@ -489,11 +502,18 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
        
         Message::UpdateSystemInstructions(instructions) => {
-            if let Some(id) = &state.selected_node_id {
-                let id_clone = id.clone();
-                if let Some(node) = state.nodes.get_mut(&id_clone) {
-                    node.set_system_instructions(Some(instructions));
-                    state.state_modified = true;
+            // Update the currently-selected agent’s system instructions directly.
+            if let Some(node_id) = &state.selected_node_id {
+                // Try to resolve the underlying agent_id.
+                let agent_id_opt = state.nodes.get(node_id)
+                    .and_then(|n| n.agent_id)
+                    .or_else(|| node_id.strip_prefix("agent-").and_then(|s| s.parse::<u32>().ok()));
+
+                if let Some(agent_id) = agent_id_opt {
+                    if let Some(agent) = state.agents.get_mut(&agent_id) {
+                        agent.system_instructions = Some(instructions);
+                        state.state_modified = true;
+                    }
                 }
             }
         },
@@ -540,8 +560,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     node.text = final_text;
                 }
                
-                // Update node status to completed
-                node.set_status(Some("complete".to_string()));
+                // Update visual colour of node to completed
+                node.color = "#c8e6c9".to_string(); // light green
+
+                if let Some(agent_id) = node.agent_id {
+                    if let Some(agent) = state.agents.get_mut(&agent_id) {
+                        agent.status = Some("complete".to_string());
+                    }
+                }
                
                 // Store parent_id before ending the borrow or making other mutable borrows
                 let parent_id = node.parent_id.clone();
@@ -555,7 +581,13 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 // If this node has a parent, update parent status too
                 if let Some(parent_id) = parent_id {
                     if let Some(parent) = state.nodes.get_mut(&parent_id) {
-                        parent.set_status(Some("idle".to_string()));
+                        parent.color = "#ffecb3".to_string(); // back to idle colour
+
+                        if let Some(agent_id) = parent.agent_id {
+                            if let Some(agent) = state.agents.get_mut(&agent_id) {
+                                agent.status = Some("idle".to_string());
+                            }
+                        }
                     }
                 }
             }

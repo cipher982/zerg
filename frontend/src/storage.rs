@@ -6,9 +6,8 @@ use crate::network::ApiClient;
 use std::collections::HashMap;
 use wasm_bindgen_futures::spawn_local;
 use wasm_bindgen::closure::Closure;
-use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
+// (no constants needed now)
 // Legacy extension trait for CanvasNode helpers
-use crate::node_agent_legacy_ext::NodeAgentLegacyExt;
 
 // Add API URL configuration
 #[allow(dead_code)]
@@ -112,10 +111,11 @@ pub fn save_state_to_api(app_state: &AppState) {
                         let agent_update = ApiAgentUpdate {
                             name: Some(node.text.clone()),
                             status: None,
-                            system_instructions: Some(node.system_instructions()
-                                .unwrap_or_else(|| DEFAULT_SYSTEM_INSTRUCTIONS.to_string())),
-                            task_instructions: Some(node.task_instructions()
-                                .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string())),
+                            // Only update mutable fields we track on the node (name for now).
+                            // System & task instructions are edited through the agent-centric
+                            // modal and therefore persisted separately.
+                            system_instructions: None,
+                            task_instructions: None,
                             model: None,
                             schedule: None,
                             config: None, // Will need to add more node data as needed
@@ -139,8 +139,9 @@ pub fn save_state_to_api(app_state: &AppState) {
                             // Compare name (String vs Option<String>)
                             let name_changed = backend_agent.name != *agent_update.name.as_ref().unwrap_or(&String::new());
                             // Compare system_instructions (Option<String> vs Option<String>)
-                            let sys_instr_changed = backend_agent.system_instructions != agent_update.system_instructions;
-                            // Compare model (Option<String> vs Option<String>)
+                            // We are not updating system/task instructions via this path anymore
+                            let sys_instr_changed = false;
+                            // Compare model (Option<String> vs Option<String>) – still relevant once we wire model editing
                             let model_changed = backend_agent.model != agent_update.model;
                             
                             if name_changed {
@@ -348,16 +349,8 @@ pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
                                     })
                                     .collect();
                                 
-                                // Update the node with the messages
-                                if !messages.is_empty() {
-                                    crate::state::APP_STATE.with(|app_state_ref| {
-                                        let mut app_state = app_state_ref.borrow_mut();
-                                        if let Some(node) = app_state.nodes.get_mut(&node_id) {
-                                            node._set_history(Some(messages));
-                                            app_state.state_modified = true;
-                                        }
-                                    });
-                                }
+                                // TODO: store historical messages with thread model once
+                                // the frontend chat rewrite lands.  Until then we ignore.
                             },
                             Err(e) => {
                                 web_sys::console::error_1(&format!("Error parsing messages: {}", e).into());

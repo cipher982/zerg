@@ -106,7 +106,7 @@ Use this list to track the actual implementation work.  Tick each task (`[x]`) o
 ### 1  Data model & naming
 
 - [x] Rename `Node` struct to `CanvasNode` (or equivalent) in `frontend/src/models.rs` and add a temporary type-alias for backward compatibility.
-- [x] Remove helper methods on the struct that read/modify agent data (`history()`, `status()`, `get_status_from_agents`, etc.) **Moved them into a dedicated extension trait `NodeAgentLegacyExt` in `frontend/src/node_agent_legacy_ext.rs`.**
+- [x] Remove helper methods on the struct that read/modify agent data (`history()`, `status()`, `get_status_from_agents`, etc.) and delete the now-redundant `NodeAgentLegacyExt` shim.
 
 ### 2  Frontend message API
 
@@ -138,7 +138,8 @@ Use this list to track the actual implementation work.  Tick each task (`[x]`) o
 
 ### 7  Remove legacy helpers
 
-- [ ] Delete functions that parse `"agent-{id}"` from node ids.
+- [x] Deleted `frontend/src/node_agent_legacy_ext.rs` and all call-sites (`_set_id`, `set_status`, `task_instructions`, etc.)
+- [ ] Delete functions that parse `"agent-{id}"` from node ids (still referenced in a few helpers).
 - [ ] Drop unused struct fields / helpers after the coupling is removed.
 
 ### 8  Tests & linting
