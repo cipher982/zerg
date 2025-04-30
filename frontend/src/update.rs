@@ -106,6 +106,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             if let Some(node_id) = node_id_to_select {
                 // Happy‑path: we already have a visual node for this agent
                 web_sys::console::log_1(&format!("Found node_id {} for agent_id {}, selecting it.", node_id, agent_id).into());
+                let node_id_cloned = node_id.clone();
                 state.selected_node_id = Some(node_id);
                 state.state_modified = true;
 
@@ -117,14 +118,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 // the state borrow has been released, following the same
                 // pattern we use for `ToggleView` above.
 
-                commands.push(Command::UpdateUI(Box::new(move || {
-                    if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
-                        crate::state::APP_STATE.with(|st| {
-                            let st = st.borrow();
-                            if let Err(e) = crate::views::show_agent_modal(&st, &document) {
+                commands.push(Command::UpdateUI(Box::new({
+                    let node_id = node_id_cloned;
+                    move || {
+                        if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
+                            if let Err(e) = crate::views::show_agent_modal(&node_id, &document) {
                                 web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
                             }
-                        });
+                        }
                     }
                 })));
             } else {
@@ -137,14 +138,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
                 // Directly open the modal with this synthetic id – show_agent_modal already has logic
                 // to fall back to agent data when it receives an id of the form "agent-{id}".
-                commands.push(Command::UpdateUI(Box::new(move || {
-                    if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
-                        crate::state::APP_STATE.with(|st| {
-                            let st = st.borrow();
-                            if let Err(e) = crate::views::show_agent_modal(&st, &document) {
+                commands.push(Command::UpdateUI(Box::new({
+                    let node_id = synthetic_node_id.clone();
+                    move || {
+                        if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
+                            if let Err(e) = crate::views::show_agent_modal(&node_id, &document) {
                                 web_sys::console::error_1(&format!("Failed to show modal for synthetic id: {:?}", e).into());
                             }
-                        });
+                        }
                     }
                 })));
 
