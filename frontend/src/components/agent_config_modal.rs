@@ -847,129 +847,164 @@ impl AgentConfigModal {
             }
         }
 
+        web_sys::console::log_1(&format!("[AgentConfigModal] schedule_value='{}'", schedule_value).into());
+
         // NEW schedule UI – pre-fill controls based on existing cron string
         if !schedule_value.trim().is_empty() {
             if let Ok(freq) = crate::scheduling::Frequency::try_from(schedule_value.as_str()) {
-                // Set dropdown value and toggle inputs accordingly
-                if let Some(freq_sel) = document.get_element_by_id("sched-frequency") {
-                    if let Some(select) = freq_sel.dyn_ref::<web_sys::HtmlSelectElement>() {
-                        match &freq {
-                            crate::scheduling::Frequency::EveryNMinutes(_) => select.set_value("minutes"),
-                            crate::scheduling::Frequency::Hourly { .. } => select.set_value("hourly"),
-                            crate::scheduling::Frequency::Daily { .. } => select.set_value("daily"),
-                            crate::scheduling::Frequency::Weekly { .. } => select.set_value("weekly"),
-                            crate::scheduling::Frequency::Monthly { .. } => select.set_value("monthly"),
+                // ------------------------------------------------------------------
+                // Apply the parsed schedule directly to the DOM.  No read-back from
+                // the <select> necessary – this avoids timing races and keeps the UI
+                // a pure function of our Rust state.
+                // ------------------------------------------------------------------
+
+                fn apply_frequency_ui(freq: &crate::scheduling::Frequency, document: &web_sys::Document) {
+                    // Helper: set input/select value to numeric u8
+                    let set_input_value = |id: &str, val: u8| {
+                        if let Some(el) = document.get_element_by_id(id) {
+                            if let Some(i) = el.dyn_ref::<web_sys::HtmlInputElement>() {
+                                i.set_value(&val.to_string());
+                            } else if let Some(sel) = el.dyn_ref::<web_sys::HtmlSelectElement>() {
+                                sel.set_value(&val.to_string());
+                            }
                         }
+                    };
+
+                    // Determine key used by dropdown & visibility matcher
+                    let key = match *freq {
+                        crate::scheduling::Frequency::EveryNMinutes(_) => "minutes",
+                        crate::scheduling::Frequency::Hourly { .. } => "hourly",
+                        crate::scheduling::Frequency::Daily { .. } => "daily",
+                        crate::scheduling::Frequency::Weekly { .. } => "weekly",
+                        crate::scheduling::Frequency::Monthly { .. } => "monthly",
+                    };
+
+                    // --- Dropdown ---
+                    if let Some(sel_el) = document.get_element_by_id("sched-frequency") {
+                        if let Some(sel) = sel_el.dyn_ref::<web_sys::HtmlSelectElement>() {
+                            sel.set_value(key);
+                        }
+                    }
+
+                    // --- Individual inputs ---
+                    match *freq {
+                        crate::scheduling::Frequency::EveryNMinutes(n) => {
+                            set_input_value("sched-interval", n);
+                        }
+                        crate::scheduling::Frequency::Hourly { minute } => {
+                            set_input_value("sched-minute", minute);
+                        }
+                        crate::scheduling::Frequency::Daily { hour, minute } => {
+                            set_input_value("sched-hour", hour);
+                            set_input_value("sched-minute", minute);
+                        }
+                        crate::scheduling::Frequency::Weekly { weekday, hour, minute } => {
+                            set_input_value("sched-weekday", weekday);
+                            set_input_value("sched-hour", hour);
+                            set_input_value("sched-minute", minute);
+                        }
+                        crate::scheduling::Frequency::Monthly { day, hour, minute } => {
+                            set_input_value("sched-day", day);
+                            set_input_value("sched-hour", hour);
+                            set_input_value("sched-minute", minute);
+                        }
+                    }
+
+                    // --- Visibility toggles ---
+                    let set_vis = |id: &str, show: bool| {
+                        if let Some(el) = document.get_element_by_id(&format!("{}-container", id)) {
+                            let _ = el.set_attribute("style", if show { "" } else { "display:none;" });
+                        }
+                    };
+
+                    match key {
+                        "minutes" => {
+                            set_vis("sched-interval", true);
+                            set_vis("sched-hour", false);
+                            set_vis("sched-minute", false);
+                            set_vis("sched-weekday", false);
+                            set_vis("sched-day", false);
+                        }
+                        "hourly" => {
+                            set_vis("sched-interval", false);
+                            set_vis("sched-hour", false);
+                            set_vis("sched-minute", true);
+                            set_vis("sched-weekday", false);
+                            set_vis("sched-day", false);
+                        }
+                        "daily" => {
+                            set_vis("sched-interval", false);
+                            set_vis("sched-hour", true);
+                            set_vis("sched-minute", true);
+                            set_vis("sched-weekday", false);
+                            set_vis("sched-day", false);
+                        }
+                        "weekly" => {
+                            set_vis("sched-interval", false);
+                            set_vis("sched-hour", true);
+                            set_vis("sched-minute", true);
+                            set_vis("sched-weekday", true);
+                            set_vis("sched-day", false);
+                        }
+                        "monthly" => {
+                            set_vis("sched-interval", false);
+                            set_vis("sched-hour", true);
+                            set_vis("sched-minute", true);
+                            set_vis("sched-weekday", false);
+                            set_vis("sched-day", true);
+                        }
+                        _ => {
+                            set_vis("sched-interval", false);
+                            set_vis("sched-hour", false);
+                            set_vis("sched-minute", false);
+                            set_vis("sched-weekday", false);
+                            set_vis("sched-day", false);
+                        }
+                    }
+
+                    // --- Summary line ---
+                    if let Some(summary_el) = document.get_element_by_id("sched-summary") {
+                        summary_el.set_inner_html(&freq.to_string());
                     }
                 }
 
-                // Populate individual inputs
-                let set_input = |id: &str, val: u8| {
-                    if let Some(el) = document.get_element_by_id(id) {
-                        if let Some(input) = el.dyn_ref::<web_sys::HtmlInputElement>() {
-                            input.set_value(&val.to_string());
-                        } else if let Some(select) = el.dyn_ref::<web_sys::HtmlSelectElement>() {
-                            select.set_value(&val.to_string());
-                        }
-                    }
-                };
+                apply_frequency_ui(&freq, &document);
+            }
+        } else {
+            // schedule blank – maybe agents not yet loaded. If we can determine
+            // agent_id, fetch it on-demand so the user still sees the correct
+            // schedule once the call returns.
 
-                match freq {
-                    crate::scheduling::Frequency::EveryNMinutes(n) => {
-                        set_input("sched-interval", n);
-                    }
-                    crate::scheduling::Frequency::Hourly { minute } => {
-                        set_input("sched-minute", minute);
-                    }
-                    crate::scheduling::Frequency::Daily { hour, minute } => {
-                        set_input("sched-hour", hour);
-                        set_input("sched-minute", minute);
-                    }
-                    crate::scheduling::Frequency::Weekly {
-                        weekday,
-                        hour,
-                        minute,
-                    } => {
-                        set_input("sched-weekday", weekday);
-                        set_input("sched-hour", hour);
-                        set_input("sched-minute", minute);
-                    }
-                    crate::scheduling::Frequency::Monthly {
-                        day,
-                        hour,
-                        minute,
-                    } => {
-                        set_input("sched-day", day);
-                        set_input("sched-hour", hour);
-                        set_input("sched-minute", minute);
-                    }
-                }
+            // Try to derive agent_id from node_id
+            let node_id_owned = node_id.to_string();
+            if let Some(agent_id) = APP_STATE.with(|state| {
+                let state = state.borrow();
+                state
+                    .nodes
+                    .get(node_id)
+                    .and_then(|n| n.agent_id)
+                    .or_else(|| node_id.strip_prefix("agent-").and_then(|s| s.parse::<u32>().ok()))
+            }) {
+                let doc_clone = document.clone();
+                let node_id_clone = node_id_owned.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    if let Ok(json_str) = crate::network::ApiClient::get_agent(agent_id).await {
+                        if let Ok(mut agent) = serde_json::from_str::<crate::models::ApiAgent>(&json_str) {
+                            if let Some(ref schedule_str) = agent.schedule {
+                                if crate::scheduling::Frequency::try_from(schedule_str.as_str()).is_ok() {
+                                    // Cache updated agent so next open uses populated schedule
+                                    crate::state::APP_STATE.with(|st| {
+                                        let mut st = st.borrow_mut();
+                                        st.agents.insert(agent_id, agent.clone());
+                                    });
 
-                // Ensure visibility and summary reflect parsed schedule
-                if let Some(freq_sel_elem) = document.get_element_by_id("sched-frequency") {
-                    if let Some(sel) = freq_sel_elem.dyn_ref::<web_sys::HtmlSelectElement>() {
-                        let val = sel.value();
-                        // reuse closures defined earlier? They are out of scope.
-                        // Re-implement minimal logic here using helper fns
-                        let doc_ref = document;
-                        // show/hide
-                        {
-                            let set_vis = |id: &str, show: bool| {
-                                if let Some(el) = doc_ref.get_element_by_id(&format!("{}-container", id)) {
-                                    let _ = el.set_attribute("style", if show { "" } else { "display:none;" });
-                                }
-                            };
-                            match val.as_str() {
-                                "minutes" => {
-                                    set_vis("sched-interval", true);
-                                    set_vis("sched-hour", false);
-                                    set_vis("sched-minute", false);
-                                    set_vis("sched-weekday", false);
-                                    set_vis("sched-day", false);
-                                }
-                                "hourly" => {
-                                    set_vis("sched-interval", false);
-                                    set_vis("sched-hour", false);
-                                    set_vis("sched-minute", true);
-                                    set_vis("sched-weekday", false);
-                                    set_vis("sched-day", false);
-                                }
-                                "daily" => {
-                                    set_vis("sched-interval", false);
-                                    set_vis("sched-hour", true);
-                                    set_vis("sched-minute", true);
-                                    set_vis("sched-weekday", false);
-                                    set_vis("sched-day", false);
-                                }
-                                "weekly" => {
-                                    set_vis("sched-interval", false);
-                                    set_vis("sched-hour", true);
-                                    set_vis("sched-minute", true);
-                                    set_vis("sched-weekday", true);
-                                    set_vis("sched-day", false);
-                                }
-                                "monthly" => {
-                                    set_vis("sched-interval", false);
-                                    set_vis("sched-hour", true);
-                                    set_vis("sched-minute", true);
-                                    set_vis("sched-weekday", false);
-                                    set_vis("sched-day", true);
-                                }
-                                _ => {
-                                    set_vis("sched-interval", false);
-                                    set_vis("sched-hour", false);
-                                    set_vis("sched-minute", false);
-                                    set_vis("sched-weekday", false);
-                                    set_vis("sched-day", false);
+                                    // Re-open modal so UI reflects new schedule
+                                    let _ = Self::open(&doc_clone, &node_id_clone);
                                 }
                             }
                         }
-                        // summary
-                        if let Some(summary_el) = doc_ref.get_element_by_id("sched-summary") {
-                            summary_el.set_inner_html(&freq.to_string());
-                        }
                     }
-                }
+                });
             }
         }
 

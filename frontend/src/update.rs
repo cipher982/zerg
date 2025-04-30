@@ -109,12 +109,24 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 state.selected_node_id = Some(node_id);
                 state.state_modified = true;
 
-                // Open the modal
-                let window = web_sys::window().expect("no global window exists");
-                let document = window.document().expect("should have a document");
-                if let Err(e) = crate::views::show_agent_modal(state, &document) {
-                    web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
-                }
+                // Defer opening of the modal until *after* we return from
+                // `update()`.  Doing this via a `Command::UpdateUI` ensures we
+                // don't attempt to borrow `APP_STATE` while we are still
+                // holding an active mutable borrow (which would panic at
+                // runtime).  The closure is executed by the dispatcher once
+                // the state borrow has been released, following the same
+                // pattern we use for `ToggleView` above.
+
+                commands.push(Command::UpdateUI(Box::new(move || {
+                    if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
+                        crate::state::APP_STATE.with(|st| {
+                            let st = st.borrow();
+                            if let Err(e) = crate::views::show_agent_modal(&st, &document) {
+                                web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
+                            }
+                        });
+                    }
+                })));
             } else {
                 // Fallback: no canvas node yet (e.g., user came from Dashboard before generating canvas)
                 let synthetic_node_id = format!("agent-{}", agent_id);
@@ -125,11 +137,16 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
                 // Directly open the modal with this synthetic id – show_agent_modal already has logic
                 // to fall back to agent data when it receives an id of the form "agent-{id}".
-                let window = web_sys::window().expect("no global window exists");
-                let document = window.document().expect("should have a document");
-                if let Err(e) = crate::views::show_agent_modal(state, &document) {
-                    web_sys::console::error_1(&format!("Failed to show modal for synthetic id: {:?}", e).into());
-                }
+                commands.push(Command::UpdateUI(Box::new(move || {
+                    if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
+                        crate::state::APP_STATE.with(|st| {
+                            let st = st.borrow();
+                            if let Err(e) = crate::views::show_agent_modal(&st, &document) {
+                                web_sys::console::error_1(&format!("Failed to show modal for synthetic id: {:?}", e).into());
+                            }
+                        });
+                    }
+                })));
 
                 // We purposely skip any canvas refresh here
                 needs_refresh = false;
