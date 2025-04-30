@@ -5,7 +5,7 @@
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{Document, Element, HtmlElement};
+use web_sys::{Document, Element, HtmlElement, DragEvent};
 
 use crate::state::{APP_STATE, dispatch_global_message};
 use crate::messages::Message;
@@ -58,23 +58,54 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
                 pill.set_class_name("agent-pill");
                 pill.set_inner_text(&agent.name);
                 pill.set_attribute("data-agent-id", &agent_id.to_string()).unwrap();
-                // No inline styles needed - using CSS now
                 
-                // Clone data for the closure.
+                // Make it draggable
+                pill.set_attribute("draggable", "true").unwrap();
+                
+                // Clone data for the closures
                 let name_cloned = agent.name.clone();
-                let closure = Closure::<dyn FnMut(_)>::new(move |_: web_sys::MouseEvent| {
-                    // Dispatch message to add a node at (0,0) which the existing logic
-                    // will reinterpret as "centre on viewport" for AgentIdentity nodes.
-                    dispatch_global_message(Message::AddAgentNode {
-                        agent_id: Some(agent_id),
-                        x: 0.0,
-                        y: 0.0,
-                        node_type: NodeType::AgentIdentity,
-                        text: name_cloned.clone(),
-                    });
+                let agent_id_value = agent_id;
+                
+                // Add dragstart event
+                let agent_id_for_drag = agent_id.to_string();
+                let agent_name_for_drag = agent.name.clone();
+                
+                let dragstart_closure = Closure::<dyn FnMut(_)>::new(move |event: DragEvent| {
+                    let dt = event.data_transfer().unwrap();
+                    
+                    // Set the drag data - include both id and name
+                    let data = format!("{{\"agent_id\":{},\"name\":\"{}\"}}", agent_id_for_drag, agent_name_for_drag);
+                    dt.set_data("text/plain", &data).unwrap();
+                    
+                    // Set visual drag effect
+                    dt.set_effect_allowed("copy");
+                    
+                    // Get the target element
+                    if let Some(target) = event.current_target() {
+                        if let Some(element) = target.dyn_ref::<HtmlElement>() {
+                            // Add dragging class for visual feedback
+                            element.class_list().add_1("dragging").unwrap();
+                        }
+                    }
+                    
+                    // Log the drag start for debugging
+                    web_sys::console::log_1(&format!("Drag started for agent: {}", agent_name_for_drag).into());
                 });
-                pill.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref()).unwrap();
-                closure.forget(); // Avoid dropping the closure – intentional memory leak.
+                pill.add_event_listener_with_callback("dragstart", dragstart_closure.as_ref().unchecked_ref()).unwrap();
+                dragstart_closure.forget();
+                
+                // Add dragend event to clean up
+                let dragend_closure = Closure::<dyn FnMut(_)>::new(move |event: DragEvent| {
+                    // Get the target element
+                    if let Some(target) = event.current_target() {
+                        if let Some(element) = target.dyn_ref::<HtmlElement>() {
+                            // Remove dragging class
+                            element.class_list().remove_1("dragging").unwrap();
+                        }
+                    }
+                });
+                pill.add_event_listener_with_callback("dragend", dragend_closure.as_ref().unchecked_ref()).unwrap();
+                dragend_closure.forget();
 
                 // Append to shelf.
                 shelf_el.append_child(&pill).unwrap();
