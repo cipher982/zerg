@@ -3,6 +3,7 @@ use web_sys::{
     Document, 
     HtmlCanvasElement, 
     MouseEvent,
+    DragEvent,
     AddEventListenerOptions,
 };
 use crate::state::{APP_STATE, AppState};
@@ -11,6 +12,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use crate::messages::Command;
 use crate::state::dispatch_global_message;
+use serde_json::Value;
 
 // New type to represent either a mutable or immutable reference to AppState
 pub enum AppStateRef<'a> {
@@ -47,6 +49,9 @@ pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
     
     // Set up mouse events for the canvas
     setup_canvas_mouse_events(&canvas)?;
+    
+    // Set up drag and drop events for the canvas
+    setup_canvas_drag_drop(&canvas)?;
     
     // Set up resize handler
     setup_resize_handler(&canvas)?;
@@ -607,4 +612,124 @@ fn refresh_dashboard_after_change() -> Result<(), JsValue> {
     
     // Then refresh UI after state changes (in a completely separate borrow)
     crate::state::AppState::refresh_ui_after_state_change()
+}
+
+// Add a new function to set up drag and drop events
+fn setup_canvas_drag_drop(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
+    let canvas_dragover = canvas.clone();
+    let dragover_handler = Closure::wrap(Box::new(move |event: DragEvent| {
+        // Prevent default to allow drop
+        event.prevent_default();
+        
+        // Set the drop effect to "copy" for visual feedback
+        if let Some(dt) = event.data_transfer() {
+            dt.set_drop_effect("copy");
+        }
+        
+        // Add a class to the canvas container for visual feedback
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("should have a document");
+        
+        if let Some(container) = document.get_element_by_id("canvas-container") {
+            if let Some(element) = container.dyn_ref::<web_sys::HtmlElement>() {
+                element.class_list().add_1("canvas-drop-target").unwrap_or_default();
+            }
+        }
+    }) as Box<dyn FnMut(_)>);
+    
+    canvas_dragover.add_event_listener_with_callback(
+        "dragover",
+        dragover_handler.as_ref().unchecked_ref()
+    )?;
+    dragover_handler.forget();
+    
+    let canvas_dragleave = canvas.clone();
+    let dragleave_handler = Closure::wrap(Box::new(move |_event: DragEvent| {
+        // Remove the highlight class when drag leaves
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("should have a document");
+        
+        if let Some(container) = document.get_element_by_id("canvas-container") {
+            if let Some(element) = container.dyn_ref::<web_sys::HtmlElement>() {
+                element.class_list().remove_1("canvas-drop-target").unwrap_or_default();
+            }
+        }
+    }) as Box<dyn FnMut(_)>);
+    
+    canvas_dragleave.add_event_listener_with_callback(
+        "dragleave",
+        dragleave_handler.as_ref().unchecked_ref()
+    )?;
+    dragleave_handler.forget();
+    
+    let canvas_drop = canvas.clone();
+    let drop_handler = Closure::wrap(Box::new(move |event: DragEvent| {
+        // Prevent default browser behavior
+        event.prevent_default();
+        
+        // Get mouse position relative to canvas
+        let x = event.offset_x() as f64;
+        let y = event.offset_y() as f64;
+        
+        // Log drop event for debugging
+        web_sys::console::log_1(&format!("Drop event at position: x={}, y={}", x, y).into());
+        
+        // Get the data transfer object
+        if let Some(dt) = event.data_transfer() {
+            // Get the agent data that was set during dragstart
+            if let Ok(data_str) = dt.get_data("text/plain") {
+                web_sys::console::log_1(&format!("Dropped agent data: {}", data_str).into());
+                
+                // Parse the JSON data
+                if let Ok(data) = serde_json::from_str::<Value>(&data_str) {
+                    // Extract agent_id and name
+                    let agent_id = data["agent_id"].as_u64().map(|id| id as u32);
+                    let name = data["name"].as_str().unwrap_or("Unknown Agent").to_string();
+                    
+                    web_sys::console::log_1(&format!("Parsed agent_id: {:?}, name: {}", agent_id, name).into());
+                    
+                    // Convert screen coordinates to world coordinates for proper placement
+                    let (zoom_level, viewport_x, viewport_y) = APP_STATE.with(|state| {
+                        let state = state.borrow();
+                        (state.zoom_level, state.viewport_x, state.viewport_y)
+                    });
+                    
+                    // Apply viewport transformation to get world coordinates
+                    let world_x = x / zoom_level + viewport_x;
+                    let world_y = y / zoom_level + viewport_y;
+                    
+                    // Dispatch message to add node at drop position
+                    dispatch_global_message(crate::messages::Message::AddAgentNode {
+                        agent_id,
+                        x: world_x,
+                        y: world_y,
+                        node_type: NodeType::AgentIdentity,
+                        text: name,
+                    });
+                    // Force UI refresh so the node appears immediately
+                    let _ = crate::state::AppState::refresh_ui_after_state_change();
+                } else {
+                    web_sys::console::error_1(&"Failed to parse dropped agent data".into());
+                }
+            }
+        }
+        
+        // Remove highlight class
+        let window = web_sys::window().expect("no global window exists");
+        let document = window.document().expect("should have a document");
+        
+        if let Some(container) = document.get_element_by_id("canvas-container") {
+            if let Some(element) = container.dyn_ref::<web_sys::HtmlElement>() {
+                element.class_list().remove_1("canvas-drop-target").unwrap_or_default();
+            }
+        }
+    }) as Box<dyn FnMut(_)>);
+    
+    canvas_drop.add_event_listener_with_callback(
+        "drop",
+        drop_handler.as_ref().unchecked_ref()
+    )?;
+    drop_handler.forget();
+    
+    Ok(())
 }
