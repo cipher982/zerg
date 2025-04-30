@@ -21,13 +21,9 @@ pub fn hide_agent_modal(document: &Document) -> Result<(), JsValue> {
 }
 
 // Add a function to display the agent modal
-pub fn show_agent_modal(state: &AppState, document: &Document) -> Result<(), JsValue> {
-    // Delegate to the new unified Rust modal implementation so that all
-    // schedule-handling logic lives in one place.
-    if let Some(node_id) = &state.selected_node_id {
-        AgentConfigModal::open(document, node_id)?;
-    }
-
+pub fn show_agent_modal(node_id: &str, document: &Document) -> Result<(), JsValue> {
+    // Directly open the modal for the given node_id
+    AgentConfigModal::open(document, node_id)?;
     Ok(())
 }
 
