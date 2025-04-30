@@ -40,7 +40,6 @@
  */
 
 use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
 
 // Needed for AgentDebug modal (Phase 1)
 use serde_json::Value;

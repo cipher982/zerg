@@ -10,7 +10,6 @@ use crate::storage::ActiveView;
 use crate::network::{WsClientV2, TopicManager};
 use crate::messages::{Message, Command};
 use crate::constants::{
-    DEFAULT_TASK_INSTRUCTIONS,
     DEFAULT_NODE_WIDTH,
     DEFAULT_NODE_HEIGHT,
     DEFAULT_AGENT_NODE_COLOR,
@@ -21,7 +20,6 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use crate::update;
 // Bring legacy helper trait into scope (methods formerly on CanvasNode)
-use crate::node_agent_legacy_ext::NodeAgentLegacyExt;
 
 // ---------------------------------------------------------------------------
 // Agent Debug Pane (read-only modal) – Phase 1
@@ -728,11 +726,21 @@ impl AppState {
         }
     }
 
-    /// Gets the task instructions for an agent with a standard fallback
-    pub fn get_task_instructions_with_fallback(&self, agent_id: &str) -> String {
-        self.nodes.get(agent_id)
-            .and_then(|node| node.task_instructions())
-            .unwrap_or_else(|| DEFAULT_TASK_INSTRUCTIONS.to_string())
+    /// Returns the saved task-instructions for the given node / agent.
+    ///
+    /// * `Ok(String)` – instructions found.
+    /// * `Err(&str)`  – agent resolved but has no instructions, or could not
+    ///                  resolve an agent for the provided `node_id`.
+    pub fn get_task_instructions(&self, node_id: &str) -> Result<String, &'static str> {
+        let agent_id_opt = self.nodes.get(node_id)
+            .and_then(|n| n.agent_id)
+            .or_else(|| node_id.strip_prefix("agent-").and_then(|s| s.parse::<u32>().ok()));
+
+        let aid = agent_id_opt.ok_or("Could not resolve agent_id from node_id")?;
+
+        let agent = self.agents.get(&aid).ok_or("Agent not found in state")?;
+
+        agent.task_instructions.clone().ok_or("Agent has no task instructions set")
     }
 
     // New dispatch method to handle messages
@@ -901,7 +909,8 @@ pub fn update_node_id(old_id: &str, new_id: &str) {
         if let Some(node) = state.nodes.remove(old_id) {
             // Insert it with the new ID
             let mut updated_node = node.clone();
-            updated_node._set_id(new_id.to_string());
+            // Directly change the `node_id` field – no helper needed.
+            updated_node.node_id = new_id.to_string();
             state.nodes.insert(new_id.to_string(), updated_node);
             
             web_sys::console::log_1(&format!("Updated node ID from {} to {}", old_id, new_id).into());
