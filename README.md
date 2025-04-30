@@ -93,6 +93,8 @@ Here's the minimal set of commands to get Agent Platform running locally:
 
 Visit http://localhost:8002 to see the UI.  
 
+**Note for new developers:** Agents are scheduled if their `schedule` field is set (as a CRON string). There is no separate boolean flag for scheduling.
+
 --------------------------------------------------------------------------------
 ## Architecture Overview
 
@@ -353,7 +355,7 @@ After launching the frontend (http://localhost:8002):
    - In the canvas, clicking on an "Agent Identity" node opens a modal for system instructions, scheduling, advanced settings.
 
 4. **Agent Debug Modal**  
-  - From the Dashboard, choose “Details” on any agent to open a read-only modal that surfaces raw JSON returned by `/api/agents/{id}/details` (powered by the new `AgentDetails` schema).  
+  - From the Dashboard, choose "Details" on any agent to open a read-only modal that surfaces raw JSON returned by `/api/agents/{id}/details` (powered by the new `AgentDetails` schema).  
   - Tabs for *Threads*, *Runs* and *Stats* are stubbed out – they will populate once those include payloads are implemented on the backend.  
 
 --------------------------------------------------------------------------------
@@ -410,24 +412,6 @@ After launching the frontend (http://localhost:8002):
 
 • **Data Analytics & Usage Metrics**  
   - Track token usage, cost, and latency.  
-
-• **Refinement of Canvas Editor**  
-  - Enhanced node library for more complex flows or branching logic.
-
---------------------------------------------------------------------------------
-## Extending the Project & Future Plans
-
-• **Additional Scheduling Features**  
-  - Full CRON-like scheduling or triggers from external events.  
-
-• **Advanced Agent Plugins**  
-  - Agents bridging to external services, e.g. sending emails or reading logs.  
-
-• **Data Analytics & Usage Metrics**  
-  - Track token usage, cost, and latency.  
-
-• **Multi-Agent Orchestration**  
-  - Let agents share data or call each other.  
 
 • **Refinement of Canvas Editor**  
   - Enhanced node library for more complex flows or branching logic.
@@ -517,10 +501,8 @@ All routers are version‑less but live under prefix "/api".
 
 ### 2.6 SchedulerService
 - backend/zerg/services/scheduler_service.py
-  - AsyncIOScheduler.
-  - On startup loads all agents where run_on_schedule=True and schedule ≠ NULL, converts cron strings to CronTrigger.
-  - Subscribes to agent‑events so schedule stays in sync.
-  - run_agent_task(): gets (or creates) a thread, then delegates to `AgentRunner.run_thread()` (non-streaming mode).
+  AsyncIOScheduler.
+  On startup, loads all agents with a non-null schedule (CRON string) and converts them to CronTrigger. Agents are considered scheduled if their schedule field is set; there is no separate boolean flag.
 
 ### 2.7 WebSocket layer
 - backend/zerg/websocket/manager.py

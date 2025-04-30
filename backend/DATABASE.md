@@ -103,6 +103,12 @@ finally:
 
 Tables are automatically created during application startup via the `initialize_database()` function.
 
+## Agent Scheduling Model
+
+The `Agent` table includes a `schedule` column (nullable string) that stores a CRON expression. If `schedule` is set (not NULL), the agent is considered scheduled and will be picked up by the SchedulerService. If `schedule` is NULL, the agent is not scheduled.
+
+**Note:** The previous `run_on_schedule` boolean flag has been removed. Scheduling is now determined solely by the presence of a non-null `schedule` string.
+
 ## Database Reset
 
 For development purposes only, we provide an admin endpoint for resetting the database:
