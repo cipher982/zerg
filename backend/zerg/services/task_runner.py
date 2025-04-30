@@ -118,14 +118,18 @@ async def execute_agent_task(db: Session, agent: AgentModel, *, thread_type: str
     # Success – flip agent back to idle and store timestamps.
     # ------------------------------------------------------------------
     now = datetime.now(timezone.utc)
-    crud.update_agent(db, agent.id, status="idle", last_run_at=now, last_error=None)
+
+    # For scheduled agents, revert to "scheduled" status instead of "idle"
+    new_status = "scheduled" if thread_type == "scheduled" else "idle"
+
+    crud.update_agent(db, agent.id, status=new_status, last_run_at=now, last_error=None)
     db.commit()
 
     await event_bus.publish(
         EventType.AGENT_UPDATED,
         {
             "id": agent.id,
-            "status": "idle",
+            "status": new_status,
             "last_run_at": now.isoformat(),
             "thread_id": thread.id,
             "last_error": None,
