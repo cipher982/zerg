@@ -4,28 +4,10 @@ use wasm_bindgen::JsValue;
 use web_sys;
 
 use crate::state::dispatch_global_message; // Import dispatch_global_message
-use crate::network::topic_manager::{TopicHandler, ITopicManager}; // Import Trait
-use crate::network::messages::ThreadMessageData;
-use crate::messages::Message; // Import main Message enum
-use crate::models::{ApiThreadMessage, ApiThread}; // Added ApiThread here
-
-/// Helper to convert network message data to the application model
-#[allow(dead_code)]
-fn convert_network_message_to_model(network_msg: ThreadMessageData) -> ApiThreadMessage {
-    ApiThreadMessage {
-        id: network_msg.id.map(|i| i as u32),  // Convert Option<i32> to Option<u32>
-        thread_id: network_msg.thread_id as u32,
-        role: network_msg.role,
-        content: network_msg.content,
-        timestamp: network_msg.timestamp,
-        // Default fields for tool‐message metadata
-        message_type: None,
-        tool_name: None,
-        tool_call_id: None,
-        tool_input: None,
-        parent_id: None,
-    }
-}
+use crate::network::topic_manager::{TopicHandler, ITopicManager};
+use crate::messages::Message; // UI message enum
+use crate::models::ApiThreadMessage;
+use crate::network::ws_schema::{WsMessage, WsStreamChunk};
 
 /// Manages WebSocket subscriptions and message handling for the Chat View lifecycle.
 pub struct ChatViewWsManager {
@@ -64,105 +46,72 @@ impl ChatViewWsManager {
     ) -> Result<(), JsValue> {
         let mut topic_manager = topic_manager_rc.borrow_mut();
 
-        // Create a handler for thread events
+        // -----------------------------------------------------------------
+        // Strongly-typed handler using WsMessage enum
+        // -----------------------------------------------------------------
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
-            // High-volume per-frame logs removed; we keep event-type level logs
-            if let Some(event_type) = data.get("type").and_then(|t| t.as_str()) {
+            match serde_json::from_value::<WsMessage>(data.clone()) {
+                Ok(WsMessage::ThreadMessage { data: msg }) => {
+                    let api_msg: ApiThreadMessage = msg.into();
+                    dispatch_global_message(Message::ReceiveNewMessage(api_msg));
+                }
 
-                match event_type {
-                    "thread_message_created" | "thread_message" => {
-                        // Handle both thread_message_created (from backend WebSocket) and thread_message (from run_thread)
-                        // First, look for data field (thread_message_created format)
-                        if let Some(message_data_val) = data.get("data") {
-                            if let Ok(message_data) = serde_json::from_value::<ApiThreadMessage>(message_data_val.clone()) {
-                                dispatch_global_message(Message::ReceiveNewMessage(message_data));
-                                return;
-                            } else {
-                                web_sys::console::error_1(&"Failed to parse message_data from thread_message_created".into());
-                            }
-                        }
-                        
-                        // If data field not found, try message field (thread_message format from run_thread)
-                        if let Some(message_val) = data.get("message") {
-                            if let Ok(message_data) = serde_json::from_value::<ApiThreadMessage>(message_val.clone()) {
-                                dispatch_global_message(Message::ReceiveNewMessage(message_data));
-                            } else {
-                                web_sys::console::error_1(&"Failed to parse message field from thread_message".into());
-                            }
-                        } else {
-                            web_sys::console::error_1(&"Message event missing both 'data' and 'message' fields".into());
-                        }
-                    },
-                    "thread_updated" => {
-                        // Handle thread updates (title changes, etc.)
-                         if let Some(thread_data_val) = data.get("data") { // Look inside "data" for this event type
-                            if let Ok(thread_data) = serde_json::from_value::<ApiThread>(thread_data_val.clone()) {
-                                dispatch_global_message(Message::ReceiveThreadUpdate {
-                                    thread_id: thread_data.id.unwrap_or(0), 
-                                    title: Some(thread_data.title),
-                                });
-                            } else {
-                                web_sys::console::error_1(&"Failed to parse thread_data from thread_updated".into());
-                            }
-                         } else {
-                              web_sys::console::error_1(&"thread_updated event missing 'data' field".into());
-                         }
-                    },
-                    "stream_start" => {
-                        web_sys::console::log_1(&format!("WS Handler (Thread {}): Stream Start received.", thread_id).into());
-                        dispatch_global_message(Message::ReceiveStreamStart(thread_id));
-                    },
-                    "stream_chunk" => {
-                        if let Some(content_val) = data.get("content") {
-                            if let Some(content) = content_val.as_str() {
-                                // Extract tool metadata (guaranteed to be present from backend)
-                                let chunk_type = data.get("chunk_type")
-                                    .and_then(|v| v.as_str())
-                                    .map(|s| s.to_string())
-                                    .expect("Backend must provide chunk_type");
-                                
-                                // Get tool_name and tool_call_id (required for tool_output)
-                                let tool_name = if chunk_type == "tool_output" {
-                                    data.get("tool_name")
-                                        .and_then(|v| v.as_str())
-                                        .map(|s| s.to_string())
-                                } else {
-                                    None // For assistant_message, these are always None
-                                };
-                                
-                                let tool_call_id = if chunk_type == "tool_output" {
-                                    data.get("tool_call_id")
-                                        .and_then(|v| v.as_str())
-                                        .map(|s| s.to_string())
-                                } else {
-                                    None
-                                };
-                                
-                                let message_id = data.get("message_id").and_then(|v| v.as_str()).unwrap_or("<null>");
-                                web_sys::console::log_1(&format!("WS Handler (Thread {}): Stream Chunk: '{}' (type: {}, msg_id: {})",
-                                    thread_id, content, chunk_type, message_id).into());
-                                
-                                dispatch_global_message(Message::ReceiveStreamChunk { 
-                                    thread_id, 
-                                    content: content.to_string(),
-                                    chunk_type: Some(chunk_type),
-                                    tool_name,
-                                    tool_call_id,
-                                    message_id: Some(message_id.to_string()),
-                                });
-                            } else {
-                                web_sys::console::error_1(&"Stream chunk content is not a string".into());
-                            }
-                        } else {
-                             web_sys::console::error_1(&"Stream chunk missing 'content' field".into());
-                        }
-                    },
-                    "stream_end" => {
-                        web_sys::console::log_1(&format!("WS Handler (Thread {}): Stream End received.", thread_id).into());
-                        dispatch_global_message(Message::ReceiveStreamEnd(thread_id));
-                    },
-                    _ => {
-                        web_sys::console::warn_1(&format!("Chat handler: Unhandled message type: {}", event_type).into());
+                Ok(WsMessage::StreamStart { .. }) => {
+                    dispatch_global_message(Message::ReceiveStreamStart(thread_id));
+                }
+
+                Ok(WsMessage::StreamChunk { data: chunk }) => {
+                    // Convert to global message
+                    let WsStreamChunk {
+                        thread_id: _tid,
+                        chunk_type,
+                        content,
+                        extra,
+                    } = chunk;
+
+                    // Extract optional tool metadata
+                    let tool_name = extra
+                        .get("tool_name")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    let tool_call_id = extra
+                        .get("tool_call_id")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                    let message_id = extra
+                        .get("message_id")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+
+                    dispatch_global_message(Message::ReceiveStreamChunk {
+                        thread_id,
+                        content: content.unwrap_or_default(),
+                        chunk_type: Some(chunk_type),
+                        tool_name,
+                        tool_call_id,
+                        message_id,
+                    });
+                }
+
+                Ok(WsMessage::StreamEnd { .. }) => {
+                    dispatch_global_message(Message::ReceiveStreamEnd(thread_id));
+                }
+
+                // Thread updates (title change, etc.) – still use old JSON nibble
+                Ok(WsMessage::ThreadEvent { data: thread_evt }) => {
+                    let maybe_title = thread_evt.extra.get("title").and_then(|v| v.as_str());
+                    if let Some(title) = maybe_title {
+                        dispatch_global_message(Message::ReceiveThreadUpdate {
+                            thread_id: thread_evt.thread_id,
+                            title: Some(title.to_string()),
+                        });
+                    }
+                }
+
+                _ => {
+                    // Fallback: log once
+                    if let Some(t) = data.get("type").and_then(|v| v.as_str()) {
+                        web_sys::console::warn_1(&format!("ChatViewWsManager: unhandled WS message type {}", t).into());
                     }
                 }
             }

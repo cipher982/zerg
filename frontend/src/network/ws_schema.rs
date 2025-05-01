@@ -31,7 +31,6 @@ pub enum WsMessage {
         rename = "thread_created",
         alias = "thread_updated",
         alias = "thread_deleted",
-        alias = "thread_message_created",
         alias = "thread_event"
     )]
     ThreadEvent { data: WsThreadEvent },
@@ -43,6 +42,15 @@ pub enum WsMessage {
     StreamChunk { data: WsStreamChunk },
     #[serde(rename = "stream_end")]
     StreamEnd { data: WsStreamEnd },
+
+    // A freshly created message in a thread – emitted both when the user
+    // posts a message (`thread_message`) and when the backend inserts a new
+    // assistant/tool message automatically (alias `thread_message_created`).
+    #[serde(
+        rename = "thread_message",
+        alias = "thread_message_created"
+    )]
+    ThreadMessage { data: WsThreadMessage },
 
     #[serde(other)]
     Unknown,
@@ -185,7 +193,33 @@ impl WsMessage {
             WsMessage::StreamStart { data } => Some(format!("thread:{}", data.thread_id)),
             WsMessage::StreamChunk { data } => Some(format!("thread:{}", data.thread_id)),
             WsMessage::StreamEnd { data } => Some(format!("thread:{}", data.thread_id)),
+            WsMessage::ThreadMessage { data } => Some(format!("thread:{}", data.thread_id)),
             WsMessage::Unknown => None,
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//   Thread message helpers
+// ---------------------------------------------------------------------------
+
+use crate::models::ApiThreadMessage;
+
+/// Payload for an individual message inserted into a thread.
+#[derive(Debug, Deserialize, Clone)]
+pub struct WsThreadMessage {
+    pub thread_id: u32,
+
+    pub message: ApiThreadMessage,
+
+    #[serde(flatten)]
+    pub extra: Value,
+}
+
+// Allow convenient conversion when the dashboard/chat needs the actual
+// `ApiThreadMessage` instance.
+impl From<WsThreadMessage> for ApiThreadMessage {
+    fn from(ws: WsThreadMessage) -> Self {
+        ws.message
     }
 }
