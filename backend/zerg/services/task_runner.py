@@ -94,7 +94,42 @@ async def execute_agent_task(db: Session, agent: AgentModel, *, thread_type: str
     )
 
     # ------------------------------------------------------------------
-    # Delegate to AgentRunner (no token stream).
+    # Persist an *AgentRun* row so dashboards can display progress.
+    # ------------------------------------------------------------------
+    run_row = crud.create_run(
+        db,
+        agent_id=agent.id,
+        thread_id=thread.id,
+        trigger=thread_type if thread_type in {"manual", "schedule"} else "api",
+        status="queued",
+    )
+
+    await event_bus.publish(
+        EventType.RUN_CREATED,
+        {
+            "event_type": "run_created",
+            "agent_id": agent.id,
+            "run_id": run_row.id,
+            "status": "queued",
+        },
+    )
+
+    # Immediately mark as running (no async queue yet)
+    start_ts = datetime.now(timezone.utc)
+    crud.mark_running(db, run_row.id, started_at=start_ts)
+    await event_bus.publish(
+        EventType.RUN_UPDATED,
+        {
+            "event_type": "run_updated",
+            "agent_id": agent.id,
+            "run_id": run_row.id,
+            "status": "running",
+            "started_at": start_ts.isoformat(),
+        },
+    )
+
+    # ------------------------------------------------------------------
+    # Delegate to AgentRunner (no token stream) and capture duration.
     # ------------------------------------------------------------------
     runner = AgentRunner(agent)
 
@@ -102,7 +137,25 @@ async def execute_agent_task(db: Session, agent: AgentModel, *, thread_type: str
         await runner.run_thread(db, thread)
 
     except Exception as exc:
-        # Persist error state & broadcast so dashboards refresh
+        # Persist run failure first
+        end_ts = datetime.now(timezone.utc)
+        duration_ms = int((end_ts - start_ts).total_seconds() * 1000)
+        crud.mark_failed(db, run_row.id, finished_at=end_ts, duration_ms=duration_ms, error=str(exc))
+
+        await event_bus.publish(
+            EventType.RUN_UPDATED,
+            {
+                "event_type": "run_updated",
+                "agent_id": agent.id,
+                "run_id": run_row.id,
+                "status": "failed",
+                "finished_at": end_ts.isoformat(),
+                "duration_ms": duration_ms,
+                "error": str(exc),
+            },
+        )
+
+        # Persist agent error state & broadcast so dashboards refresh
         crud.update_agent(db, agent.id, status="error", last_error=str(exc))
         db.commit()
 
@@ -115,14 +168,30 @@ async def execute_agent_task(db: Session, agent: AgentModel, *, thread_type: str
         raise
 
     # ------------------------------------------------------------------
-    # Success – flip agent back to idle and store timestamps.
+    # Success – update run + flip agent back to idle.
     # ------------------------------------------------------------------
-    now = datetime.now(timezone.utc)
+    end_ts = datetime.now(timezone.utc)
+    duration_ms = int((end_ts - start_ts).total_seconds() * 1000)
+
+    crud.mark_finished(db, run_row.id, finished_at=end_ts, duration_ms=duration_ms)
+
+    await event_bus.publish(
+        EventType.RUN_UPDATED,
+        {
+            "event_type": "run_updated",
+            "agent_id": agent.id,
+            "run_id": run_row.id,
+            "status": "success",
+            "finished_at": end_ts.isoformat(),
+            "duration_ms": duration_ms,
+        },
+    )
 
     # For scheduled agents, revert to "scheduled" status instead of "idle"
-    new_status = "scheduled" if thread_type == "scheduled" else "idle"
+    # thread_type "schedule" corresponds to scheduled runs
+    new_status = "scheduled" if thread_type == "schedule" else "idle"
 
-    crud.update_agent(db, agent.id, status=new_status, last_run_at=now, last_error=None)
+    crud.update_agent(db, agent.id, status=new_status, last_run_at=end_ts, last_error=None)
     db.commit()
 
     await event_bus.publish(
@@ -130,7 +199,7 @@ async def execute_agent_task(db: Session, agent: AgentModel, *, thread_type: str
         {
             "id": agent.id,
             "status": new_status,
-            "last_run_at": now.isoformat(),
+            "last_run_at": end_ts.isoformat(),
             "thread_id": thread.id,
             "last_error": None,
         },

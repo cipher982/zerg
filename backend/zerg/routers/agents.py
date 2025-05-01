@@ -142,10 +142,13 @@ def read_agent_details(
     # Placeholder for forwards-compatibility – fill with empty list/dict so
     # that client JSON keys are stable even before we implement them.
     if "threads" in include_set:
+        # Placeholder: actual thread details will be implemented in phase 2
         details_payload["threads"] = []  # type: ignore[assignment]
     if "runs" in include_set:
-        details_payload["runs"] = []  # type: ignore[assignment]
+        # Include latest runs for this agent
+        details_payload["runs"] = crud.list_runs(db, agent_id)  # type: ignore[assignment]
     if "stats" in include_set:
+        # Placeholder for future aggregated stats
         details_payload["stats"] = {}  # type: ignore[assignment]
 
     return details_payload

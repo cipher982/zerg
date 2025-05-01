@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::collections::{HashMap, HashSet};
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
 use crate::models::{Node, NodeType, Workflow, Edge, ApiAgent, ApiThread, ApiThreadMessage};
+use crate::models::ApiAgentRun;
 
 use crate::models::ApiAgentDetails;
 use crate::canvas::renderer;
@@ -123,10 +124,21 @@ pub struct AppState {
     // preserve open/closed state across re‑renders.
     pub expanded_agent_rows: HashSet<u32>,
 
+    // Map `agent_id -> recent runs (ordered newest-first, max 20)`
+    pub agent_runs: HashMap<u32, Vec<ApiAgentRun>>, 
+
     // Agent Debug modal (None when hidden)
     pub agent_debug_pane: Option<AgentDebugPane>,
     // UI state for collapsible tool call indicators
     pub tool_ui_states: HashMap<String, ToolUiState>,
+
+    // Track which agents have their full run history expanded (>5 rows)
+    pub run_history_expanded: HashSet<u32>,
+
+    /// Runs currently in `running` status for which the dashboard should show
+    /// a ticking duration value.  Stores *run_id* (primary key) – agent_id can
+    /// be looked up via `agent_runs` map if required.
+    pub running_runs: HashSet<u32>,
 }
 
 impl AppState {
@@ -186,9 +198,15 @@ impl AppState {
 
             expanded_agent_rows: HashSet::new(),
 
+            agent_runs: HashMap::new(),
+
             agent_debug_pane: None,
             // Initialize UI state for tool call indicators
             tool_ui_states: HashMap::new(),
+
+            run_history_expanded: HashSet::new(),
+
+            running_runs: HashSet::new(),
         }
     }
 
@@ -972,6 +990,7 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::FetchThreadMessages(_) |
             cmd @ Command::LoadAgentInfo(_) |
             cmd @ Command::FetchAgents |
+            cmd @ Command::FetchAgentRuns(_) |
             cmd @ Command::FetchAgentDetails(_) => crate::command_executors::execute_fetch_command(cmd),
             
             cmd @ Command::CreateThread { .. } |

@@ -82,6 +82,19 @@ pub fn execute_fetch_command(cmd: Command) {
                 }
             });
         },
+        Command::FetchAgentRuns(agent_id) => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_agent_runs(agent_id, 20).await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<Vec<crate::models::ApiAgentRun>>(&json_str) {
+                            Ok(runs) => dispatch_global_message(Message::ReceiveAgentRuns { agent_id, runs }),
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse agent runs: {:?}", e).into()),
+                        }
+                    },
+                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch agent runs: {:?}", e).into()),
+                }
+            });
+        },
         _ => web_sys::console::warn_1(&"Unexpected command type in execute_fetch_command".into())
     }
 }

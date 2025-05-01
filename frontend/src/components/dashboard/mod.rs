@@ -576,7 +576,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Run button click handler
     let agent_id = agent.id;
-    let run_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+    let run_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+        event.stop_propagation();
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
         // Optimistically mark the agent as running so the UI updates instantly.
         crate::state::APP_STATE.with(|state_ref| {
@@ -624,7 +625,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Edit button click handler
     let agent_id = agent.id;
-    let edit_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+    let edit_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+        event.stop_propagation();
         web_sys::console::log_1(&format!("Edit agent: {}", agent_id).into());
 
         // Dispatch EditAgent message with the u32 ID
@@ -645,7 +647,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Chat button click handler
     let agent_id = agent.id;
-    let chat_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+    let chat_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+        event.stop_propagation();
         web_sys::console::log_1(&format!("Chat with agent: {}", agent_id).into());
 
         // Dispatch NavigateToChatView message with the u32 ID
@@ -690,31 +693,28 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     actions_cell.append_child(&debug_btn)?;
     actions_cell.append_child(&chat_btn)?;
     
-    // More options button
-    let more_btn = document.create_element("button")?;
-    more_btn.set_class_name("action-btn more-btn");
-    more_btn.set_inner_html("⋮");
-    more_btn.set_attribute("title", "More Options")?;
-    
-    // More button click handler
+    // Delete agent button
+    let delete_btn = document.create_element("button")?;
+    delete_btn.set_class_name("action-btn delete-btn");
+    delete_btn.set_inner_html("🗑️");
+    delete_btn.set_attribute("title", "Delete Agent")?;
+
+    // Delete button click handler
     let agent_id = agent.id;
-    let more_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
-        // Prevent the event from bubbling
+    let delete_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         event.stop_propagation();
-        
-        // Ask for confirmation before deleting
         let window = web_sys::window().expect("no global window exists");
         if window.confirm_with_message(&format!("Are you sure you want to delete agent {}?", agent_id)).unwrap_or(false) {
             crate::state::dispatch_global_message(crate::messages::Message::RequestAgentDeletion { agent_id: agent_id.clone() });
         }
     }) as Box<dyn FnMut(_)>);
-    
-    more_btn.dyn_ref::<HtmlElement>()
+
+    delete_btn.dyn_ref::<HtmlElement>()
         .unwrap()
-        .add_event_listener_with_callback("click", more_callback.as_ref().unchecked_ref())?;
-    more_callback.forget();
-    
-    actions_cell.append_child(&more_btn)?;
+        .add_event_listener_with_callback("click", delete_callback.as_ref().unchecked_ref())?;
+    delete_callback.forget();
+
+    actions_cell.append_child(&delete_btn)?;
     
     row.append_child(&actions_cell)?;
 
@@ -724,8 +724,11 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         crate::state::APP_STATE.with(|state_ref| {
             let mut s = state_ref.borrow_mut();
             if s.expanded_agent_rows.contains(&toggle_id) {
+                // Collapse current row
                 s.expanded_agent_rows.remove(&toggle_id);
             } else {
+                // Collapse any other expanded rows to enforce single-open behaviour
+                s.expanded_agent_rows.clear();
                 s.expanded_agent_rows.insert(toggle_id);
             }
         });
@@ -756,49 +759,164 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
     let container = document.create_element("div")?;
     container.set_class_name("agent-detail-container");
 
-    // Error
-    if let Some(err) = &agent.last_error {
-        let pre = document.create_element("pre")?;
-        pre.set_class_name("error-block");
-        pre.set_text_content(Some(err));
-        container.append_child(&pre)?;
+    // (legacy error display removed)
+
+    // -----------------------------------------------------------------
+    // Run History table (Phase 1 stub – minimal yet functional)
+    // -----------------------------------------------------------------
+    // Attempt to fetch runs from global state. If not present trigger load.
+    let runs_opt = APP_STATE.with(|state| {
+        let state = state.borrow();
+        state.agent_runs.get(&agent.id).cloned()
+    });
+
+    if let Some(runs) = runs_opt {
+        // Determine whether we are in compact (<=5) or expanded mode
+        let expanded = APP_STATE.with(|s| s.borrow().run_history_expanded.contains(&agent.id));
+
+        let rows_to_show = if expanded { runs.len() } else { runs.len().min(5) };
+
+        // Build a minimal table with id + status + started_at
+        let table = document.create_element("table")?;
+        table.set_class_name("run-history-table");
+
+        // Header row – extended columns
+        let thead = document.create_element("thead")?;
+        let header_row = document.create_element("tr")?;
+        for h in [
+            "Status",
+            "Started",
+            "Duration",
+            "Trigger",
+            "Tokens",
+            "Cost",
+            "",
+        ] {
+            let th = document.create_element("th")?;
+            th.set_inner_html(h);
+            header_row.append_child(&th)?;
+        }
+        thead.append_child(&header_row)?;
+        table.append_child(&thead)?;
+
+        let tbody = document.create_element("tbody")?;
+        for run in runs.iter().take(rows_to_show) {
+            let row = document.create_element("tr")?;
+
+            // Status icon
+            let status_td = document.create_element("td")?;
+            let icon = match run.status.as_str() {
+                "running" => "▶",
+                "success" => "✔",
+                "failed" => "✖",
+                _ => "●",
+            };
+            status_td.set_inner_html(icon);
+            row.append_child(&status_td)?;
+
+            // Started at (short)
+            let started_td = document.create_element("td")?;
+            started_td.set_inner_html(
+                run.started_at
+                    .as_ref()
+                    .map(|s| format_datetime_short(s))
+                    .unwrap_or_else(|| "-".to_string())
+                    .as_str(),
+            );
+            row.append_child(&started_td)?;
+
+            // Duration (pretty)
+            let dur_td = document.create_element("td")?;
+            let dur_str = run
+                .duration_ms
+                .map(|d| crate::utils::format_duration_ms(d))
+                .unwrap_or_else(|| "-".to_string());
+            dur_td.set_inner_html(&dur_str);
+            row.append_child(&dur_td)?;
+
+            // Trigger
+            let trig_td = document.create_element("td")?;
+            let trig_str = crate::utils::capitalise_first(run.trigger.as_str());
+            trig_td.set_inner_html(&trig_str);
+            row.append_child(&trig_td)?;
+
+            // Tokens
+            let tokens_td = document.create_element("td")?;
+            let tok_str = run
+                .total_tokens
+                .map(|t| t.to_string())
+                .unwrap_or_else(|| "—".to_string());
+            tokens_td.set_inner_html(&tok_str);
+            row.append_child(&tokens_td)?;
+
+            // Cost
+            let cost_td = document.create_element("td")?;
+            let cost_str = run
+                .total_cost_usd
+                .map(|c| crate::utils::format_cost_usd(c))
+                .unwrap_or_else(|| "—".to_string());
+            cost_td.set_inner_html(&cost_str);
+            row.append_child(&cost_td)?;
+
+            // Kebab-menu placeholder (⋮)
+            let action_td = document.create_element("td")?;
+            action_td.set_class_name("run-kebab-cell");
+            let kebab = document.create_element("span")?;
+            kebab.set_class_name("kebab-menu-btn");
+            kebab.set_inner_html("⋮");
+
+            // Placeholder click handler – will be replaced in Phase-2 PR-3
+            let run_id_for_cb = run.id;
+            let cb = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+                event.stop_propagation();
+                web_sys::window()
+                    .and_then(|w| w.alert_with_message(&format!("Actions menu for run #{} – not yet implemented", run_id_for_cb)).ok());
+            }) as Box<dyn FnMut(_)>);
+            kebab.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+            cb.forget();
+
+            action_td.append_child(&kebab)?;
+            row.append_child(&action_td)?;
+
+            tbody.append_child(&row)?;
+        }
+        table.append_child(&tbody)?;
+        container.append_child(&table)?;
+
+        // Show toggle link if more than 5 runs exist
+        if runs.len() > 5 {
+            let toggle_link = document.create_element("a")?;
+            toggle_link.set_class_name("run-toggle-link");
+            toggle_link.set_attribute("href", "#")?;
+            let link_text = if expanded {
+                "Show less".to_string()
+            } else {
+                format!("Show all ({})", runs.len())
+            };
+            toggle_link.set_inner_html(&link_text);
+
+            let aid = agent.id;
+            let toggle_cb = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+                event.prevent_default();
+                crate::state::dispatch_global_message(crate::messages::Message::ToggleRunHistory { agent_id: aid });
+            }) as Box<dyn FnMut(_)>);
+
+            toggle_link.add_event_listener_with_callback("click", toggle_cb.as_ref().unchecked_ref())?;
+            toggle_cb.forget();
+
+            container.append_child(&toggle_link)?;
+        }
     } else {
+        // Not yet loaded – show placeholder and dispatch load message
         let span = document.create_element("span")?;
-        span.set_inner_html("No recent errors.");
+        span.set_inner_html("Loading run history...");
         container.append_child(&span)?;
+
+        // Dispatch load
+        crate::state::dispatch_global_message(crate::messages::Message::LoadAgentRuns(agent.id));
     }
 
-    // Action buttons
-    let btn_wrap = document.create_element("div")?;
-    btn_wrap.set_class_name("detail-actions");
-
-    // Retry
-    let retry_btn = document.create_element("button")?;
-    retry_btn.set_class_name("detail-btn");
-    retry_btn.set_inner_html("↻ Retry");
-    let rid = agent.id;
-    let retry_cb = Closure::wrap(Box::new(move |_e: web_sys::MouseEvent| {
-        // Dispatch message instead of direct API call and state manipulation
-        crate::state::dispatch_global_message(crate::messages::Message::RetryAgentTask { agent_id: rid });
-    }) as Box<dyn FnMut(_)>);
-    retry_btn.add_event_listener_with_callback("click", retry_cb.as_ref().unchecked_ref())?;
-    retry_cb.forget();
-    btn_wrap.append_child(&retry_btn)?;
-
-    // Dismiss
-    let dismiss_btn = document.create_element("button")?;
-    dismiss_btn.set_class_name("detail-btn");
-    dismiss_btn.set_inner_html("✖ Dismiss");
-    let did = agent.id;
-    let dismiss_cb = Closure::wrap(Box::new(move |_e: web_sys::MouseEvent| {
-        // Dispatch message instead of direct API call and state manipulation
-        crate::state::dispatch_global_message(crate::messages::Message::DismissAgentError { agent_id: did });
-    }) as Box<dyn FnMut(_)>);
-    dismiss_btn.add_event_listener_with_callback("click", dismiss_cb.as_ref().unchecked_ref())?;
-    dismiss_cb.forget();
-    btn_wrap.append_child(&dismiss_btn)?;
-
-    container.append_child(&btn_wrap)?;
+    // (legacy retry / dismiss buttons removed)
     td.append_child(&container)?;
     tr.append_child(&td)?;
 

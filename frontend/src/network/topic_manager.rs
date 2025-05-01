@@ -174,37 +174,17 @@ impl TopicManager {
             return;
         }
 
-        // --- Determine the topic from the message --- 
-        // This logic needs to align with how the backend structures event messages.
-        // Assuming backend sends: {"type": "event_type", "data": {"id": resource_id, ...}}
-        // Or for thread messages: {"type": "event_type", "data": {"thread_id": resource_id, ...}}
+        use crate::network::ws_schema::WsMessage;
 
-        let message_type = message.get("type").and_then(|t| t.as_str());
-        let data = message.get("data");
+        // Fast-path: try structured deserialisation first.  This covers the
+        // majority of event traffic (agent + thread + stream + run).  Falling
+        // back to the legacy heuristic only when the payload is not covered
+        // keeps backward-compat with exotic frames such as "pong" or admin
+        // messages.
 
-        let topic_str_option: Option<String> = match (message_type, data) {
-            (Some(mt), Some(d)) if mt.starts_with("agent_") => {
-                d.get("id").and_then(|id| id.as_u64()).map(|id| format!("agent:{}", id))
-            }
-            (Some(mt), Some(d)) if mt.starts_with("thread_") => {
-                d.get("thread_id").and_then(|id| id.as_u64()).map(|id| format!("thread:{}", id))
-            }
-             // Handle specific message types that might not follow the event_type/data pattern
-             (Some("thread_history"), _) => { // Check schema ws_messages.py ThreadHistoryMessage
-                 // Extract thread_id from top level for thread_history
-                 message.get("thread_id").and_then(|id| id.as_u64()).map(|id| format!("thread:{}", id))
-             }
-              (Some("agent_state"), Some(d)) => { // Check schema new_handlers.py agent_state
-                 d.get("id").and_then(|id| id.as_u64()).map(|id| format!("agent:{}", id))
-             }
-            // Add cases for stream messages which have thread_id at the top level
-            (Some("stream_start") | Some("stream_chunk") | Some("stream_end"), _) => {
-                message.get("thread_id").and_then(|id| id.as_u64()).map(|id| format!("thread:{}", id))
-            }
-            _ => {
-                web_sys::console::warn_1(&format!("Could not determine topic for message type: {:?}", message_type).into());
-                None
-            }
+        let topic_str_option: Option<String> = match serde_json::from_value::<WsMessage>(message.clone()) {
+            Ok(parsed) => parsed.topic(),
+            Err(_) => None,
         };
 
         // --- Call Handlers --- 
@@ -226,13 +206,22 @@ impl TopicManager {
                 web_sys::console::log_1(&format!("No handlers registered for determined topic: {}", topic_str).into());
             }
         } else {
-             // Handle messages that don't map to a specific topic? (e.g., Pong, Errors from WS itself)
-             if let Some("pong") = message_type {
-                 // Pong received, maybe update last pong time if needed
-             } else if let Some("error") = message_type {
-                 // Handle potential error messages from the backend WebSocket layer
-                 web_sys::console::error_1(&format!("Received WebSocket error message: {:?}", message).into());
-             }
+            // Administrative frames like "pong" or generic error payloads do
+            // not belong to a topic; we still want to surface them for
+            // debugging.
+            if let Some(t) = message.get("type").and_then(|t| t.as_str()) {
+                match t {
+                    "pong" => {
+                        web_sys::console::debug_1(&"WS pong received".into());
+                    }
+                    "error" => {
+                        web_sys::console::error_1(&format!("Received WebSocket error message: {:?}", message).into());
+                    }
+                    _ => {
+                        web_sys::console::warn_1(&format!("Unhandled WS admin frame: {}", t).into());
+                    }
+                }
+            }
         }
     }
 

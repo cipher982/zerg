@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -22,6 +23,18 @@ from zerg.models.models import Thread
 from zerg.models.models import ThreadMessage
 from zerg.services.scheduler_service import scheduler_service
 from zerg.websocket.manager import topic_manager
+
+# Disable LangSmith tracing for all tests
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
+os.environ["LANGCHAIN_ENDPOINT"] = ""
+os.environ["LANGCHAIN_API_KEY"] = ""
+
+# Mock the LangSmith client to prevent any actual API calls
+mock_langsmith = MagicMock()
+mock_langsmith_client = MagicMock()
+mock_langsmith.Client.return_value = mock_langsmith_client
+sys.modules["langsmith"] = mock_langsmith
+sys.modules["langsmith.client"] = MagicMock()
 
 dotenv.load_dotenv()
 
@@ -191,6 +204,31 @@ if _zr_module is not None:  # pragma: no cover – depends on import order
 
 # Import app after all engine setup and mocks are in place
 from zerg.main import app  # noqa: E402
+
+
+@pytest.fixture(scope="session", autouse=True)
+def disable_langsmith_tracing():
+    """
+    Fixture to disable LangSmith tracing for all tests.
+    This is more robust than setting environment variables.
+    """
+    # First try patching internal classes that control tracing
+    with patch("langsmith.client.Client") as mock_client, patch(
+        "langsmith._internal._background_thread.tracing_control_thread_func"
+    ) as mock_thread:
+        # Disable tracing in the client
+        mock_client_instance = MagicMock()
+        mock_client_instance.sync_trace.return_value = MagicMock()
+        mock_client_instance.trace.return_value = MagicMock()
+        mock_client.return_value = mock_client_instance
+
+        # Disable the background thread
+        mock_thread.return_value = None
+
+        # Also disable the tracing wrapper API
+        with patch("langsmith.wrappers.wrap_openai") as mock_wrap:
+            mock_wrap.return_value = lambda *args, **kwargs: args[0]
+            yield
 
 
 @pytest.fixture(scope="session", autouse=True)
