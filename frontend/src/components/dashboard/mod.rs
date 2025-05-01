@@ -724,8 +724,11 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         crate::state::APP_STATE.with(|state_ref| {
             let mut s = state_ref.borrow_mut();
             if s.expanded_agent_rows.contains(&toggle_id) {
+                // Collapse current row
                 s.expanded_agent_rows.remove(&toggle_id);
             } else {
+                // Collapse any other expanded rows to enforce single-open behaviour
+                s.expanded_agent_rows.clear();
                 s.expanded_agent_rows.insert(toggle_id);
             }
         });
