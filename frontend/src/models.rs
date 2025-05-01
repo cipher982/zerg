@@ -140,6 +140,37 @@ pub struct ApiAgent {
 }
 
 // -----------------------------------------------------------------------------
+//  Run History – new API model
+// -----------------------------------------------------------------------------
+
+/// A single execution (run) of an agent task. Mirrors the backend `AgentRun` model.
+///
+/// Only the subset of fields required for the dashboard UI is included. Additional
+/// telemetry (token_count, cost, etc.) can be added later without changing
+/// existing code as Serde will simply ignore missing struct fields.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ApiAgentRun {
+    pub id: u32,
+    pub agent_id: u32,
+    pub thread_id: Option<u32>,
+
+    pub status: String,        // queued | running | success | failed
+    pub trigger: String,       // manual | schedule | api
+
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+    pub duration_ms: Option<u64>,
+
+    #[serde(default)]
+    pub total_tokens: Option<u32>,
+    #[serde(default)]
+    pub total_cost_usd: Option<f64>,
+
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+// -----------------------------------------------------------------------------
 // Convenience impls
 // -----------------------------------------------------------------------------
 

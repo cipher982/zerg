@@ -1774,6 +1774,53 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             });
             needs_refresh = false;
         },
+
+        // -----------------------------------------------------
+        // Run History Messages (AgentRun)
+        // -----------------------------------------------------
+
+        Message::LoadAgentRuns(agent_id) => {
+            if !state.agent_runs.contains_key(&agent_id) {
+                commands.push(Command::FetchAgentRuns(agent_id));
+            }
+            // UI will refresh once runs are loaded
+            needs_refresh = false;
+        },
+
+        Message::ReceiveAgentRuns { agent_id, runs } => {
+            state.agent_runs.insert(agent_id, runs);
+
+            // Schedule dashboard refresh so the run history table replaces the spinner.
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        let _ = crate::components::dashboard::refresh_dashboard(&document);
+                    }
+                }
+            })));
+        },
+
+        Message::ReceiveRunUpdate { agent_id, run } => {
+            let runs_list = state.agent_runs.entry(agent_id).or_default();
+            if let Some(pos) = runs_list.iter().position(|r| r.id == run.id) {
+                runs_list.remove(pos);
+            }
+            runs_list.insert(0, run);
+            if runs_list.len() > 20 {
+                runs_list.truncate(20);
+            }
+
+            // If the dashboard is visible and row expanded, refresh UI to show new row.
+            if state.active_view == crate::storage::ActiveView::Dashboard {
+                commands.push(Command::UpdateUI(Box::new(|| {
+                    if let Some(window) = web_sys::window() {
+                        if let Some(document) = window.document() {
+                            let _ = crate::components::dashboard::refresh_dashboard(&document);
+                        }
+                    }
+                })));
+            }
+        },
     }
 
     // For now, if needs_refresh is true, add a NoOp command
