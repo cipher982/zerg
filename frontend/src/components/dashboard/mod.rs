@@ -693,31 +693,28 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     actions_cell.append_child(&debug_btn)?;
     actions_cell.append_child(&chat_btn)?;
     
-    // More options button
-    let more_btn = document.create_element("button")?;
-    more_btn.set_class_name("action-btn more-btn");
-    more_btn.set_inner_html("⋮");
-    more_btn.set_attribute("title", "More Options")?;
-    
-    // More button click handler
+    // Delete agent button
+    let delete_btn = document.create_element("button")?;
+    delete_btn.set_class_name("action-btn delete-btn");
+    delete_btn.set_inner_html("🗑️");
+    delete_btn.set_attribute("title", "Delete Agent")?;
+
+    // Delete button click handler
     let agent_id = agent.id;
-    let more_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
-        // Prevent the event from bubbling
+    let delete_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         event.stop_propagation();
-        
-        // Ask for confirmation before deleting
         let window = web_sys::window().expect("no global window exists");
         if window.confirm_with_message(&format!("Are you sure you want to delete agent {}?", agent_id)).unwrap_or(false) {
             crate::state::dispatch_global_message(crate::messages::Message::RequestAgentDeletion { agent_id: agent_id.clone() });
         }
     }) as Box<dyn FnMut(_)>);
-    
-    more_btn.dyn_ref::<HtmlElement>()
+
+    delete_btn.dyn_ref::<HtmlElement>()
         .unwrap()
-        .add_event_listener_with_callback("click", more_callback.as_ref().unchecked_ref())?;
-    more_callback.forget();
-    
-    actions_cell.append_child(&more_btn)?;
+        .add_event_listener_with_callback("click", delete_callback.as_ref().unchecked_ref())?;
+    delete_callback.forget();
+
+    actions_cell.append_child(&delete_btn)?;
     
     row.append_child(&actions_cell)?;
 
