@@ -768,6 +768,80 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
         container.append_child(&span)?;
     }
 
+    // -----------------------------------------------------------------
+    // Run History table (Phase 1 stub – minimal yet functional)
+    // -----------------------------------------------------------------
+    // Attempt to fetch runs from global state. If not present trigger load.
+    let runs_opt = APP_STATE.with(|state| {
+        let state = state.borrow();
+        state.agent_runs.get(&agent.id).cloned()
+    });
+
+    if let Some(runs) = runs_opt {
+        // Build a minimal table with id + status + started_at
+        let table = document.create_element("table")?;
+        table.set_class_name("run-history-table");
+
+        // Header row
+        let thead = document.create_element("thead")?;
+        let header_row = document.create_element("tr")?;
+        for h in ["Status", "Started", "Duration"] {
+            let th = document.create_element("th")?;
+            th.set_inner_html(h);
+            header_row.append_child(&th)?;
+        }
+        thead.append_child(&header_row)?;
+        table.append_child(&thead)?;
+
+        let tbody = document.create_element("tbody")?;
+        for run in runs.iter().take(20) {
+            let row = document.create_element("tr")?;
+
+            // Status icon
+            let status_td = document.create_element("td")?;
+            let icon = match run.status.as_str() {
+                "running" => "▶",
+                "success" => "✔",
+                "failed" => "✖",
+                _ => "●",
+            };
+            status_td.set_inner_html(icon);
+            row.append_child(&status_td)?;
+
+            // Started at (short)
+            let started_td = document.create_element("td")?;
+            started_td.set_inner_html(
+                run.started_at
+                    .as_ref()
+                    .map(|s| format_datetime_short(s))
+                    .unwrap_or_else(|| "-".to_string())
+                    .as_str(),
+            );
+            row.append_child(&started_td)?;
+
+            // Duration ms to s
+            let dur_td = document.create_element("td")?;
+            let dur_str = run
+                .duration_ms
+                .map(|d| format!("{}s", d / 1000))
+                .unwrap_or_else(|| "-".to_string());
+            dur_td.set_inner_html(&dur_str);
+            row.append_child(&dur_td)?;
+
+            tbody.append_child(&row)?;
+        }
+        table.append_child(&tbody)?;
+        container.append_child(&table)?;
+    } else {
+        // Not yet loaded – show placeholder and dispatch load message
+        let span = document.create_element("span")?;
+        span.set_inner_html("Loading run history...");
+        container.append_child(&span)?;
+
+        // Dispatch load
+        crate::state::dispatch_global_message(crate::messages::Message::LoadAgentRuns(agent.id));
+    }
+
     // Action buttons
     let btn_wrap = document.create_element("div")?;
     btn_wrap.set_class_name("detail-actions");

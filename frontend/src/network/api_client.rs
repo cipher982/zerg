@@ -14,6 +14,19 @@ impl ApiClient {
         super::get_api_base_url().expect("API base URL must be set (no fallback allowed)")
     }
 
+    // ---------------- Agent Runs ----------------
+
+    /// Fetch most recent runs for an agent (limit parameter default 20)
+    pub async fn get_agent_runs(agent_id: u32, limit: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/agents/{}/runs?limit={}",
+            Self::api_base_url(),
+            agent_id,
+            limit
+        );
+        Self::fetch_json(&url, "GET", None).await
+    }
+
     // Get available models
     pub async fn fetch_available_models() -> Result<String, JsValue> {
         let url = format!("{}/api/models", Self::api_base_url());

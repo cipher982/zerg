@@ -7,6 +7,7 @@ use wasm_bindgen::JsValue;
  // Keep for borrowing
 use crate::state::APP_STATE;
 use crate::network::topic_manager::{TopicHandler, ITopicManager}; // Import Trait
+use serde_json;
 
 /// Manages WebSocket subscriptions and message handling for the Dashboard lifecycle.
 pub struct DashboardWsManager {
@@ -119,6 +120,24 @@ impl DashboardWsManager {
                     }
 
                     // Nothing more to do for handled events.
+                    return;
+                }
+            }
+
+            // -------------------------------------------------------------
+            // Handle run_update events coming from backend. Expect shape:
+            // { "type": "run_update", "data": { ..AgentRun fields.. } }
+            // -------------------------------------------------------------
+            if let Some(event_type) = data.get("type").and_then(|v| v.as_str()) {
+                if event_type == "run_update" {
+                    if let Some(run_payload) = data.get("data") {
+                        // Attempt to deserialize into ApiAgentRun
+                        if let Ok(run) = serde_json::from_value::<crate::models::ApiAgentRun>(run_payload.clone()) {
+                            let agent_id = run.agent_id;
+                            crate::state::dispatch_global_message(crate::messages::Message::ReceiveRunUpdate { agent_id, run });
+                        }
+                    }
+                    // We already dispatched specialised message, skip generic reload
                     return;
                 }
             }
