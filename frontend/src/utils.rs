@@ -1,5 +1,8 @@
 //! Utility helpers shared across the WASM frontend.
 
+use wasm_bindgen::JsValue;
+use js_sys::Date;
+
 /// Format a duration given in **milliseconds** into a short human-readable
 /// string such as `"1 m 23 s"` or `"12 s"`.
 ///
@@ -37,6 +40,18 @@ pub fn format_cost_usd(cost: f64) -> String {
         format!("${:.3}", cost)
     } else {
         format!("${:.4}", cost)
+    }
+}
+
+/// Parse an ISO-8601 datetime string and return milliseconds since epoch.
+/// Returns None when the string cannot be parsed.
+pub fn parse_iso_ms(iso: &str) -> Option<u64> {
+    let date = js_sys::Date::new(&JsValue::from_str(iso));
+    let ms = date.get_time();
+    if ms.is_nan() {
+        None
+    } else {
+        Some(ms as u64)
     }
 }
 

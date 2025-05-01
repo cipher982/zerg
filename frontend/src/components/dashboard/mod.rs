@@ -576,7 +576,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Run button click handler
     let agent_id = agent.id;
-    let run_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+    let run_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+        event.stop_propagation();
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
         // Optimistically mark the agent as running so the UI updates instantly.
         crate::state::APP_STATE.with(|state_ref| {
@@ -624,7 +625,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Edit button click handler
     let agent_id = agent.id;
-    let edit_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+    let edit_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+        event.stop_propagation();
         web_sys::console::log_1(&format!("Edit agent: {}", agent_id).into());
 
         // Dispatch EditAgent message with the u32 ID
@@ -645,7 +647,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Chat button click handler
     let agent_id = agent.id;
-    let chat_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
+    let chat_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+        event.stop_propagation();
         web_sys::console::log_1(&format!("Chat with agent: {}", agent_id).into());
 
         // Dispatch NavigateToChatView message with the u32 ID

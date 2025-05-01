@@ -651,18 +651,60 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
        
         Message::AnimationTick => {
-            // Process animation updates like pulsing effect for nodes
-            for (_id, node) in state.nodes.iter_mut() {
-                // Look up linked agent status directly (no helper on node)
-                if let Some(agent_id) = node.agent_id {
-                    if let Some(agent) = state.agents.get(&agent_id) {
-                        if let Some(status_str) = &agent.status {
-                            if status_str == "processing" {
-                                // Update visual properties here if needed
+            let mut duration_changed = false;
+
+            // Live duration ticker for running runs
+            let now_ms = crate::utils::now_ms();
+
+            // We need to find the corresponding run objects and update duration_ms
+            for run_id in state.running_runs.iter() {
+                // Find agent+run
+                if let Some((agent_id, run_list)) = state
+                    .agent_runs
+                    .iter_mut()
+                    .find(|(_aid, list)| list.iter().any(|r| r.id == *run_id))
+                {
+                    if let Some(run) = run_list.iter_mut().find(|r| r.id == *run_id) {
+                        if let Some(start_iso) = &run.started_at {
+                            if let Some(start_ms) = crate::utils::parse_iso_ms(start_iso) {
+                                let new_duration = now_ms.saturating_sub(start_ms as u64);
+                                // Update if changed by at least 1000 ms to limit refreshes
+                                if run
+                                    .duration_ms
+                                    .map(|old| new_duration / 1000 != old / 1000)
+                                    .unwrap_or(true)
+                                {
+                                    run.duration_ms = Some(new_duration);
+                                    duration_changed = true;
+                                }
                             }
                         }
                     }
                 }
+            }
+
+            // Node animations (existing behaviour)
+            for (_id, node) in state.nodes.iter_mut() {
+                if let Some(agent_id) = node.agent_id {
+                    if let Some(agent) = state.agents.get(&agent_id) {
+                        if let Some(status_str) = &agent.status {
+                            if status_str == "processing" {
+                                // Placeholder for future animation effect
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Trigger dashboard repaint when durations changed
+            if duration_changed && state.active_view == crate::storage::ActiveView::Dashboard {
+                commands.push(Command::UpdateUI(Box::new(|| {
+                    if let (Some(win), true) = (web_sys::window(), true) {
+                        if let Some(doc) = win.document() {
+                            let _ = crate::components::dashboard::refresh_dashboard(&doc);
+                        }
+                    }
+                })));
             }
         },
        
@@ -840,6 +882,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.pending_ui_updates = Some(Box::new(|| {
                 if let Err(e) = AppState::refresh_ui_after_state_change() {
                     web_sys::console::error_1(&format!("Failed to refresh UI after AgentsRefreshed: {:?}", e).into());
+                }
+
+                // Ensure Dashboard WS manager is subscribed to all current agents.
+                if let Err(e) = crate::components::dashboard::ws_manager::init_dashboard_ws() {
+                    web_sys::console::error_1(&format!("Failed to re-init dashboard WS subscriptions: {:?}", e).into());
                 }
             }));
             needs_refresh = false; // Refresh handled by pending_ui_updates
@@ -1790,6 +1837,26 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::ReceiveAgentRuns { agent_id, runs } => {
             state.agent_runs.insert(agent_id, runs);
 
+            // Update running_runs set to include any runs that are still in
+            // "running" status after the fetch.  Also remove stale IDs not
+            // present anymore.
+            let mut still_running_ids = HashSet::new();
+            if let Some(list) = state.agent_runs.get(&agent_id) {
+                for r in list.iter() {
+                    if r.status == "running" {
+                        still_running_ids.insert(r.id);
+                    }
+                }
+            }
+
+            // Remove runs for this agent that are no longer running
+            state
+                .running_runs
+                .retain(|rid| still_running_ids.contains(rid) || !state.agent_runs.values().any(|v| v.iter().any(|r| r.id == *rid && r.status != "running")) );
+
+            // Add new running ones
+            state.running_runs.extend(still_running_ids);
+
             // Schedule dashboard refresh so the run history table replaces the spinner.
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(window) = web_sys::window() {
@@ -1805,9 +1872,21 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             if let Some(pos) = runs_list.iter().position(|r| r.id == run.id) {
                 runs_list.remove(pos);
             }
-            runs_list.insert(0, run);
+            let run_clone = run.clone();
+            runs_list.insert(0, run_clone);
             if runs_list.len() > 20 {
                 runs_list.truncate(20);
+            }
+
+            // Manage running_runs set
+            match run.status.as_str() {
+                "running" => {
+                    state.running_runs.insert(run.id);
+                }
+                "success" | "failed" | "queued" => {
+                    state.running_runs.remove(&run.id);
+                }
+                _ => {}
             }
 
             // If the dashboard is visible and row expanded, refresh UI to show new row.
