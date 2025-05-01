@@ -759,17 +759,7 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
     let container = document.create_element("div")?;
     container.set_class_name("agent-detail-container");
 
-    // Error
-    if let Some(err) = &agent.last_error {
-        let pre = document.create_element("pre")?;
-        pre.set_class_name("error-block");
-        pre.set_text_content(Some(err));
-        container.append_child(&pre)?;
-    } else {
-        let span = document.create_element("span")?;
-        span.set_inner_html("No recent errors.");
-        container.append_child(&span)?;
-    }
+    // (legacy error display removed)
 
     // -----------------------------------------------------------------
     // Run History table (Phase 1 stub – minimal yet functional)
@@ -781,6 +771,11 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
     });
 
     if let Some(runs) = runs_opt {
+        // Determine whether we are in compact (<=5) or expanded mode
+        let expanded = APP_STATE.with(|s| s.borrow().run_history_expanded.contains(&agent.id));
+
+        let rows_to_show = if expanded { runs.len() } else { runs.len().min(5) };
+
         // Build a minimal table with id + status + started_at
         let table = document.create_element("table")?;
         table.set_class_name("run-history-table");
@@ -797,7 +792,7 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
         table.append_child(&thead)?;
 
         let tbody = document.create_element("tbody")?;
-        for run in runs.iter().take(20) {
+        for run in runs.iter().take(rows_to_show) {
             let row = document.create_element("tr")?;
 
             // Status icon
@@ -835,6 +830,30 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
         }
         table.append_child(&tbody)?;
         container.append_child(&table)?;
+
+        // Show toggle link if more than 5 runs exist
+        if runs.len() > 5 {
+            let toggle_link = document.create_element("a")?;
+            toggle_link.set_class_name("run-toggle-link");
+            toggle_link.set_attribute("href", "#")?;
+            let link_text = if expanded {
+                "Show less".to_string()
+            } else {
+                format!("Show all ({})", runs.len())
+            };
+            toggle_link.set_inner_html(&link_text);
+
+            let aid = agent.id;
+            let toggle_cb = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+                event.prevent_default();
+                crate::state::dispatch_global_message(crate::messages::Message::ToggleRunHistory { agent_id: aid });
+            }) as Box<dyn FnMut(_)>);
+
+            toggle_link.add_event_listener_with_callback("click", toggle_cb.as_ref().unchecked_ref())?;
+            toggle_cb.forget();
+
+            container.append_child(&toggle_link)?;
+        }
     } else {
         // Not yet loaded – show placeholder and dispatch load message
         let span = document.create_element("span")?;
@@ -845,37 +864,7 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
         crate::state::dispatch_global_message(crate::messages::Message::LoadAgentRuns(agent.id));
     }
 
-    // Action buttons
-    let btn_wrap = document.create_element("div")?;
-    btn_wrap.set_class_name("detail-actions");
-
-    // Retry
-    let retry_btn = document.create_element("button")?;
-    retry_btn.set_class_name("detail-btn");
-    retry_btn.set_inner_html("↻ Retry");
-    let rid = agent.id;
-    let retry_cb = Closure::wrap(Box::new(move |_e: web_sys::MouseEvent| {
-        // Dispatch message instead of direct API call and state manipulation
-        crate::state::dispatch_global_message(crate::messages::Message::RetryAgentTask { agent_id: rid });
-    }) as Box<dyn FnMut(_)>);
-    retry_btn.add_event_listener_with_callback("click", retry_cb.as_ref().unchecked_ref())?;
-    retry_cb.forget();
-    btn_wrap.append_child(&retry_btn)?;
-
-    // Dismiss
-    let dismiss_btn = document.create_element("button")?;
-    dismiss_btn.set_class_name("detail-btn");
-    dismiss_btn.set_inner_html("✖ Dismiss");
-    let did = agent.id;
-    let dismiss_cb = Closure::wrap(Box::new(move |_e: web_sys::MouseEvent| {
-        // Dispatch message instead of direct API call and state manipulation
-        crate::state::dispatch_global_message(crate::messages::Message::DismissAgentError { agent_id: did });
-    }) as Box<dyn FnMut(_)>);
-    dismiss_btn.add_event_listener_with_callback("click", dismiss_cb.as_ref().unchecked_ref())?;
-    dismiss_cb.forget();
-    btn_wrap.append_child(&dismiss_btn)?;
-
-    container.append_child(&btn_wrap)?;
+    // (legacy retry / dismiss buttons removed)
     td.append_child(&container)?;
     tr.append_child(&td)?;
 

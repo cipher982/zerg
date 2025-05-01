@@ -1821,6 +1821,24 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 })));
             }
         },
+
+        // Toggle compact/full run history view
+        Message::ToggleRunHistory { agent_id } => {
+            if state.run_history_expanded.contains(&agent_id) {
+                state.run_history_expanded.remove(&agent_id);
+            } else {
+                state.run_history_expanded.insert(agent_id);
+            }
+
+            // Refresh dashboard UI
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        let _ = crate::components::dashboard::refresh_dashboard(&document);
+                    }
+                }
+            })));
+        },
     }
 
     // For now, if needs_refresh is true, add a NoOp command

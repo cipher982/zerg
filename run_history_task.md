@@ -91,23 +91,23 @@ Hence we want a lightweight AgentRun entity that references the Thread but captu
 
 ### 4.2 Frontend
 
-    * [ ]  `models.rs` – `ApiAgentRun`
-    * [ ]  `messages.rs`
-        * [ ]  new Messages
+    * [x]  `models.rs` – `ApiAgentRun`
+    * [x]  `messages.rs`
+        * [x]  new Messages (`LoadAgentRuns`, `ReceiveAgentRuns`, `ReceiveRunUpdate`, `ToggleRunHistory`)
 
-        * [ ]  new Commands
-    * [ ]  `command_executors.rs` – handle `FetchAgentRuns`
-    * [ ]  `network/api_client.rs` – `get_agent_runs()`
-    * [ ]  `network/ws_handlers` – route `"run_update"`
-    * [ ]  `state.rs` – add `agent_runs`
-    * [ ]  `update.rs` – reducers for new messages
-    * [ ]  `components/dashboard/mod.rs`
-        * [ ]  dispatch `LoadAgentRuns` on expand
+        * [x]  new Commands (`FetchAgentRuns`)
+    * [x]  `command_executors.rs` – handle `FetchAgentRuns`
+    * [x]  `network/api_client.rs` – `get_agent_runs()`
+    * [x]  `network/ws_handlers` – route `"run_update"`
+    * [x]  `state.rs` – add `agent_runs` & `run_history_expanded`
+    * [x]  `update.rs` – reducers for new messages + UI refresh
+    * [x]  `components/dashboard/mod.rs`
+        * [x]  dispatch `LoadAgentRuns` on expand
 
-        * [ ]  replace details row with run-table
+        * [x]  replace details row with run-table (default 5 rows, toggle show all)
 
-        * [ ]  live prepend on `ReceiveRunUpdate`
-    * [ ]  CSS tweaks (`frontend/www/styles.css`)
+        * [x]  live prepend on `ReceiveRunUpdate`
+    * [x]  CSS tweaks (`frontend/www/styles.css`) – table styling, dense rows, toggle link
     * [ ]  wasm-bindgen tests
 
 ### 4.3 Docs / Ops
@@ -144,8 +144,12 @@ Backend:
 • Return runs from `AgentDetails` when requested.
 • Unit + integration tests.
 
-Frontend:
-• All checklist items still open (state, commands, UI, ws handler, CSS).
+Frontend (2025-05-02):
+• Core feature implemented – lazy fetch, real-time updates, compact table with Show-all toggle.
+• Legacy error/Retry UI removed, accordion now single-purpose.
+• Single agent row expanded at a time.
+• Visual polish: increased font, tighter rows, branded toggle link.
+• Remaining: extra columns (tokens, trigger, menu), live duration ticker, wasm-bindgen tests.
 
 Docs / Ops:
 • README & CHANGELOG updates; Alembic migration script for production.
