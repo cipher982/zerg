@@ -22,6 +22,7 @@ mod command_executors;
 mod models_config;
 mod pages;
 mod scheduling;
+mod utils;
 
 
 // Main entry point for the WASM application
