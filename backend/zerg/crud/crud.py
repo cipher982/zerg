@@ -12,6 +12,8 @@ from zerg.models.models import AgentRun
 from zerg.models.models import Thread
 from zerg.models.models import ThreadMessage
 from zerg.models.models import Trigger
+from zerg.schemas.schemas import RunStatus
+from zerg.schemas.schemas import RunTrigger
 
 
 # Agent CRUD operations
@@ -340,11 +342,20 @@ def create_run(
     Minimal helper to keep service layers free from SQLAlchemy internals.
     """
 
+    # Validate trigger and status enum values
+    try:
+        trigger_enum = RunTrigger(trigger)
+    except ValueError:
+        raise ValueError(f"Invalid run trigger: {trigger}")
+    try:
+        status_enum = RunStatus(status)
+    except ValueError:
+        raise ValueError(f"Invalid run status: {status}")
     run_row = AgentRun(
         agent_id=agent_id,
         thread_id=thread_id,
-        trigger=trigger,
-        status=status,
+        trigger=trigger_enum,
+        status=status_enum,
     )
     db.add(run_row)
     db.commit()
@@ -358,7 +369,8 @@ def mark_running(db: Session, run_id: int, *, started_at: Optional[datetime] = N
         return None
 
     started_at = started_at or datetime.utcnow()
-    row.status = "running"
+    # Set to running status
+    row.status = RunStatus.running
     row.started_at = started_at
     db.commit()
     db.refresh(row)
@@ -382,7 +394,8 @@ def mark_finished(
     if row.started_at and duration_ms is None:
         duration_ms = int((finished_at - row.started_at).total_seconds() * 1000)
 
-    row.status = "success"
+    # Set to success status
+    row.status = RunStatus.success
     row.finished_at = finished_at
     row.duration_ms = duration_ms
     row.total_tokens = total_tokens
@@ -409,7 +422,8 @@ def mark_failed(
     if row.started_at and duration_ms is None:
         duration_ms = int((finished_at - row.started_at).total_seconds() * 1000)
 
-    row.status = "failed"
+    # Set to failed status
+    row.status = RunStatus.failed
     row.finished_at = finished_at
     row.duration_ms = duration_ms
     row.error = error
