@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 from typing import Any
 from typing import Dict
 from typing import List
@@ -189,7 +190,7 @@ class Trigger(TriggerBase):
 # ------------------------------------------------------------
 
 
-class RunStatus(str):
+class RunStatus(str, Enum):
     """Enum-like convenience class for runtime validation.
 
     Using a plain ``str`` subclass keeps the dependency footprint minimal
@@ -203,7 +204,7 @@ class RunStatus(str):
     failed = "failed"
 
 
-class RunTrigger(str):
+class RunTrigger(str, Enum):
     manual = "manual"
     schedule = "schedule"
     api = "api"
@@ -213,8 +214,8 @@ class AgentRunOut(BaseModel):
     id: int
     agent_id: int
     thread_id: int
-    status: str
-    trigger: str
+    status: RunStatus
+    trigger: RunTrigger
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     duration_ms: Optional[int] = None
