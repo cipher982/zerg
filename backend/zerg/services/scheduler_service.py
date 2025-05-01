@@ -236,7 +236,8 @@ class SchedulerService:
             # Delegate to shared helper (handles status flips & events).
             # ------------------------------------------------------------------
             logger.info("Running scheduled task for agent %s", agent_id)
-            thread = await execute_agent_task(db_session, agent, thread_type="scheduled")
+            # Use "schedule" to match RunTrigger.schedule and CRUD trigger logic
+            thread = await execute_agent_task(db_session, agent, thread_type="schedule")
 
             # ------------------------------------------------------------------
             # Update *next_run_at* after successful run so dashboards show when
