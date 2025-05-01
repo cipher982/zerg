@@ -139,6 +139,17 @@ pub struct AppState {
     /// a ticking duration value.  Stores *run_id* (primary key) – agent_id can
     /// be looked up via `agent_runs` map if required.
     pub running_runs: HashSet<u32>,
+
+    // -------------------------------------------------------------------
+    // NEW: Explicit mapping from backend `agent_id` → canvas `node_id`.
+    // -------------------------------------------------------------------
+    /// Once an AgentIdentity node is placed on the canvas we store a *single*
+    /// mapping entry so the UI can instantly look up the visual node given an
+    /// `agent_id` without resorting to brittle string parsing or HashMap
+    /// scans.  The invariant we uphold is **at most one** AgentIdentity node
+    /// per agent per-workflow.  When a node is deleted (feature TBD) the
+    /// entry must be removed as well.
+    pub agent_id_to_node_id: HashMap<u32, String>,
 }
 
 impl AppState {
@@ -207,6 +218,8 @@ impl AppState {
             run_history_expanded: HashSet::new(),
 
             running_runs: HashSet::new(),
+
+            agent_id_to_node_id: HashMap::new(),
         }
     }
 
@@ -264,6 +277,40 @@ impl AppState {
         
         web_sys::console::log_1(&format!("Successfully added node {}", id).into());
         id
+    }
+
+    // -------------------------------------------------------------------
+    // NODE CREATION HELPERS – AGENT-AWARE
+    // -------------------------------------------------------------------
+    /// Add a `NodeType::AgentIdentity` node that visualises the given
+    /// `agent_id`.  The function ensures the `agent_id_to_node_id` mapping is
+    /// updated so other parts of the frontend can perform O(1) look-ups.
+    pub fn add_agent_node(&mut self, agent_id: u32, text: String, x: f64, y: f64) -> String {
+        // Delegates to the generic `add_node()` but afterwards injects the
+        // agent-specific metadata and mapping.
+
+        let node_id = self.add_node(text, x, y, NodeType::AgentIdentity);
+
+        if let Some(node) = self.nodes.get_mut(&node_id) {
+            node.agent_id = Some(agent_id);
+        }
+
+        self.agent_id_to_node_id.insert(agent_id, node_id.clone());
+
+        node_id
+    }
+
+    /// Remove a node from the canvas and clean up any reverse mapping if the
+    /// node belonged to an agent.
+    pub fn remove_node(&mut self, node_id: &str) {
+        if let Some(node) = self.nodes.remove(node_id) {
+            if let Some(agent_id) = node.agent_id {
+                self.agent_id_to_node_id.remove(&agent_id);
+                self.agents_on_canvas.remove(&agent_id);
+            }
+            self.state_modified = true;
+            self.draw_nodes();
+        }
     }
 
     pub fn add_response_node(&mut self, parent_id: &str, response_text: String) -> String {
@@ -750,9 +797,7 @@ impl AppState {
     /// * `Err(&str)`  – agent resolved but has no instructions, or could not
     ///                  resolve an agent for the provided `node_id`.
     pub fn get_task_instructions(&self, node_id: &str) -> Result<String, &'static str> {
-        let agent_id_opt = self.nodes.get(node_id)
-            .and_then(|n| n.agent_id)
-            .or_else(|| node_id.strip_prefix("agent-").and_then(|s| s.parse::<u32>().ok()));
+        let agent_id_opt = self.nodes.get(node_id).and_then(|n| n.agent_id);
 
         let aid = agent_id_opt.ok_or("Could not resolve agent_id from node_id")?;
 
@@ -794,18 +839,16 @@ impl AppState {
     pub fn add_node_with_agent(&mut self, agent_id: Option<u32>, x: f64, y: f64, 
                     node_type: NodeType, text: String) -> String {
         // Generate a unique ID for the node
-        let node_id = match node_type {
-            NodeType::AgentIdentity => {
-                if let Some(id) = agent_id {
-                    format!("agent-{}", id)
-                } else {
-                    format!("node-{}", js_sys::Date::now() as u32)
-                }
-            },
-            _ => format!("node-{}", js_sys::Date::now() as u32)
-        };
-        
-        // Create the new node
+        if node_type == NodeType::AgentIdentity {
+            // Delegate to the dedicated helper so we keep the mapping in sync.
+            if let Some(aid) = agent_id {
+                return self.add_agent_node(aid, text, x, y);
+            }
+        }
+
+        // Fallback – generic node (or agent node without backend id yet).
+        let node_id = format!("node-{}", js_sys::Date::now() as u32);
+
         let node = Node {
             node_id: node_id.clone(),
             agent_id,
@@ -825,11 +868,10 @@ impl AppState {
             is_selected: false,
             is_dragging: false,
         };
-        
-        // Store the node
+
         self.nodes.insert(node_id.clone(), node);
         self.state_modified = true;
-        
+
         node_id
     }
     
