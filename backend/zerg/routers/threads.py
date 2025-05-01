@@ -6,8 +6,6 @@ and interacting with threads.
 """
 
 import logging
-from datetime import datetime
-from datetime import timezone
 from typing import List
 from typing import Optional
 
@@ -20,8 +18,6 @@ from sqlalchemy.orm import Session
 # DB/CRUD helpers
 from zerg.crud import crud
 from zerg.database import get_db
-from zerg.events import EventType
-from zerg.events.event_bus import event_bus
 from zerg.managers.agent_runner import AgentRunner
 from zerg.schemas.schemas import Thread
 from zerg.schemas.schemas import ThreadCreate
@@ -31,9 +27,12 @@ from zerg.schemas.schemas import ThreadUpdate
 from zerg.schemas.ws_messages import StreamChunkMessage
 from zerg.schemas.ws_messages import StreamEndMessage
 from zerg.schemas.ws_messages import StreamStartMessage
+from zerg.services.run_history import execute_thread_run_with_history
 
 # New higher-level ThreadService façade
 from zerg.services.thread_service import ThreadService
+
+# WebSocket topic manager
 from zerg.websocket.manager import topic_manager
 
 # Set up logging
@@ -216,67 +215,9 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
     # Notify start of (non token) stream
     await topic_manager.broadcast_to_topic(topic, StreamStartMessage(thread_id=thread_id).model_dump())
 
-    # Record run history: create AgentRun, emit run_created and run_updated events
-    # trigger="api" for chat-based runs
-    run_row = crud.create_run(db, agent_id=agent.id, thread_id=thread.id, trigger="api", status="queued")
-    await event_bus.publish(
-        EventType.RUN_CREATED,
-        {
-            "event_type": "run_created",
-            "agent_id": agent.id,
-            "run_id": run_row.id,
-            "status": run_row.status,
-        },
-    )
-    # Mark as running
-    start_ts = datetime.now(timezone.utc)
-    crud.mark_running(db, run_row.id, started_at=start_ts)
-    await event_bus.publish(
-        EventType.RUN_UPDATED,
-        {
-            "event_type": "run_updated",
-            "agent_id": agent.id,
-            "run_id": run_row.id,
-            "status": "running",
-            "started_at": start_ts.isoformat(),
-        },
-    )
-    # Execute the agent turn – *await* the async runner to get the assistant reply
-    try:
-        created_rows = await runner.run_thread(db, thread)
-    except Exception as exc:
-        # Record failure
-        end_ts = datetime.now(timezone.utc)
-        duration_ms = int((end_ts - start_ts).total_seconds() * 1000)
-        crud.mark_failed(db, run_row.id, finished_at=end_ts, duration_ms=duration_ms, error=str(exc))
-        await event_bus.publish(
-            EventType.RUN_UPDATED,
-            {
-                "event_type": "run_updated",
-                "agent_id": agent.id,
-                "run_id": run_row.id,
-                "status": "failed",
-                "finished_at": end_ts.isoformat(),
-                "duration_ms": duration_ms,
-                "error": str(exc),
-            },
-        )
-        # Propagate error to client
-        raise
-    # On successful completion, mark finish and emit success event
-    end_ts = datetime.now(timezone.utc)
-    duration_ms = int((end_ts - start_ts).total_seconds() * 1000)
-    crud.mark_finished(db, run_row.id, finished_at=end_ts, duration_ms=duration_ms)
-    await event_bus.publish(
-        EventType.RUN_UPDATED,
-        {
-            "event_type": "run_updated",
-            "agent_id": agent.id,
-            "run_id": run_row.id,
-            "status": "success",
-            "finished_at": end_ts.isoformat(),
-            "duration_ms": duration_ms,
-        },
+    # Execute the agent turn and record run history/events
+    created_rows = await execute_thread_run_with_history(
+        db=db, agent=agent, thread=thread, runner=runner, trigger="api"
     )
 
     # We maintain a single *stream* sequence for the entire agent turn so the
