@@ -81,7 +81,7 @@ impl AgentConfigModal {
         modal_header.append_child(&modal_title)?;
         modal_header.append_child(&close_button)?;
 
-        // Tabs: Main / History
+        // Tabs: Main
         let tab_container = document.create_element("div")?;
         tab_container.set_class_name("tab-container");
 
@@ -90,13 +90,8 @@ impl AgentConfigModal {
         main_tab.set_id("main-tab");
         main_tab.set_inner_html("Main");
 
-        let history_tab = document.create_element("button")?;
-        history_tab.set_class_name("tab-button");
-        history_tab.set_id("history-tab");
-        history_tab.set_inner_html("History");
 
         tab_container.append_child(&main_tab)?;
-        tab_container.append_child(&history_tab)?;
 
         // Main content
         let main_content = document.create_element("div")?;
@@ -295,17 +290,6 @@ impl AgentConfigModal {
         // Append schedule container to main_content
         main_content.append_child(&sched_container)?;
 
-        // --- History content ---
-        let history_content = document.create_element("div")?;
-        history_content.set_class_name("tab-content");
-        history_content.set_id("history-content");
-        history_content.set_attribute("style", "display: none;")?;
-
-        let history_container = document.create_element("div")?;
-        history_container.set_id("history-container");
-        history_container.set_inner_html("<p>No history available.</p>");
-
-        history_content.append_child(&history_container)?;
 
         // --- Buttons ---
         let button_container = document.create_element("div")?;
@@ -321,7 +305,6 @@ impl AgentConfigModal {
         modal_content.append_child(&modal_header)?;
         modal_content.append_child(&tab_container)?;
         modal_content.append_child(&main_content)?;
-        modal_content.append_child(&history_content)?;
         modal_content.append_child(&button_container)?;
 
         modal.append_child(&modal_content)?;
@@ -1004,11 +987,6 @@ impl AgentConfigModal {
             }
         }
 
-        // History tab – temporarily disabled until a dedicated agent history
-        // API is wired up on the backend.  Leaving the DOM empty for now.
-        if let Some(container) = document.get_element_by_id("history-container") {
-            container.set_inner_html("<p>History view coming soon …</p>");
-        }
 
         // Finally, show the modal
         if let Some(modal) = document.get_element_by_id("agent-modal") {
