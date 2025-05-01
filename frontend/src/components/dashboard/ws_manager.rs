@@ -59,11 +59,27 @@ impl DashboardWsManager {
                 data.clone()
             };
 
+            // -------------------------------------------------------------
+            // First, short-circuit on run_update events.  We must do this *before*
+            // the generic agent-status handler below because a run payload also
+            // contains `id` and `status` fields – but they refer to the RUN, not
+            // the agent.
+            // -------------------------------------------------------------
+            if let Some(event_type) = data.get("type").and_then(|v| v.as_str()) {
+                if event_type == "run_update" {
+                    if let Some(run_payload) = data.get("data") {
+                        if let Ok(run) = serde_json::from_value::<crate::models::ApiAgentRun>(run_payload.clone()) {
+                            let agent_id = run.agent_id;
+                            crate::state::dispatch_global_message(crate::messages::Message::ReceiveRunUpdate { agent_id, run });
+                        }
+                    }
+                    return;
+                }
+            }
+
             // -----------------------------------------------------------------
-            // 1. Apply the delta contained in the event (`id`, `status`,
-            //    `last_run_at`, ... ) directly to APP_STATE so the UI can flip
-            //    the status badge to "Running" without waiting for the REST
-            //    refresh.
+            // Apply the delta contained in AGENT events (`id`, `status`, …)
+            // directly to APP_STATE so the UI updates instantly.
             // -----------------------------------------------------------------
             if let (Some(id_val), Some(status_val)) = (
                 payload.get("id"),
@@ -216,14 +232,18 @@ thread_local! {
 pub fn init_dashboard_ws() -> Result<(), JsValue> {
     DASHBOARD_WS.with(|cell| {
         let mut manager_opt = cell.borrow_mut();
-        if manager_opt.is_none() {
+        if let Some(mgr) = manager_opt.as_mut() {
+            // Already initialised – ensure we are subscribed to any new agents.
+            web_sys::console::log_1(&"DashboardWsManager: refreshing subscriptions for new agents".into());
+            let topic_manager_trait_rc = APP_STATE.with(|state_ref| {
+                state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>
+            });
+            mgr.subscribe_to_agent_events(topic_manager_trait_rc)?;
+        } else {
             web_sys::console::log_1(&"Initializing DashboardWsManager singleton...".into());
             let mut manager = DashboardWsManager::new();
-            // initialize now uses APP_STATE internally, no need to pass manager here
-            manager.initialize()?; 
+            manager.initialize()?;
             *manager_opt = Some(manager);
-        } else {
-            web_sys::console::warn_1(&"DashboardWsManager singleton already initialized.".into());
         }
         Ok(())
     })

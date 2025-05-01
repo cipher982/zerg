@@ -134,6 +134,11 @@ pub struct AppState {
 
     // Track which agents have their full run history expanded (>5 rows)
     pub run_history_expanded: HashSet<u32>,
+
+    /// Runs currently in `running` status for which the dashboard should show
+    /// a ticking duration value.  Stores *run_id* (primary key) – agent_id can
+    /// be looked up via `agent_runs` map if required.
+    pub running_runs: HashSet<u32>,
 }
 
 impl AppState {
@@ -200,6 +205,8 @@ impl AppState {
             tool_ui_states: HashMap::new(),
 
             run_history_expanded: HashSet::new(),
+
+            running_runs: HashSet::new(),
         }
     }
 

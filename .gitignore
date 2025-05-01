@@ -180,3 +180,4 @@ backend/data
 .DS_Store
 .cursorrules
 .cursor/
+app.db
