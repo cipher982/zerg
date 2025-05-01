@@ -61,28 +61,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - DEFAULT_NODE_WIDTH / 2.0;
             let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - DEFAULT_NODE_HEIGHT / 2.0;
            
-            // Create the node with the proper ID format
-            let node_id = format!("agent-{}", agent_id);
-           
-            // Create and add the node directly to state
-            let node = crate::models::Node {
-                node_id: node_id.clone(),
-                agent_id: Some(agent_id),
-                x,
-                y,
-                text: name,
-                width: DEFAULT_NODE_WIDTH,
-                height: DEFAULT_NODE_HEIGHT,
-                color: DEFAULT_AGENT_NODE_COLOR.to_string(),
-                node_type: NodeType::AgentIdentity,
-                parent_id: None,
-                is_selected: false,
-                is_dragging: false,
-            };
-           
-            // Add the node to our state
-            state.nodes.insert(node_id.clone(), node);
-           
+            // Create and add the node via the new helper that keeps the
+            // agent<->node mapping up-to-date.
+            let node_id = state.add_agent_node(agent_id, name, x, y);
+
             // Log the new node ID - make it clear this is a visual node representing an agent
             web_sys::console::log_1(&format!("Created visual node with ID: {} for agent {}", node_id, agent_id).into());
            
@@ -101,10 +83,8 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
        
         Message::EditAgent(agent_id) => {
             web_sys::console::log_1(&format!("Update: Handling EditAgent for agent_id: {}", agent_id).into());
-            // Find the node associated with this agent ID
-            let node_id_to_select = state.nodes.iter()
-                .find(|(_, node)| node.agent_id == Some(agent_id))
-                .map(|(id, _)| id.clone());
+            // Quick O(1) lookup via the explicit map
+            let node_id_to_select = state.agent_id_to_node_id.get(&agent_id).cloned();
 
             if let Some(node_id) = node_id_to_select {
                 // Happy‑path: we already have a visual node for this agent
@@ -132,27 +112,18 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     }
                 })));
             } else {
-                // Fallback: no canvas node yet (e.g., user came from Dashboard before generating canvas)
-                let synthetic_node_id = format!("agent-{}", agent_id);
-                web_sys::console::log_1(&format!("No visual node for agent_id {}. Using synthetic id {}.", agent_id, synthetic_node_id).into());
+                // Fallback: no canvas node yet (e.g., user came from Dashboard)
+                // We simply open the modal without selecting a node.
 
-                state.selected_node_id = Some(synthetic_node_id.clone());
-                // Not marking state_modified because we haven't changed any persistent state
-
-                // Directly open the modal with this synthetic id – show_agent_modal already has logic
-                // to fall back to agent data when it receives an id of the form "agent-{id}".
-                commands.push(Command::UpdateUI(Box::new({
-                    let _node_id = synthetic_node_id.clone();
-                    move || {
-                        if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
+                commands.push(Command::UpdateUI(Box::new(move || {
+                    if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
                         if let Err(e) = crate::views::show_agent_modal(agent_id, &document) {
-                                web_sys::console::error_1(&format!("Failed to show modal for synthetic id: {:?}", e).into());
-                            }
+                            web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
                         }
                     }
                 })));
 
-                // We purposely skip any canvas refresh here
+                // No canvas refresh necessary
                 needs_refresh = false;
             }
         },
@@ -506,9 +477,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // Update the currently-selected agent’s system instructions directly.
             if let Some(node_id) = &state.selected_node_id {
                 // Try to resolve the underlying agent_id.
-                let agent_id_opt = state.nodes.get(node_id)
-                    .and_then(|n| n.agent_id)
-                    .or_else(|| node_id.strip_prefix("agent-").and_then(|s| s.parse::<u32>().ok()));
+                let agent_id_opt = state.nodes.get(node_id).and_then(|n| n.agent_id);
 
                 if let Some(agent_id) = agent_id_opt {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
@@ -785,9 +754,8 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // First, find all agents that need nodes
             let agents_needing_nodes = state.agents.iter()
                 .filter(|(id, _)| {
-                    // Check if this agent already has a node
-                    let node_id = format!("agent-{}", id);
-                    !state.nodes.contains_key(&node_id)
+                    // Use the explicit mapping
+                    !state.agent_id_to_node_id.contains_key(id)
                 })
                 .map(|(id, agent)| (*id, agent.name.clone()))
                 .collect::<Vec<_>>();
@@ -801,27 +769,8 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 let x = 100.0 + (col as f64 * 250.0); // 250px horizontal spacing
                 let y = 100.0 + (row as f64 * 150.0); // 150px vertical spacing
                
-                // Create the node with the proper ID format
-                let node_id = format!("agent-{}", agent_id);
-               
-                // Create and add the node directly to state
-                let node = crate::models::Node {
-                    node_id: node_id.clone(),
-                    agent_id: Some(*agent_id),
-                    x,
-                    y,
-                    text: name.clone(),
-                    width: 200.0,
-                    height: 80.0,
-                    color: "#ffecb3".to_string(), // Light amber color
-                    node_type: NodeType::AgentIdentity,
-                    parent_id: None,
-                    is_selected: false,
-                    is_dragging: false,
-                };
-               
-                // Add the node to our state
-                state.nodes.insert(node_id.clone(), node);
+                // Create and add the node via helper
+                state.add_agent_node(*agent_id, name.clone(), x, y);
                 nodes_created += 1;
             }
            

@@ -102,11 +102,9 @@ pub fn save_state_to_api(app_state: &AppState) {
     // Spawn an async task to save agents to API
     spawn_local(async move {
         // We'll need to convert each Node of type AgentIdentity to an ApiAgent
-        for (node_id, node) in nodes.iter() {
+        for (_node_id, node) in nodes.iter() {
             if let crate::models::NodeType::AgentIdentity = node.node_type {
-                // Only update existing agents with proper agent-{id} format
-                if let Some(agent_id_str) = node_id.strip_prefix("agent-") {
-                    if let Ok(agent_id) = agent_id_str.parse::<u32>() {
+                if let Some(agent_id) = node.agent_id {
                         // Create the agent update object
                         let agent_update = ApiAgentUpdate {
                             name: Some(node.text.clone()),
@@ -184,8 +182,7 @@ pub fn save_state_to_api(app_state: &AppState) {
                     }
                 }
             }
-        }
-    });
+        });
 }
 
 /// Load app state from API
@@ -287,9 +284,14 @@ fn mark_loading_complete() {
 
 /// Save agent messages to the API
 pub fn save_agent_messages_to_api(node_id: &str, messages: &[crate::models::Message]) {
-    // Extract the agent ID from the node ID if it starts with "agent-"
-    if let Some(agent_id_str) = node_id.strip_prefix("agent-") {
-        if let Ok(agent_id) = agent_id_str.parse::<u32>() {
+    // Resolve the `agent_id` using the global mapping.  This avoids any
+    // string-based assumptions about the node_id.
+    use crate::state::APP_STATE;
+
+    if let Some(agent_id) = APP_STATE.with(|s| {
+        let st = s.borrow();
+        st.nodes.get(node_id).and_then(|n| n.agent_id)
+    }) {
             // Clone the messages for the async block
             let messages_clone = messages.to_vec();
             
@@ -320,15 +322,17 @@ pub fn save_agent_messages_to_api(node_id: &str, messages: &[crate::models::Mess
                 }
             });
         }
-    }
 }
 
 /// Load agent messages from the API
 #[allow(dead_code)]
 pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
-    // Extract the agent ID from the node ID
-    if let Some(agent_id_str) = node_id.strip_prefix("agent-") {
-        if let Ok(agent_id) = agent_id_str.parse::<u32>() {
+    use crate::state::APP_STATE;
+
+    if let Some(agent_id) = APP_STATE.with(|s| {
+        let st = s.borrow();
+        st.nodes.get(node_id).and_then(|n| n.agent_id)
+    }) {
             // Reference to the node ID for the closure
             let node_id = node_id.to_string();
             
@@ -364,7 +368,6 @@ pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
             });
         }
     }
-}
 
 /// Helper function to save just the nodes to the API
 #[allow(dead_code)]
