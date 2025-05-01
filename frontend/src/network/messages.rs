@@ -235,6 +235,13 @@ pub mod handlers {
             "stream_start" => Ok(Box::new(serde_json::from_str::<StreamStartMessage>(json)?)),
             "stream_chunk" => Ok(Box::new(serde_json::from_str::<StreamChunkMessage>(json)?)),
             "stream_end" => Ok(Box::new(serde_json::from_str::<StreamEndMessage>(json)?)),
+            // We ignore agent_event & run_update here – they are handled by the
+            // typed ws_schema layer inside individual WsManagers.  Returning a
+            // dummy message suppresses noisy console warnings.
+            s if s.starts_with("agent_") => Ok(Box::new(BaseMessage {
+                message_type: MessageType::Unknown,
+                message_id: None,
+            })),
             "unsubscribe_success" => Ok(Box::new(serde_json::from_str::<UnsubscribeSuccessMessage>(json)?)),
             _ => {
                 console::warn_1(&format!("Unknown message type: {}", msg_type).into());
