@@ -297,6 +297,13 @@ pub struct ApiThread {
     pub active: bool,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
+    /// Optional eagerly-loaded messages list returned by the `/api/threads` endpoint.
+    ///
+    /// For large installations this field may be truncated or omitted by the
+    /// backend; therefore we mark it with `#[serde(default)]` so deserialising
+    /// older responses (or those with pagination) continues to work.
+    #[serde(default)]
+    pub messages: Vec<ApiThreadMessage>,
 }
 
 /// Create a new thread
