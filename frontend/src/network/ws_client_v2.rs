@@ -6,8 +6,7 @@ use js_sys::Array;
 use serde_json::Value;
 use std::any::Any;
 
-use super::messages::{builders, handlers};
-use super::event_types::MessageType;
+use super::messages::builders;
 
 /// Trait defining the WebSocket client interface
 #[allow(dead_code)]
@@ -269,55 +268,57 @@ impl WsClientV2 {
         ws.set_onclose(Some(onclose_closure.as_ref().unchecked_ref()));
         onclose_closure.forget();
 
-        // Set up message handler
+        // Set up message handler: parse JSON once, handle control frames, then forward to topic manager
         let onmessage_closure = Closure::wrap(Box::new(move |event: MessageEvent| {
+            // Only handle text messages
             if let Ok(text) = event.data().dyn_into::<js_sys::JsString>() {
                 if let Some(msg_str) = text.as_string() {
-                    // Attempt to parse the message as JSON
                     match serde_json::from_str::<Value>(&msg_str) {
                         Ok(parsed_value) => {
-                            // Try to parse as a specific message type first
-                            match handlers::parse_message(&msg_str) {
-                                Ok(message) => {
-                                    // Handle connection-level messages here
-                                    match message.message_type() {
-                                        MessageType::Pong => {
-                                            // Silently handle pong - it's just keeping the connection alive
-                                            return;
-                                        }
-                                        MessageType::Error => {
-                                            web_sys::console::error_1(&format!("WebSocket error: {:?}", parsed_value).into());
-                                            return;
-                                        }
-                                        _ => {
-                                            // Forward all other messages to topic manager via callback
-                                            if let Some(callback_rc) = &on_message_cb_clone {
-                                                if let Ok(mut callback) = callback_rc.try_borrow_mut() {
-                                                    (*callback)(parsed_value);
-                                                } else {
-                                                    web_sys::console::error_1(&"Failed to borrow on_message callback".into());
-                                                }
-                                            }
-                                        }
-                                    }
+                            // Inspect the message type field
+                            let msg_type = parsed_value
+                                .get("type")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+
+                            match msg_type {
+                                "pong" => {
+                                    // Keep-alive frame, ignore
+                                    return;
                                 }
-                                Err(_) => {
-                                    // If parsing as specific type failed, just forward the raw value
+                                "error" => {
+                                    web_sys::console::error_1(
+                                        &format!("WebSocket error: {:?}", parsed_value).into()
+                                    );
+                                    return;
+                                }
+                                _ => {
+                                    // Forward all other messages to topic manager via callback
                                     if let Some(callback_rc) = &on_message_cb_clone {
                                         if let Ok(mut callback) = callback_rc.try_borrow_mut() {
                                             (*callback)(parsed_value);
+                                        } else {
+                                            web_sys::console::error_1(
+                                                &"Failed to borrow on_message callback".into()
+                                            );
                                         }
                                     }
                                 }
                             }
                         }
                         Err(e) => {
-                            web_sys::console::error_1(&format!("Failed to parse incoming WebSocket message as JSON: {}, Error: {:?}", msg_str, e).into());
+                            web_sys::console::error_1(
+                                &format!(
+                                    "Failed to parse incoming WebSocket message as JSON: {}, Error: {:?}",
+                                    msg_str, e
+                                )
+                                .into()
+                            );
                         }
                     }
                 }
             } else {
-                 web_sys::console::warn_1(&"Received non-text WebSocket message".into());
+                web_sys::console::warn_1(&"Received non-text WebSocket message".into());
             }
         }) as Box<dyn FnMut(MessageEvent)>);
         ws.set_onmessage(Some(onmessage_closure.as_ref().unchecked_ref()));

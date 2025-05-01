@@ -2,6 +2,7 @@ from sqlalchemy import JSON
 from sqlalchemy import Boolean
 from sqlalchemy import Column
 from sqlalchemy import DateTime
+from sqlalchemy import Float
 from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import String
@@ -42,6 +43,9 @@ class Agent(Base):
     messages = relationship("AgentMessage", back_populates="agent", cascade="all, delete-orphan")
     # Define relationship with Thread
     threads = relationship("Thread", back_populates="agent", cascade="all, delete-orphan")
+
+    # Relationship to execution runs (added in the *Run History* feature).
+    runs = relationship("AgentRun", back_populates="agent", cascade="all, delete-orphan")
 
 
 class AgentMessage(Base):
@@ -126,3 +130,47 @@ class ThreadMessage(Base):
 
     # Define relationship with Thread
     thread = relationship("Thread", back_populates="messages")
+
+
+# ---------------------------------------------------------------------------
+# AgentRun – lightweight execution telemetry row
+# ---------------------------------------------------------------------------
+
+
+class AgentRun(Base):
+    """Represents a single *execution* of an Agent.
+
+    An AgentRun is created whenever an agent task is executed either manually,
+    via the scheduler or through an external trigger.  It references the
+    underlying *Thread* that captures the chat transcript but keeps
+    additional execution-level metadata (status, timing, cost, etc.) that is
+    cumbersome to derive from the chat model alone.
+    """
+
+    __tablename__ = "agent_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Foreign keys -------------------------------------------------------
+    agent_id = Column(Integer, ForeignKey("agents.id"), nullable=False)
+    thread_id = Column(Integer, ForeignKey("agent_threads.id"), nullable=False)
+
+    # Lifecycle ----------------------------------------------------------
+    status = Column(String, default="queued", nullable=False)  # queued → running → success|failed
+    trigger = Column(String, default="manual", nullable=False)  # manual / schedule / api
+
+    # Timing -------------------------------------------------------------
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    duration_ms = Column(Integer, nullable=True)
+
+    # Usage --------------------------------------------------------------
+    total_tokens = Column(Integer, nullable=True)
+    total_cost_usd = Column(Float, nullable=True)
+
+    # Failure ------------------------------------------------------------
+    error = Column(Text, nullable=True)
+
+    # Relationships ------------------------------------------------------
+    agent = relationship("Agent", back_populates="runs")
+    thread = relationship("Thread", backref="runs")

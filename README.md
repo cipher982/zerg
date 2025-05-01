@@ -256,6 +256,9 @@ This architecture creates a seamless real-time experience: when an agent is crea
 • **Cron-style scheduling via SchedulerService**  
   - ✅ Shipped – APScheduler now triggers `AgentRunner` on the defined CRON schedule.
 
+• **Run History**  
+  - Track agent executions with detailed metrics including token counts and costs
+
 --------------------------------------------------------------------------------
 ## Directory Structure
 

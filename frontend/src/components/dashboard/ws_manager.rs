@@ -7,6 +7,37 @@ use wasm_bindgen::JsValue;
  // Keep for borrowing
 use crate::state::APP_STATE;
 use crate::network::topic_manager::{TopicHandler, ITopicManager}; // Import Trait
+use crate::network::ws_schema::WsAgentEvent;
+
+/// Convert a raw JSON payload coming from run_update into an ApiAgentRun.
+/// The websocket messages are *slim* – many optional fields from the REST
+/// schema are missing.  We fill sensible defaults so that the struct can be
+/// used right away by the dashboard without forcing an extra REST reload.
+// Helper: apply agent_event delta to AppState in-place
+fn apply_agent_event(evt: WsAgentEvent) {
+    crate::state::APP_STATE.with(|state_ref| {
+        let mut state = state_ref.borrow_mut();
+        if let Some(agent) = state.agents.get_mut(&evt.id) {
+            if let Some(status) = evt.status {
+                agent.status = Some(status);
+            }
+            if let Some(ts) = evt.last_run_at {
+                agent.last_run_at = Some(ts);
+            }
+            if let Some(ts) = evt.next_run_at {
+                agent.next_run_at = Some(ts);
+            }
+            if let Some(err) = evt.last_error {
+                agent.last_error = if err.is_empty() { None } else { Some(err) };
+            }
+        }
+    });
+
+    // Optimistic UI refresh
+    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+        web_sys::console::error_1(&format!("UI refresh error: {:?}", e).into());
+    }
+}
 
 /// Manages WebSocket subscriptions and message handling for the Dashboard lifecycle.
 pub struct DashboardWsManager {
@@ -43,95 +74,37 @@ impl DashboardWsManager {
         // Borrowing and using the trait object works the same
         let mut topic_manager = topic_manager_rc.borrow_mut();
 
-        // Handler remains largely the same, just operates on global state/API.
+        // Structured handler – parse incoming JSON into strongly-typed enums
+        // and act accordingly.
         let handler = Rc::new(RefCell::new(|data: serde_json::Value| {
-            web_sys::console::log_1(&format!("Dashboard handler received agent event: {:?}", data).into());
+            use crate::network::ws_schema::WsMessage;
 
-            // Backend broadcasts as: { "type": "agent_event", "data": { .. }}.
-            // Extract the inner payload so we can update local state immediately
-            // instead of doing an extra round‑trip to the REST API (which may
-            // already contain an *older* status if the agent finished very
-            // quickly).
-            let payload = if let Some(inner) = data.get("data") {
-                inner.clone()
-            } else {
-                data.clone()
-            };
+            // Attempt to parse – unknown messages fall through to old fallback
+            match serde_json::from_value::<WsMessage>(data.clone()) {
+                Ok(WsMessage::RunUpdate { data: run }) => {
+                    let run_struct: crate::models::ApiAgentRun = run.into();
+                    let agent_id = run_struct.agent_id;
+                    crate::state::dispatch_global_message(
+                        crate::messages::Message::ReceiveRunUpdate {
+                            agent_id,
+                            run: run_struct,
+                        },
+                    );
+                    return; // handled
+                }
 
-            // -----------------------------------------------------------------
-            // 1. Apply the delta contained in the event (`id`, `status`,
-            //    `last_run_at`, ... ) directly to APP_STATE so the UI can flip
-            //    the status badge to "Running" without waiting for the REST
-            //    refresh.
-            // -----------------------------------------------------------------
-            if let (Some(id_val), Some(status_val)) = (
-                payload.get("id"),
-                payload.get("status"),
-            ) {
-                if let (Some(id_num), Some(status_str)) = (
-                    id_val.as_u64(),
-                    status_val.as_str(),
-                ) {
-                    crate::state::APP_STATE.with(|state_ref| {
-                        let mut state = state_ref.borrow_mut();
-                        if let Some(agent) = state.agents.get_mut(&(id_num as u32)) {
-                            agent.status = Some(status_str.to_string());
+                Ok(WsMessage::AgentEvent { data: evt }) => {
+                    apply_agent_event(evt);
+                    return; // handled
+                }
 
-                            // Also update last_run_at / next_run_at if present so
-                            // the dashboard timestamp column refreshes instantly.
-                            if let Some(ts) = payload.get("last_run_at").and_then(|v| v.as_str()) {
-                                agent.last_run_at = Some(ts.to_string());
-                            }
-                            if let Some(ts) = payload.get("next_run_at").and_then(|v| v.as_str()) {
-                                agent.next_run_at = Some(ts.to_string());
-                            }
-
-                            // Update last_error field if present in payload
-                            if let Some(err) = payload.get("last_error").and_then(|v| v.as_str()) {
-                                // Treat empty string as None for cleanliness
-                                if err.is_empty() {
-                                    agent.last_error = None;
-                                } else {
-                                    agent.last_error = Some(err.to_string());
-                                }
-                            }
-                        }
-                    });
-
-                    // Refresh UI optimistically so the change is visible right
-                    // away.
-                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                        web_sys::console::error_1(&format!("UI refresh error: {:?}", e).into());
-                    }
-
-                    // -----------------------------------------------------------------
-                    // 2. Decide if we still want to hit the REST endpoint:
-                    //    • For a transition *into* "running" we skip the
-                    //      immediate reload so that we don't clobber the just
-                    //      applied optimistic state with a stale "idle" one.
-                    //    • For all other statuses (e.g. "idle", "deleted" …)
-                    //      we perform a targeted reload of that single agent
-                    //      object so that any additional fields changed by the
-                    //      backend are picked up.
-                    // -----------------------------------------------------------------
-                    if status_str != "running" && status_str != "processing" {
-                        crate::network::api_client::reload_agent(id_num as u32);
-                    }
-
-                    // Nothing more to do for handled events.
-                    return;
+                _ => {
+                    web_sys::console::warn_1(&"DashboardWsManager: unhandled WS message".into());
                 }
             }
 
-            // Fall‑back behaviour – when payload is missing the expected
-            // fields we keep the previous strategy of reloading everything.
+            // Fallback – reload agents list (legacy behaviour)
             crate::network::api_client::load_agents();
-
-            // Subscribe to the specific agent topic so we receive future
-            // status updates immediately.
-            // (Optional) could subscribe to this specific agent topic here if we
-            // had a reference to the original handler. For simplicity we rely
-            // on load_agents() + re‑initialisation to add subscriptions.
         }));
 
         self.agent_subscription_handler = Some(handler.clone());
@@ -197,14 +170,18 @@ thread_local! {
 pub fn init_dashboard_ws() -> Result<(), JsValue> {
     DASHBOARD_WS.with(|cell| {
         let mut manager_opt = cell.borrow_mut();
-        if manager_opt.is_none() {
+        if let Some(mgr) = manager_opt.as_mut() {
+            // Already initialised – ensure we are subscribed to any new agents.
+            web_sys::console::log_1(&"DashboardWsManager: refreshing subscriptions for new agents".into());
+            let topic_manager_trait_rc = APP_STATE.with(|state_ref| {
+                state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>
+            });
+            mgr.subscribe_to_agent_events(topic_manager_trait_rc)?;
+        } else {
             web_sys::console::log_1(&"Initializing DashboardWsManager singleton...".into());
             let mut manager = DashboardWsManager::new();
-            // initialize now uses APP_STATE internally, no need to pass manager here
-            manager.initialize()?; 
+            manager.initialize()?;
             *manager_opt = Some(manager);
-        } else {
-            web_sys::console::warn_1(&"DashboardWsManager singleton already initialized.".into());
         }
         Ok(())
     })

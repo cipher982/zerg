@@ -43,6 +43,10 @@ class TopicConnectionManager:
         event_bus.subscribe(EventType.THREAD_DELETED, self._handle_thread_event)
         event_bus.subscribe(EventType.THREAD_MESSAGE_CREATED, self._handle_thread_event)
 
+        # Run events
+        event_bus.subscribe(EventType.RUN_CREATED, self._handle_run_event)
+        event_bus.subscribe(EventType.RUN_UPDATED, self._handle_run_event)
+
     async def connect(self, client_id: str, websocket: WebSocket) -> None:
         """Register a new client connection.
 
@@ -160,6 +164,15 @@ class TopicConnectionManager:
         thread_id = data["thread_id"]
         topic = f"thread:{thread_id}"
         await self.broadcast_to_topic(topic, {"type": data.get("event_type", "thread_event"), "data": data})
+
+    async def _handle_run_event(self, data: Dict[str, Any]) -> None:
+        """Forward run events to the *agent:* topic so dashboards update."""
+        if "agent_id" not in data:
+            return
+
+        agent_id = data["agent_id"]
+        topic = f"agent:{agent_id}"
+        await self.broadcast_to_topic(topic, {"type": "run_update", "data": data})
 
 
 # Create a global instance of the new connection manager

@@ -213,75 +213,7 @@ pub mod builders {
     }
 }
 
-/// Message parsing and handling
-pub mod handlers {
-    use super::*;
-    use web_sys::console;
-    use serde::de::Error;
 
-    /// Parse a raw JSON message into the appropriate message type
-    pub fn parse_message(json: &str) -> Result<Box<dyn WsMessage>, serde_json::Error> {
-        // First parse as generic Value to get the type
-        let value: serde_json::Value = serde_json::from_str(json)?;
-        
-        // Get the message type
-        let msg_type = value["type"].as_str().unwrap_or("unknown");
-        
-        // Parse into specific message type based on the type field
-        match msg_type {
-            "error" => Ok(Box::new(serde_json::from_str::<ErrorMessage>(json)?)),
-            "pong" => Ok(Box::new(serde_json::from_str::<PongMessage>(json)?)),
-            "thread_history" => Ok(Box::new(serde_json::from_str::<ThreadHistoryMessage>(json)?)),
-            "stream_start" => Ok(Box::new(serde_json::from_str::<StreamStartMessage>(json)?)),
-            "stream_chunk" => Ok(Box::new(serde_json::from_str::<StreamChunkMessage>(json)?)),
-            "stream_end" => Ok(Box::new(serde_json::from_str::<StreamEndMessage>(json)?)),
-            "unsubscribe_success" => Ok(Box::new(serde_json::from_str::<UnsubscribeSuccessMessage>(json)?)),
-            _ => {
-                console::warn_1(&format!("Unknown message type: {}", msg_type).into());
-                Err(serde_json::Error::custom(format!("Unknown message type: {}", msg_type)))
-            }
-        }
-    }
-}
-
-/// Trait for common message functionality
-pub trait WsMessage: std::fmt::Debug {
-    fn message_type(&self) -> MessageType;
-    #[allow(dead_code)]
-    fn message_id(&self) -> Option<String>;
-}
-
-// Implement WsMessage for all message types
-macro_rules! impl_ws_message {
-    ($($t:ty),*) => {
-        $(
-            impl WsMessage for $t {
-                fn message_type(&self) -> MessageType {
-                    self.message_type.clone()
-                }
-                
-                fn message_id(&self) -> Option<String> {
-                    self.message_id.clone()
-                }
-            }
-        )*
-    }
-}
-
-impl_ws_message!(
-    BaseMessage,
-    ErrorMessage,
-    PingMessage,
-    PongMessage,
-    SubscribeMessage,
-    UnsubscribeMessage,
-    UnsubscribeSuccessMessage,
-    ThreadHistoryMessage,
-    StreamStartMessage,
-    StreamChunkMessage,
-    StreamEndMessage,
-    AgentStateMessage
-);
 
 #[cfg(test)]
 mod tests {

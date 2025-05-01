@@ -27,9 +27,12 @@ from zerg.schemas.schemas import ThreadUpdate
 from zerg.schemas.ws_messages import StreamChunkMessage
 from zerg.schemas.ws_messages import StreamEndMessage
 from zerg.schemas.ws_messages import StreamStartMessage
+from zerg.services.run_history import execute_thread_run_with_history
 
 # New higher-level ThreadService façade
 from zerg.services.thread_service import ThreadService
+
+# WebSocket topic manager
 from zerg.websocket.manager import topic_manager
 
 # Set up logging
@@ -212,8 +215,10 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
     # Notify start of (non token) stream
     await topic_manager.broadcast_to_topic(topic, StreamStartMessage(thread_id=thread_id).model_dump())
 
-    # Execute the agent turn – *await* the async runner to get the assistant reply
-    created_rows = await runner.run_thread(db, thread)
+    # Execute the agent turn and record run history/events
+    created_rows = await execute_thread_run_with_history(
+        db=db, agent=agent, thread=thread, runner=runner, trigger="api"
+    )
 
     # We maintain a single *stream* sequence for the entire agent turn so the
     # frontend can group chunks under one progress indicator.
