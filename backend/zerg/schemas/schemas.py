@@ -4,6 +4,9 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+# ---------------------------------------------------------------------------
+# New *Run History* schemas
+# ---------------------------------------------------------------------------
 from pydantic import BaseModel
 
 
@@ -176,6 +179,48 @@ class Trigger(TriggerBase):
     id: int
     secret: str
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ------------------------------------------------------------
+# AgentRun output schema (read-only, hence *Out* suffix)
+# ------------------------------------------------------------
+
+
+class RunStatus(str):
+    """Enum-like convenience class for runtime validation.
+
+    Using a plain ``str`` subclass keeps the dependency footprint minimal
+    (avoids importing ``enum.Enum`` repeatedly in pydantic JSON serialisation
+    hot-paths) while still providing a canonical list of allowed values.
+    """
+
+    queued = "queued"
+    running = "running"
+    success = "success"
+    failed = "failed"
+
+
+class RunTrigger(str):
+    manual = "manual"
+    schedule = "schedule"
+    api = "api"
+
+
+class AgentRunOut(BaseModel):
+    id: int
+    agent_id: int
+    thread_id: int
+    status: str
+    trigger: str
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    duration_ms: Optional[int] = None
+    total_tokens: Optional[int] = None
+    total_cost_usd: Optional[float] = None
+    error: Optional[str] = None
 
     class Config:
         from_attributes = True

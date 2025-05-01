@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from zerg.models.models import Agent
 from zerg.models.models import AgentMessage
+from zerg.models.models import AgentRun
 from zerg.models.models import Thread
 from zerg.models.models import ThreadMessage
 from zerg.models.models import Trigger
@@ -319,3 +320,105 @@ def get_unprocessed_messages(db: Session, thread_id: int):
         .order_by(ThreadMessage.timestamp)
         .all()
     )
+
+
+# ---------------------------------------------------------------------------
+# AgentRun CRUD helpers (Run History feature)
+# ---------------------------------------------------------------------------
+
+
+def create_run(
+    db: Session,
+    *,
+    agent_id: int,
+    thread_id: int,
+    trigger: str = "manual",
+    status: str = "queued",
+) -> AgentRun:
+    """Insert a new *AgentRun* row.
+
+    Minimal helper to keep service layers free from SQLAlchemy internals.
+    """
+
+    run_row = AgentRun(
+        agent_id=agent_id,
+        thread_id=thread_id,
+        trigger=trigger,
+        status=status,
+    )
+    db.add(run_row)
+    db.commit()
+    db.refresh(run_row)
+    return run_row
+
+
+def mark_running(db: Session, run_id: int, *, started_at: Optional[datetime] = None) -> Optional[AgentRun]:
+    row = db.query(AgentRun).filter(AgentRun.id == run_id).first()
+    if row is None:
+        return None
+
+    started_at = started_at or datetime.utcnow()
+    row.status = "running"
+    row.started_at = started_at
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def mark_finished(
+    db: Session,
+    run_id: int,
+    *,
+    finished_at: Optional[datetime] = None,
+    duration_ms: Optional[int] = None,
+    total_tokens: Optional[int] = None,
+    total_cost_usd: Optional[float] = None,
+) -> Optional[AgentRun]:
+    row = db.query(AgentRun).filter(AgentRun.id == run_id).first()
+    if row is None:
+        return None
+
+    finished_at = finished_at or datetime.utcnow()
+    if row.started_at and duration_ms is None:
+        duration_ms = int((finished_at - row.started_at).total_seconds() * 1000)
+
+    row.status = "success"
+    row.finished_at = finished_at
+    row.duration_ms = duration_ms
+    row.total_tokens = total_tokens
+    row.total_cost_usd = total_cost_usd
+
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def mark_failed(
+    db: Session,
+    run_id: int,
+    *,
+    finished_at: Optional[datetime] = None,
+    duration_ms: Optional[int] = None,
+    error: Optional[str] = None,
+) -> Optional[AgentRun]:
+    row = db.query(AgentRun).filter(AgentRun.id == run_id).first()
+    if row is None:
+        return None
+
+    finished_at = finished_at or datetime.utcnow()
+    if row.started_at and duration_ms is None:
+        duration_ms = int((finished_at - row.started_at).total_seconds() * 1000)
+
+    row.status = "failed"
+    row.finished_at = finished_at
+    row.duration_ms = duration_ms
+    row.error = error
+
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def list_runs(db: Session, agent_id: int, *, limit: int = 20):
+    """Return the most recent runs for *agent_id* ordered DESC by id."""
+    return db.query(AgentRun).filter(AgentRun.agent_id == agent_id).order_by(AgentRun.id.desc()).limit(limit).all()

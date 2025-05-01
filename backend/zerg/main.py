@@ -12,6 +12,7 @@ from zerg.database import initialize_database
 from zerg.routers.admin import router as admin_router
 from zerg.routers.agents import router as agents_router
 from zerg.routers.models import router as models_router
+from zerg.routers.runs import router as runs_router
 from zerg.routers.threads import router as threads_router
 from zerg.routers.triggers import router as triggers_router
 from zerg.routers.websocket import router as websocket_router
@@ -43,6 +44,7 @@ app.include_router(models_router, prefix=f"{API_PREFIX}{MODELS_PREFIX}")
 app.include_router(websocket_router, prefix=API_PREFIX)
 app.include_router(admin_router, prefix=API_PREFIX)
 app.include_router(triggers_router, prefix=f"{API_PREFIX}")
+app.include_router(runs_router, prefix=f"{API_PREFIX}")
 
 # Set up logging
 logger = logging.getLogger(__name__)
