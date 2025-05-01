@@ -905,10 +905,29 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             if state.active_view == crate::storage::ActiveView::ChatView {
                 web_sys::console::log_1(&format!("Update: Handling ThreadsLoaded with {} threads", threads.len()).into());
                 
-                // Update state
-                state.threads = threads.iter()
+
+                // ------------------------------------------------------------------
+                // 1. Merge thread metadata into state.threads
+                // ------------------------------------------------------------------
+                state.threads = threads
+                    .iter()
                     .filter_map(|t| t.id.map(|id| (id, t.clone())))
                     .collect();
+
+                // ------------------------------------------------------------------
+                // 2. Seed `state.thread_messages` with the **preloaded** messages that
+                //    came bundled inside each `Thread` payload.  This allows the sidebar
+                //    previews to render immediately without waiting for an explicit
+                //    LoadThreadMessages call (bug-fix #142).
+                // ------------------------------------------------------------------
+                for t in &threads {
+                    if let Some(tid) = t.id {
+                        if !t.messages.is_empty() {
+                            // Clone to decouple lifetimes
+                            state.thread_messages.insert(tid, t.messages.clone());
+                        }
+                    }
+                }
                 state.is_chat_loading = false;
                 
                 // If no thread selected, select first thread
@@ -922,6 +941,21 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 if let Some(thread_id) = selected_thread_id {
                     commands.push(Command::SendMessage(Message::SelectThread(thread_id)));
                 }
+
+                // After state is fully populated, refresh the sidebar so that
+                // message previews become visible even before a thread is
+                // actively selected.
+                let threads_data: Vec<ApiThread> = state.threads.values().cloned().collect();
+                let current_thread_id = state.current_thread_id;
+                let thread_messages = state.thread_messages.clone();
+
+                commands.push(Command::UpdateUI(Box::new(move || {
+                    dispatch_global_message(Message::UpdateThreadList(
+                        threads_data,
+                        current_thread_id,
+                        thread_messages,
+                    ));
+                })));
             } else {
                 web_sys::console::warn_1(&"Received ThreadsLoaded outside of ChatView".into());
             }
@@ -1519,6 +1553,20 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     dispatch_global_message(Message::UpdateConversation(messages_clone));
                 }));
             }
+
+            // Regardless of whether this is the active thread we want the
+            // sidebar preview to reflect the new message.
+            let threads_data: Vec<ApiThread> = state.threads.values().cloned().collect();
+            let thread_messages_map = state.thread_messages.clone();
+            let current_thread_id = state.current_thread_id;
+
+            commands.push(Command::UpdateUI(Box::new(move || {
+                dispatch_global_message(Message::UpdateThreadList(
+                    threads_data,
+                    current_thread_id,
+                    thread_messages_map,
+                ));
+            })));
         },
 
         Message::ReceiveThreadUpdate { thread_id, title } => {
