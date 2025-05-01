@@ -118,7 +118,7 @@ class ThreadService:
         *,
         title: str,
         thread_type: str = "chat",
-        active: bool | None = None,
+        active: Optional[bool] = None,
     ) -> ThreadModel:
         """Create a thread and insert the agent's system message atomically."""
 

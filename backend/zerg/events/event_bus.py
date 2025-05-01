@@ -25,6 +25,10 @@ class EventType(str, Enum):
     THREAD_DELETED = "thread_deleted"
     THREAD_MESSAGE_CREATED = "thread_message_created"
 
+    # Run events (new run history feature)
+    RUN_CREATED = "run_created"
+    RUN_UPDATED = "run_updated"
+
     # Trigger events (external webhook or other sources)
     TRIGGER_FIRED = "trigger_fired"
 
