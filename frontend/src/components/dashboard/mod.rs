@@ -780,10 +780,18 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
         let table = document.create_element("table")?;
         table.set_class_name("run-history-table");
 
-        // Header row
+        // Header row – extended columns
         let thead = document.create_element("thead")?;
         let header_row = document.create_element("tr")?;
-        for h in ["Status", "Started", "Duration"] {
+        for h in [
+            "Status",
+            "Started",
+            "Duration",
+            "Trigger",
+            "Tokens",
+            "Cost",
+            "",
+        ] {
             let th = document.create_element("th")?;
             th.set_inner_html(h);
             header_row.append_child(&th)?;
@@ -817,14 +825,58 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
             );
             row.append_child(&started_td)?;
 
-            // Duration ms to s
+            // Duration (pretty)
             let dur_td = document.create_element("td")?;
             let dur_str = run
                 .duration_ms
-                .map(|d| format!("{}s", d / 1000))
+                .map(|d| crate::utils::format_duration_ms(d))
                 .unwrap_or_else(|| "-".to_string());
             dur_td.set_inner_html(&dur_str);
             row.append_child(&dur_td)?;
+
+            // Trigger
+            let trig_td = document.create_element("td")?;
+            let trig_str = crate::utils::capitalise_first(run.trigger.as_str());
+            trig_td.set_inner_html(&trig_str);
+            row.append_child(&trig_td)?;
+
+            // Tokens
+            let tokens_td = document.create_element("td")?;
+            let tok_str = run
+                .total_tokens
+                .map(|t| t.to_string())
+                .unwrap_or_else(|| "—".to_string());
+            tokens_td.set_inner_html(&tok_str);
+            row.append_child(&tokens_td)?;
+
+            // Cost
+            let cost_td = document.create_element("td")?;
+            let cost_str = run
+                .total_cost_usd
+                .map(|c| crate::utils::format_cost_usd(c))
+                .unwrap_or_else(|| "—".to_string());
+            cost_td.set_inner_html(&cost_str);
+            row.append_child(&cost_td)?;
+
+            // Kebab-menu placeholder (⋮)
+            let action_td = document.create_element("td")?;
+            action_td.set_class_name("run-kebab-cell");
+            let kebab = document.create_element("span")?;
+            kebab.set_class_name("kebab-menu-btn");
+            kebab.set_inner_html("⋮");
+
+            // Placeholder click handler – will be replaced in Phase-2 PR-3
+            let run_id_for_cb = run.id;
+            let cb = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+                event.stop_propagation();
+                web_sys::window()
+                    .and_then(|w| w.alert_with_message(&format!("Actions menu for run #{} – not yet implemented", run_id_for_cb)).ok());
+            }) as Box<dyn FnMut(_)>);
+            kebab.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+            cb.forget();
+
+            action_td.append_child(&kebab)?;
+            row.append_child(&action_td)?;
 
             tbody.append_child(&row)?;
         }

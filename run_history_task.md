@@ -222,3 +222,55 @@ Docs / Ops:
         manual = "manual"
         schedule = "schedule"
         api = "api"
+
+-----------
+---
+
+## 9. Phase-2 Implementation Plan (2025-05-01)
+
+This section captures the agreed roadmap for finishing the **Run-History accordion** feature.  It complements the checklist above by laying out the concrete sequencing, component touch-points and testing strategy so that any contributor can pick up remaining tasks without context loss.
+
+### A. Data & State Layer
+
+1.  `ApiAgentRun` already includes `trigger`, `total_tokens`, and `total_cost_usd` – no backend change required.
+2.  Add lightweight time helpers in `frontend/src/utils/time.rs`:
+    • `format_duration(ms) -> "1 m 23 s"`
+    • `now_ms() -> u64`
+3.  Extend `AppState` with `running_runs: HashSet<u32>` to track rows that need a live duration ticker.
+
+### B. UI – Dashboard Accordion
+
+1.  Extend `create_agent_detail_row()` to render the full table header:
+    `Status | Started | Duration | Trigger | Tokens | Cost | ⋮`
+2.  Live duration ticker:
+    • `ReceiveRunUpdate` inserts `run.id` into `running_runs` when status == `running`.
+    • Re-use `Message::AnimationTick` (already dispatched ~60 fps) to recompute `duration_ms` and issue an `UpdateUI` when visible.
+    • Remove ID from `running_runs` once terminal status (`success`/`failed`) arrives.
+3.  Kebab menu component (`components/dashboard/kebab.rs`):
+    • Menu items emit new messages `ViewRunDetails(run_id)`, `RetryRun(run_id)`, `StopRun(run_id)`.
+    • Command plumbing in `command_executors.rs`. Until endpoints exist show `alert("Not yet implemented")`.
+4.  CSS polish: align icons, right-align numeric columns, clamp row height (28 px), responsive hide of Tokens/Cost below 640 px.
+
+### C. Reducer & Unit Tests
+
+1.  `update.rs` additions for new messages and efficient AnimationTick refresh.
+2.  wasm-bindgen tests (`frontend/tests/run_reducer.rs`):
+    • Verify `ReceiveRunUpdate` behaviour (prepend / replace, truncate ≤ 20).
+    • Ensure `ToggleRunHistory` set membership.
+
+### D. Docs / Ops
+
+1.  README → add bullet under *Key Features*: “Real-time run history with token & cost metrics”.
+2.  Create `CHANGELOG.md` entry 0.9.4 with feature highlights.
+3.  (Optional) Alembic migration stub `versions/20250501_agent_run.py` for prod DBs.
+
+### E. Delivery Order / PR Granularity
+
+| PR | Scope | Status |
+|----|------------------------------------------|---------|
+| 1  | UI columns + helpers + CSS               | **✅ merged** |
+| 2  | Live duration ticker (running runs)      | 🔄 in-progress |
+| 3  | Kebab menu & actions plumbing            | ⬜ not started |
+| 4  | Reducer tests, docs & CHANGELOG update   | ⬜ not started |
+
+Following this plan keeps each PR reviewable, deployable and avoids breaking the existing accordion which is already live in production.

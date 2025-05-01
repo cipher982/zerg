@@ -70,6 +70,26 @@
     color: var(--text-primary);
 }
 
+/* Right-align numeric columns (Tokens, Cost) */
+.run-history-table td:nth-child(5),
+.run-history-table td:nth-child(6) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Kebab menu */
+.kebab-menu-btn {
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    user-select: none;
+}
+
+.run-kebab-cell {
+    width: 22px;
+    text-align: center;
+}
+
 .run-toggle-link {
     display: inline-block;
     margin-top: var(--spacing-xs);
