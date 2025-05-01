@@ -4,6 +4,7 @@ pub mod ws_client_v2;
 pub mod event_types;
 pub mod messages;
 pub mod topic_manager;
+pub mod ws_schema;
 pub mod ui_updates;
 pub mod config;
 
