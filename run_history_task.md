@@ -83,11 +83,11 @@ Hence we want a lightweight AgentRun entity that references the Thread but captu
     * [x]  Extend `schemas/schemas.py` with `RunStatus`, `RunTrigger`, `AgentRunOut`
     * [x]  CRUD helpers (`create_run`, `mark_running`, `mark_finished`, `mark_failed`, `list_runs`)
     * [x]  Add `RUN_CREATED`, `RUN_UPDATED` to `events/event_bus.py`
-    * [~]  Hook run lifecycle in `task_runner.execute_agent_task()` (**done**) and `AgentRunner` (**pending**)
+* [x]  Hook run lifecycle in `task_runner.execute_agent_task()` and chat `/threads/{id}/run` via shared helper (`execute_thread_run_with_history`)
     * [x]  REST routes (`routers/runs.py`) + mount under `/api`
-    * [ ]  Include `runs` in `AgentDetails` when `include=runs`
+* [x]  Include `runs` in `AgentDetails` when `include=runs`
     * [x]  Broadcast run_update via `websocket/manager.TopicConnectionManager`
-    * [ ]  Unit / integration tests (`tests/test_runs.py`)
+* [x]  Unit / integration tests (`tests/test_runs.py`, `tests/test_websocket_run_events.py`)
 
 ### 4.2 Frontend
 
