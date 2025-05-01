@@ -131,6 +131,9 @@ pub struct AppState {
     pub agent_debug_pane: Option<AgentDebugPane>,
     // UI state for collapsible tool call indicators
     pub tool_ui_states: HashMap<String, ToolUiState>,
+
+    // Track which agents have their full run history expanded (>5 rows)
+    pub run_history_expanded: HashSet<u32>,
 }
 
 impl AppState {
@@ -195,6 +198,8 @@ impl AppState {
             agent_debug_pane: None,
             // Initialize UI state for tool call indicators
             tool_ui_states: HashMap::new(),
+
+            run_history_expanded: HashSet::new(),
         }
     }
 

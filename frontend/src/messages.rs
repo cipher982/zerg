@@ -191,6 +191,9 @@ pub enum Message {
     ReceiveAgentRuns { agent_id: u32, runs: Vec<crate::models::ApiAgentRun> },
     /// Real-time update for a single run via WebSocket
     ReceiveRunUpdate { agent_id: u32, run: crate::models::ApiAgentRun },
+
+    /// Toggle between compact (first 5) and full run list for an agent row
+    ToggleRunHistory { agent_id: u32 },
     ReceiveStreamStart(u32),          // Start of streaming response for thread_id
     ReceiveStreamChunk {               // Chunk of streaming response
         thread_id: u32,

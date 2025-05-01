@@ -41,6 +41,49 @@
   --actions-column-width: 7.5rem;
 }
 
+/* -------------------------------------------------------------
+   Run History (dashboard accordion) styles
+   ------------------------------------------------------------- */
+
+
+.run-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: var(--spacing-sm);
+    font-size: 14px; /* slightly larger text */
+}
+
+.run-history-table th,
+.run-history-table td {
+    padding: 2px 6px;           /* tighter vertical padding for dense rows */
+    line-height: 1.3em;         /* maintain readability */
+}
+
+.run-history-table th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.run-history-table td {
+    color: var(--text-primary);
+}
+
+.run-toggle-link {
+    display: inline-block;
+    margin-top: var(--spacing-xs);
+    font-size: 11px;
+    color: var(--color-primary);
+    cursor: pointer;
+    text-decoration: none;
+    user-select: none;
+}
+
+.run-toggle-link:hover {
+    text-decoration: underline;
+}
+
 /* Reset and base styles */
 body {
     margin: 0;
