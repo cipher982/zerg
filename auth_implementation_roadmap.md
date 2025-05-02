@@ -71,7 +71,7 @@ Stage 4 – Front-end integration
 | 4.8 | Gate initial data fetch & WS connect until user is authenticated      | `frontend/src/lib.rs`, `frontend/src/components/auth.rs` | [x] |
 | 4.9 | CSS for `.login-overlay` (full-screen, centre button, `.hidden`)      | `frontend/www/styles.css` | [x] |
 | 4.10 | Show loading / error feedback during login flow                      | `frontend/src/components/auth.rs` | [x] |
-| 4.11 | Logout flow (clear token, show overlay, close WS)                    | frontend | [ ] |
+| 4.11 | Logout flow (clear token, show overlay, close WS)                    | frontend | [x] |
 | 4.12 | JWT expiry / 401 handling → automatic refresh or re-login            | frontend / backend | [ ] |
 | 4.13 | Replace `eval()` glue with safe JS interop (CSP-friendly)             | `frontend/src/components/auth.rs` | [ ] |
 | 4.14 | Build-time injection of `GOOGLE_CLIENT_ID` via env! macro            | build scripts | [ ] |

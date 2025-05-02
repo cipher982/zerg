@@ -1,6 +1,6 @@
 //! Utility helpers shared across the WASM frontend.
 
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
 
 /// Format a duration given in **milliseconds** into a short human-readable
 /// string such as `"1 m 23 s"` or `"12 s"`.
@@ -61,6 +61,64 @@ pub fn capitalise_first(s: &str) -> String {
         None => String::new(),
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Authentication helpers
+// ---------------------------------------------------------------------------
+
+/// Remove the persisted JWT from localStorage.
+pub fn clear_stored_jwt() {
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            let _ = storage.remove_item("zerg_jwt");
+        }
+    }
+}
+
+/// Returns the JWT stored in localStorage, if any.
+pub fn current_jwt() -> Option<String> {
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            return storage.get_item("zerg_jwt").ok().flatten();
+        }
+    }
+    None
+}
+
+/// Fully logs the user out: clears JWT, closes WebSocket, shows login overlay.
+#[wasm_bindgen]
+pub fn logout() -> Result<(), JsValue> {
+    clear_stored_jwt();
+
+    // Update global state
+    crate::state::APP_STATE.with(|st| {
+        let mut s = st.borrow_mut();
+        s.logged_in = false;
+
+        // Close any active websocket connection
+        let _ = s.ws_client.borrow_mut().close();
+    });
+
+    // Show overlay again
+    if let Some(window) = web_sys::window() {
+        if let Some(document) = window.document() {
+            // If overlay not present create it.
+            if document.get_element_by_id("login-overlay").is_none() {
+                let client_id = js_sys::Reflect::get(&window, &"GOOGLE_CLIENT_ID".into())
+                    .ok()
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_default();
+                crate::components::auth::mount_login_overlay(&document, &client_id);
+            } else {
+                if let Some(el) = document.get_element_by_id("login-overlay") {
+                    el.set_class_name("login-overlay");
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 // wasm-bindgen tests ----------------------------------------------------------
