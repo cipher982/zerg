@@ -49,25 +49,37 @@ pub fn start() -> Result<(), JsValue> {
     // Stage 4 – Show Google Sign-In overlay if we are *not* logged in.
     // -------------------------------------------------------------------
     let needs_login = state::APP_STATE.with(|s| !s.borrow().logged_in);
+
     if needs_login {
-        // Client ID retrieved from compile-time env var so the frontend build
-        // remains static.  The value must be injected via `Dioxus` build or
-        // other bundler but for now we read JS global.  Fallback to empty.
-        // For now the Google *client_id* is expected to be declared as a
-        // global JS variable (injected by the hosting page).  We fall back to
-        // an empty string which makes the Google SDK throw a visible error –
-        // that is acceptable in dev-mode when the env var is missing.
+        // ----------------------------------------------------------------
+        // Mount Google Sign-In overlay and postpone rest of bootstrap until
+        // the user has authenticated successfully.
+        // ----------------------------------------------------------------
         let client_id = js_sys::Reflect::get(&window, &"GOOGLE_CLIENT_ID".into())
             .ok()
             .and_then(|v| v.as_string())
             .unwrap_or_default();
         auth::mount_login_overlay(&document, &client_id);
+
+        // Nothing else to do – the `google_credential_received` callback will
+        // invoke `bootstrap_app_after_login()` once sign-in succeeds.
+        return Ok(());
     }
-    
+
+    // User already logged in → continue normal bootstrap
+    bootstrap_app_after_login(&document)?;
+
+    Ok(())
+}
+
+/// Performs the main UI + networking bootstrap sequence.  Called once on page
+/// load *if* a JWT is already present, or after the Google sign-in flow
+/// completes successfully.
+pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsValue> {
     // Create base UI elements (header and status bar)
-    ui::setup::create_base_ui(&document)?;
+    ui::setup::create_base_ui(document)?;
     
-    // --- NEW: Initialize and Connect WebSocket v2 ---
+    // --- Initialize and Connect WebSocket v2 ---
     // Access the globally initialized WS client and Topic Manager
     let (ws_client_rc, topic_manager_rc) = state::APP_STATE.with(|state_ref| {
         let state = state_ref.borrow();
@@ -122,8 +134,8 @@ pub fn start() -> Result<(), JsValue> {
     });
     
     // Then render the dashboard view
-    views::render_active_view_by_type(&storage::ActiveView::Dashboard, &document)?;
-    
+    views::render_active_view_by_type(&storage::ActiveView::Dashboard, document)?;
+
     Ok(())
 }
 
