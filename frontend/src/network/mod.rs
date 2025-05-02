@@ -45,8 +45,18 @@ fn get_api_config() -> Result<std::sync::RwLockReadGuard<'static, Option<ApiConf
 
 /// Get the WebSocket URL
 pub(crate) fn get_ws_url() -> Result<String, &'static str> {
-    get_api_config()
-        .map(|config| config.as_ref().expect("API config not initialized").ws_url())
+    let base_url = get_api_config()
+        .map(|config| config.as_ref().expect("API config not initialized").ws_url())?;
+
+    // If a JWT is present in localStorage append it as query parameter so the
+    // backend can authenticate the WebSocket upgrade request.
+    let token_opt = crate::utils::current_jwt();
+
+    if let Some(tok) = token_opt {
+        Ok(format!("{}?token={}", base_url, tok))
+    } else {
+        Ok(base_url)
+    }
 }
 
 /// Get the base URL for API calls

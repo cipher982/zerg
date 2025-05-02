@@ -50,7 +50,39 @@ class WsTokenCallback(AsyncCallbackHandler):
 
     # We only need **async** token notifications
 
-    ignore_other = True  # type: ignore[assignment]  # we intentionally ignore other events
+    # ------------------------------------------------------------------
+    # Callback filtering
+    # ------------------------------------------------------------------
+
+    # We *only* care about individual LLM tokens.  All other event categories
+    # (chains, agents, chat-model lifecycle, etc.) can be safely ignored to
+    # avoid unnecessary method dispatch and the corresponding "method not
+    # implemented" errors that were cluttering the logs.  The
+    # ``BaseCallbackHandler`` contract allows us to opt-out on a per-category
+    # basis by overriding the ``ignore_*`` properties.
+
+    @property  # type: ignore[override]
+    def ignore_chain(self) -> bool:  # noqa: D401 – property mirrors base-class naming
+        return True
+
+    @property  # type: ignore[override]
+    def ignore_agent(self) -> bool:  # noqa: D401
+        return True
+
+    @property  # type: ignore[override]
+    def ignore_retriever(self) -> bool:  # noqa: D401
+        return True
+
+    @property  # type: ignore[override]
+    def ignore_chat_model(self) -> bool:  # noqa: D401
+        # We already receive token-level callbacks via ``on_llm_new_token``
+        # even for chat models, so we can skip the separate chat-specific
+        # lifecycle hooks entirely.
+        return True
+
+    @property  # type: ignore[override]
+    def ignore_custom_event(self) -> bool:  # noqa: D401
+        return True
 
     def __init__(self) -> None:  # noqa: D401 – keep signature minimal
         super().__init__()

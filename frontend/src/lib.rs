@@ -4,6 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::{window, Document};
 use network::ui_updates;
 use crate::state::dispatch_global_message;
+use crate::components::auth;
 
 // Import modules
 mod models;
@@ -43,11 +44,74 @@ pub fn start() -> Result<(), JsValue> {
     // Get the document
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
-    
+
+    // -------------------------------------------------------------------
+    // Stage 4 – Google Sign-In overlay logic with *AUTH_DISABLED* env var
+    // -------------------------------------------------------------------
+
+    // Detect compile-time env var.  When you build the frontend with
+    // `AUTH_DISABLED=1 ./build-debug.sh` the macro expands accordingly.
+    let auth_disabled_env: &str = option_env!("AUTH_DISABLED").unwrap_or("");
+    let auth_disabled = matches!(auth_disabled_env.to_lowercase().as_str(), "1" | "true" | "yes");
+
+    if auth_disabled {
+        // Bypass auth completely – mark as logged in and continue startup.
+        state::APP_STATE.with(|s| s.borrow_mut().logged_in = true);
+        bootstrap_app_after_login(&document)?;
+        return Ok(());
+    }
+
+    // Otherwise follow the normal flow: if we *already* have a JWT we skip
+    // the overlay, else show Google sign-in.
+    let needs_login = state::APP_STATE.with(|s| !s.borrow().logged_in);
+
+    if needs_login {
+        // --------------------------------------------------------------------
+        // Auth feature-flag handling
+        // --------------------------------------------------------------------
+        //  * `GOOGLE_AUTH_ENABLED` – when **truthy** ("1", "true", "yes") the
+        //    Google sign-in overlay is allowed to appear.
+        //  * `GOOGLE_CLIENT_ID`        – OAuth client that the Identity API
+        //    should use.  It can remain defined permanently in your `.env`
+        //    file so you don’t have to export it manually; simply toggle the
+        //    overlay with the flag above.
+        // --------------------------------------------------------------------
+
+        let auth_enabled_raw: &str = option_env!("GOOGLE_AUTH_ENABLED").unwrap_or("false");
+        let auth_enabled = matches!(auth_enabled_raw.to_ascii_lowercase().as_str(), "1" | "true" | "yes");
+
+        if auth_enabled {
+            // Compile-time embedded Google Client ID (may still be empty if the
+            // developer omitted it from .env).
+            let client_id: &str = option_env!("GOOGLE_CLIENT_ID").unwrap_or("");
+
+            if client_id.is_empty() {
+                // Feature enabled but ID missing → warn loudly.
+                web_sys::console::error_1(&"GOOGLE_CLIENT_ID not set – cannot present sign-in overlay".into());
+            } else {
+                // Show overlay and pause further bootstrap until the user
+                // completes the sign-in flow.
+                auth::mount_login_overlay(&document, client_id);
+                return Ok(());
+            }
+        }
+        // Auth disabled → fall through to normal bootstrap.
+    }
+
+    // Logged in already → continue normal bootstrap
+    bootstrap_app_after_login(&document)?;
+
+    Ok(())
+}
+
+/// Performs the main UI + networking bootstrap sequence.  Called once on page
+/// load *if* a JWT is already present, or after the Google sign-in flow
+/// completes successfully.
+pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsValue> {
     // Create base UI elements (header and status bar)
-    ui::setup::create_base_ui(&document)?;
+    ui::setup::create_base_ui(document)?;
     
-    // --- NEW: Initialize and Connect WebSocket v2 ---
+    // --- Initialize and Connect WebSocket v2 ---
     // Access the globally initialized WS client and Topic Manager
     let (ws_client_rc, topic_manager_rc) = state::APP_STATE.with(|state_ref| {
         let state = state_ref.borrow();
@@ -102,8 +166,8 @@ pub fn start() -> Result<(), JsValue> {
     });
     
     // Then render the dashboard view
-    views::render_active_view_by_type(&storage::ActiveView::Dashboard, &document)?;
-    
+    views::render_active_view_by_type(&storage::ActiveView::Dashboard, document)?;
+
     Ok(())
 }
 
