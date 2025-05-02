@@ -48,6 +48,27 @@ class AgentMessage(BaseModel):
         from_attributes = True
 
 
+# ------------------------------------------------------------
+# Authentication schemas (Stage 1)
+# ------------------------------------------------------------
+
+
+class UserOut(BaseModel):
+    id: int
+    email: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int  # seconds until expiry
+
+
 # Thread Message schemas
 class ThreadMessageBase(BaseModel):
     role: str

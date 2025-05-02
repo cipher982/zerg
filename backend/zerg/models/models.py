@@ -12,6 +12,34 @@ from sqlalchemy.sql import func
 
 from zerg.database import Base
 
+# ---------------------------------------------------------------------------
+# Authentication – User table (Stage 1)
+# ---------------------------------------------------------------------------
+
+
+class User(Base):
+    """Application user.
+
+    For the MVP we only support Google sign-in, but we leave provider fields
+    generic to allow future providers (e.g. GitHub, email, etc.).
+    """
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # OAuth provider details -------------------------------------------------
+    provider = Column(String, nullable=True, default="google")
+    provider_user_id = Column(String, nullable=True, index=True)
+
+    # Core identity ----------------------------------------------------------
+    email = Column(String, unique=True, nullable=False, index=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    # Timestamps -------------------------------------------------------------
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
 
 class Agent(Base):
     __tablename__ = "agents"

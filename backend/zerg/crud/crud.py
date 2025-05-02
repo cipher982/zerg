@@ -12,6 +12,9 @@ from zerg.models.models import AgentRun
 from zerg.models.models import Thread
 from zerg.models.models import ThreadMessage
 from zerg.models.models import Trigger
+
+# Added for authentication
+from zerg.models.models import User
 from zerg.schemas.schemas import RunStatus
 from zerg.schemas.schemas import RunTrigger
 
@@ -109,6 +112,37 @@ def delete_agent(db: Session, agent_id: int):
     db.delete(db_agent)
     db.commit()
     return True
+
+
+# ------------------------------------------------------------
+# User CRUD operations (Stage 1 – Auth MVP)
+# ------------------------------------------------------------
+
+
+def get_user(db: Session, user_id: int) -> User | None:
+    """Return user by primary key."""
+    return db.query(User).filter(User.id == user_id).first()
+
+
+def get_user_by_email(db: Session, email: str) -> User | None:
+    """Return user by e-mail address (case-insensitive)."""
+    return (
+        db.query(User)
+        .filter(User.email.ilike(email))  # type: ignore[arg-type]
+        .first()
+    )
+
+
+def create_user(db: Session, *, email: str, provider: str | None = None, provider_user_id: str | None = None) -> User:
+    """Insert new user row.
+
+    Caller is expected to ensure uniqueness beforehand; we do not upsert here.
+    """
+    new_user = User(email=email, provider=provider, provider_user_id=provider_user_id)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
 
 
 # ------------------------------------------------------------
