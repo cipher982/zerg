@@ -1,6 +1,12 @@
 import logging
 
 from dotenv import load_dotenv
+
+# Load environment variables FIRST - before any other imports
+load_dotenv()
+
+# fmt: off
+# ruff: noqa: E402
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,8 +25,7 @@ from zerg.routers.triggers import router as triggers_router
 from zerg.routers.websocket import router as websocket_router
 from zerg.services.scheduler_service import scheduler_service
 
-# Load environment variables
-load_dotenv()
+# fmt: on
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s", handlers=[logging.StreamHandler()])
