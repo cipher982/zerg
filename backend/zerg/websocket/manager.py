@@ -119,8 +119,11 @@ class TopicConnectionManager:
             topic: The topic to broadcast to
             message: The message to broadcast
         """
+        # If there are no active subscribers we silently skip to avoid log
+        # spam – this situation is perfectly normal when scheduled agents or
+        # background jobs emit updates while no browser is connected.
         if topic not in self.topic_subscriptions:
-            logger.warning(f"broadcast_to_topic: No subscribers for topic {topic}")
+            logger.debug("broadcast_to_topic: no subscribers for topic %s", topic)
             return
 
         # Track disconnected clients so we can clean up afterwards
