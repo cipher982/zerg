@@ -1,6 +1,6 @@
 use wasm_bindgen_test::*;
 use super::ws_manager::DashboardWsManager;
-use crate::network::{TopicManager};
+// TopicManager currently unused in this unit-test; remove once test expands.
 use wasm_bindgen::JsValue;
 use std::rc::Rc;
 use std::cell::RefCell;

@@ -334,7 +334,7 @@ pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
         st.nodes.get(node_id).and_then(|n| n.agent_id)
     }) {
             // Reference to the node ID for the closure
-            let node_id = node_id.to_string();
+            let _node_id = node_id.to_string();
             
             // Spawn an async task to load messages
             spawn_local(async move {
@@ -345,7 +345,7 @@ pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
                                 web_sys::console::log_1(&format!("Loaded {} messages for agent {}", api_messages.len(), agent_id).into());
                                 
                                 // Convert API messages to our internal Message type
-                                let messages: Vec<crate::models::Message> = api_messages.into_iter()
+                                let _messages: Vec<crate::models::Message> = api_messages.into_iter()
                                     .map(|api_msg| crate::models::Message {
                                         role: api_msg.role,
                                         content: api_msg.content,

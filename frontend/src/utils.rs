@@ -1,7 +1,6 @@
 //! Utility helpers shared across the WASM frontend.
 
 use wasm_bindgen::JsValue;
-use js_sys::Date;
 
 /// Format a duration given in **milliseconds** into a short human-readable
 /// string such as `"1 m 23 s"` or `"12 s"`.

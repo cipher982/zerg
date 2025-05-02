@@ -6,7 +6,6 @@ use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent};
 use crate::constants::{
     DEFAULT_NODE_WIDTH,
     DEFAULT_NODE_HEIGHT,
-    DEFAULT_AGENT_NODE_COLOR,
     DEFAULT_THREAD_TITLE,
 };
 use web_sys::Document;
@@ -628,7 +627,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // We need to find the corresponding run objects and update duration_ms
             for run_id in state.running_runs.iter() {
                 // Find agent+run
-                if let Some((agent_id, run_list)) = state
+                if let Some((_agent_id, run_list)) = state
                     .agent_runs
                     .iter_mut()
                     .find(|(_aid, list)| list.iter().any(|r| r.id == *run_id))
