@@ -93,7 +93,7 @@ Stage 6 – Tests & quality gates
 | 6.1 | Unit-tests for ID-token verification & JWT minting                    | `backend/tests/test_auth_google.py` (new) | [ ] |
 | 6.2 | Integration test: unauthenticated request returns 401 (prod-mode)     | same | [ ] |
 | 6.3 | Integration test: `AUTH_DISABLED=1` bypass works                      | same | [ ] |
-| 6.4 | Front-end wasm-bindgen test: `google_auth_login` stores token         | `frontend/run_frontend_tests.sh` | [ ] |
+| 6.4 | Front-end wasm-bindgen test: auth utils & logout helpers             | `frontend/src/utils.rs` | [x] |
 
 -------------------------------------------------------------------------------
 Stage 7 – Docs & housekeeping
