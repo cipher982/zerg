@@ -17,9 +17,26 @@ use crate::state::{APP_STATE};
 /// callback.
 #[wasm_bindgen]
 pub async fn google_credential_received(id_token: String) {
+    // Add `loading` class while we perform the network request so the CSS
+    // spinner (see styles.css) is visible.
+    let overlay_el_opt = web_sys::window()
+        .and_then(|w| w.document())
+        .and_then(|doc| doc.get_element_by_id("login-overlay"));
+
+    if let Some(ref el) = overlay_el_opt {
+        let mut cls = el.class_name();
+        if !cls.contains("loading") {
+            cls.push_str(" loading");
+            el.set_class_name(&cls.trim());
+        }
+    }
+
     // Send id_token to backend → persist JWT → update logged_in flag.
     if let Err(e) = ApiClient::google_auth_login(&id_token).await {
         web_sys::console::error_1(&e);
+        if let Some(el) = overlay_el_opt {
+            el.set_class_name("login-overlay"); // remove loading state
+        }
         return;
     }
 
@@ -34,6 +51,14 @@ pub async fn google_credential_received(id_token: String) {
             if let Some(el) = document.get_element_by_id("login-overlay") {
                 el.set_class_name("hidden");
             }
+        }
+    }
+
+    // Continue normal application bootstrap now that we are authenticated.
+    if let Some(window) = web_sys::window() {
+        if let Some(document) = window.document() {
+            // Ignore errors – if bootstrap was already run nothing happens.
+            let _ = crate::bootstrap_app_after_login(&document);
         }
     }
 }

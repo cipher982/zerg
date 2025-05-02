@@ -68,9 +68,9 @@ Stage 4 – Front-end integration
 | 4.5 | Attach `Authorization: Bearer …` in `fetch_json()` if present         | same | [x] |
 | 4.6 | WebSocket: append `?token=<jwt>` on connect                           | `frontend/src/network/ws_client_v2.rs` | [x] |
 | 4.7 | Simple *logged-in* flag in `AppState` to show / hide login modal      | `frontend/src/state.rs` | [x] |
-| 4.8 | Gate initial data fetch & WS connect until user is authenticated      | <> | [ ] |
-| 4.9 | CSS for `.login-overlay` (full-screen, centre button, `.hidden`)      | `frontend/www/styles.css` | [ ] |
-| 4.10 | Show loading / error feedback during login flow                      | `frontend/src/components/auth.rs` | [ ] |
+| 4.8 | Gate initial data fetch & WS connect until user is authenticated      | `frontend/src/lib.rs`, `frontend/src/components/auth.rs` | [x] |
+| 4.9 | CSS for `.login-overlay` (full-screen, centre button, `.hidden`)      | `frontend/www/styles.css` | [x] |
+| 4.10 | Show loading / error feedback during login flow                      | `frontend/src/components/auth.rs` | [x] |
 | 4.11 | Logout flow (clear token, show overlay, close WS)                    | frontend | [ ] |
 | 4.12 | JWT expiry / 401 handling → automatic refresh or re-login            | frontend / backend | [ ] |
 | 4.13 | Replace `eval()` glue with safe JS interop (CSP-friendly)             | `frontend/src/components/auth.rs` | [ ] |
