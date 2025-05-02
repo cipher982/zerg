@@ -72,18 +72,18 @@ Stage 4 – Front-end integration
 | 4.9 | CSS for `.login-overlay` (full-screen, centre button, `.hidden`)      | `frontend/www/styles.css` | [x] |
 | 4.10 | Show loading / error feedback during login flow                      | `frontend/src/components/auth.rs` | [x] |
 | 4.11 | Logout flow (clear token, show overlay, close WS)                    | frontend | [x] |
-| 4.12 | JWT expiry / 401 handling → automatic refresh or re-login            | frontend / backend | [ ] |
-| 4.13 | Replace `eval()` glue with safe JS interop (CSP-friendly)             | `frontend/src/components/auth.rs` | [ ] |
-| 4.14 | Build-time injection of `GOOGLE_CLIENT_ID` via env! macro            | build scripts | [ ] |
+| 4.12 | JWT expiry / 401 handling → automatic re-login (refresh TBD)         | frontend / backend | [x] |
+| 4.13 | Replace `eval()` glue with safe JS interop (CSP-friendly)             | `frontend/src/components/auth.rs` | [x] |
+| 4.14 | Build-time injection of `GOOGLE_CLIENT_ID` via env! macro            | build scripts | [x] |
 
 -------------------------------------------------------------------------------
 Stage 5 – Trigger hardening (HMAC header)
 -------------------------------------------------------------------------------
 | # | Task | Code Location | Status |
 |---|------|---------------|--------|
-| 5.1 | Spec headers `X-Zerg-Timestamp`, `X-Zerg-Signature`                   | `backend/zerg/routers/triggers.py` | [ ] |
-| 5.2 | Implement 5-min replay-window & HMAC-SHA256 validation                | same | [ ] |
-| 5.3 | Update tests (see `tests/test_triggers.py`)                           | `backend/tests/…` | [ ] |
+| 5.1 | Spec headers `X-Zerg-Timestamp`, `X-Zerg-Signature`                   | `backend/zerg/routers/triggers.py` | [x] |
+| 5.2 | Implement 5-min replay-window & HMAC-SHA256 validation                | same | [x] |
+| 5.3 | Update tests (see `tests/test_triggers.py`)                           | `backend/tests/…` | [x] |
 
 -------------------------------------------------------------------------------
 Stage 6 – Tests & quality gates

@@ -8,7 +8,11 @@
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::closure::Closure;
 use web_sys::{HtmlElement, Element, Document};
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use crate::network::api_client::ApiClient;
 use crate::state::{APP_STATE};
@@ -92,37 +96,127 @@ pub fn mount_login_overlay(document: &Document, client_id: &str) {
 
     body.append_child(&overlay).unwrap();
 
-    // ---------------------------------------------------------------------
-    // JS glue – call google.accounts.id.* API.  Doing this here keeps the
-    // Rust side free from complicated `js_sys` reflection code.
-    // ---------------------------------------------------------------------
-    // SAFETY: The Google script is loaded in <head> with `async defer`, so by
-    // the time our WASM runs it *should* be available.  We still wrap in
-    // `js_sys::Function` checks but keep it terse.
+    // Attempt to initialise Google Identity library.  If the external script
+    // has not yet loaded we install a small polling interval that retries
+    // every ~250 ms until the global `google.accounts` namespace becomes
+    // available.
 
-    let init_js = format!(r#"
-        (function() {{
-            if (!window.google || !google.accounts || !google.accounts.id) {{
-                console.error('Google Identity library not loaded');
-                return;
-            }}
+    if attempt_google_init(document, client_id) {
+        return; // success → nothing else to do.
+    }
 
-            google.accounts.id.initialize({{
-                client_id: '{}',
-                callback: (resp) => {{
-                    if (resp.credential) {{
-                        // Forward to Rust → async so we can await inside WASM.
-                        wasm_bindgen.google_credential_received(resp.credential);
-                    }}
-                }}
-            }});
+    // Google script not ready yet – set up retry interval.
+    let win = match web_sys::window() {
+        Some(w) => w,
+        None => return,
+    };
 
-            google.accounts.id.renderButton(
-                document.getElementById('google-btn-holder'),
-                {{ theme: 'outline', size: 'large' }}
-            );
-        }})();
-    "#, client_id);
+    // We need to be able to clear the interval once init succeeds; store the
+    // interval ID inside an Rc<RefCell<…>> so the closure can access it.
+    let interval_handle: Rc<RefCell<Option<i32>>> = Rc::new(RefCell::new(None));
+    let interval_handle_clone = Rc::clone(&interval_handle);
 
-    let _ = js_sys::eval(&init_js);
+    // Clone values moved into closure.
+    let doc_clone = document.clone();
+    let client_id_owned = client_id.to_string();
+
+    let closure = Closure::wrap(Box::new(move || {
+        if attempt_google_init(&doc_clone, &client_id_owned) {
+            if let Some(id) = *interval_handle_clone.borrow() {
+                let _ = web_sys::window()
+                    .expect("window").clear_interval_with_handle(id);
+            }
+        }
+    }) as Box<dyn FnMut()>);
+
+    // Start polling every 250 ms.
+    let int_id = win
+        .set_interval_with_callback_and_timeout_and_arguments_0(
+            closure.as_ref().unchecked_ref(),
+            250,
+        )
+        .expect("setInterval failed");
+    *interval_handle.borrow_mut() = Some(int_id);
+
+    // Prevent closure from being dropped.
+    closure.forget();
+}
+
+// ---------------------------------------------------------------------------------
+// Helper – tries to initialise google.accounts.id.  Returns `true` on success or
+// `false` if the external Google Identity script has not yet loaded.
+// ---------------------------------------------------------------------------------
+
+fn attempt_google_init(document: &Document, client_id: &str) -> bool {
+    use js_sys::{Function, Object, Reflect};
+
+    let window = match web_sys::window() {
+        Some(w) => w,
+        None => return false,
+    };
+
+    // Access `google.accounts.id` hierarchy via JS reflection.
+    let google_val = Reflect::get(&window, &"google".into()).unwrap_or(JsValue::UNDEFINED);
+    if google_val.is_undefined() {
+        return false; // Script not yet ready → caller will retry.
+    }
+
+    let accounts_val = Reflect::get(&google_val, &"accounts".into()).unwrap();
+    let id_val = Reflect::get(&accounts_val, &"id".into()).unwrap();
+
+    // ------------------------------------------------------------------
+    // Build the credential callback → forwards the token to Rust async fn.
+    // ------------------------------------------------------------------
+
+    let credential_cb = Closure::wrap(Box::new(move |resp: JsValue| {
+        if let Ok(token) = Reflect::get(&resp, &"credential".into()) {
+            if let Some(token_str) = token.as_string() {
+                wasm_bindgen_futures::spawn_local(async move {
+                    crate::components::auth::google_credential_received(token_str).await;
+                });
+            }
+        }
+    }) as Box<dyn FnMut(JsValue)>);
+
+    // ------------------------------------------------------------------
+    // google.accounts.id.initialize({...})
+    // ------------------------------------------------------------------
+
+    let init_fn = match Reflect::get(&id_val, &"initialize".into()) {
+        Ok(v) => v.dyn_into::<Function>().expect("initialize not a Function"),
+        Err(_) => return false,
+    };
+
+    let init_opts = Object::new();
+    let _ = Reflect::set(&init_opts, &"client_id".into(), &JsValue::from_str(client_id));
+    let _ = Reflect::set(&init_opts, &"callback".into(), credential_cb.as_ref());
+
+    let _ = init_fn.call1(&id_val, &init_opts);
+
+    // ------------------------------------------------------------------
+    // google.accounts.id.renderButton(element, {theme: 'outline', size:'large'})
+    // ------------------------------------------------------------------
+
+    let render_fn = Reflect::get(&id_val, &"renderButton".into())
+        .expect("renderButton missing")
+        .dyn_into::<Function>()
+        .expect("renderButton not a Function");
+
+    let btn_holder_el = match document.get_element_by_id("google-btn-holder") {
+        Some(el) => el,
+        None => return false,
+    };
+
+    let render_opts = Object::new();
+    let _ = Reflect::set(&render_opts, &"theme".into(), &"outline".into());
+    let _ = Reflect::set(&render_opts, &"size".into(), &"large".into());
+
+    let _ = render_fn.call2(&id_val, &btn_holder_el.into(), &render_opts);
+
+    // Prevent the closure from being dropped (callback must stay alive while
+    // the page is open).  We *leak* it intentionally – the OS will reclaim
+    // memory when the tab is closed.
+    credential_cb.forget();
+
+    true
 }

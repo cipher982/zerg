@@ -89,27 +89,36 @@ pub fn current_jwt() -> Option<String> {
 /// Fully logs the user out: clears JWT, closes WebSocket, shows login overlay.
 #[wasm_bindgen]
 pub fn logout() -> Result<(), JsValue> {
-    clear_stored_jwt();
+    // If already logged out, do nothing (idempotent).
+    let mut was_logged_in = false;
 
-    // Update global state
     crate::state::APP_STATE.with(|st| {
         let mut s = st.borrow_mut();
+        was_logged_in = s.logged_in;
+        if !was_logged_in {
+            return; // early exit – avoids duplicate overlay creation
+        }
+
         s.logged_in = false;
 
         // Close any active websocket connection
         let _ = s.ws_client.borrow_mut().close();
     });
 
+    if !was_logged_in {
+        return Ok(());
+    }
+
+    clear_stored_jwt();
+
     // Show overlay again
     if let Some(window) = web_sys::window() {
         if let Some(document) = window.document() {
             // If overlay not present create it.
             if document.get_element_by_id("login-overlay").is_none() {
-                let client_id = js_sys::Reflect::get(&window, &"GOOGLE_CLIENT_ID".into())
-                    .ok()
-                    .and_then(|v| v.as_string())
-                    .unwrap_or_default();
-                crate::components::auth::mount_login_overlay(&document, &client_id);
+                // Build-time embedded client ID (may be empty in local dev)
+                let client_id: &str = option_env!("GOOGLE_CLIENT_ID").unwrap_or("");
+                crate::components::auth::mount_login_overlay(&document, client_id);
             } else {
                 if let Some(el) = document.get_element_by_id("login-overlay") {
                     el.set_class_name("login-overlay");
