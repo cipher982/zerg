@@ -89,6 +89,15 @@ pub enum Message {
         viewport_x: f64,
         viewport_y: f64,
     },
+
+    // -------------------------------------------------------------------
+    // Node ↔ Agent *display* sync helpers
+    // -------------------------------------------------------------------
+    /// Refresh the `.text` labels of all CanvasNodes that reference an agent
+    /// so they reflect the **current** `agent.name`.  Used after agent rename
+    /// operations or bulk agent refresh from the backend.  One-way sync only
+    /// (agents are the source-of-truth).
+    RefreshCanvasLabels,
     
     // Input handling
     UpdateInputText(String),             // Update the input text field
