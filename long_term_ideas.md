@@ -2,7 +2,7 @@
 
 **Document Purpose:** Provides essential context, current status, roadmap, development guidelines, and future ideas for the Zerg project, intended for both human developers and AI coding assistants.
 
-**Last Updated:** 2025-05-04 *(Remember to update this date regularly!)*
+**Last Updated:** 2025-05-05 *(Remember to update this date regularly!)*
 
 ---
 
@@ -21,7 +21,7 @@
 
 ---
 
-## 2. Current System State (Snapshot as of 2025-05-04)
+## 2. Current System State (Snapshot as of 2025-05-05)
 
 *Key: ✅ = Shipped & Verified | 🟡 = Partially Done | ❌ = Not Started*
 
@@ -34,8 +34,9 @@
 *   Webhook Triggers (DB Table, `POST /api/triggers`, `POST /api/triggers/{id}/events`, `EventType.TRIGGER_FIRED`, Scheduler hook): ✅
 *   Webhook Triggers (`DELETE /api/triggers/{id}` endpoint): 🟡 (CRUD helper exists; router & tests pending)
 *   Webhook Triggers (HMAC Secret Verification on fire event): ❌ (simple secret field currently used)
+*   Agent Debug Endpoint (`/agents/{id}/details`) & Modal (Phase 1): ✅
 *   Workflow DAG Execution Engine (Multi-node LangGraph from Canvas JSON): ❌
-*   Testing: >180 tests, covering CRUD, services, events, triggers (create/fire). Green ✅
+*   Testing: >200 tests, covering CRUD, services, events, triggers, streaming, debug modal – all green ✅
 
 **Frontend:**
 *   Core Views (Dashboard, Chat, Canvas): ✅
@@ -47,6 +48,8 @@
 *   Chat: Real-time conversation view per agent/thread: ✅
 *   Chat: Surface Threads from *all* runs (manual, scheduled, trigger-fired): 🟡 (Data exists; UI currently filters/hides some)
 *   Chat: Render `ToolMessage` outputs (collapsible panels) & correct timestamp ordering: ✅
+*   Debug Modal (Overview & Raw-JSON tabs): ✅
+*   Node ↔ Agent Decoupling (renamed `Node` ➜ `CanvasNode`, modal agent-centric): ✅
 *   Canvas: Node Editor foundational component: ✅
 *   Canvas: Only "Agent" nodes currently placeable/editable: ✅ _(Trigger & Tool nodes not yet surfaced)_
 *   Canvas: Add/Connect other node types (Webhook Trigger, Tool, Condition, Input/Output): ❌
@@ -79,8 +82,11 @@
 
 *   **M3b: “Toolbox UI & Nodes”** (Status: ❌ Not Started)
     *   *Summary:* Bring Tool nodes to the Canvas and ship first deterministic tools (HTTP Request, Slack message, Email send). Define node contract, input/output schema & access controls.
-*   **M4: “Debugging UX”** (Status: 🟡 In Progress)
-    *   *Summary:* Agent Debug backend routes & modal to inspect LangGraph state, message streams, and tool payloads for easier troubleshooting.
+*   **M4: “Debugging UX”** (Status: ✅ Phase-1 Completed 2025-05-02)
+    *Summary:* Shipped backend `/agents/{id}/details` endpoint and frontend *Agent Debug* modal (Overview & Raw JSON tabs). Next phases will add Threads/Runs tabs but core visibility tooling is live.
+
+*   **M4b: “Node ↔ Agent Decoupling”** (Status: ✅ Completed 2025-05-02)
+    *Summary:* Large refactor removing legacy coupling. `Node` renamed to `CanvasNode`, agent modal is now agent-centric, obsolete sync messages/helpers removed. See `node_agent_task.md` for full checklist (≈70 % items closed; remaining are test/doc polish).
 
 *   **M5: “Multi-tenant & Auth”** (Status: ❌ Not Started)
     *   *Summary:* Implement user authentication (e.g., Auth0/Clerk JWT) and data isolation (`workspace_id`) to support multiple users securely. *This may include managing permissions for accessing specific tools or agents.*
@@ -118,6 +124,12 @@
 *   `[ ]` **Canvas:** When a "Webhook Trigger" node is selected, its side-panel should display the associated (read-only) webhook URL and potentially the secret (with copy-to-clipboard buttons). If a trigger hasn't been created for this node yet, prompt to create one.
 *   `[ ]` **Canvas:** Ensure the unique ID of the associated Trigger DB row is stored as part of the Webhook Trigger node's configuration in the (future) Canvas JSON export structure (preparation for M2).
 *   `[ ]` **Chat/Dashboard:** Modify data fetching or filtering logic to ensure *all* `Thread` rows associated with an agent (regardless of how the run was initiated - manual, schedule, trigger) are potentially visible in the Chat view's thread list or a dedicated run history view.
+
+**Frontend Tasks (M4b Follow-ups – Node↔Agent Refactor Polish):**
+*   `[ ]` Audit all modal triggers and context menus; ensure they dispatch `Message::EditAgent(id)` directly.
+*   `[ ]` Remove residual helpers that parse synthetic `"agent-{id}"` node IDs.
+*   `[ ]` Update frontend tests for renamed message variants (`AddCanvasNode`, etc.) and run `./frontend/run_frontend_tests.sh`.
+*   `[ ]` Documentation: add a “Canvas Nodes vs Agents” architecture note to `README.md`.
 
 **QA & Documentation:**
 *   `[ ]` Refine/add end-to-end `pytest`: Create Agent -> Use API to Create Trigger -> `POST` valid data to trigger URL -> Verify `AgentRun` record created / `Thread` updated / `last_run_at` timestamp updated / expected `Message` appears. Test invalid trigger post (e.g., wrong ID, bad secret if HMAC enabled).
@@ -251,3 +263,7 @@
 
 **2025-05-02 - Status Review Snapshot**
 *   *(Content of original Section 7 "Status review – 02 May 2025" was integrated into Section 2 "Current System State" above)*
+
+**2025-05-02 - Debug Modal & Node/Agent Refactor**
+*   **Debug Modal (Phase-1)** shipped – backend `/agents/{id}/details` route, frontend `agent_debug_modal.rs` with Overview + Raw JSON tabs.
+*   **Node ↔ Agent Refactor** landed – `Node` struct renamed to `CanvasNode`; agent edit flows are now agent-centric.  Removed legacy sync messages and helpers.  Majority of checklist in `node_agent_task.md` completed; remaining tasks tracked in Section 4.
