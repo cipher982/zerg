@@ -839,6 +839,35 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 }
             }));
             needs_refresh = false; // Refresh handled by pending_ui_updates
+
+            // After updating the agent list trigger a label refresh so all
+            // visual nodes show the latest agent names.
+            commands.push(Command::SendMessage(Message::RefreshCanvasLabels));
+        },
+
+        // ------------------------------------------------------------------
+        // Display-only sync: update node.text from agent.name
+        // ------------------------------------------------------------------
+        Message::RefreshCanvasLabels => {
+            use std::collections::HashSet;
+
+            let mut updated_nodes: HashSet<String> = HashSet::new();
+
+            for (agent_id, node_id) in state.agent_id_to_node_id.iter() {
+                if let (Some(agent), Some(node)) = (
+                    state.agents.get(agent_id),
+                    state.nodes.get_mut(node_id),
+                ) {
+                    if node.text != agent.name {
+                        node.text = agent.name.clone();
+                        updated_nodes.insert(node_id.clone());
+                    }
+                }
+            }
+
+            if !updated_nodes.is_empty() {
+                state.draw_nodes();
+            }
         },
        
         // Thread-related messages
