@@ -203,9 +203,16 @@ impl ApiClient {
         let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
         let resp: Response = resp_value.dyn_into()?;
 
-        // Check if successful
+        // Check HTTP status – handle authentication expiry gracefully.
         if !resp.ok() {
             let status = resp.status();
+
+            // 401 → token expired or invalid → logout & show error.
+            if status == 401 {
+                // Attempt to log out; ignore errors (e.g. during unit tests)
+                let _ = crate::utils::logout();
+            }
+
             let status_text = resp.status_text();
             return Err(JsValue::from_str(&format!("API request failed: {} {}", status, status_text)));
         }

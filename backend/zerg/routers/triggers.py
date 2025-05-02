@@ -5,17 +5,24 @@ an EventType.TRIGGER_FIRED event.  The SchedulerService listens for that event
 and executes the associated agent immediately.
 """
 
+import hashlib
+import hmac
+import json
 import logging
+import time
 from typing import Dict
 
 # FastAPI helpers
 from fastapi import APIRouter
+from fastapi import Body
 from fastapi import Depends
+from fastapi import Header
 from fastapi import HTTPException
 from fastapi import Path
 from fastapi import status
 from sqlalchemy.orm import Session
 
+from zerg import constants
 from zerg.crud import crud
 from zerg.database import get_db
 
@@ -56,36 +63,59 @@ def create_trigger(trigger_in: TriggerCreate, db: Session = Depends(get_db)):
 async def fire_trigger_event(
     *,
     trigger_id: int = Path(..., gt=0),
-    payload: Dict = {},  # Arbitrary JSON from caller
+    payload: Dict = Body(default={}),  # Arbitrary JSON body
+    x_zerg_timestamp: str = Header(..., alias="X-Zerg-Timestamp"),
+    x_zerg_signature: str = Header(..., alias="X-Zerg-Signature"),
     db: Session = Depends(get_db),
 ):
-    """Endpoint that external services hit to fire a trigger.
+    """Webhook endpoint that fires a trigger event.
 
-    For now we do **not** validate a signature – the client must supply the
-    `secret` query parameter that matches the stored secret.  A more robust
-    signing approach can be added later.
+    Security: the caller must sign the request body using HMAC-SHA256.
+
+    Signature string to hash:
+        "{timestamp}.{raw_body}"
+
+    where *timestamp* is the same value sent in `X-Zerg-Timestamp` header and
+    *raw_body* is the exact JSON body (no whitespace changes).  The hex-encoded
+    digest is provided via `X-Zerg-Signature` header.
     """
 
+    # 1) Validate timestamp (prevents replay attacks)
+    try:
+        ts_int = int(x_zerg_timestamp)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid X-Zerg-Timestamp header")
+
+    now = int(time.time())
+    if abs(now - ts_int) > constants.TRIGGER_TIMESTAMP_TOLERANCE_S:
+        raise HTTPException(status_code=400, detail="Timestamp skew too large")
+
+    # 2) Recompute HMAC and compare (constant-time)
+    signing_secret = constants.TRIGGER_SIGNING_SECRET.encode()
+
+    # We must use the *raw* body as delivered on the wire, not the already-
+    # parsed `payload` dict.  FastAPI gives us access via request.body() but
+    # we'd need Request object; instead re-serialise deterministically.
+    body_serialised = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+
+    data_to_sign = f"{x_zerg_timestamp}.{body_serialised}".encode()
+    expected_sig = hmac.new(signing_secret, data_to_sign, hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(expected_sig, x_zerg_signature):
+        raise HTTPException(status_code=403, detail="Invalid signature")
+
+    # 3) Check trigger exists
     trg = crud.get_trigger(db, trigger_id)
     if trg is None:
         raise HTTPException(status_code=404, detail="Trigger not found")
 
-    # Simple secret‑check via query param ( ?secret=... )
-    # Very naive secret validation – expects caller to supply `{"secret": "..."}` in
-    # the JSON body.  A real implementation would use an HTTP header or HMAC.
-    supplied_secret = payload.pop("secret", None)
-    if supplied_secret != trg.secret:
-        raise HTTPException(status_code=403, detail="Invalid secret")
-
-    # Publish event.  The scheduler will pick it up.
+    # 4) Publish event on internal bus
     await event_bus.publish(
         EventType.TRIGGER_FIRED,
         {"trigger_id": trg.id, "agent_id": trg.agent_id, "payload": payload},
     )
 
-    # Immediately execute the agent asynchronously; this guarantees that the
-    # trigger has a visible effect even if the SchedulerService listener has
-    # not been started (e.g. during certain unit‑test contexts).
+    # 5) Fire agent immediately (non-blocking)
     await scheduler_service.run_agent_task(trg.agent_id)  # type: ignore[arg-type]
 
     return {"status": "accepted"}

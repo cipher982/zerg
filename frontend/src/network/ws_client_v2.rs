@@ -241,10 +241,19 @@ impl WsClientV2 {
         let state_clone = self.state.clone();
         let reconnect_attempt_clone = self.reconnect_attempt.clone();
         let on_disconnect_cb_clone_for_close = on_disconnect_cb_clone.clone(); // Clone again for this closure
-        let onclose_closure = Closure::wrap(Box::new(move |_: web_sys::Event| {
+        let onclose_closure = Closure::wrap(Box::new(move |evt: web_sys::Event| {
+            // Attempt to downcast to CloseEvent so we can inspect the code.
+            if let Ok(close_evt) = evt.dyn_into::<web_sys::CloseEvent>() {
+                let code = close_evt.code();
+                if code == 4401 || code == 4003 {
+                    // 4401: unauthenticated, 4003: forbidden – logout.
+                    let _ = crate::utils::logout();
+                }
+            }
+
             web_sys::console::log_1(&"WebSocket closed".into());
             *state_clone.borrow_mut() = ConnectionState::Disconnected;
-            
+
             // --- Call on_disconnect callback --- 
             if let Some(callback_rc) = &on_disconnect_cb_clone_for_close {
                  if let Ok(mut callback) = callback_rc.try_borrow_mut() {
@@ -253,7 +262,7 @@ impl WsClientV2 {
                     web_sys::console::error_1(&"Failed to borrow on_disconnect callback".into());
                 }
             }
-            
+
             // Check if reconnection should be attempted
             let current_attempt = *reconnect_attempt_clone.borrow();
             if config_clone.max_reconnect_attempts.map_or(true, |max| current_attempt < max) {

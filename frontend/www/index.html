@@ -2,6 +2,32 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <!-- CSP: disallow inline scripts, unsafe-eval is not required now that
+         the Google Identity initialisation uses reflective closures inside
+         WASM (see components/auth.rs) -->
+    <!--
+      Note: Chrome’s WASM engine still treats `WebAssembly.instantiateStreaming`
+      as *script execution* that requires either `'unsafe-eval'` **or** the
+      narrower `'wasm-unsafe-eval'` keyword in CSP.  We want to avoid enabling
+      generic eval, therefore we add `'wasm-unsafe-eval'` to the script-src
+      directive.  This keeps CSP tight while allowing streamed WASM modules.
+    -->
+    <!--
+      The CSP below was recently tightened as part of the new OAuth work.  During
+      local development however the frontend (served from http://localhost:8002)
+      still needs to communicate with the backend API that runs on the **different
+      origin** http://localhost:8001.  A `connect-src` that only allows `'self'`
+      therefore blocks WebSocket and fetch requests which is exactly the failure
+      you are currently seeing in the browser console (CSP refused to connect to
+      http://localhost:8001 and ws://localhost:8001).
+
+      We explicitly list those two origins (HTTP + WS) so that they are allowed
+      in dev builds while keeping the policy strict for everything else.  This
+      change is safe for production because the API is usually served from the
+      same origin as the static files in that environment – meaning the
+      additional hosts will simply be ignored.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' http://localhost:8001 ws://localhost:8001 https://accounts.google.com; script-src 'self' 'wasm-unsafe-eval' 'wasm-eval' https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src https://accounts.google.com;" />
     <title>AI Agent Platform</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="chat.css">
@@ -12,12 +38,10 @@
 <body>
     <div id="app-container"></div>
     
-    <script type="module">
-        import init from './index.js';
-        async function run() {
-            await init();
-        }
-        run();
-    </script>
+    <!-- Load configuration -->
+    <script src="config.js"></script>
+    
+    <!-- Load bootstrap code -->
+    <script type="module" src="bootstrap.js"></script>
 </body>
 </html>
