@@ -1,17 +1,24 @@
 import logging
 import os
 
+# FastAPI helpers
 from fastapi import APIRouter
+from fastapi import Depends
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
+# Database helpers
 from zerg.database import Base
 from zerg.database import default_engine
 from zerg.database import initialize_database
 
+# Auth dependency
+from zerg.dependencies.auth import get_current_user
+
 router = APIRouter(
     prefix="/admin",
     tags=["admin"],
+    dependencies=[Depends(get_current_user)],
 )
 
 logger = logging.getLogger(__name__)

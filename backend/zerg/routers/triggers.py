@@ -8,6 +8,7 @@ and executes the associated agent immediately.
 import logging
 from typing import Dict
 
+# FastAPI helpers
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
@@ -17,8 +18,13 @@ from sqlalchemy.orm import Session
 
 from zerg.crud import crud
 from zerg.database import get_db
+
+# Auth dependency
+from zerg.dependencies.auth import get_current_user
 from zerg.events import EventType
 from zerg.events import event_bus
+
+# Schemas
 from zerg.schemas.schemas import Trigger as TriggerSchema
 from zerg.schemas.schemas import TriggerCreate
 from zerg.services.scheduler_service import scheduler_service
@@ -26,7 +32,11 @@ from zerg.services.scheduler_service import scheduler_service
 logger = logging.getLogger(__name__)
 
 
-router = APIRouter(prefix="/triggers", tags=["triggers"])
+router = APIRouter(
+    prefix="/triggers",
+    tags=["triggers"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.post("/", response_model=TriggerSchema, status_code=status.HTTP_201_CREATED)

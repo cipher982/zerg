@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import List
 
+# FastAPI helpers
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
@@ -11,10 +12,18 @@ from sqlalchemy.orm import Session
 
 from zerg.crud import crud
 from zerg.database import get_db
+
+# Auth dependency
+from zerg.dependencies.auth import get_current_user
 from zerg.models.models import AgentRun as AgentRunModel
+
+# Schemas
 from zerg.schemas.schemas import AgentRunOut
 
-router = APIRouter(tags=["runs"])
+router = APIRouter(
+    tags=["runs"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.get("/agents/{agent_id}/runs", response_model=List[AgentRunOut])

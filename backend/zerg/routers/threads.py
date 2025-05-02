@@ -9,6 +9,7 @@ import logging
 from typing import List
 from typing import Optional
 
+# FastAPI helpers
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
@@ -18,6 +19,10 @@ from sqlalchemy.orm import Session
 # DB/CRUD helpers
 from zerg.crud import crud
 from zerg.database import get_db
+
+# New higher-level ThreadService façade
+# Auth dependency
+from zerg.dependencies.auth import get_current_user
 from zerg.managers.agent_runner import AgentRunner
 from zerg.schemas.schemas import Thread
 from zerg.schemas.schemas import ThreadCreate
@@ -29,7 +34,7 @@ from zerg.schemas.ws_messages import StreamEndMessage
 from zerg.schemas.ws_messages import StreamStartMessage
 from zerg.services.run_history import execute_thread_run_with_history
 
-# New higher-level ThreadService façade
+# Thread service façade
 from zerg.services.thread_service import ThreadService
 
 # WebSocket topic manager
@@ -40,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(
     tags=["threads"],
+    dependencies=[Depends(get_current_user)],
 )
 
 
