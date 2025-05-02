@@ -17,7 +17,6 @@ use lazy_static::lazy_static;
 use std::sync::RwLock;
 use config::ApiConfig;
 use wasm_bindgen::prelude::*;
-use web_sys;
 
 lazy_static! {
     static ref API_CONFIG: RwLock<Option<ApiConfig>> = RwLock::new(None);
@@ -51,16 +50,7 @@ pub(crate) fn get_ws_url() -> Result<String, &'static str> {
 
     // If a JWT is present in localStorage append it as query parameter so the
     // backend can authenticate the WebSocket upgrade request.
-    let token_opt = {
-        if let Some(window) = web_sys::window() {
-            match window.local_storage() {
-                Ok(Some(storage)) => storage.get_item("zerg_jwt").ok().flatten(),
-                _ => None,
-            }
-        } else {
-            None
-        }
-    };
+    let token_opt = crate::utils::current_jwt();
 
     if let Some(tok) = token_opt {
         Ok(format!("{}?token={}", base_url, tok))

@@ -20,14 +20,7 @@ struct TokenOut {
 // Helper – read the persisted JWT from localStorage
 // ----------------------------------------------------------------------------
 
-fn get_stored_jwt() -> Option<String> {
-    if let Some(window) = web_sys::window() {
-        if let Ok(Some(storage)) = window.local_storage() {
-            return storage.get_item("zerg_jwt").ok().flatten();
-        }
-    }
-    None
-}
+use crate::utils as auth_utils;
 
 // REST API Client for Agent operations
 pub struct ApiClient;
@@ -191,7 +184,7 @@ impl ApiClient {
         let headers = Headers::new()?;
 
         // Always attempt to attach Authorization header if token present.
-        if let Some(jwt) = get_stored_jwt() {
+        if let Some(jwt) = auth_utils::current_jwt() {
             headers.append("Authorization", &format!("Bearer {}", jwt))?;
         }
 
