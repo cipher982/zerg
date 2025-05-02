@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Response
 from fastapi import status
 from openai import OpenAI
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from zerg.crud import crud
 from zerg.database import get_db
 from zerg.events import EventType
 from zerg.events.decorators import publish_event
+from zerg.events.event_bus import event_bus  # Local import to prevent circular deps
 from zerg.schemas.schemas import Agent
 from zerg.schemas.schemas import AgentCreate
 from zerg.schemas.schemas import AgentDetails
@@ -179,20 +181,52 @@ async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(
 
 
 @router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
-@publish_event(EventType.AGENT_DELETED)
 async def delete_agent(agent_id: int, db: Session = Depends(get_db)):
-    """Delete an agent"""
-    # Get the agent first to include in the event data
-    agent = crud.get_agent(db, agent_id=agent_id)
-    if agent is None:
+    """Delete an agent and broadcast an *agent_deleted* event.
+
+    A 204 No Content response is returned to the HTTP caller as per REST
+    conventions, while the full agent row (converted to a plain dict) is
+    published on the internal EventBus so that the SchedulerService and any
+    WebSocket clients can react to the deletion.
+    """
+
+    # ------------------------------------------------------------------
+    # 1. Fetch the agent row **before** deleting it so we still have its
+    #    attributes available for the event payload.
+    # ------------------------------------------------------------------
+    agent_row = crud.get_agent(db, agent_id=agent_id)
+    if agent_row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    # Delete the agent
+    # ------------------------------------------------------------------
+    # 2. Perform the actual deletion.  ``crud.delete_agent`` returns a boolean
+    #    to indicate success so we can bail out with 404 if the row vanished
+    #    between the initial SELECT and the DELETE (highly unlikely but keeps
+    #    the semantics consistent with the other endpoints).
+    # ------------------------------------------------------------------
     if not crud.delete_agent(db, agent_id=agent_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    # Return the agent data for the event
-    return agent
+    # ------------------------------------------------------------------
+    # 3. Publish the *agent_deleted* event – the payload is a lightweight
+    #    plain dict containing only the column values.  This avoids the
+    #    recursion issues we observed when FastAPI tried to serialise the raw
+    #    SQLAlchemy model object (which can embed cyclic relationships).
+    # ------------------------------------------------------------------
+
+    event_payload = {column.name: getattr(agent_row, column.name) for column in agent_row.__table__.columns}
+    # Remove SQLAlchemy internal state just to be safe (present when "expire_on_commit=False")
+    event_payload.pop("_sa_instance_state", None)
+
+    # Fire-and-forget publish – we ``await`` so tests can deterministically
+    # observe the event right after the HTTP call returns.
+    await event_bus.publish(EventType.AGENT_DELETED, event_payload)
+
+    # ------------------------------------------------------------------
+    # 4. Return an *empty* response body with status 204.  Starlette will make
+    #    sure no content is sent to the client.
+    # ------------------------------------------------------------------
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # Agent messages endpoints
