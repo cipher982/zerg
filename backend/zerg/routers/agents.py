@@ -53,8 +53,13 @@ def _validate_model_or_400(model_id: str) -> None:
         )
 
 
+# Authentication dependency -------------------------------------------------
+
+from zerg.dependencies.auth import get_current_user
+
 router = APIRouter(
     tags=["agents"],
+    dependencies=[Depends(get_current_user)],
 )
 
 # Initialize OpenAI client

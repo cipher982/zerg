@@ -10,7 +10,13 @@ fi
 
 # Build the WASM module
 echo "Building WASM module..."
-wasm-pack build --target web --out-dir www
+# Ensure GOOGLE_CLIENT_ID is set for compile-time embedding
+if [[ -z "${GOOGLE_CLIENT_ID}" ]]; then
+  echo "WARNING: GOOGLE_CLIENT_ID not set, frontend will fall back to empty client_id."
+fi
+
+# Expose the variable to Cargo so `env!("GOOGLE_CLIENT_ID")` works.
+GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID}" wasm-pack build --target web --out-dir www
 
 # Move the generated JS to index.js for simplicity
 echo "Finalizing build..."

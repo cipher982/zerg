@@ -1,9 +1,4 @@
-"""Static path constants used by FastAPI router setup.
-
-This module is intentionally *simple*: it only defines hard-coded string
-prefixes that the rest of the codebase imports.  No environment look-ups, no
-dynamic logic – just constants.
-"""
+import os
 
 # Base API prefix (all HTTP routes are served under /api/*)
 API_PREFIX = "/api"
@@ -15,6 +10,17 @@ WS_ENDPOINT = "/ws"
 AGENTS_PREFIX = "/agents"
 THREADS_PREFIX = "/threads"
 MODELS_PREFIX = "/models"
+
+# ---------------------------------------------------------------------------
+# Trigger HMAC signing secret – used by /api/triggers/{id}/events HMAC
+# verification (Stage 5 of auth hardening roadmap).
+# ---------------------------------------------------------------------------
+
+# Will raise KeyError if not set
+TRIGGER_SIGNING_SECRET: str = os.environ["TRIGGER_SIGNING_SECRET"]
+
+# Accept ±5 minutes clock skew for HMAC timestamp header
+TRIGGER_TIMESTAMP_TOLERANCE_S: int = 300
 
 
 def get_full_path(relative_path: str) -> str:  # noqa: D401 – tiny helper

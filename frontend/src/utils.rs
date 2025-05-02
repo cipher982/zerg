@@ -1,6 +1,6 @@
 //! Utility helpers shared across the WASM frontend.
 
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
 
 /// Format a duration given in **milliseconds** into a short human-readable
 /// string such as `"1 m 23 s"` or `"12 s"`.
@@ -63,6 +63,73 @@ pub fn capitalise_first(s: &str) -> String {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Authentication helpers
+// ---------------------------------------------------------------------------
+
+/// Remove the persisted JWT from localStorage.
+pub fn clear_stored_jwt() {
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            let _ = storage.remove_item("zerg_jwt");
+        }
+    }
+}
+
+/// Returns the JWT stored in localStorage, if any.
+pub fn current_jwt() -> Option<String> {
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            return storage.get_item("zerg_jwt").ok().flatten();
+        }
+    }
+    None
+}
+
+/// Fully logs the user out: clears JWT, closes WebSocket, shows login overlay.
+#[wasm_bindgen]
+pub fn logout() -> Result<(), JsValue> {
+    // If already logged out, do nothing (idempotent).
+    let mut was_logged_in = false;
+
+    crate::state::APP_STATE.with(|st| {
+        let mut s = st.borrow_mut();
+        was_logged_in = s.logged_in;
+        if !was_logged_in {
+            return; // early exit – avoids duplicate overlay creation
+        }
+
+        s.logged_in = false;
+
+        // Close any active websocket connection
+        let _ = s.ws_client.borrow_mut().close();
+    });
+
+    if !was_logged_in {
+        return Ok(());
+    }
+
+    clear_stored_jwt();
+
+    // Show overlay again
+    if let Some(window) = web_sys::window() {
+        if let Some(document) = window.document() {
+            // If overlay not present create it.
+            if document.get_element_by_id("login-overlay").is_none() {
+                // Build-time embedded client ID (may be empty in local dev)
+                let client_id: &str = option_env!("GOOGLE_CLIENT_ID").unwrap_or("");
+                crate::components::auth::mount_login_overlay(&document, client_id);
+            } else {
+                if let Some(el) = document.get_element_by_id("login-overlay") {
+                    el.set_class_name("login-overlay");
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 // wasm-bindgen tests ----------------------------------------------------------
 
 #[cfg(test)]
@@ -77,5 +144,64 @@ mod tests {
         assert_eq!(format_duration_ms(1_500), "1 s");
         assert_eq!(format_duration_ms(12_000), "12 s");
         assert_eq!(format_duration_ms(65_000), "1 m 05 s");
+    }
+
+    // ------------------------------------------------------------------
+    // Authentication helper tests
+    // ------------------------------------------------------------------
+
+    #[wasm_bindgen_test]
+    fn test_jwt_storage_helpers() {
+        // Ensure clean slate
+        clear_stored_jwt();
+        assert!(current_jwt().is_none());
+
+        // Store a token via JS localStorage
+        let window = web_sys::window().unwrap();
+        let storage = window.local_storage().unwrap().unwrap();
+        storage.set_item("zerg_jwt", "testtoken").unwrap();
+
+        assert_eq!(current_jwt().as_deref(), Some("testtoken"));
+
+        clear_stored_jwt();
+        assert!(current_jwt().is_none());
+    }
+
+    #[wasm_bindgen_test]
+    fn test_logout_clears_token_and_overlay() {
+        use wasm_bindgen::JsCast;
+
+        // Prepare environment ------------------------------------------------
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+
+        // Inject fake GOOGLE_CLIENT_ID so overlay creation works.
+        js_sys::Reflect::set(&window, &"GOOGLE_CLIENT_ID".into(), &"dummy_client_id".into()).unwrap();
+
+        // Ensure no overlay initially
+        if let Some(el) = document.get_element_by_id("login-overlay") {
+            el.parent_node().unwrap().remove_child(&el).unwrap();
+        }
+
+        // Store a JWT
+        let storage = window.local_storage().unwrap().unwrap();
+        storage.set_item("zerg_jwt", "dummyjwt").unwrap();
+
+        // Manually mark app as logged-in
+        crate::state::APP_STATE.with(|s| {
+            s.borrow_mut().logged_in = true;
+        });
+
+        // Call logout()
+        logout().unwrap();
+
+        // Assertions ---------------------------------------------------------
+        assert!(current_jwt().is_none());
+
+        crate::state::APP_STATE.with(|s| {
+            assert_eq!(s.borrow().logged_in, false);
+        });
+
+        assert!(document.get_element_by_id("login-overlay").is_some());
     }
 }
