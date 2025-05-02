@@ -501,7 +501,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             if let Some(node_id) = selected_node_id {
                 // Open the agent modal
                 let window = web_sys::window().expect("no global window exists");
-                let document = window.document().expect("should have a document");
+                let _document = window.document().expect("should have a document");
 
                 // Open the agent configuration modal via the global message
                 // system – this keeps all state mutations funnelled through

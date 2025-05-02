@@ -655,17 +655,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         // NOTE: Message::NavigateToChatView needs to be updated to accept u32
         crate::state::dispatch_global_message(crate::messages::Message::NavigateToChatView(agent_id));
 
-        /* Old logic removed:
-        // Check if this is an API agent (with agent-{id} format)
-        if let Some(api_agent_id_str) = agent_id.strip_prefix("agent-") {
-            if let Ok(api_agent_id) = api_agent_id_str.parse::<u32>() {
-                // Navigate to the chat view with this agent
-                crate::state::dispatch_global_message(crate::messages::Message::NavigateToChatView(api_agent_id));
-            } else {
-                web_sys::console::error_1(&format!("Invalid agent ID format: {}", agent_id).into());
-            }
-        }
-        */
+        // (legacy id parsing logic removed – agent_id is already a u32)
     }) as Box<dyn FnMut(_)>);
     
     chat_btn.dyn_ref::<HtmlElement>()
