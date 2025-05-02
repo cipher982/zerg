@@ -17,6 +17,7 @@ use lazy_static::lazy_static;
 use std::sync::RwLock;
 use config::ApiConfig;
 use wasm_bindgen::prelude::*;
+use web_sys;
 
 lazy_static! {
     static ref API_CONFIG: RwLock<Option<ApiConfig>> = RwLock::new(None);
@@ -45,8 +46,27 @@ fn get_api_config() -> Result<std::sync::RwLockReadGuard<'static, Option<ApiConf
 
 /// Get the WebSocket URL
 pub(crate) fn get_ws_url() -> Result<String, &'static str> {
-    get_api_config()
-        .map(|config| config.as_ref().expect("API config not initialized").ws_url())
+    let base_url = get_api_config()
+        .map(|config| config.as_ref().expect("API config not initialized").ws_url())?;
+
+    // If a JWT is present in localStorage append it as query parameter so the
+    // backend can authenticate the WebSocket upgrade request.
+    let token_opt = {
+        if let Some(window) = web_sys::window() {
+            match window.local_storage() {
+                Ok(Some(storage)) => storage.get_item("zerg_jwt").ok().flatten(),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    };
+
+    if let Some(tok) = token_opt {
+        Ok(format!("{}?token={}", base_url, tok))
+    } else {
+        Ok(base_url)
+    }
 }
 
 /// Get the base URL for API calls

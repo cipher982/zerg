@@ -4,6 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::{window, Document};
 use network::ui_updates;
 use crate::state::dispatch_global_message;
+use crate::components::auth;
 
 // Import modules
 mod models;
@@ -43,6 +44,25 @@ pub fn start() -> Result<(), JsValue> {
     // Get the document
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
+
+    // -------------------------------------------------------------------
+    // Stage 4 – Show Google Sign-In overlay if we are *not* logged in.
+    // -------------------------------------------------------------------
+    let needs_login = state::APP_STATE.with(|s| !s.borrow().logged_in);
+    if needs_login {
+        // Client ID retrieved from compile-time env var so the frontend build
+        // remains static.  The value must be injected via `Dioxus` build or
+        // other bundler but for now we read JS global.  Fallback to empty.
+        // For now the Google *client_id* is expected to be declared as a
+        // global JS variable (injected by the hosting page).  We fall back to
+        // an empty string which makes the Google SDK throw a visible error –
+        // that is acceptable in dev-mode when the env var is missing.
+        let client_id = js_sys::Reflect::get(&window, &"GOOGLE_CLIENT_ID".into())
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_default();
+        auth::mount_login_overlay(&document, &client_id);
+    }
     
     // Create base UI elements (header and status bar)
     ui::setup::create_base_ui(&document)?;

@@ -150,6 +150,14 @@ pub struct AppState {
     /// per agent per-workflow.  When a node is deleted (feature TBD) the
     /// entry must be removed as well.
     pub agent_id_to_node_id: HashMap<u32, String>,
+
+    // -------------------------------------------------------------------
+    // Authentication
+    // -------------------------------------------------------------------
+    /// Whether the current browser session is authenticated.  Determined at
+    /// startup from `localStorage["zerg_jwt"]` and updated once the Google
+    /// login flow succeeds.
+    pub logged_in: bool,
 }
 
 impl AppState {
@@ -220,6 +228,22 @@ impl AppState {
             running_runs: HashSet::new(),
 
             agent_id_to_node_id: HashMap::new(),
+
+            // -------------------------------------------------------------------
+            // Authentication state – look for a persisted JWT.
+            // -------------------------------------------------------------------
+            logged_in: {
+                let window = web_sys::window();
+                if let Some(w) = window {
+                    if let Ok(Some(storage)) = w.local_storage() {
+                        storage.get_item("zerg_jwt").ok().flatten().is_some()
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            },
         }
     }
 
