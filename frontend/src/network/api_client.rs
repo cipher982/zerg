@@ -1,9 +1,33 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{RequestMode};
+// Individual web-sys types are imported where required – RequestMode is still
+// used in several helper methods so we keep the top-level import for
+// convenience.
+use web_sys::RequestMode;
 use super::ui_updates::flash_activity;
 use crate::constants::{DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT};
 use std::rc::Rc;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct TokenOut {
+    access_token: String,
+    expires_in: u32,
+    token_type: String,
+}
+
+// ----------------------------------------------------------------------------
+// Helper – read the persisted JWT from localStorage
+// ----------------------------------------------------------------------------
+
+fn get_stored_jwt() -> Option<String> {
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            return storage.get_item("zerg_jwt").ok().flatten();
+        }
+    }
+    None
+}
 
 // REST API Client for Agent operations
 pub struct ApiClient;
@@ -155,42 +179,71 @@ impl ApiClient {
 
     // Helper function to make fetch requests
     pub async fn fetch_json(url: &str, method: &str, body: Option<&str>) -> Result<String, JsValue> {
-        use web_sys::{Request, RequestInit, RequestMode, Response};
-        
-        let opts = RequestInit::new();
+        use web_sys::{Request, RequestInit, RequestMode, Response, Headers};
+
+        let mut opts = RequestInit::new();
         opts.set_method(method);
         opts.set_mode(RequestMode::Cors);
-        
-        // Add body if provided
+
+        // ----------------------------------------------------------------
+        // Headers
+        // ----------------------------------------------------------------
+        let headers = Headers::new()?;
+
+        // Always attempt to attach Authorization header if token present.
+        if let Some(jwt) = get_stored_jwt() {
+            headers.append("Authorization", &format!("Bearer {}", jwt))?;
+        }
+
+        // Add Content-Type & body if provided
         if let Some(data) = body {
-            // Create the JsValue once and pass a reference to set_body
             let js_body = JsValue::from_str(data);
             opts.set_body(&js_body);
-            
-            // Create and set headers
-            let headers = web_sys::Headers::new()?;
             headers.append("Content-Type", "application/json")?;
-            opts.set_headers(&headers);
         }
-        
+
+        opts.set_headers(&headers);
+
         let request = Request::new_with_str_and_init(url, &opts)?;
-        
+
         let window = web_sys::window().expect("no global window exists");
         let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
         let resp: Response = resp_value.dyn_into()?;
-        
+
         // Check if successful
         if !resp.ok() {
             let status = resp.status();
             let status_text = resp.status_text();
-            return Err(JsValue::from_str(&format!(
-                "API request failed: {} {}", status, status_text
-            )));
+            return Err(JsValue::from_str(&format!("API request failed: {} {}", status, status_text)));
         }
-        
-        // Parse JSON
-        let json = JsFuture::from(resp.text()?).await?;
-        Ok(json.as_string().unwrap_or_default())
+
+        // Parse body as text – caller can decode JSON.
+        let text = JsFuture::from(resp.text()?).await?;
+        Ok(text.as_string().unwrap_or_default())
+    }
+
+    // -------------------------------------------------------------------
+    // Authentication – Google Sign-In
+    // -------------------------------------------------------------------
+
+    /// Exchange a Google ID token for a platform JWT and persist it.
+    pub async fn google_auth_login(id_token: &str) -> Result<(), JsValue> {
+        let url = format!("{}/api/auth/google", Self::api_base_url());
+        let payload = format!("{{\"id_token\": \"{}\"}}", id_token);
+
+        let resp_json = Self::fetch_json(&url, "POST", Some(&payload)).await?;
+
+        let token_out: TokenOut = serde_json::from_str(&resp_json)
+            .map_err(|e| JsValue::from_str(&format!("Failed to parse token response: {:?}", e)))?;
+
+        // Store JWT in localStorage so future fetches/websocket connections are authenticated
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                let _ = storage.set_item("zerg_jwt", &token_out.access_token);
+            }
+        }
+
+        Ok(())
     }
 }
 
