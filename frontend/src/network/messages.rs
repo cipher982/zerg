@@ -245,16 +245,22 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_message_parsing() {
-        // Test error message parsing
+        // Regression check: generic JSON -> strongly-typed struct parsing for an
+        // `error` WebSocket frame.
+
         let error_json = r#"{
             "type": "error",
             "message_id": "test-123",
             "error": "Test error",
             "details": null
         }"#;
-        
-        let parsed = handlers::parse_message(error_json).unwrap();
-        assert_eq!(parsed.message_type(), MessageType::Error);
+
+        // Since the dedicated parsing helper was removed during the
+        // WebSocket-refactor we can directly deserialize into `ErrorMessage`.
+        let parsed: ErrorMessage = serde_json::from_str(error_json).unwrap();
+
+        assert_eq!(parsed.message_type, MessageType::Error);
+        assert_eq!(parsed.message_id.unwrap(), "test-123");
     }
 
     #[wasm_bindgen_test]
