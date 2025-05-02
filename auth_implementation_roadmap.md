@@ -45,10 +45,16 @@ Stage 3 – Auth dependency & dev-mode bypass
 -------------------------------------------------------------------------------
 | # | Task | Code Location | Status |
 |---|------|---------------|--------|
-| 3.1 | Utility `get_current_user()` (`dependencies/auth.py` new file)         | `backend/zerg/dependencies/auth.py` | [ ] |
-| 3.2 | Implement branch: if `AUTH_DISABLED==1` → always return *dev user*     | same | [ ] |
-| 3.3 | If enabled: verify JWT, load user, raise 401 if missing/expired        | same | [ ] |
-| 3.4 | Inject `current_user: User = Depends(get_current_user)` into **ALL** existing routers (except `/models`) | each router | [ ] |
+| 3.1 | Utility `get_current_user()` (`dependencies/auth.py` new file)         | `backend/zerg/dependencies/auth.py` | [x] |
+| 3.2 | Implement branch: if `AUTH_DISABLED==1` → always return *dev user*     | same | [x] |
+| 3.3 | If enabled: verify JWT, load user, raise 401 if missing/expired        | same | [x] |
+| 3.4 | Inject `current_user: User = Depends(get_current_user)` into **ALL** existing routers (except `/models`) | each router | [x] |
+
+> **Update (2025-05-02):** All Stage 3 items have landed.  The backend now
+> enforces JWT auth across every router except the public `/models` and
+> `/auth` endpoints.  Setting `AUTH_DISABLED=1` in the environment bypasses
+> auth and automatically returns/creates a deterministic *dev@local* user –
+> this keeps the existing test-suite and local hacking workflow functional.
 
 -------------------------------------------------------------------------------
 Stage 4 – Front-end integration
