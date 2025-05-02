@@ -136,4 +136,63 @@ mod tests {
         assert_eq!(format_duration_ms(12_000), "12 s");
         assert_eq!(format_duration_ms(65_000), "1 m 05 s");
     }
+
+    // ------------------------------------------------------------------
+    // Authentication helper tests
+    // ------------------------------------------------------------------
+
+    #[wasm_bindgen_test]
+    fn test_jwt_storage_helpers() {
+        // Ensure clean slate
+        clear_stored_jwt();
+        assert!(current_jwt().is_none());
+
+        // Store a token via JS localStorage
+        let window = web_sys::window().unwrap();
+        let storage = window.local_storage().unwrap().unwrap();
+        storage.set_item("zerg_jwt", "testtoken").unwrap();
+
+        assert_eq!(current_jwt().as_deref(), Some("testtoken"));
+
+        clear_stored_jwt();
+        assert!(current_jwt().is_none());
+    }
+
+    #[wasm_bindgen_test]
+    fn test_logout_clears_token_and_overlay() {
+        use wasm_bindgen::JsCast;
+
+        // Prepare environment ------------------------------------------------
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+
+        // Inject fake GOOGLE_CLIENT_ID so overlay creation works.
+        js_sys::Reflect::set(&window, &"GOOGLE_CLIENT_ID".into(), &"dummy_client_id".into()).unwrap();
+
+        // Ensure no overlay initially
+        if let Some(el) = document.get_element_by_id("login-overlay") {
+            el.parent_node().unwrap().remove_child(&el).unwrap();
+        }
+
+        // Store a JWT
+        let storage = window.local_storage().unwrap().unwrap();
+        storage.set_item("zerg_jwt", "dummyjwt").unwrap();
+
+        // Manually mark app as logged-in
+        crate::state::APP_STATE.with(|s| {
+            s.borrow_mut().logged_in = true;
+        });
+
+        // Call logout()
+        logout().unwrap();
+
+        // Assertions ---------------------------------------------------------
+        assert!(current_jwt().is_none());
+
+        crate::state::APP_STATE.with(|s| {
+            assert_eq!(s.borrow().logged_in, false);
+        });
+
+        assert!(document.get_element_by_id("login-overlay").is_some());
+    }
 }
