@@ -164,6 +164,67 @@ async def _subscribe_agent(client_id: str, agent_id: int, message_id: str, db: S
         await send_error(client_id, "Failed to subscribe to agent", message_id)
 
 
+# ---------------------------------------------------------------------------
+# User subscriptions
+# ---------------------------------------------------------------------------
+
+
+async def _subscribe_user(client_id: str, user_id: int, message_id: str, db: Session) -> None:
+    """Subscribe the *client* to updates for the given user.
+
+    The backend currently broadcasts profile changes via the
+    ``user:{id}`` topic (see :pyfunc:`zerg.websocket.manager.TopicConnectionManager`).
+    However the generic *subscribe* handler previously rejected the "user"
+    topic type, causing the frontend to receive *error* frames on page load
+    when it attempted to listen for updates of the current profile.
+
+    This helper mirrors ``_subscribe_agent`` and sends the **initial** profile
+    snapshot back to the browser so all open tabs start with the same data.
+    """
+
+    try:
+        # Fast-path: allow "user:0" placeholder subscription which the
+        # frontend may emit *before* it knows the real user id.  We silently
+        # accept but skip any initial payload so the browser does not spam
+        # the console with error frames during startup.
+        if user_id <= 0:
+            topic = f"user:{user_id}"
+            await topic_manager.subscribe_to_topic(client_id, topic)
+            return
+
+        # Validate user exists – any non-zero id must be present in the DB.
+        user = crud.get_user(db, user_id)
+        if user is None:
+            await send_error(client_id, f"User {user_id} not found", message_id)
+            return
+
+        # Subscribe to dedicated user topic
+        topic = f"user:{user_id}"
+        await topic_manager.subscribe_to_topic(client_id, topic)
+
+        # Send initial user state – we re-use the *user_update* payload shape
+        # already handled by the frontend rather than introducing a new
+        # message type.
+        from zerg.schemas.schemas import UserOut  # Local import to avoid cycle
+
+        user_payload = UserOut.model_validate(user).model_dump()
+
+        await send_to_client(
+            client_id,
+            {
+                "type": "user_update",
+                "message_id": message_id,
+                "data": user_payload,
+            },
+        )
+
+        logger.info("Sent initial user_update for user %s to client %s", user_id, client_id)
+
+    except Exception as e:
+        logger.error(f"Error in _subscribe_user: {str(e)}")
+        await send_error(client_id, "Failed to subscribe to user", message_id)
+
+
 async def handle_subscribe(client_id: str, message: Dict[str, Any], db: Session) -> None:
     """Handle topic subscription requests.
 
@@ -184,6 +245,8 @@ async def handle_subscribe(client_id: str, message: Dict[str, Any], db: Session)
                     await _subscribe_thread(client_id, int(topic_id), subscribe_msg.message_id, db)
                 elif topic_type == "agent":
                     await _subscribe_agent(client_id, int(topic_id), subscribe_msg.message_id, db)
+                elif topic_type == "user":
+                    await _subscribe_user(client_id, int(topic_id), subscribe_msg.message_id, db)
                 else:
                     await send_error(
                         client_id,

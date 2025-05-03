@@ -29,6 +29,7 @@ from zerg.schemas.schemas import ThreadCreate
 from zerg.schemas.schemas import ThreadMessageCreate
 from zerg.schemas.schemas import ThreadMessageResponse
 from zerg.schemas.schemas import ThreadUpdate
+from zerg.schemas.ws_messages import AssistantIdMessage
 from zerg.schemas.ws_messages import StreamChunkMessage
 from zerg.schemas.ws_messages import StreamEndMessage
 from zerg.schemas.ws_messages import StreamStartMessage
@@ -231,8 +232,19 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
 
     for row in created_rows:
         if row.role == "assistant":
-            # Skip duplicate full-message chunk when token streaming was active
-            if not runner.enable_token_stream:
+            if runner.enable_token_stream:
+                # Phase-2: emit the new *assistant_id* frame so the frontend
+                # can link upcoming tool_output chunks to this assistant
+                # bubble while streaming is still in progress.
+                await topic_manager.broadcast_to_topic(
+                    topic,
+                    AssistantIdMessage(
+                        thread_id=thread_id,
+                        message_id=row.id,
+                    ).model_dump(),
+                )
+            else:
+                # Non-token mode: keep sending the full assistant_message
                 await topic_manager.broadcast_to_topic(
                     topic,
                     StreamChunkMessage(

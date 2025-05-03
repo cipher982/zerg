@@ -170,6 +170,26 @@ impl ApiClient {
         Self::fetch_json(&url, "POST", None).await
     }
 
+    // -------------------------------------------------------------------
+    // Authentication & User profile
+    // -------------------------------------------------------------------
+
+    /// Fetch the authenticated user's profile (`/api/users/me`).  Caller is
+    /// responsible for ensuring that a valid JWT is already present in
+    /// localStorage – otherwise the request will fail with 401.
+    pub async fn fetch_current_user() -> Result<String, JsValue> {
+        let url = format!("{}/api/users/me", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    /// Update (PATCH) the current user's profile via `/api/users/me`.
+    /// Expects `patch_json` to be a JSON string matching the backend
+    /// `UserUpdate` schema, e.g. `{ "display_name": "Alice" }`.
+    pub async fn update_current_user(patch_json: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/users/me", Self::api_base_url());
+        Self::fetch_json(&url, "PUT", Some(patch_json)).await
+    }
+
     // Helper function to make fetch requests
     pub async fn fetch_json(url: &str, method: &str, body: Option<&str>) -> Result<String, JsValue> {
         use web_sys::{Request, RequestInit, RequestMode, Response, Headers};
