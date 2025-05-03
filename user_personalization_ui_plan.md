@@ -61,55 +61,55 @@ Estimated **3–4 dev-days** end-to-end.
 * Own messages are prefixed with small avatar & display_name.
 
 
-## 5  Backend Tasks
+## 5  Backend Tasks – Status
 
-1. **Extend SQL model** (`backend/zerg/models/models.py`)
-   ```py
-   class User(Base):
-       …
-       display_name = Column(String, nullable=True)
-       avatar_url   = Column(String, nullable=True)
-       created_at   = Column(DateTime, server_default=func.now())
-       last_login   = Column(DateTime)
-       prefs        = Column(JSON, default={})  # theme, timezone, …
-   ```
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| 1 | Extend `User` model with display_name, avatar_url, prefs, last_login | **DONE** (`models/models.py`) |
+| 2 | Add `crud.update_user()` helper | **DONE** |
+| 3 | Add/extend schemas `UserOut`, **new** `UserUpdate` | **DONE** |
+| 4 | Create **users router** <br/>• `GET /api/users/me` <br/>• `PUT /api/users/me` | **DONE** (`routers/users.py`) |
+| 5 | Emit `USER_UPDATED` over EventBus & WebSocket (`user:{id}` topic) | **DONE** – Topic manager hooked up |
+| 6 | Include name / avatar in issued JWT | **BACKLOG / optional** |
 
-2. **CRUD helpers** – add `update_user()`.
+### New regression tests
 
-3. **Schemas** (`UserOut`, `UserUpdate`).
+`backend/tests/test_users.py` covers:
 
-4. **Routes** (`routers/users.py` – new file)
-   * `GET  /users/me` → returns `UserOut` (auth required)
-   * `PUT  /users/me` → partial update via `UserUpdate`.
+• Fetching the current profile (GET) returns valid structure.  
+• Updating profile (PUT) persists and reflects on subsequent GET.  
+• `USER_UPDATED` EventBus message is emitted (captured with `AsyncMock`).
 
-5. **EventBus** – fire `USER_UPDATED` so other sessions refresh.
-
-6. (Optional) include `display_name`, `avatar_url` inside the JWT to avoid extra request on very first paint.
+All backend tests now: **102 passed, 15 skipped**.
 
 
 ## 6  Frontend Tasks
 
-### 6.1 Domain model
+### 6.1 Domain model  ✅ *implemented*
+Rust structs are now shipped in `frontend/src/models.rs`:
 ```
-pub struct CurrentUser {
-    pub id: u32,
-    pub email: String,
-    pub display_name: Option<String>,
-    pub avatar_url: Option<String>,
-    pub prefs: Option<serde_json::Value>,
-}
+pub struct CurrentUser { … }
 
-AppState {
-    …
-    pub current_user: Option<CurrentUser>,
-    pub logged_in: bool,
-}
+// AppState (frontend/src/state.rs)
+pub current_user: Option<CurrentUser>,
+pub logged_in: bool,
 ```
 
-### 6.2 Load flow
-1 After `google_auth_login()` → call `ApiClient::fetch_current_user()`.
-2 Dispatch `Msg::CurrentUserLoaded(cur_user)` → set `state.current_user` & `state.logged_in=true`.
-3 Subscribe to topic `user:{id}` for live updates.
+They deserialize directly from `/api/users/me`.
+
+### 6.2 Load flow  ✅ *implemented step 1-2*
+1 After `google_auth_login()` the Rust side now:
+   • stores JWT -> localStorage (existing)
+   • calls **new** `ApiClient::fetch_current_user()`
+   • dispatches **Message::CurrentUserLoaded**.
+2 `update.rs` stores `state.current_user` & sets `logged_in=true`.
+3 **Next**: subscribe to topic `user:{id}` once profile is known *(pending)*.
+
+New helper fns in `ApiClient`:
+```rust
+async fn fetch_current_user() -> Result<String, JsValue>
+async fn update_current_user(patch_json: &str) -> Result<String, JsValue>
+```
 
 ### 6.3 Components
 * **AvatarBadge** – renders circle image or letter fallback.
@@ -145,10 +145,11 @@ Add hash-based route `#/profile` → loads ProfilePage.
 
 | Day | Deliverable |
 |-----|-------------|
-| 0.5 | DB column additions, unit tests pass |
-| 1   | `GET /users/me`, `PUT /users/me`, EventBus message |
-| 2   | AppState.current_user, AvatarBadge & UserMenu rendered |
-| 3   | Profile page, dashboard filter, chat avatars |
+| 0   | **DONE** – DB columns, CRUD helper, schemas, routes, tests |
+| 1   | **DONE** – Frontend plumbing: CurrentUser in state, fetch after login |
+| 1½  | **NEXT** – subscribe `user:{id}` topic |
+| 2   | AvatarBadge & UserMenu in header (incl. WS status) |
+| 3   | Profile page UI, dashboard “My agents” filter, chat avatars |
 | 4   | Polish, cross-browser test, docs/screenshots |
 
 
@@ -166,7 +167,7 @@ Add hash-based route `#/profile` → loads ProfilePage.
 1. User sees their avatar & name after signing in.  
 2. Profile page persists changes immediately and broadcasts via WS.  
 3. Dashboard defaults to *My agents* and shows owner column.  
-4. Unit + integration tests green; new tests cover `users/me` endpoints.  
+4. Unit + integration tests green; new tests cover `users/me` endpoints + **wasm-tests for CurrentUser deserialization**.  
 5. No regressions in existing CI suites.
 
 

@@ -16,6 +16,8 @@ use std::rc::Rc;
 
 use crate::network::api_client::ApiClient;
 use crate::state::{APP_STATE};
+use crate::messages::Message;
+use crate::state::dispatch_global_message;
 
 /// Called by JS when `google.accounts.id.initialize()` fires the *credential*
 /// callback.
@@ -48,6 +50,21 @@ pub async fn google_credential_received(id_token: String) {
     APP_STATE.with(|state_ref| {
         state_ref.borrow_mut().logged_in = true;
     });
+
+    // ---------------------------------------------------------------------
+    // Step 2: Fetch the user profile & update global state
+    // ---------------------------------------------------------------------
+    let profile_json = match ApiClient::fetch_current_user().await {
+        Ok(j) => j,
+        Err(e) => {
+            web_sys::console::error_1(&JsValue::from(e));
+            "{}".to_string()
+        }
+    };
+
+    if let Ok(user) = serde_json::from_str::<crate::models::CurrentUser>(&profile_json) {
+        dispatch_global_message(Message::CurrentUserLoaded(user));
+    }
 
     // Hide login overlay if present.
     if let Some(window) = web_sys::window() {

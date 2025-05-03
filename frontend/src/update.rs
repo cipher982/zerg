@@ -26,6 +26,15 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     let mut commands = Vec::new(); // Collect commands to return
 
     match msg {
+        // ---------------------------------------------------------------
+        // Auth / profile handling
+        // ---------------------------------------------------------------
+        Message::CurrentUserLoaded(user) => {
+            state.current_user = Some(user);
+            state.logged_in = true;
+            // After updating profile we simply refresh the UI.
+        }
+
         Message::ToggleView(view) => {
             let view_clone = view.clone();
             state.active_view = view;
