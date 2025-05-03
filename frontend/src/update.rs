@@ -179,6 +179,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // This prevents triggering state saves for every tiny move
             if !state.is_dragging_agent {
                 state.state_modified = true;
+
+                // Repaint immediately so canvas follows the cursor in real-time.
+                // This mirrors the behaviour of node dragging where
+                // `update_node_position()` triggers a draw on every mousemove.
+                state.draw_nodes();
             }
         },
        
