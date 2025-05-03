@@ -266,6 +266,12 @@ pub enum Message {
     // Add the DeleteAgentApi command inside the enum
     DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion
 
+    // -------------------------------------------------------------------
+    // Authentication / User profile
+    // -------------------------------------------------------------------
+    /// The authenticated user's profile has been fetched from `/api/users/me`.
+    CurrentUserLoaded(crate::models::CurrentUser),
+
     // Model management
     SetAvailableModels {
         models: Vec<(String, String)>,

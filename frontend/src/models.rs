@@ -171,6 +171,30 @@ pub struct ApiAgentRun {
 }
 
 // -----------------------------------------------------------------------------
+//  User profile (CurrentUser)
+// -----------------------------------------------------------------------------
+
+/// Authenticated user profile returned from `/api/users/me`.
+///
+/// Only the subset of fields actually required by the frontend is modelled
+/// here.  Additional backend attributes will be ignored during `serde`
+/// deserialization so the backend can evolve freely.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CurrentUser {
+    pub id: u32,
+    pub email: String,
+
+    #[serde(default)]
+    pub display_name: Option<String>,
+
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+
+    #[serde(default)]
+    pub prefs: Option<serde_json::Value>,
+}
+
+// -----------------------------------------------------------------------------
 // Convenience impls
 // -----------------------------------------------------------------------------
 

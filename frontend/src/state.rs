@@ -2,7 +2,16 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::{HashMap, HashSet};
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
-use crate::models::{Node, NodeType, Workflow, Edge, ApiAgent, ApiThread, ApiThreadMessage};
+use crate::models::{
+    Node,
+    NodeType,
+    Workflow,
+    Edge,
+    ApiAgent,
+    ApiThread,
+    ApiThreadMessage,
+    CurrentUser,
+};
 use crate::models::ApiAgentRun;
 
 use crate::models::ApiAgentDetails;
@@ -169,6 +178,10 @@ pub struct AppState {
     /// startup from `localStorage["zerg_jwt"]` and updated once the Google
     /// login flow succeeds.
     pub logged_in: bool,
+
+    /// Authenticated user profile loaded from `/api/users/me`.  `None` until
+    /// the profile fetch succeeds (or the session is unauthenticated).
+    pub current_user: Option<crate::models::CurrentUser>,
 }
 
 impl AppState {
@@ -257,6 +270,11 @@ impl AppState {
                     false
                 }
             },
+
+            // Initially no profile is loaded.  Will be set once the frontend
+            // successfully calls `/api/users/me` after a login or page
+            // refresh.
+            current_user: None,
         }
     }
 
