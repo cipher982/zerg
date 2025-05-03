@@ -118,6 +118,11 @@ pub struct AppState {
     pub ws_client: Rc<RefCell<WsClientV2>>,
     pub topic_manager: Rc<RefCell<TopicManager>>,
     pub streaming_threads: HashSet<u32>,
+
+    /// Threads for which the server is sending *token level* chunks.  This is
+    /// detected lazily when the first `assistant_token` chunk is observed so
+    /// we can adapt placeholder/bubble logic accordingly.
+    pub token_mode_threads: HashSet<u32>,
     pub current_agent_id: Option<u32>,
 
     // Track which agent rows are expanded in the dashboard UI so we can
@@ -213,6 +218,8 @@ impl AppState {
             ws_client: ws_client_rc,
             topic_manager: topic_manager_rc,
             streaming_threads: HashSet::new(),
+
+            token_mode_threads: HashSet::new(),
             current_agent_id: None,
 
             expanded_agent_rows: HashSet::new(),

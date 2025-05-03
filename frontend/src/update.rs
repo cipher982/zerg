@@ -1432,7 +1432,45 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
 
         Message::ReceiveStreamChunk { thread_id, content, chunk_type, tool_name, tool_call_id, message_id } => {
-            if chunk_type.as_deref() == Some("tool_output") {
+            if chunk_type.as_deref() == Some("assistant_token") {
+                // ---------------------------
+                // Token-level assistant chunk
+                // ---------------------------
+
+                // Mark the thread as token-mode so future StreamStart calls
+                // know not to create placeholders.
+                state.token_mode_threads.insert(thread_id);
+
+                let messages = state.thread_messages.entry(thread_id).or_default();
+
+                // Ensure there is an assistant bubble to append to.  We need
+                // a *new* bubble when either there are no messages yet or
+                // the last one is not an assistant bubble from the current
+                // stream.
+
+                let need_new_bubble = match messages.last() {
+                    Some(last) => last.role != "assistant" || !state.streaming_threads.contains(&thread_id),
+                    None => true,
+                };
+
+                if need_new_bubble {
+                    let now = chrono::Utc::now().to_rfc3339();
+                    messages.push(ApiThreadMessage {
+                        id: None,
+                        thread_id,
+                        role: "assistant".to_string(),
+                        content: content.clone(),
+                        timestamp: Some(now),
+                        message_type: Some("assistant_message".to_string()),
+                        tool_name: None,
+                        tool_call_id: None,
+                        tool_input: None,
+                        parent_id: None,
+                    });
+                } else if let Some(last) = messages.last_mut() {
+                    last.content.push_str(&content);
+                }
+            } else if chunk_type.as_deref() == Some("tool_output") {
                 // For tool messages, create a new standalone message instead of appending
                 let now = chrono::Utc::now().to_rfc3339();
                 // Attempt to associate this tool output with the *current*
@@ -1498,7 +1536,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         // Remember this message_id as the current one for this stream
                         state.active_streams.insert(thread_id, mid_str);
                 } else if let Some(last_message) = messages.last_mut() {
-                    web_sys::console::log_1(&format!("Update: appending to existing assistant bubble (prev len {}, new chunk len {})", last_message.content.len(), content.len()).into());
                     last_message.content.push_str(&content);
                 }
             }
@@ -1571,56 +1608,15 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // the first chunk starts a new bubble.
             state.active_streams.insert(thread_id, String::new());
 
-            // Insert a *placeholder* assistant bubble so that token chunks
-            // have something to append to.  Without this, the first chunk is
-            // mistakenly appended to the preceding user message because the
-            // logic in `ReceiveStreamChunk` only starts a new bubble when the
-            // incoming `message_id` differs from the one stored in
-            // `active_streams`.  When we stream tokens and *suppress* the
-            // final full `assistant_message` chunk, the `message_id` is empty
-            // – so creating the placeholder here guarantees a dedicated
-            // bubble for the assistant reply.
-
-            let messages = state.thread_messages.entry(thread_id).or_default();
-            // Only add the placeholder if the last message is not already an
-            // unfinished assistant bubble (e.g. reconnection scenario).
-            let needs_placeholder = messages
-                .last()
-                .map(|m| m.role != "assistant" || !state.streaming_threads.contains(&thread_id))
-                .unwrap_or(true);
-
-            if needs_placeholder {
-                let placeholder = ApiThreadMessage {
-                    id: None,
-                    thread_id,
-                    role: "assistant".to_string(),
-                    content: String::new(),
-                    timestamp: Some(chrono::Utc::now().to_rfc3339()),
-                    message_type: Some("assistant_message".to_string()),
-                    tool_name: None,
-                    tool_call_id: None,
-                    tool_input: None,
-                    parent_id: None,
-                };
-                messages.push(placeholder);
-            }
-
-            // Trigger UI update so the empty bubble is rendered immediately
-            if state.current_thread_id == Some(thread_id) {
-                let messages_clone = state.thread_messages.get(&thread_id).cloned();
-                if let Some(msgs) = messages_clone {
-                    state.pending_ui_updates = Some(Box::new(move || {
-                        dispatch_global_message(Message::UpdateConversation(msgs));
-                    }));
-                }
-            }
-
             web_sys::console::log_1(&format!("Stream started for thread {}.", thread_id).into());
         },
 
         Message::ReceiveStreamEnd(thread_id) => {
             // Mark thread as no longer streaming in local state
             state.streaming_threads.remove(&thread_id);
+
+            // Reset token-mode flag so a subsequent run can re-detect the mode
+            state.token_mode_threads.remove(&thread_id);
 
             // Find the last user message and update its status (e.g., mark as completed)
             // We assume the stream ending means the corresponding user message is processed.
