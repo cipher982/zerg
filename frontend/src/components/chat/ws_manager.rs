@@ -115,6 +115,13 @@ impl ChatViewWsManager {
                         }
                         return;
                     }
+                    WsMessage::AssistantId(data) => {
+                        dispatch_global_message(Message::ReceiveAssistantId {
+                            thread_id: data.thread_id,
+                            message_id: data.message_id,
+                        });
+                        return;
+                    }
                     _ => {
                         // Fall through to flat handler below
                     }

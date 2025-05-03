@@ -213,6 +213,10 @@ pub enum Message {
         message_id: Option<String>,
     },
     ReceiveStreamEnd(u32),            // End of streaming response for thread_id
+    /// The backend sent the id of the assistant bubble currently being
+    /// streamed (token mode).  Enables correct parent-linking of tool_output
+    /// messages.
+    ReceiveAssistantId { thread_id: u32, message_id: u32 },
     /// Toggle collapse/expand of a tool call indicator
     ToggleToolExpansion { tool_call_id: String },
     /// Toggle show full vs truncated tool output for a tool call

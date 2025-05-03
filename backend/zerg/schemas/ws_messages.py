@@ -31,6 +31,16 @@ class MessageType(str, Enum):
     STREAM_CHUNK = "stream_chunk"
     STREAM_END = "stream_end"
 
+    # -------------------------------------------------------------------
+    # Phase 2: The backend now emits a tiny *assistant_id* frame right after
+    # it persists an assistant message **when token streaming is enabled**.
+    # This allows the frontend to know the DB primary-key of the bubble that
+    # is currently being streamed so subsequent `tool_output` chunks can be
+    # folded under the correct parent.
+    # -------------------------------------------------------------------
+
+    ASSISTANT_ID = "assistant_id"
+
     # System events
     SYSTEM_STATUS = "system_status"
 
@@ -127,6 +137,24 @@ class StreamEndMessage(BaseMessage):
     thread_id: int
 
 
+# ---------------------------------------------------------------------------
+#   Phase-2: AssistantId helper frame
+# ---------------------------------------------------------------------------
+
+
+class AssistantIdMessage(BaseMessage):
+    """Broadcasts the DB id of the assistant message currently being streamed.
+
+    Only sent when *LLM_TOKEN_STREAM* feature flag is **on** because in that
+    mode the backend suppresses the duplicate ``assistant_message`` chunk.
+    """
+
+    type: MessageType = MessageType.ASSISTANT_ID
+
+    thread_id: int
+    message_id: int
+
+
 # Agent message schemas
 class SubscribeAgentMessage(BaseMessage):
     """Request to subscribe to an agent's events."""
@@ -166,6 +194,7 @@ OutgoingMessage = Union[
     StreamStartMessage,
     StreamChunkMessage,
     StreamEndMessage,
+    AssistantIdMessage,
     AgentStateMessage,  # Add agent state
     AgentEventMessage,  # Add agent event
 ]

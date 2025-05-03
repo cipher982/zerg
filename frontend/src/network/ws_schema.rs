@@ -46,6 +46,10 @@ pub enum WsMessage {
     #[serde(rename = "stream_end")]
     StreamEnd(WsStreamEnd),
 
+    // Phase-2: id of the assistant bubble currently being streamed.
+    #[serde(rename = "assistant_id")]
+    AssistantId(WsAssistantId),
+
     // A freshly created message in a thread – emitted both when the user
     // posts a message (`thread_message`) and when the backend inserts a new
     // assistant/tool message automatically (alias `thread_message_created`).
@@ -157,6 +161,16 @@ pub struct WsStreamEnd {
 }
 
 // ---------------------------------------------------------------------------
+//   AssistantId helper payload
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct WsAssistantId {
+    pub thread_id: u32,
+    pub message_id: u32,
+}
+
+// ---------------------------------------------------------------------------
 //   Conversions into full REST models used by the dashboard UI
 // ---------------------------------------------------------------------------
 
@@ -196,6 +210,7 @@ impl WsMessage {
             WsMessage::StreamStart(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::StreamChunk(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::StreamEnd(data) => Some(format!("thread:{}", data.thread_id)),
+            WsMessage::AssistantId(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::ThreadMessage { data } => Some(format!("thread:{}", data.thread_id)),
             WsMessage::Unknown => None,
         }

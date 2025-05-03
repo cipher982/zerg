@@ -1475,17 +1475,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 let now = chrono::Utc::now().to_rfc3339();
                 // Attempt to associate this tool output with the *current*
                 // assistant message being streamed for the same thread.  The
-                // active_streams map stores the `message_id` (as a string)
-                // for the assistant bubble that is currently receiving
-                // chunks.  Converting that ID back to `u32` lets the chat UI
-                // link the tool output to its parent.  If parsing fails we
-                // fall back to `None` so the UI will still display the tool
-                // message as a standalone bubble (see chat_view.rs).
+                // `active_streams` keeps the *current* assistant row id (if
+                // already known).  We use it as `parent_id` so tool_output
+                // bubbles fold under the correct assistant bubble.  When the
+                // id is not yet known (`None`) the tool bubble will render as
+                // a standalone block – it will be reconciled by a later
+                // `ReceiveAssistantId` event.
 
-                let parent_id = state
-                    .active_streams
-                    .get(&thread_id)
-                    .and_then(|mid| mid.parse::<u32>().ok());
+                let parent_id = state.current_assistant_id(thread_id);
 
                 let tool_message = ApiThreadMessage {
                     id: None,
@@ -1512,15 +1509,18 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 // stream).
                 let messages = state.thread_messages.entry(thread_id).or_default();
 
-                let mid_str = message_id.clone().unwrap_or_default();
-                let current_mid = state.active_streams.get(&thread_id);
-                let start_new = current_mid.map(|id| id != &mid_str).unwrap_or(true);
+                let mid_u32 = message_id
+                    .as_ref()
+                    .and_then(|s| s.parse::<u32>().ok());
+
+                let current_mid = state.current_assistant_id(thread_id);
+                let start_new = current_mid != mid_u32;
 
                 if start_new {
                     web_sys::console::log_1(&"Update: starting NEW assistant bubble".into());
                         let now = chrono::Utc::now().to_rfc3339();
                         let assistant_message = ApiThreadMessage {
-                            id: message_id.and_then(|s| s.parse::<u32>().ok()),
+                            id: mid_u32,
                             thread_id,
                             role: "assistant".to_string(),
                             content: content.clone(),
@@ -1534,7 +1534,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         messages.push(assistant_message);
 
                         // Remember this message_id as the current one for this stream
-                        state.active_streams.insert(thread_id, mid_str);
+                        state.active_streams.insert(thread_id, mid_u32);
                 } else if let Some(last_message) = messages.last_mut() {
                     last_message.content.push_str(&content);
                 }
@@ -1606,7 +1606,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
             // Reset current assistant-message tracker for this thread so that
             // the first chunk starts a new bubble.
-            state.active_streams.insert(thread_id, String::new());
+            state.active_streams.insert(thread_id, None);
 
             web_sys::console::log_1(&format!("Stream started for thread {}.", thread_id).into());
         },
@@ -1638,6 +1638,27 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
 
             web_sys::console::log_1(&format!("Stream ended for thread {}.", thread_id).into());
+        },
+
+        // -----------------------------------------------------------------
+        // AssistantId – arrives once per *token-mode* stream right after the
+        // backend persisted the assistant row.  We store the id so upcoming
+        // tool_output chunks can link to this bubble.  Additionally we patch
+        // the last assistant message (if id is still None) so future UI
+        // operations have the correct PK.
+        // -----------------------------------------------------------------
+
+        Message::ReceiveAssistantId { thread_id, message_id } => {
+            web_sys::console::log_1(&format!("Received AssistantId {} for thread {}", message_id, thread_id).into());
+
+            state.active_streams.insert(thread_id, Some(message_id));
+
+            // Update the most recent assistant bubble id if it was None.
+            if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
+                if let Some(last) = messages.iter_mut().rev().find(|m| m.role == "assistant" && m.id.is_none()) {
+                    last.id = Some(message_id);
+                }
+            }
         },
         
         // Toggle collapse/expand state for a tool call indicator
