@@ -97,13 +97,13 @@ pub logged_in: bool,
 
 They deserialize directly from `/api/users/me`.
 
-### 6.2 Load flow  ✅ *implemented step 1-2*
+### 6.2 Load flow  ✅ *complete*
 1 After `google_auth_login()` the Rust side now:
    • stores JWT -> localStorage (existing)
    • calls **new** `ApiClient::fetch_current_user()`
    • dispatches **Message::CurrentUserLoaded**.
 2 `update.rs` stores `state.current_user` & sets `logged_in=true`.
-3 **Next**: subscribe to topic `user:{id}` once profile is known *(pending)*.
+3 Subscribes to topic `user:{id}` once profile is known; WS `user_update` frames now refresh avatar live.
 
 New helper fns in `ApiClient`:
 ```rust
@@ -111,9 +111,9 @@ async fn fetch_current_user() -> Result<String, JsValue>
 async fn update_current_user(patch_json: &str) -> Result<String, JsValue>
 ```
 
-### 6.3 Components
-* **AvatarBadge** – renders circle image or letter fallback.
-* **UserMenu** – top-bar component showing AvatarBadge, WS status dot & dropdown.
+### 6.3 Components  ✅
+* **AvatarBadge** – implemented in `frontend/src/components/avatar_badge.rs`.
+* **UserMenu** – implemented & mounted automatically – shows Avatar, dropdown (Profile / Logout) and updates on WS events.
 * **ProfilePage** – two-column form; messages: `ProfileFieldChanged`, `SaveProfile`.
 
 ### 6.4 Routing
@@ -147,7 +147,9 @@ Add hash-based route `#/profile` → loads ProfilePage.
 |-----|-------------|
 | 0   | **DONE** – DB columns, CRUD helper, schemas, routes, tests |
 | 1   | **DONE** – Frontend plumbing: CurrentUser in state, fetch after login |
-| 1½  | **NEXT** – subscribe `user:{id}` topic |
+| 1½  | **DONE** – WS `user:{id}` subscription & live updates |
+| 2   | AvatarBadge & UserMenu in header (incl. WS status) **DONE** |
+| 2½  | Profile page UI & routing |
 | 2   | AvatarBadge & UserMenu in header (incl. WS status) |
 | 3   | Profile page UI, dashboard “My agents” filter, chat avatars |
 | 4   | Polish, cross-browser test, docs/screenshots |

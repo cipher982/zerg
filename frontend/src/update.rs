@@ -3,10 +3,12 @@
 use crate::messages::{Message, Command};
 use crate::state::{AppState, APP_STATE, dispatch_global_message, ToolUiState};
 use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent};
-use crate::constants::{
+use crate::{
+    constants::{
     DEFAULT_NODE_WIDTH,
     DEFAULT_NODE_HEIGHT,
     DEFAULT_THREAD_TITLE,
+    },
 };
 use web_sys::Document;
 use wasm_bindgen::JsValue;
@@ -16,6 +18,8 @@ use serde_json;
 use rand;
 use chrono;
 use std::collections::HashSet;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 // Bring legacy helper trait into scope so its methods are usable on CanvasNode
 // Legacy helper trait no longer needed after decoupling cleanup.
@@ -32,7 +36,40 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::CurrentUserLoaded(user) => {
             state.current_user = Some(user);
             state.logged_in = true;
-            // After updating profile we simply refresh the UI.
+
+            // Mount / refresh user menu asynchronously after borrow ends.
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::user_menu::mount_user_menu(&doc);
+                    }
+                }
+            })));
+
+            // Subscribe to user:{id} topic for live updates.
+            if let Some(user_id) = state.current_user.as_ref().map(|u| u.id) {
+                let topic = format!("user:{}", user_id);
+                let topic_manager_rc = state.topic_manager.clone();
+
+                commands.push(Command::UpdateUI(Box::new(move || {
+                    if let Ok(mut tm) = topic_manager_rc.try_borrow_mut() {
+                        // Prepare handler closure
+                        use std::rc::Rc;
+                        use std::cell::RefCell;
+                        let handler: crate::network::topic_manager::TopicHandler = Rc::new(RefCell::new(move |payload: serde_json::Value| {
+                        if let Ok(msg) = serde_json::from_value::<crate::network::ws_schema::WsMessage>(payload.clone()) {
+                            if let crate::network::ws_schema::WsMessage::UserUpdate { data } = msg {
+                                let profile: crate::models::CurrentUser = data.into();
+                                crate::state::dispatch_global_message(Message::CurrentUserLoaded(profile));
+                                return;
+                            }
+                        }
+                        }));
+
+                        let _ = tm.subscribe(topic, handler);
+                    }
+                })));
+            }
         }
 
         Message::ToggleView(view) => {
