@@ -1507,34 +1507,34 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 // the *active_streams* tracker. We create a new bubble when
                 // the message_id changes (or is empty at the start of a
                 // stream).
-                let messages = state.thread_messages.entry(thread_id).or_default();
-
+                // --- FIXED: Compute all immutable info first ---
                 let mid_u32 = message_id
                     .as_ref()
                     .and_then(|s| s.parse::<u32>().ok());
-
                 let current_mid = state.current_assistant_id(thread_id);
                 let start_new = current_mid != mid_u32;
 
+                // --- Only now, borrow messages mutably ---
+                let messages = state.thread_messages.entry(thread_id).or_default();
                 if start_new {
                     web_sys::console::log_1(&"Update: starting NEW assistant bubble".into());
-                        let now = chrono::Utc::now().to_rfc3339();
-                        let assistant_message = ApiThreadMessage {
-                            id: mid_u32,
-                            thread_id,
-                            role: "assistant".to_string(),
-                            content: content.clone(),
-                            timestamp: Some(now),
-                            message_type: chunk_type.clone(),
-                            tool_name: None,
-                            tool_call_id: None,
-                            tool_input: None,
-                            parent_id: None,
-                        };
-                        messages.push(assistant_message);
+                    let now = chrono::Utc::now().to_rfc3339();
+                    let assistant_message = ApiThreadMessage {
+                        id: mid_u32,
+                        thread_id,
+                        role: "assistant".to_string(),
+                        content: content.clone(),
+                        timestamp: Some(now),
+                        message_type: chunk_type.clone(),
+                        tool_name: None,
+                        tool_call_id: None,
+                        tool_input: None,
+                        parent_id: None,
+                    };
+                    messages.push(assistant_message);
 
-                        // Remember this message_id as the current one for this stream
-                        state.active_streams.insert(thread_id, mid_u32);
+                    // Remember this message_id as the current one for this stream
+                    state.active_streams.insert(thread_id, mid_u32);
                 } else if let Some(last_message) = messages.last_mut() {
                     last_message.content.push_str(&content);
                 }
