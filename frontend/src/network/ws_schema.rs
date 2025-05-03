@@ -59,6 +59,10 @@ pub enum WsMessage {
     )]
     ThreadMessage { data: WsThreadMessage },
 
+    // Profile update of the authenticated user.
+    #[serde(rename = "user_update")]
+    UserUpdate { data: WsUserUpdate },
+
     #[serde(other)]
     Unknown,
 }
@@ -110,6 +114,24 @@ pub struct WsAgentEvent {
 
     #[serde(default)]
     pub last_error: Option<String>,
+
+    #[serde(flatten)]
+    pub extra: Value,
+}
+
+/// Payload for user profile update broadcast.
+#[derive(Debug, Deserialize, Clone)]
+pub struct WsUserUpdate {
+    pub id: u32,
+
+    #[serde(default)]
+    pub email: Option<String>,
+
+    #[serde(default)]
+    pub display_name: Option<String>,
+
+    #[serde(default)]
+    pub avatar_url: Option<String>,
 
     #[serde(flatten)]
     pub extra: Value,
@@ -212,7 +234,24 @@ impl WsMessage {
             WsMessage::StreamEnd(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::AssistantId(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::ThreadMessage { data } => Some(format!("thread:{}", data.thread_id)),
+            WsMessage::UserUpdate { data } => Some(format!("user:{}", data.id)),
             WsMessage::Unknown => None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//   Conversions
+// ---------------------------------------------------------------------------
+
+impl From<WsUserUpdate> for crate::models::CurrentUser {
+    fn from(ws: WsUserUpdate) -> Self {
+        crate::models::CurrentUser {
+            id: ws.id,
+            email: ws.email.unwrap_or_default(),
+            display_name: ws.display_name,
+            avatar_url: ws.avatar_url,
+            prefs: None,
         }
     }
 }

@@ -296,8 +296,10 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                             // Then force a page reload to ensure everything is fresh
                             // Use a timeout to allow the UI to update first
                             let reload_callback = Closure::wrap(Box::new(move || {
-                                // Use the raw JS API to force a hard refresh (no cache)
-                                js_sys::eval("window.location.reload(true)").unwrap();
+                                // Force a hard refresh using the native Location API
+                                if let Some(win) = web_sys::window() {
+                                    let _ = win.location().reload();
+                                }
                             }) as Box<dyn FnMut()>);
                             
                             let _ = window.set_timeout_with_callback_and_timeout_and_arguments(

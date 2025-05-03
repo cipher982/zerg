@@ -155,6 +155,21 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
     
     // Initialize data loading
     initialize_data_loading();
+
+    // -------------------------------------------------------------------
+    // If a JWT is present fetch the current user profile.  This also covers
+    // the *page refresh* scenario where Google login overlay is skipped.
+    // -------------------------------------------------------------------
+
+    wasm_bindgen_futures::spawn_local(async move {
+        if crate::state::APP_STATE.with(|s| s.borrow().logged_in) {
+            if let Ok(profile_json) = crate::network::api_client::ApiClient::fetch_current_user().await {
+                if let Ok(user) = serde_json::from_str::<crate::models::CurrentUser>(&profile_json) {
+                    dispatch_global_message(crate::messages::Message::CurrentUserLoaded(user));
+                }
+            }
+        }
+    });
     
     // By default, start with dashboard view
     web_sys::console::log_1(&"Setting initial view to Dashboard".into());

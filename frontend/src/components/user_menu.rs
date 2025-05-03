@@ -1,0 +1,97 @@
+//! UserMenu – top-bar dropdown with avatar and quick actions.
+
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use web_sys::{Document, Element, HtmlElement};
+
+use crate::state::APP_STATE;
+use crate::components::avatar_badge;
+
+/// Create & mount the user menu inside the `header` element.  Calling this
+/// multiple times is safe – it will update the avatar if the element already
+/// exists.
+pub fn mount_user_menu(document: &Document) -> Result<(), JsValue> {
+    let header = document
+        .get_element_by_id("header")
+        .ok_or(JsValue::from_str("header element missing"))?;
+
+    // Ensure container exists
+    let container: HtmlElement = if let Some(el) = document.get_element_by_id("user-menu-container") {
+        el.dyn_into()?
+    } else {
+        let el: HtmlElement = document.create_element("div")?.dyn_into()?;
+        el.set_id("user-menu-container");
+        el.set_class_name("user-menu-container");
+        header.append_child(&el)?;
+        el
+    };
+
+    // Wipe existing children (simpler stateless render)
+    while let Some(child) = container.first_child() {
+        let _ = container.remove_child(&child);
+    }
+
+    // Retrieve profile
+    let maybe_user = APP_STATE.with(|s| s.borrow().current_user.clone());
+    if let Some(user) = maybe_user {
+        // AvatarBadge
+        let avatar_el = avatar_badge::render(document, &user)?;
+        container.append_child(&avatar_el)?;
+
+        // Dropdown toggle (simplified – clicking avatar toggles menu)
+        let dropdown = document.create_element("div")?;
+        dropdown.set_class_name("user-dropdown hidden");
+
+        let profile_item = create_menu_item(document, "Profile")?;
+        let logout_item = create_menu_item(document, "Logout")?;
+
+        // Event listeners ------------------------------------------------
+        {
+            let _cb = Closure::wrap(Box::new(move |_evt: web_sys::MouseEvent| {
+                // Navigate to /#/profile
+                if let Some(win) = web_sys::window() {
+                    win.location().set_hash("#/profile").ok();
+                }
+            }) as Box<dyn FnMut(_)>);
+            profile_item.add_event_listener_with_callback("click", _cb.as_ref().unchecked_ref())?;
+            _cb.forget();
+        }
+
+        {
+            let _cb = Closure::wrap(Box::new(move |_evt: web_sys::MouseEvent| {
+                // Clear JWT → reload page
+                crate::utils::logout().ok();
+                web_sys::window().unwrap().location().reload().ok();
+            }) as Box<dyn FnMut(_)>);
+            logout_item.add_event_listener_with_callback("click", _cb.as_ref().unchecked_ref())?;
+            _cb.forget();
+        }
+
+        dropdown.append_child(&profile_item)?;
+        dropdown.append_child(&logout_item)?;
+
+        container.append_child(&dropdown)?;
+
+        // Toggle show/hide on avatar click
+        {
+            let dropdown_clone = dropdown.clone();
+            let _cb = Closure::wrap(Box::new(move |_evt: web_sys::MouseEvent| {
+                let cls = dropdown_clone.class_list();
+                if cls.contains("hidden") { let _ = cls.remove_1("hidden"); } else { let _ = cls.add_1("hidden"); }
+            }) as Box<dyn FnMut(_)>);
+            avatar_el
+                .unchecked_ref::<HtmlElement>()
+                .add_event_listener_with_callback("click", _cb.as_ref().unchecked_ref())?;
+            _cb.forget();
+        }
+    }
+
+    Ok(())
+}
+
+fn create_menu_item(document: &Document, label: &str) -> Result<Element, JsValue> {
+    let item = document.create_element("div")?;
+    item.set_class_name("user-menu-item");
+    item.set_inner_html(label);
+    Ok(item)
+}

@@ -8,6 +8,8 @@ pub mod canvas_editor;
 pub mod agent_debug_modal;
 pub mod agent_config_modal;
 pub mod auth;
+pub mod avatar_badge;
+pub mod user_menu;
 
 // utilities
 
