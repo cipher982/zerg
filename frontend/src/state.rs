@@ -10,7 +10,6 @@ use crate::models::{
     ApiAgent,
     ApiThread,
     ApiThreadMessage,
-    CurrentUser,
 };
 use crate::models::ApiAgentRun;
 
