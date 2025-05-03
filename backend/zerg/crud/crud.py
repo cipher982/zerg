@@ -156,7 +156,7 @@ def update_user(
     *,
     display_name: str | None = None,
     avatar_url: str | None = None,
-    prefs: Dict[str, Any] | None = None,
+    prefs: Optional[Dict[str, Any]] = None,
 ) -> User | None:
     """Partial update for the *User* table.
 
