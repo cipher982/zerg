@@ -36,12 +36,15 @@ pub enum WsMessage {
     ThreadEvent { data: WsThreadEvent },
 
     // Token-level streaming coming from AgentRunner.
+    // Streaming events are emitted by the backend with *flat* payload – no
+    // nested `data` object.  Therefore we map them directly onto the helper
+    // structs using *tuple* variants.
     #[serde(rename = "stream_start")]
-    StreamStart { data: WsStreamStart },
+    StreamStart(WsStreamStart),
     #[serde(rename = "stream_chunk")]
-    StreamChunk { data: WsStreamChunk },
+    StreamChunk(WsStreamChunk),
     #[serde(rename = "stream_end")]
-    StreamEnd { data: WsStreamEnd },
+    StreamEnd(WsStreamEnd),
 
     // A freshly created message in a thread – emitted both when the user
     // posts a message (`thread_message`) and when the backend inserts a new
@@ -190,9 +193,9 @@ impl WsMessage {
             WsMessage::RunUpdate { data } => Some(format!("agent:{}", data.agent_id)),
             WsMessage::AgentEvent { data } => Some(format!("agent:{}", data.id)),
             WsMessage::ThreadEvent { data } => Some(format!("thread:{}", data.thread_id)),
-            WsMessage::StreamStart { data } => Some(format!("thread:{}", data.thread_id)),
-            WsMessage::StreamChunk { data } => Some(format!("thread:{}", data.thread_id)),
-            WsMessage::StreamEnd { data } => Some(format!("thread:{}", data.thread_id)),
+            WsMessage::StreamStart(data) => Some(format!("thread:{}", data.thread_id)),
+            WsMessage::StreamChunk(data) => Some(format!("thread:{}", data.thread_id)),
+            WsMessage::StreamEnd(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::ThreadMessage { data } => Some(format!("thread:{}", data.thread_id)),
             WsMessage::Unknown => None,
         }

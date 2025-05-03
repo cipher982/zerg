@@ -1571,6 +1571,50 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // the first chunk starts a new bubble.
             state.active_streams.insert(thread_id, String::new());
 
+            // Insert a *placeholder* assistant bubble so that token chunks
+            // have something to append to.  Without this, the first chunk is
+            // mistakenly appended to the preceding user message because the
+            // logic in `ReceiveStreamChunk` only starts a new bubble when the
+            // incoming `message_id` differs from the one stored in
+            // `active_streams`.  When we stream tokens and *suppress* the
+            // final full `assistant_message` chunk, the `message_id` is empty
+            // – so creating the placeholder here guarantees a dedicated
+            // bubble for the assistant reply.
+
+            let messages = state.thread_messages.entry(thread_id).or_default();
+            // Only add the placeholder if the last message is not already an
+            // unfinished assistant bubble (e.g. reconnection scenario).
+            let needs_placeholder = messages
+                .last()
+                .map(|m| m.role != "assistant" || !state.streaming_threads.contains(&thread_id))
+                .unwrap_or(true);
+
+            if needs_placeholder {
+                let placeholder = ApiThreadMessage {
+                    id: None,
+                    thread_id,
+                    role: "assistant".to_string(),
+                    content: String::new(),
+                    timestamp: Some(chrono::Utc::now().to_rfc3339()),
+                    message_type: Some("assistant_message".to_string()),
+                    tool_name: None,
+                    tool_call_id: None,
+                    tool_input: None,
+                    parent_id: None,
+                };
+                messages.push(placeholder);
+            }
+
+            // Trigger UI update so the empty bubble is rendered immediately
+            if state.current_thread_id == Some(thread_id) {
+                let messages_clone = state.thread_messages.get(&thread_id).cloned();
+                if let Some(msgs) = messages_clone {
+                    state.pending_ui_updates = Some(Box::new(move || {
+                        dispatch_global_message(Message::UpdateConversation(msgs));
+                    }));
+                }
+            }
+
             web_sys::console::log_1(&format!("Stream started for thread {}.", thread_id).into());
         },
 

@@ -176,52 +176,42 @@ impl TopicManager {
 
         use crate::network::ws_schema::WsMessage;
 
-        // Fast-path: try structured deserialisation first.  This covers the
-        // majority of event traffic (agent + thread + stream + run).  Falling
-        // back to the legacy heuristic only when the payload is not covered
-        // keeps backward-compat with exotic frames such as "pong" or admin
-        // messages.
+        // Try to parse via strongly-typed WsMessage.  Any deserialisation
+        // error is considered a *bug* – we log an error but otherwise ignore
+        // the frame so the issue surfaces quickly during development.
 
         let topic_str_option: Option<String> = match serde_json::from_value::<WsMessage>(message.clone()) {
             Ok(parsed) => parsed.topic(),
-            Err(_) => None,
+            Err(err) => {
+                web_sys::console::error_1(&format!("TopicManager: failed to parse WS message: {:?} – raw: {:?}", err, message).into());
+                None
+            }
         };
 
-        // --- Call Handlers --- 
         if let Some(topic_str) = topic_str_option {
-            if let Some(handlers) = self.topic_handlers.get(&topic_str) {
-                // Pass the entire original message Value to the handlers
-                // The handler itself will decide how to parse based on message type
-                 let payload_to_handlers = message; // Pass the whole message
+            self.dispatch_to_topic_handlers(&topic_str, message);
+        } else if let Some(t) = message.get("type").and_then(|t| t.as_str()) {
+            // Non-topic frames – log but do not treat as fatal.
+            match t {
+                "pong" => web_sys::console::debug_1(&"WS pong received".into()),
+                "error" => web_sys::console::error_1(&format!("Received WS error frame: {:?}", message).into()),
+                other => web_sys::console::error_1(&format!("Unhandled WS frame type '{}': {:?}", other, message).into()),
+            }
+        }
+    }
 
-                for handler_rc in handlers {
-                     if let Ok(mut handler) = handler_rc.try_borrow_mut() {
-                         // Call the handler with the relevant payload
-                        (*handler)(payload_to_handlers.clone()); 
-                    } else {
-                        web_sys::console::error_1(&format!("Failed to borrow handler for topic {}", topic_str).into());
-                    }
+    /// Helper: run all handlers registered for *topic* with the provided payload.
+    fn dispatch_to_topic_handlers(&self, topic: &str, payload: serde_json::Value) {
+        if let Some(handlers) = self.topic_handlers.get(topic) {
+            for handler_rc in handlers {
+                if let Ok(mut handler) = handler_rc.try_borrow_mut() {
+                    (*handler)(payload.clone());
+                } else {
+                    web_sys::console::error_1(&format!("Failed to borrow handler for topic {}", topic).into());
                 }
-            } else {
-                web_sys::console::log_1(&format!("No handlers registered for determined topic: {}", topic_str).into());
             }
         } else {
-            // Administrative frames like "pong" or generic error payloads do
-            // not belong to a topic; we still want to surface them for
-            // debugging.
-            if let Some(t) = message.get("type").and_then(|t| t.as_str()) {
-                match t {
-                    "pong" => {
-                        web_sys::console::debug_1(&"WS pong received".into());
-                    }
-                    "error" => {
-                        web_sys::console::error_1(&format!("Received WebSocket error message: {:?}", message).into());
-                    }
-                    _ => {
-                        web_sys::console::warn_1(&format!("Unhandled WS admin frame: {}", t).into());
-                    }
-                }
-            }
+            web_sys::console::debug_1(&format!("No handlers registered for determined topic: {}", topic).into());
         }
     }
 
