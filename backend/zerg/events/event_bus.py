@@ -36,6 +36,9 @@ class EventType(str, Enum):
     SYSTEM_STATUS = "system_status"
     ERROR = "error"
 
+    # User events (profile updates, etc.)
+    USER_UPDATED = "user_updated"
+
 
 class EventBus:
     """Central event bus for publishing and subscribing to events."""

@@ -111,13 +111,24 @@ pub struct AppState {
     pub thread_messages: HashMap<u32, Vec<ApiThreadMessage>>,
     pub is_chat_loading: bool,
     // New field for handling streaming responses
-    pub active_streams: HashMap<u32, String>,
+    /// Tracks the **current assistant message** id for every thread that is
+    /// actively streaming.  `None` means we have not yet received the
+    /// `assistant_id` frame (token-stream mode) or the first
+    /// `assistant_message` chunk (non token mode).  Once the id is known we
+    /// replace the entry with `Some(id)` so tool_output bubbles can link to
+    /// their parent.
+    pub active_streams: HashMap<u32, Option<u32>>,
     // Pending UI updates to avoid recursive borrow issues
     pub pending_ui_updates: Option<Box<dyn FnOnce()>>,
     // --- WebSocket v2 and Topic Manager --- 
     pub ws_client: Rc<RefCell<WsClientV2>>,
     pub topic_manager: Rc<RefCell<TopicManager>>,
     pub streaming_threads: HashSet<u32>,
+
+    /// Threads for which the server is sending *token level* chunks.  This is
+    /// detected lazily when the first `assistant_token` chunk is observed so
+    /// we can adapt placeholder/bubble logic accordingly.
+    pub token_mode_threads: HashSet<u32>,
     pub current_agent_id: Option<u32>,
 
     // Track which agent rows are expanded in the dashboard UI so we can
@@ -213,6 +224,8 @@ impl AppState {
             ws_client: ws_client_rc,
             topic_manager: topic_manager_rc,
             streaming_threads: HashSet::new(),
+
+            token_mode_threads: HashSet::new(),
             current_agent_id: None,
 
             expanded_agent_rows: HashSet::new(),
@@ -245,6 +258,12 @@ impl AppState {
                 }
             },
         }
+    }
+
+    /// Return the assistant message id that is **currently being streamed**
+    /// for the given `thread_id`, if known.
+    pub fn current_assistant_id(&self, thread_id: u32) -> Option<u32> {
+        self.active_streams.get(&thread_id).and_then(|opt| *opt)
     }
 
     pub fn add_node(&mut self, text: String, x: f64, y: f64, node_type: NodeType) -> String {
