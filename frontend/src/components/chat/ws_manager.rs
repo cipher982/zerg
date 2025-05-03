@@ -38,6 +38,39 @@ impl ChatViewWsManager {
         Ok(())
     }
 
+    /// Internal helper to convert a structured `WsStreamChunk` into the
+    /// `Message::ReceiveStreamChunk` UI event.
+    fn forward_stream_chunk(thread_id: u32, chunk: WsStreamChunk) {
+        let WsStreamChunk {
+            thread_id: _tid,
+            chunk_type,
+            content,
+            extra,
+        } = chunk;
+
+        let tool_name = extra
+            .get("tool_name")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let tool_call_id = extra
+            .get("tool_call_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let message_id = extra
+            .get("message_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        dispatch_global_message(Message::ReceiveStreamChunk {
+            thread_id,
+            content: content.unwrap_or_default(),
+            chunk_type: Some(chunk_type),
+            tool_name,
+            tool_call_id,
+            message_id,
+        });
+    }
+
     /// Subscribe to thread-related events using the provided ITopicManager.
     pub(crate) fn subscribe_to_thread_events(
         &mut self,
@@ -50,70 +83,54 @@ impl ChatViewWsManager {
         // Strongly-typed handler using WsMessage enum
         // -----------------------------------------------------------------
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
-            match serde_json::from_value::<WsMessage>(data.clone()) {
-                Ok(WsMessage::ThreadMessage { data: msg }) => {
-                    let api_msg: ApiThreadMessage = msg.into();
-                    dispatch_global_message(Message::ReceiveNewMessage(api_msg));
-                }
-
-                Ok(WsMessage::StreamStart { .. }) => {
-                    dispatch_global_message(Message::ReceiveStreamStart(thread_id));
-                }
-
-                Ok(WsMessage::StreamChunk { data: chunk }) => {
-                    // Convert to global message
-                    let WsStreamChunk {
-                        thread_id: _tid,
-                        chunk_type,
-                        content,
-                        extra,
-                    } = chunk;
-
-                    // Extract optional tool metadata
-                    let tool_name = extra
-                        .get("tool_name")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    let tool_call_id = extra
-                        .get("tool_call_id")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-                    let message_id = extra
-                        .get("message_id")
-                        .and_then(|v| v.as_str())
-                        .map(|s| s.to_string());
-
-                    dispatch_global_message(Message::ReceiveStreamChunk {
-                        thread_id,
-                        content: content.unwrap_or_default(),
-                        chunk_type: Some(chunk_type),
-                        tool_name,
-                        tool_call_id,
-                        message_id,
-                    });
-                }
-
-                Ok(WsMessage::StreamEnd { .. }) => {
-                    dispatch_global_message(Message::ReceiveStreamEnd(thread_id));
-                }
-
-                // Thread updates (title change, etc.) – still use old JSON nibble
-                Ok(WsMessage::ThreadEvent { data: thread_evt }) => {
-                    let maybe_title = thread_evt.extra.get("title").and_then(|v| v.as_str());
-                    if let Some(title) = maybe_title {
-                        dispatch_global_message(Message::ReceiveThreadUpdate {
-                            thread_id: thread_evt.thread_id,
-                            title: Some(title.to_string()),
+            // -----------------------------------------------------------------
+            // 1. Structured path using the canonical `{ type, data {…}}` shape
+            // -----------------------------------------------------------------
+            if let Ok(parsed) = serde_json::from_value::<WsMessage>(data.clone()) {
+                match parsed {
+                    WsMessage::ThreadMessage { data: msg } => {
+                        let api_msg: ApiThreadMessage = msg.into();
+                        dispatch_global_message(Message::ReceiveNewMessage(api_msg));
+                        return;
+                    }
+                    WsMessage::StreamStart(_) => {
+                        dispatch_global_message(Message::ReceiveStreamStart(thread_id));
+                        return;
+                    }
+                    WsMessage::StreamChunk(chunk) => {
+                        Self::forward_stream_chunk(thread_id, chunk);
+                        return;
+                    }
+                    WsMessage::StreamEnd(_) => {
+                        dispatch_global_message(Message::ReceiveStreamEnd(thread_id));
+                        return;
+                    }
+                    WsMessage::ThreadEvent { data: thread_evt } => {
+                        let maybe_title = thread_evt.extra.get("title").and_then(|v| v.as_str());
+                        if let Some(title) = maybe_title {
+                            dispatch_global_message(Message::ReceiveThreadUpdate {
+                                thread_id: thread_evt.thread_id,
+                                title: Some(title.to_string()),
+                            });
+                        }
+                        return;
+                    }
+                    WsMessage::AssistantId(data) => {
+                        dispatch_global_message(Message::ReceiveAssistantId {
+                            thread_id: data.thread_id,
+                            message_id: data.message_id,
                         });
+                        return;
+                    }
+                    _ => {
+                        // Fall through to flat handler below
                     }
                 }
+            }
 
-                _ => {
-                    // Fallback: log once
-                    if let Some(t) = data.get("type").and_then(|v| v.as_str()) {
-                        web_sys::console::warn_1(&format!("ChatViewWsManager: unhandled WS message type {}", t).into());
-                    }
-                }
+            // If we reached here the message did not match any known variant
+            if let Some(t) = data.get("type").and_then(|v| v.as_str()) {
+                web_sys::console::error_1(&format!("ChatViewWsManager: unhandled WS message type {}", t).into());
             }
         }));
 
