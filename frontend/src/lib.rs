@@ -56,8 +56,26 @@ pub fn start() -> Result<(), JsValue> {
 
     if auth_disabled {
         // Bypass auth completely – mark as logged in and continue startup.
-        state::APP_STATE.with(|s| s.borrow_mut().logged_in = true);
+        // Mark as logged in **before** we call bootstrap so the normal flow
+        // (data loading etc.) proceeds.
+        state::APP_STATE.with(|s| {
+            s.borrow_mut().logged_in = true;
+        });
+
+        // Perform normal UI bootstrap (creates header, status-bar, etc.)
         bootstrap_app_after_login(&document)?;
+
+        // Now that the header DOM exists, inject a *dummy developer user* so
+        // the avatar & dropdown render even though real auth is disabled.
+        let dummy_user = crate::models::CurrentUser {
+            id: 0,
+            email: "dev@example.com".to_string(),
+            display_name: Some("Developer".to_string()),
+            avatar_url: None,
+            prefs: None,
+        };
+
+        dispatch_global_message(crate::messages::Message::CurrentUserLoaded(dummy_user));
         return Ok(());
     }
 
