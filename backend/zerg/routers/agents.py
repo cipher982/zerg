@@ -55,7 +55,8 @@ def _validate_model_or_400(model_id: str) -> None:
 
 # Authentication dependency -------------------------------------------------
 
-from zerg.dependencies.auth import get_current_user
+# NOTE: import placed after validation helper to avoid circular import issues
+from zerg.dependencies.auth import get_current_user  # noqa: E402
 
 router = APIRouter(
     tags=["agents"],
