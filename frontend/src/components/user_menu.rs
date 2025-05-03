@@ -6,6 +6,9 @@ use web_sys::{Document, Element, HtmlElement};
 
 use crate::state::APP_STATE;
 use crate::components::avatar_badge;
+use crate::messages::Message;
+use crate::storage::ActiveView;
+use crate::state::dispatch_global_message;
 
 /// Create & mount the user menu inside the `header` element.  Calling this
 /// multiple times is safe – it will update the avatar if the element already
@@ -47,11 +50,10 @@ pub fn mount_user_menu(document: &Document) -> Result<(), JsValue> {
 
         // Event listeners ------------------------------------------------
         {
+            // Clicking "Profile" toggles to the dedicated profile view via
+            // the normal message/command flow so state & UI stay in sync.
             let _cb = Closure::wrap(Box::new(move |_evt: web_sys::MouseEvent| {
-                // Navigate to /#/profile
-                if let Some(win) = web_sys::window() {
-                    win.location().set_hash("#/profile").ok();
-                }
+                dispatch_global_message(Message::ToggleView(ActiveView::Profile));
             }) as Box<dyn FnMut(_)>);
             profile_item.add_event_listener_with_callback("click", _cb.as_ref().unchecked_ref())?;
             _cb.forget();

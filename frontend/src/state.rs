@@ -830,6 +830,10 @@ impl AppState {
                 // For Chat view, refresh chat components
                 web_sys::console::log_1(&"Refreshing chat components".into());
                 // Chat view refreshes are handled by its own code
+            },
+            crate::storage::ActiveView::Profile => {
+                // Profile page currently doesn't need dynamic refresh logic
+                web_sys::console::log_1(&"Refreshing profile components".into());
             }
         }
         
