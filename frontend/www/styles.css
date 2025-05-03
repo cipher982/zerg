@@ -1137,3 +1137,67 @@ button {
 .user-menu-item:hover {
     background-color: #f1f1f1;
 }
+
+/* ------------------------------------------------------------------
+   Profile Page Styling
+   ------------------------------------------------------------------ */
+
+.profile-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: var(--spacing-xl) var(--spacing-lg);
+    background-color: var(--bg-darker);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    color: var(--text-primary);
+}
+
+.profile-container h2 {
+    margin-top: 0;
+    font-weight: 400;
+    color: #ffffff;
+}
+
+.profile-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.profile-form label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.profile-input {
+    padding: 10px 12px;
+    font-size: 14px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+}
+
+.profile-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.4);
+}
+
+.btn-primary {
+    align-self: flex-start;
+    background-color: var(--color-primary);
+    border: none;
+    padding: 10px 18px;
+    font-size: 14px;
+    border-radius: 4px;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.btn-primary:hover {
+    background-color: #2380c4;
+}
