@@ -56,8 +56,26 @@ pub fn start() -> Result<(), JsValue> {
 
     if auth_disabled {
         // Bypass auth completely – mark as logged in and continue startup.
-        state::APP_STATE.with(|s| s.borrow_mut().logged_in = true);
+        // Mark as logged in **before** we call bootstrap so the normal flow
+        // (data loading etc.) proceeds.
+        state::APP_STATE.with(|s| {
+            s.borrow_mut().logged_in = true;
+        });
+
+        // Perform normal UI bootstrap (creates header, status-bar, etc.)
         bootstrap_app_after_login(&document)?;
+
+        // Now that the header DOM exists, inject a *dummy developer user* so
+        // the avatar & dropdown render even though real auth is disabled.
+        let dummy_user = crate::models::CurrentUser {
+            id: 0,
+            email: "dev@example.com".to_string(),
+            display_name: Some("Developer".to_string()),
+            avatar_url: None,
+            prefs: None,
+        };
+
+        dispatch_global_message(crate::messages::Message::CurrentUserLoaded(dummy_user));
         return Ok(());
     }
 
@@ -155,6 +173,21 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
     
     // Initialize data loading
     initialize_data_loading();
+
+    // -------------------------------------------------------------------
+    // If a JWT is present fetch the current user profile.  This also covers
+    // the *page refresh* scenario where Google login overlay is skipped.
+    // -------------------------------------------------------------------
+
+    wasm_bindgen_futures::spawn_local(async move {
+        if crate::state::APP_STATE.with(|s| s.borrow().logged_in) {
+            if let Ok(profile_json) = crate::network::api_client::ApiClient::fetch_current_user().await {
+                if let Ok(user) = serde_json::from_str::<crate::models::CurrentUser>(&profile_json) {
+                    dispatch_global_message(crate::messages::Message::CurrentUserLoaded(user));
+                }
+            }
+        }
+    });
     
     // By default, start with dashboard view
     web_sys::console::log_1(&"Setting initial view to Dashboard".into());

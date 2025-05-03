@@ -27,6 +27,8 @@ pub enum ActiveView {
     Dashboard,
     Canvas,
     ChatView,
+    /// User profile & preferences page
+    Profile,
 }
 
 /// Save current app state to API

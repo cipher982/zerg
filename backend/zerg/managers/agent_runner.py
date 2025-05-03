@@ -48,8 +48,11 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
         # get_runnable now returns the compiled entrypoint function
         self._runnable = zerg_react_agent.get_runnable(agent_row)
 
-        # Whether this runner/LLM emits per-token chunks
-        self.enable_token_stream: bool = os.getenv("LLM_TOKEN_STREAM")
+        # Whether this runner/LLM emits per-token chunks – treat env value
+        # case-insensitively; anything truthy like "1", "true", "yes" enables
+        # the feature.
+        val = os.getenv("LLM_TOKEN_STREAM", "")
+        self.enable_token_stream = val.lower() in {"1", "true", "yes", "on"}
 
     # ------------------------------------------------------------------
     # Public API – asynchronous

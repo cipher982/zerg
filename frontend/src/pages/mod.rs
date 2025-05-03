@@ -5,3 +5,4 @@
 
 pub mod dashboard;
 pub mod canvas;
+pub mod profile;

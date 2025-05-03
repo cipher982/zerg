@@ -40,6 +40,11 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
     if crate::pages::canvas::is_canvas_mounted(document) {
         crate::pages::canvas::unmount_canvas(document)?;
     }
+
+    // Unmount profile page if mounted
+    if crate::pages::profile::is_profile_mounted(document) {
+        crate::pages::profile::unmount_profile(document)?;
+    }
     
     // Hide chat view if it exists
     if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
@@ -53,6 +58,9 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
         },
         ActiveView::Canvas => {
             crate::pages::canvas::mount_canvas(document)?;
+        },
+        ActiveView::Profile => {
+            crate::pages::profile::mount_profile(document)?;
         },
         ActiveView::ChatView => {
             // Setup the chat view if needed
@@ -93,6 +101,9 @@ fn update_tab_styling(view_type: &ActiveView, document: &Document) -> Result<(),
             if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
                 canvas_tab.set_class_name("tab-button active");
             }
+        },
+        ActiveView::Profile => {
+            // Profile currently has no tab; ensure others are inactive.
         },
         ActiveView::ChatView => {
             // Chat doesn't have a tab currently, could add one in the future

@@ -7,8 +7,13 @@ load_dotenv()
 
 # fmt: off
 # ruff: noqa: E402
+# Standard library
+from pathlib import Path
+
+# Third-party
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from zerg.constants import AGENTS_PREFIX
 from zerg.constants import API_PREFIX
@@ -22,6 +27,7 @@ from zerg.routers.models import router as models_router
 from zerg.routers.runs import router as runs_router
 from zerg.routers.threads import router as threads_router
 from zerg.routers.triggers import router as triggers_router
+from zerg.routers.users import router as users_router
 from zerg.routers.websocket import router as websocket_router
 from zerg.services.scheduler_service import scheduler_service
 
@@ -31,6 +37,22 @@ from zerg.services.scheduler_service import scheduler_service
 logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s", handlers=[logging.StreamHandler()])
 
 # Create the FastAPI app
+# ---------------------------------------------------------------------------
+# FastAPI application instance
+# ---------------------------------------------------------------------------
+
+# Ensure ./static directory exists before mounting.  `StaticFiles` raises at
+# runtime if the path is missing, which would break unit-tests that import the
+# app without running the server process.
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent  # repo root
+STATIC_DIR = BASE_DIR / "static"
+AVATARS_DIR = STATIC_DIR / "avatars"
+
+# Create folders on import so they are there in tests and dev.
+AVATARS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Create FastAPI APP
 app = FastAPI(redirect_slashes=True)
 
 # Add CORS middleware with all necessary headers
@@ -43,6 +65,9 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+# Mount /static for avatars (and any future assets served by the backend)
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 # Include our API routers with centralized prefixes
 app.include_router(agents_router, prefix=f"{API_PREFIX}{AGENTS_PREFIX}")
 app.include_router(threads_router, prefix=f"{API_PREFIX}{THREADS_PREFIX}")
@@ -52,6 +77,7 @@ app.include_router(admin_router, prefix=API_PREFIX)
 app.include_router(triggers_router, prefix=f"{API_PREFIX}")
 app.include_router(runs_router, prefix=f"{API_PREFIX}")
 app.include_router(auth_router, prefix=f"{API_PREFIX}")
+app.include_router(users_router, prefix=f"{API_PREFIX}")
 
 # Set up logging
 logger = logging.getLogger(__name__)

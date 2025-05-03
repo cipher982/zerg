@@ -2,7 +2,15 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::{HashMap, HashSet};
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
-use crate::models::{Node, NodeType, Workflow, Edge, ApiAgent, ApiThread, ApiThreadMessage};
+use crate::models::{
+    Node,
+    NodeType,
+    Workflow,
+    Edge,
+    ApiAgent,
+    ApiThread,
+    ApiThreadMessage,
+};
 use crate::models::ApiAgentRun;
 
 use crate::models::ApiAgentDetails;
@@ -111,7 +119,13 @@ pub struct AppState {
     pub thread_messages: HashMap<u32, Vec<ApiThreadMessage>>,
     pub is_chat_loading: bool,
     // New field for handling streaming responses
-    pub active_streams: HashMap<u32, String>,
+    /// Tracks the **current assistant message** id for every thread that is
+    /// actively streaming.  `None` means we have not yet received the
+    /// `assistant_id` frame (token-stream mode) or the first
+    /// `assistant_message` chunk (non token mode).  Once the id is known we
+    /// replace the entry with `Some(id)` so tool_output bubbles can link to
+    /// their parent.
+    pub active_streams: HashMap<u32, Option<u32>>,
     // Pending UI updates to avoid recursive borrow issues
     pub pending_ui_updates: Option<Box<dyn FnOnce()>>,
     // --- WebSocket v2 and Topic Manager --- 
@@ -163,6 +177,10 @@ pub struct AppState {
     /// startup from `localStorage["zerg_jwt"]` and updated once the Google
     /// login flow succeeds.
     pub logged_in: bool,
+
+    /// Authenticated user profile loaded from `/api/users/me`.  `None` until
+    /// the profile fetch succeeds (or the session is unauthenticated).
+    pub current_user: Option<crate::models::CurrentUser>,
 }
 
 impl AppState {
@@ -251,7 +269,18 @@ impl AppState {
                     false
                 }
             },
+
+            // Initially no profile is loaded.  Will be set once the frontend
+            // successfully calls `/api/users/me` after a login or page
+            // refresh.
+            current_user: None,
         }
+    }
+
+    /// Return the assistant message id that is **currently being streamed**
+    /// for the given `thread_id`, if known.
+    pub fn current_assistant_id(&self, thread_id: u32) -> Option<u32> {
+        self.active_streams.get(&thread_id).and_then(|opt| *opt)
     }
 
     pub fn add_node(&mut self, text: String, x: f64, y: f64, node_type: NodeType) -> String {
@@ -801,6 +830,10 @@ impl AppState {
                 // For Chat view, refresh chat components
                 web_sys::console::log_1(&"Refreshing chat components".into());
                 // Chat view refreshes are handled by its own code
+            },
+            crate::storage::ActiveView::Profile => {
+                // Profile page currently doesn't need dynamic refresh logic
+                web_sys::console::log_1(&"Refreshing profile components".into());
             }
         }
         

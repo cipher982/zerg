@@ -47,6 +47,9 @@ class TopicConnectionManager:
         event_bus.subscribe(EventType.RUN_CREATED, self._handle_run_event)
         event_bus.subscribe(EventType.RUN_UPDATED, self._handle_run_event)
 
+        # User events (e.g., profile updated) – broadcast to dedicated topic
+        event_bus.subscribe(EventType.USER_UPDATED, self._handle_user_event)
+
     async def connect(self, client_id: str, websocket: WebSocket) -> None:
         """Register a new client connection.
 
@@ -176,6 +179,15 @@ class TopicConnectionManager:
         agent_id = data["agent_id"]
         topic = f"agent:{agent_id}"
         await self.broadcast_to_topic(topic, {"type": "run_update", "data": data})
+
+    async def _handle_user_event(self, data: Dict[str, Any]) -> None:
+        """Forward user events to `user:{id}` topic so other tabs update."""
+        user_id = data.get("id")
+        if user_id is None:
+            return
+
+        topic = f"user:{user_id}"
+        await self.broadcast_to_topic(topic, {"type": "user_update", "data": data})
 
 
 # Create a global instance of the new connection manager

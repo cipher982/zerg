@@ -3,10 +3,12 @@
 use crate::messages::{Message, Command};
 use crate::state::{AppState, APP_STATE, dispatch_global_message, ToolUiState};
 use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent};
-use crate::constants::{
+use crate::{
+    constants::{
     DEFAULT_NODE_WIDTH,
     DEFAULT_NODE_HEIGHT,
     DEFAULT_THREAD_TITLE,
+    },
 };
 use web_sys::Document;
 use wasm_bindgen::JsValue;
@@ -16,6 +18,8 @@ use serde_json;
 use rand;
 use chrono;
 use std::collections::HashSet;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 // Bring legacy helper trait into scope so its methods are usable on CanvasNode
 // Legacy helper trait no longer needed after decoupling cleanup.
@@ -26,6 +30,48 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     let mut commands = Vec::new(); // Collect commands to return
 
     match msg {
+        // ---------------------------------------------------------------
+        // Auth / profile handling
+        // ---------------------------------------------------------------
+        Message::CurrentUserLoaded(user) => {
+            state.current_user = Some(user);
+            state.logged_in = true;
+
+            // Mount / refresh user menu asynchronously after borrow ends.
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::user_menu::mount_user_menu(&doc);
+                    }
+                }
+            })));
+
+            // Subscribe to user:{id} topic for live updates.
+            if let Some(user_id) = state.current_user.as_ref().map(|u| u.id) {
+                let topic = format!("user:{}", user_id);
+                let topic_manager_rc = state.topic_manager.clone();
+
+                commands.push(Command::UpdateUI(Box::new(move || {
+                    if let Ok(mut tm) = topic_manager_rc.try_borrow_mut() {
+                        // Prepare handler closure
+                        use std::rc::Rc;
+                        use std::cell::RefCell;
+                        let handler: crate::network::topic_manager::TopicHandler = Rc::new(RefCell::new(move |payload: serde_json::Value| {
+                        if let Ok(msg) = serde_json::from_value::<crate::network::ws_schema::WsMessage>(payload.clone()) {
+                            if let crate::network::ws_schema::WsMessage::UserUpdate { data } = msg {
+                                let profile: crate::models::CurrentUser = data.into();
+                                crate::state::dispatch_global_message(Message::CurrentUserLoaded(profile));
+                                return;
+                            }
+                        }
+                        }));
+
+                        let _ = tm.subscribe(topic, handler);
+                    }
+                })));
+            }
+        }
+
         Message::ToggleView(view) => {
             let view_clone = view.clone();
             state.active_view = view;
@@ -133,6 +179,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // This prevents triggering state saves for every tiny move
             if !state.is_dragging_agent {
                 state.state_modified = true;
+
+                // Repaint immediately so canvas follows the cursor in real-time.
+                // This mirrors the behaviour of node dragging where
+                // `update_node_position()` triggers a draw on every mousemove.
+                state.draw_nodes();
             }
         },
        
@@ -1475,17 +1526,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 let now = chrono::Utc::now().to_rfc3339();
                 // Attempt to associate this tool output with the *current*
                 // assistant message being streamed for the same thread.  The
-                // active_streams map stores the `message_id` (as a string)
-                // for the assistant bubble that is currently receiving
-                // chunks.  Converting that ID back to `u32` lets the chat UI
-                // link the tool output to its parent.  If parsing fails we
-                // fall back to `None` so the UI will still display the tool
-                // message as a standalone bubble (see chat_view.rs).
+                // `active_streams` keeps the *current* assistant row id (if
+                // already known).  We use it as `parent_id` so tool_output
+                // bubbles fold under the correct assistant bubble.  When the
+                // id is not yet known (`None`) the tool bubble will render as
+                // a standalone block – it will be reconciled by a later
+                // `ReceiveAssistantId` event.
 
-                let parent_id = state
-                    .active_streams
-                    .get(&thread_id)
-                    .and_then(|mid| mid.parse::<u32>().ok());
+                let parent_id = state.current_assistant_id(thread_id);
 
                 let tool_message = ApiThreadMessage {
                     id: None,
@@ -1510,31 +1558,34 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 // the *active_streams* tracker. We create a new bubble when
                 // the message_id changes (or is empty at the start of a
                 // stream).
+                // --- FIXED: Compute all immutable info first ---
+                let mid_u32 = message_id
+                    .as_ref()
+                    .and_then(|s| s.parse::<u32>().ok());
+                let current_mid = state.current_assistant_id(thread_id);
+                let start_new = current_mid != mid_u32;
+
+                // --- Only now, borrow messages mutably ---
                 let messages = state.thread_messages.entry(thread_id).or_default();
-
-                let mid_str = message_id.clone().unwrap_or_default();
-                let current_mid = state.active_streams.get(&thread_id);
-                let start_new = current_mid.map(|id| id != &mid_str).unwrap_or(true);
-
                 if start_new {
                     web_sys::console::log_1(&"Update: starting NEW assistant bubble".into());
-                        let now = chrono::Utc::now().to_rfc3339();
-                        let assistant_message = ApiThreadMessage {
-                            id: message_id.and_then(|s| s.parse::<u32>().ok()),
-                            thread_id,
-                            role: "assistant".to_string(),
-                            content: content.clone(),
-                            timestamp: Some(now),
-                            message_type: chunk_type.clone(),
-                            tool_name: None,
-                            tool_call_id: None,
-                            tool_input: None,
-                            parent_id: None,
-                        };
-                        messages.push(assistant_message);
+                    let now = chrono::Utc::now().to_rfc3339();
+                    let assistant_message = ApiThreadMessage {
+                        id: mid_u32,
+                        thread_id,
+                        role: "assistant".to_string(),
+                        content: content.clone(),
+                        timestamp: Some(now),
+                        message_type: chunk_type.clone(),
+                        tool_name: None,
+                        tool_call_id: None,
+                        tool_input: None,
+                        parent_id: None,
+                    };
+                    messages.push(assistant_message);
 
-                        // Remember this message_id as the current one for this stream
-                        state.active_streams.insert(thread_id, mid_str);
+                    // Remember this message_id as the current one for this stream
+                    state.active_streams.insert(thread_id, mid_u32);
                 } else if let Some(last_message) = messages.last_mut() {
                     last_message.content.push_str(&content);
                 }
@@ -1606,7 +1657,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
             // Reset current assistant-message tracker for this thread so that
             // the first chunk starts a new bubble.
-            state.active_streams.insert(thread_id, String::new());
+            state.active_streams.insert(thread_id, None);
 
             web_sys::console::log_1(&format!("Stream started for thread {}.", thread_id).into());
         },
@@ -1638,6 +1689,27 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
 
             web_sys::console::log_1(&format!("Stream ended for thread {}.", thread_id).into());
+        },
+
+        // -----------------------------------------------------------------
+        // AssistantId – arrives once per *token-mode* stream right after the
+        // backend persisted the assistant row.  We store the id so upcoming
+        // tool_output chunks can link to this bubble.  Additionally we patch
+        // the last assistant message (if id is still None) so future UI
+        // operations have the correct PK.
+        // -----------------------------------------------------------------
+
+        Message::ReceiveAssistantId { thread_id, message_id } => {
+            web_sys::console::log_1(&format!("Received AssistantId {} for thread {}", message_id, thread_id).into());
+
+            state.active_streams.insert(thread_id, Some(message_id));
+
+            // Update the most recent assistant bubble id if it was None.
+            if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
+                if let Some(last) = messages.iter_mut().rev().find(|m| m.role == "assistant" && m.id.is_none()) {
+                    last.id = Some(message_id);
+                }
+            }
         },
         
         // Toggle collapse/expand state for a tool call indicator

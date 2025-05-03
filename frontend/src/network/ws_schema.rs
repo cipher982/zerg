@@ -46,6 +46,10 @@ pub enum WsMessage {
     #[serde(rename = "stream_end")]
     StreamEnd(WsStreamEnd),
 
+    // Phase-2: id of the assistant bubble currently being streamed.
+    #[serde(rename = "assistant_id")]
+    AssistantId(WsAssistantId),
+
     // A freshly created message in a thread – emitted both when the user
     // posts a message (`thread_message`) and when the backend inserts a new
     // assistant/tool message automatically (alias `thread_message_created`).
@@ -54,6 +58,10 @@ pub enum WsMessage {
         alias = "thread_message_created"
     )]
     ThreadMessage { data: WsThreadMessage },
+
+    // Profile update of the authenticated user.
+    #[serde(rename = "user_update")]
+    UserUpdate { data: WsUserUpdate },
 
     #[serde(other)]
     Unknown,
@@ -111,6 +119,24 @@ pub struct WsAgentEvent {
     pub extra: Value,
 }
 
+/// Payload for user profile update broadcast.
+#[derive(Debug, Deserialize, Clone)]
+pub struct WsUserUpdate {
+    pub id: u32,
+
+    #[serde(default)]
+    pub email: Option<String>,
+
+    #[serde(default)]
+    pub display_name: Option<String>,
+
+    #[serde(default)]
+    pub avatar_url: Option<String>,
+
+    #[serde(flatten)]
+    pub extra: Value,
+}
+
 /// Thread-level events (creation, update, message inserted, deletion).
 /// Backend always includes a `thread_id` so we can determine the topic.
 #[derive(Debug, Deserialize, Clone)]
@@ -157,6 +183,16 @@ pub struct WsStreamEnd {
 }
 
 // ---------------------------------------------------------------------------
+//   AssistantId helper payload
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct WsAssistantId {
+    pub thread_id: u32,
+    pub message_id: u32,
+}
+
+// ---------------------------------------------------------------------------
 //   Conversions into full REST models used by the dashboard UI
 // ---------------------------------------------------------------------------
 
@@ -196,8 +232,26 @@ impl WsMessage {
             WsMessage::StreamStart(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::StreamChunk(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::StreamEnd(data) => Some(format!("thread:{}", data.thread_id)),
+            WsMessage::AssistantId(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::ThreadMessage { data } => Some(format!("thread:{}", data.thread_id)),
+            WsMessage::UserUpdate { data } => Some(format!("user:{}", data.id)),
             WsMessage::Unknown => None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+//   Conversions
+// ---------------------------------------------------------------------------
+
+impl From<WsUserUpdate> for crate::models::CurrentUser {
+    fn from(ws: WsUserUpdate) -> Self {
+        crate::models::CurrentUser {
+            id: ws.id,
+            email: ws.email.unwrap_or_default(),
+            display_name: ws.display_name,
+            avatar_url: ws.avatar_url,
+            prefs: None,
         }
     }
 }
