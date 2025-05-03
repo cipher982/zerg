@@ -36,6 +36,19 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
+    # -------------------------------------------------------------------
+    # Personalisation fields (introduced in *User Personalisation* feature)
+    # -------------------------------------------------------------------
+    # Optional display name shown in the UI (fallback: e-mail)
+    display_name = Column(String, nullable=True)
+    # User-supplied avatar URL (fallback: generated initial)
+    avatar_url = Column(String, nullable=True)
+    # Store arbitrary UI preferences (theme, timezone, etc.)
+    prefs = Column(JSON, nullable=True, default={})
+
+    # Login tracking
+    last_login = Column(DateTime, nullable=True)
+
     # Timestamps -------------------------------------------------------------
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

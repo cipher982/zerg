@@ -159,6 +159,18 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
 
+    # -------------------------------------------------------------------
+    # Update *last_login* timestamp in the background – we persist lazily to
+    # avoid extra DB writes on every authenticated request while still
+    # keeping reasonable accuracy.
+    # -------------------------------------------------------------------
+
+    from datetime import datetime as _dt  # local import to avoid cycles
+
+    if getattr(user, "last_login", None) is None:
+        user.last_login = _dt.utcnow()
+        db.commit()
+
     return user
 
 

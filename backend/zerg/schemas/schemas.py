@@ -58,9 +58,20 @@ class UserOut(BaseModel):
     email: str
     is_active: bool
     created_at: datetime
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    prefs: Optional[Dict[str, Any]] = None
+    last_login: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+# User profile update schema (partial)
+class UserUpdate(BaseModel):
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    prefs: Optional[Dict[str, Any]] = None
 
 
 class TokenOut(BaseModel):
