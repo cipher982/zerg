@@ -263,10 +263,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.dragging = None;
             state.is_dragging_agent = false;
             state.state_modified = true;
-           
-            // Explicitly save state to API when dragging is complete
-            // This ensures we only save the final position once
-            crate::storage::save_state_to_api(state);
         },
        
         Message::StartCanvasDrag { start_x, start_y } => {
@@ -744,6 +740,20 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         }
                     }
                 })));
+            }
+
+            // ----------------------------------------------------------------
+            // Debounced state persistence
+            // ----------------------------------------------------------------
+            // Persist if modified and no change happened in the last ~400 ms.
+            if state.state_modified {
+                let now = crate::utils::now_ms();
+                if now.saturating_sub(state.last_modified_ms) > 400 {
+                    // Push SaveState command (executed after borrow released)
+                    commands.push(Command::SaveState);
+                    // Reset flag to avoid duplicate saves.
+                    state.state_modified = false;
+                }
             }
         },
        
@@ -2075,6 +2085,16 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 }
             })));
         },
+    }
+
+    // -------------------------------------------------------------------
+    // After handling the message: if any mutation occurred mark timestamp.
+    // This centralised check guarantees `last_modified_ms` is always kept
+    // in sync with the `state_modified` flag without sprinkling
+    // `utils::now_ms()` across every reducer arm.
+    // -------------------------------------------------------------------
+    if state.state_modified {
+        state.last_modified_ms = crate::utils::now_ms();
     }
 
     // For now, if needs_refresh is true, add a NoOp command

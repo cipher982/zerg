@@ -413,23 +413,21 @@ pub fn reload_agent(agent_id: u32) {
                                             match serde_wasm_bindgen::from_value::<crate::models::ApiAgent>(agent_data) {
                                                 Ok(agent) => {
                                                     // Update the agent in the agents HashMap
-                                                    crate::state::APP_STATE.with(|state| {
-                                                        let mut state = state.borrow_mut();
-                                                        
-                                                        // Update agent in the HashMap
-                                                        if let Some(id) = agent.id {
-                                                            state.agents.insert(id, agent.clone());
-                                                            
-                                                            // Also update any nodes that reference this agent
-                                                            for (_, node) in state.nodes.iter_mut() {
-                                                                if node.agent_id == Some(id) {
-                                                                    node.text = agent.name.clone();
+                                                        // First mutate state data
+                                                        crate::state::APP_STATE.with(|state| {
+                                                            let mut state = state.borrow_mut();
+                                                            if let Some(id) = agent.id {
+                                                                state.agents.insert(id, agent.clone());
+                                                                for (_, node) in state.nodes.iter_mut() {
+                                                                    if node.agent_id == Some(id) {
+                                                                        node.text = agent.name.clone();
+                                                                    }
                                                                 }
                                                             }
-                                                        }
-                                                        
-                                                        state.mark_dirty();
-                                                    });
+                                                        });
+
+                                                        // After the previous borrow ends, mark canvas dirty via queued Message
+                                                        crate::state::dispatch_global_message(crate::messages::Message::MarkCanvasDirty);
                                                     
                                                     // Update the UI
                                                     if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
