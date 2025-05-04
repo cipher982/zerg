@@ -36,6 +36,27 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
+    <!--
+      The "single root" (#app-container) approach worked fine when each view
+      (dashboard, canvas, chat …) was mounted/un-mounted on every tab switch.
+      For the upcoming performance refactor (see CANVAS_RENDER_ROADMAP.md) we
+      will instead keep *all* views in the DOM and merely toggle their
+      visibility via CSS.  This requires a permanent container for each view
+      so the browser can reuse existing nodes instead of tearing them down.
+
+      Phase 1 therefore introduces four empty root elements – one per view –
+      that start hidden (except the dashboard which will be shown by the Rust
+      code on first mount).  Later phases will move the existing mount logic
+      to populate these containers once at startup and then rely on simple
+      `display:none` toggling for view switching.
+    -->
+    <div id="dashboard-root"></div>
+    <div id="canvas-root" style="display:none"></div>
+    <div id="chat-root" style="display:none"></div>
+    <div id="profile-root" style="display:none"></div>
+
+    <!-- Legacy container used by the current code-base.  Will be removed once
+         all components are migrated to the dedicated view roots. -->
     <div id="app-container"></div>
     
     <!-- Load configuration -->

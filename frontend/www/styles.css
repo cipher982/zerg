@@ -113,6 +113,21 @@ body {
     background-color: #1e1e2e;
 }
 
+/* -------------------------------------------------------------
+   Utility helpers
+   ------------------------------------------------------------- */
+
+/* Generic class used by the new view-switching implementation.
+   Instead of mounting/un-mounting large DOM sub-trees we will keep all
+   views in the document and just flip this class on the respective
+   root element. */
+.hidden {
+    display: none !important;
+}
+
+/* The new dedicated root containers take the full viewport by default so
+   their children can rely on flex/grid layouts without extra wrapping. */
+
 /* App structure */
 .header {
     position: fixed;
