@@ -114,7 +114,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             web_sys::console::log_1(&format!("Created visual node with ID: {} for agent {}", node_id, agent_id).into());
            
             // Draw the nodes on canvas
-            state.draw_nodes();
+            state.mark_dirty();
            
             // After creating the agent, immediately create a default thread
             commands.push(Command::SendMessage(Message::CreateThread(agent_id, DEFAULT_THREAD_TITLE.to_string())));
@@ -183,7 +183,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 // Repaint immediately so canvas follows the cursor in real-time.
                 // This mirrors the behaviour of node dragging where
                 // `update_node_position()` triggers a draw on every mousemove.
-                state.draw_nodes();
+                state.mark_dirty();
             }
         },
        
@@ -245,12 +245,18 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::UpdateInputText(text) => {
             state.input_text = text;
         },
+
+        Message::MarkCanvasDirty => {
+            state.mark_dirty();
+        },
        
-        Message::StartDragging { node_id, offset_x, offset_y } => {
+        Message::StartDragging { node_id, offset_x, offset_y, start_x, start_y, is_agent } => {
             state.dragging = Some(node_id);
             state.drag_offset_x = offset_x;
             state.drag_offset_y = offset_y;
-            state.is_dragging_agent = true;
+            state.is_dragging_agent = is_agent;
+            state.drag_start_x = start_x;
+            state.drag_start_y = start_y;
         },
        
         Message::StopDragging => {
@@ -296,7 +302,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 // remount was removed in the previous cleanup.  Explicitly
                 // redrawing here restores the smooth panning behaviour without
                 // re-creating the entire canvas element.
-                state.draw_nodes();
+                state.mark_dirty();
             }
         },
        
@@ -312,7 +318,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.state_modified = true;
            
             // Redraw with the new zoom level
-            state.draw_nodes();
+            state.mark_dirty();
         },
        
         Message::SaveAgentDetails { name, system_instructions, task_instructions, model, schedule } => {
@@ -789,7 +795,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
            
             // Draw the nodes on canvas
-            state.draw_nodes();
+            state.mark_dirty();
            
             state.state_modified = true;
         },
@@ -799,7 +805,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             web_sys::console::log_1(&format!("Created new edge with ID: {}", edge_id).into());
            
             // Draw the nodes and edges on canvas
-            state.draw_nodes();
+            state.mark_dirty();
            
             state.state_modified = true;
         },
@@ -844,7 +850,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             if nodes_created > 0 {
                 state.state_modified = true;
                 // Draw the updated nodes on canvas
-                state.draw_nodes();
+                state.mark_dirty();
             }
         },
        
@@ -930,7 +936,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
 
             if !updated_nodes.is_empty() {
-                state.draw_nodes();
+                state.mark_dirty();
             }
         },
        

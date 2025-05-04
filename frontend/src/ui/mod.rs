@@ -17,10 +17,16 @@ pub fn setup_animation_loop() {
     
     // Closure that will be called on each animation frame
     *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-        // Dispatch an AnimationTick message instead of directly manipulating state
+        // 1. Paint if the model is flagged as dirty ----------------------
         APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            state.dispatch(Message::AnimationTick);
+            let mut st = state.borrow_mut();
+            if st.dirty {
+                st.draw_nodes();
+                st.dirty = false;
+            }
+
+            // 2. Other per-frame work (duration ticker, etc.) -------------
+            st.dispatch(Message::AnimationTick);
         });
         
         // Request the next animation frame
