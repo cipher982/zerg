@@ -1,13 +1,12 @@
 use wasm_bindgen::prelude::*;
 use serde_json::{to_string, from_str};
 use crate::state::AppState;
-use crate::models::{Node, ApiAgent, ApiAgentUpdate, Workflow};
-use crate::network::ApiClient;
+use crate::models::{Node, Workflow, ApiAgent};
 use std::collections::HashMap;
+use crate::network::ApiClient;
 use wasm_bindgen_futures::spawn_local;
-use wasm_bindgen::closure::Closure;
-// (no constants needed now)
-// Legacy extension trait for CanvasNode helpers
+// Additional helpers and legacy extension traits – these will gradually be
+// trimmed once the new storage pipeline stabilises.
 
 // Add API URL configuration
 #[allow(dead_code)]
@@ -89,111 +88,45 @@ pub fn clear_storage() -> Result<(), JsValue> {
 
 /// Save app state to API (transitional approach)
 pub fn save_state_to_api(app_state: &AppState) {
-    // Clone the necessary data before passing to the async block
-    let nodes = app_state.nodes.clone();
-    let _selected_model = app_state.selected_model.clone();
-    let is_dragging = app_state.is_dragging_agent;
-    let agents = app_state.agents.clone();
-    
-    // Skip state saving if we're actively dragging to prevent spamming API
-    if is_dragging {
-        web_sys::console::log_1(&"Skipping API save during active dragging".into());
+    // Skip API interaction completely.  Canvas state (positions, zoom, etc.)
+    // is persisted locally; agent metadata is managed via the Agent modal
+    // which already calls the dedicated update endpoint.  By removing the
+    // comparison & PATCH logic we avoid:
+    //   • redundant network traffic on every drag-stop
+    //   • confusing console output in debug builds
+    //   • accidental overwrites when multiple tabs are open.
+
+    // We keep the early-exit that throttles saves while an active drag is in
+    // progress because the caller (`StopDragging`) may still fire rapidly
+    // when the mouse is moving.
+
+    if app_state.is_dragging_agent {
         return;
     }
-    
-    // Spawn an async task to save agents to API
-    spawn_local(async move {
-        // We'll need to convert each Node of type AgentIdentity to an ApiAgent
-        for (_node_id, node) in nodes.iter() {
-            if let crate::models::NodeType::AgentIdentity = node.node_type {
-                if let Some(agent_id) = node.agent_id {
-                        // Create the agent update object
-                        let agent_update = ApiAgentUpdate {
-                            name: Some(node.text.clone()),
-                            status: None,
-                            // Only update mutable fields we track on the node (name for now).
-                            // System & task instructions are edited through the agent-centric
-                            // modal and therefore persisted separately.
-                            system_instructions: None,
-                            task_instructions: None,
-                            model: None,
-                            schedule: None,
-                            config: None, // Will need to add more node data as needed
-                            last_error: None,
-                        };
-                        
-                        // Check if the agent data has actually changed by comparing with backend data
-                        let should_update = if let Some(backend_agent) = agents.get(&agent_id) {
-                            // In debug builds print a diff summary – keeps production console clean.
-                            if cfg!(debug_assertions) {
-                                web_sys::console::log_1(&format!("Comparing agent {}: Backend vs Frontend", agent_id).into());
-                                web_sys::console::log_1(&format!("Name: '{}' vs '{}'", 
-                                    backend_agent.name, 
-                                    agent_update.name.as_ref().unwrap_or(&String::new())).into());
-                                web_sys::console::log_1(&format!("System Instructions: '{:?}' vs '{:?}'", 
-                                    backend_agent.system_instructions, 
-                                    agent_update.system_instructions).into());
-                                web_sys::console::log_1(&format!("Model: '{:?}' vs '{:?}'", 
-                                    backend_agent.model, 
-                                    agent_update.model).into());
-                            }
 
-                            // Compare name (String vs Option<String>)
-                            let name_changed = backend_agent.name != *agent_update.name.as_ref().unwrap_or(&String::new());
-                            // Compare system_instructions – currently not saved via this path
-                            let sys_instr_changed = false;
-                            // Compare model (Option<String> vs Option<String>)
-                            let model_changed = backend_agent.model != agent_update.model;
+    // Persist viewport & node positions to localStorage only – this is
+    // synchronous, extremely fast and avoids any server round-trips.
+    // (Future: send batched "layout" payload to backend once a dedicated
+    // endpoint exists.)
 
-                            if cfg!(debug_assertions) {
-                                if name_changed {
-                                    web_sys::console::log_1(&"Name differs".into());
-                                }
-                                if sys_instr_changed {
-                                    web_sys::console::log_1(&"System instructions differ".into());
-                                }
-                                if model_changed {
-                                    web_sys::console::log_1(&"Model differs".into());
-                                }
-                            }
-
-                            name_changed || sys_instr_changed || model_changed
-                        } else {
-                            // No backend snapshot; assume update needed
-                            if cfg!(debug_assertions) {
-                                web_sys::console::log_1(&format!("No backend data for agent {}, will update", agent_id).into());
-                            }
-                            true
-                        };
-                        
-                        // Only update if there are actual changes
-                        if should_update {
-                            // Try to update existing agent
-                            let agent_json = match to_string(&agent_update) {
-                                Ok(json) => json,
-                                Err(e) => {
-                                    web_sys::console::error_1(&format!("Error serializing agent update: {}", e).into());
-                                    continue;
-                                }
-                            };
-                            
-                            if let Err(e) = ApiClient::update_agent(agent_id, &agent_json).await {
-                                web_sys::console::error_1(&format!("Error updating agent in API: {:?}", e).into());
-                            } else {
-                                if cfg!(debug_assertions) {
-                                    web_sys::console::log_1(&format!("Updated agent {} in API (with changes)", agent_id).into());
-                                }
-                            }
-                        } else {
-                            // No changes detected, log it differently
-                            if cfg!(debug_assertions) {
-                                web_sys::console::log_1(&format!("Verified agent {} in API (no changes)", agent_id).into());
-                            }
-                        }
-                    }
-                }
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            // Nodes
+            if let Ok(nodes_json) = to_string(&app_state.nodes) {
+                let _ = storage.set_item("nodes", &nodes_json);
             }
-        });
+
+            // Viewport
+            let viewport_data = ViewportData {
+                x: app_state.viewport_x,
+                y: app_state.viewport_y,
+                zoom: app_state.zoom_level,
+            };
+            if let Ok(vp_json) = to_string(&viewport_data) {
+                let _ = storage.set_item("viewport", &vp_json);
+            }
+        }
+    }
 }
 
 /// Load app state from API
