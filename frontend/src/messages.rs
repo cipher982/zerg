@@ -378,6 +378,9 @@ pub enum Command {
 
     /// Fetch latest runs for an agent
     FetchAgentRuns(u32), // agent_id
+
+    /// Persist current canvas/layout state (debounced in AnimationTick)
+    SaveState,
 }
 
 impl Command {

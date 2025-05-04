@@ -32,16 +32,25 @@ Important invariants:
 * Only the reducer mutates `AppState`.
 * Rendering happens **exclusively** inside `ui/mod.rs::setup_animation_loop()`.
 
+---
+
+## 1.1 · Progress snapshot (updated 2025-05-04)
+
+P1 (debounced save-state) and P3 (dirty-flag cleanup) are merged.  The RAF
+loop now performs both rendering _and_ the debounce check that dispatches the
+new `Command::SaveState`.  All helper functions outside the reducer trigger
+repaints via the `MarkCanvasDirty` message.
+
 
 ## 2 · Remaining pain-points  (value ✓ / effort ⧗)
 
-| ID | Title | Value | Effort |
-|----|-------|-------|--------|
-| P1 | Debounce `save_state_to_api()` | ★★★★★ | ★★☆☆☆ |
-| P2 | Replace view mount/unmount with CSS toggling | ★★★★☆ | ★★☆☆☆ |
-| P3 | Remove stray `mark_dirty()` calls in helpers | ★★☆☆☆ | ☆☆☆☆☆ |
-| P4 | `debug_log!` macro + on-screen ring-buffer | ★★☆☆☆ | ★☆☆☆☆ |
-| P5 | Batch “layout” PATCH endpoint (frontend + backend) | ★★★★☆ | ★★★☆☆ |
+| ID | Title | Value | Effort | Status |
+|----|-------|-------|--------|--------|
+| P1 | Debounce `save_state_to_api()` | ★★★★★ | ★★☆☆☆ | ✅ **shipped (2025-05-04)** |
+| P2 | Replace view mount/unmount with CSS toggling | ★★★★☆ | ★★☆☆☆ | ⏩ **next** |
+| P3 | Remove stray `mark_dirty()` calls in helpers | ★★☆☆☆ | ☆☆☆☆☆ | ✅ **shipped (2025-05-04)** |
+| P4 | `debug_log!` macro + on-screen ring-buffer | ★★☆☆☆ | ★☆☆☆☆ | 🔜 week-3 |
+| P5 | Batch “layout” PATCH endpoint (frontend + backend) | ★★★★☆ | ★★★☆☆ | 🔜 week-4 |
 
 
 ## 3 · File guide for each task
@@ -122,10 +131,10 @@ components/canvas_editor.rs        // converts DOM events → Messages
 
 | Week | Goals |
 |------|-------|
-| 1 | P1 + P3 fully shipped & tested |
-| 2 | P2 including removal of `render_active_view_by_type` | 
-| 3 | P4 macro + overlay, start backend endpoint stub | 
-| 4 | P5 end-to-end batch save & WebSocket broadcast |
+| 1 | **DONE** – P1 (debounced save) + P3 (dirty-flag cleanup) |
+| 2 | P2 (CSS visibility toggle for views) |
+| 3 | P4 (`debug_log!` macro + overlay UI) + create backend layout endpoint stub |
+| 4 | P5 Batch-save payload: frontend caller, backend PATCH handler, WS broadcast |
 
 
 ---

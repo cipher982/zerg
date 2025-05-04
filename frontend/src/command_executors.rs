@@ -244,6 +244,20 @@ pub fn execute_network_command(cmd: Command) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Save-state executor – called by debounced SaveState command
+// ---------------------------------------------------------------------------
+
+pub fn execute_save_command() {
+    // Borrow AppState immutably to serialise current state.  Persistence
+    // helpers only need read-access.
+    crate::state::APP_STATE.with(|state_ref| {
+        let state = state_ref.borrow();
+        // Persist viewport & node positions (localStorage for now)
+        crate::storage::save_state_to_api(&state);
+    });
+}
+
 pub fn execute_websocket_command(cmd: Command) {
     match cmd {
         Command::WebSocketAction { action, topic, data: _ } => {

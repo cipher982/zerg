@@ -101,6 +101,11 @@ pub struct AppState {
     pub available_models: Vec<(String, String)>,
     // Whether state has been modified since last save
     pub state_modified: bool,
+
+    /// Timestamp (ms) of the **last modification** that set `state_modified`
+    /// to true.  Used by the debounced persistence logic inside the
+    /// AnimationTick handler.
+    pub last_modified_ms: u64,
     // Currently selected node ID
     pub selected_node_id: Option<String>,
     // Flag to track if we're dragging an agent
@@ -226,6 +231,8 @@ impl AppState {
             selected_model: String::new(),
             available_models: Vec::new(), // Start with empty models, will fetch from API
             state_modified: false,
+
+            last_modified_ms: 0,
             selected_node_id: None,
             is_dragging_agent: false,
             active_view: ActiveView::Dashboard,
@@ -1128,6 +1135,9 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::DeleteAgentApi { .. } => crate::command_executors::execute_network_command(cmd),
             
             cmd @ Command::WebSocketAction { .. } => crate::command_executors::execute_websocket_command(cmd),
+
+            // Persist debounced state saves
+            Command::SaveState => crate::command_executors::execute_save_command(),
             
             Command::NoOp => {},
         }
