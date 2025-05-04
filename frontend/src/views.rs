@@ -8,6 +8,20 @@ use crate::storage::ActiveView;
 use wasm_bindgen::JsValue;
 use crate::components::agent_config_modal::AgentConfigModal;
 
+/// Helper: hide a DOM element (`display:none`) if it exists.
+fn hide_by_id(document: &web_sys::Document, id: &str) {
+    if let Some(elem) = document.get_element_by_id(id) {
+        let _ = elem.set_attribute("style", "display: none;");
+    }
+}
+
+/// Helper: show a DOM element (`display:block`) if it exists.
+fn show_block_by_id(document: &web_sys::Document, id: &str) {
+    if let Some(elem) = document.get_element_by_id(id) {
+        let _ = elem.set_attribute("style", "display: block;");
+    }
+}
+
 
 // Handle agent modal display
 pub fn hide_agent_modal(document: &Document) -> Result<(), JsValue> {
@@ -31,44 +45,70 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
     // First log which view we're switching to for debugging
     web_sys::console::log_1(&format!("Switching to view: {:?}", view_type).into());
     
-    // Unmount dashboard if it's mounted
-    if crate::pages::dashboard::is_dashboard_mounted(document) {
-        crate::pages::dashboard::unmount_dashboard(document)?;
-    }
-    
-    // Unmount canvas if it's mounted
-    if crate::pages::canvas::is_canvas_mounted(document) {
-        crate::pages::canvas::unmount_canvas(document)?;
-    }
+    // -------------------------------------------------------------
+    // Step 1: Hide *all* view containers (if they exist).
+    // -------------------------------------------------------------
 
-    // Unmount profile page if mounted
-    if crate::pages::profile::is_profile_mounted(document) {
-        crate::pages::profile::unmount_profile(document)?;
-    }
+    hide_by_id(document, "dashboard-container");
+    hide_by_id(document, "canvas-container");
+    hide_by_id(document, "main-content-area");
+    hide_by_id(document, "input-panel");
+    hide_by_id(document, "agent-shelf");
+    hide_by_id(document, "profile-container");
+    hide_by_id(document, "chat-view-container");
     
-    // Hide chat view if it exists
-    if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
-        chat_container.set_attribute("style", "display: none;")?;
-    }
-    
-    // Now mount the requested view
+    // -------------------------------------------------------------
+    // Step 2: Ensure requested view is mounted once, then show it.
+    // -------------------------------------------------------------
     match view_type {
         ActiveView::Dashboard => {
-            crate::pages::dashboard::mount_dashboard(document)?;
+            if !crate::pages::dashboard::is_dashboard_mounted(document) {
+                crate::pages::dashboard::mount_dashboard(document)?;
+            }
+            show_block_by_id(document, "dashboard-container");
+
+            // Ensure layout class on app-container is reset (dashboard needs default)
+            if let Some(app_container) = document.get_element_by_id("app-container") {
+                app_container.set_class_name("");
+            }
         },
         ActiveView::Canvas => {
-            crate::pages::canvas::mount_canvas(document)?;
+            if !crate::pages::canvas::is_canvas_mounted(document) {
+                crate::pages::canvas::mount_canvas(document)?;
+            }
+            show_block_by_id(document, "canvas-container");
+            show_block_by_id(document, "main-content-area");
+            show_block_by_id(document, "input-panel");
+            
+            show_block_by_id(document, "agent-shelf");
+
+            // Canvas view uses flex row layout via the .canvas-view class
+            if let Some(app_container) = document.get_element_by_id("app-container") {
+                app_container.set_class_name("canvas-view");
+            }
         },
         ActiveView::Profile => {
-            crate::pages::profile::mount_profile(document)?;
+            if !crate::pages::profile::is_profile_mounted(document) {
+                crate::pages::profile::mount_profile(document)?;
+            }
+            show_block_by_id(document, "profile-container");
+
+            if let Some(app_container) = document.get_element_by_id("app-container") {
+                app_container.set_class_name("");
+            }
         },
         ActiveView::ChatView => {
-            // Setup the chat view if needed
-            crate::components::chat_view::setup_chat_view(document)?;
-            
-            // Show chat view container
+            // Setup chat view once
+            if document.get_element_by_id("chat-view-container").is_none() {
+                crate::components::chat_view::setup_chat_view(document)?;
+            }
+            // Show
             if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
                 chat_container.set_attribute("style", "display: flex;")?;
+            }
+
+            if let Some(app_container) = document.get_element_by_id("app-container") {
+                app_container.set_class_name("");
             }
         }
     }
