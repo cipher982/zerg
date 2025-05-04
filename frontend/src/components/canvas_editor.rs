@@ -122,10 +122,10 @@ pub fn resize_canvas(canvas: &HtmlCanvasElement, mut app_state_ref: AppStateRef)
                 AppStateRef::Mutable(ref mut state) => {
                     state.fit_nodes_to_view();
                 },
-                AppStateRef::Immutable(ref state) => {
-                    // Can't fit nodes in read-only mode,
-                    // but we can still draw them as they are
-                    state.draw_nodes();
+                AppStateRef::Immutable(_state) => {
+                    // Read-only ref – obtain a fresh mutable borrow to flag
+                    // the upcoming redraw without directly painting here.
+                    crate::state::dispatch_global_message(crate::messages::Message::MarkCanvasDirty);
                 },
                 AppStateRef::None => APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
@@ -135,15 +135,15 @@ pub fn resize_canvas(canvas: &HtmlCanvasElement, mut app_state_ref: AppStateRef)
         } else {
             // Just redraw without auto-fit
             match app_state_ref {
-                AppStateRef::Mutable(ref state) => {
-                    state.draw_nodes();
+                AppStateRef::Mutable(ref mut state) => {
+                    let _ = state.dispatch(crate::messages::Message::MarkCanvasDirty);
                 },
-                AppStateRef::Immutable(ref state) => {
-                    state.draw_nodes();
+                AppStateRef::Immutable(_state) => {
+                    crate::state::dispatch_global_message(crate::messages::Message::MarkCanvasDirty);
                 },
                 AppStateRef::None => APP_STATE.with(|state| {
-                    let state = state.borrow();
-                    state.draw_nodes();
+                    let mut state = state.borrow_mut();
+                    let _ = state.dispatch(crate::messages::Message::MarkCanvasDirty);
                 })
             }
         }
@@ -251,20 +251,14 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             // Dispatch StartDragging message
             let commands = APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
-                let commands = state.dispatch(crate::messages::Message::StartDragging {
+                state.dispatch(crate::messages::Message::StartDragging {
                     node_id: node_id.clone(),
                     offset_x,
                     offset_y,
-                });
-                
-                // If this is an agent node, store additional information for the mouseup handler
-                if is_agent {
-                    state.is_dragging_agent = true;
-                    state.drag_start_x = x; // Store start position to determine if it was a click or drag
-                    state.drag_start_y = y;
-                }
-                
-                commands
+                    start_x: x,
+                    start_y: y,
+                    is_agent,
+                })
             });
             
             // Execute commands

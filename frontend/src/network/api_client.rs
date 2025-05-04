@@ -428,7 +428,7 @@ pub fn reload_agent(agent_id: u32) {
                                                             }
                                                         }
                                                         
-                                                        state.draw_nodes();
+                                                        state.mark_dirty();
                                                     });
                                                     
                                                     // Update the UI

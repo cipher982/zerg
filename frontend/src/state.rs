@@ -171,6 +171,12 @@ pub struct AppState {
     pub agent_id_to_node_id: HashMap<u32, String>,
 
     // -------------------------------------------------------------------
+    // Rendering: marks whether a repaint is required on the next
+    // requestAnimationFrame.  Keep this separate from `state_modified`
+    // which is about *persistence*, not visual output.
+    pub dirty: bool,
+
+    // -------------------------------------------------------------------
     // Authentication
     // -------------------------------------------------------------------
     /// Whether the current browser session is authenticated.  Determined at
@@ -254,6 +260,9 @@ impl AppState {
 
             agent_id_to_node_id: HashMap::new(),
 
+            // The very first frame must draw the freshly created canvas.
+            dirty: true,
+
             // -------------------------------------------------------------------
             // Authentication state – look for a persisted JWT.
             // -------------------------------------------------------------------
@@ -275,6 +284,15 @@ impl AppState {
             // refresh.
             current_user: None,
         }
+    }
+
+    // -------------------------------------------------------------------
+    // Rendering helpers
+    // -------------------------------------------------------------------
+
+    /// Mark the canvas as needing a repaint on the next animation frame.
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
     }
 
     /// Return the assistant message id that is **currently being streamed**
@@ -369,7 +387,7 @@ impl AppState {
                 self.agents_on_canvas.remove(&agent_id);
             }
             self.state_modified = true;
-            self.draw_nodes();
+            self.mark_dirty();
         }
     }
 
@@ -475,7 +493,7 @@ impl AppState {
             if self.auto_fit {
                 self.fit_nodes_to_view();
             } else {
-                self.draw_nodes();
+                self.mark_dirty();
             }
         }
     }
@@ -597,8 +615,8 @@ impl AppState {
             self.viewport_x = new_viewport_x;
             self.viewport_y = new_viewport_y;
             
-            // Now redraw
-            self.draw_nodes();
+            // Schedule a redraw via RAF
+            self.mark_dirty();
         }
     }
     
@@ -675,8 +693,8 @@ impl AppState {
                 state.viewport_y = start_y + (target_y - start_y) * eased_progress;
                 state.zoom_level = start_zoom + (target_zoom - start_zoom) * eased_progress;
                 
-                // Redraw with new viewport
-                state.draw_nodes();
+                // Flag a repaint for this frame
+                state.mark_dirty();
                 
                 // Continue animation if not finished
                 if progress < 1.0 {
@@ -818,8 +836,8 @@ impl AppState {
                 if has_canvas {
                     // Refresh canvas in a separate borrow scope
                     APP_STATE.with(|state| {
-                        let state = state.borrow_mut();
-                        state.draw_nodes();
+                        let mut state = state.borrow_mut();
+                        state.mark_dirty();
                     });
                 }
                 
@@ -895,8 +913,8 @@ impl AppState {
             }
         }
         
-        // Redraw the canvas
-        self.draw_nodes();
+        // Flag for redraw
+        self.mark_dirty();
     }
 
     /// Creates a new node linked to an optional agent

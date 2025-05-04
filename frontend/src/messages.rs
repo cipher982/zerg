@@ -101,12 +101,20 @@ pub enum Message {
     
     // Input handling
     UpdateInputText(String),             // Update the input text field
+
+    // Mark canvas as needing a redraw (set `dirty = true`).  Should not be
+    // produced by the renderer itself – only helpers that run outside the
+    // normal reducer flow and cannot obtain a mutable AppState borrow.
+    MarkCanvasDirty,
     
     // Dragging state
     StartDragging {
         node_id: String,
         offset_x: f64,
         offset_y: f64,
+        start_x: f64,
+        start_y: f64,
+        is_agent: bool,
     },
     StopDragging,
     
