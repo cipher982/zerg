@@ -124,40 +124,45 @@ pub fn save_state_to_api(app_state: &AppState) {
                         
                         // Check if the agent data has actually changed by comparing with backend data
                         let should_update = if let Some(backend_agent) = agents.get(&agent_id) {
-                            // Log the values for debugging
-                            web_sys::console::log_1(&format!("Comparing agent {}: Backend vs Frontend", agent_id).into());
-                            web_sys::console::log_1(&format!("Name: '{}' vs '{}'", 
-                                backend_agent.name, 
-                                agent_update.name.as_ref().unwrap_or(&String::new())).into());
-                            web_sys::console::log_1(&format!("System Instructions: '{:?}' vs '{:?}'", 
-                                backend_agent.system_instructions, 
-                                agent_update.system_instructions).into());
-                            web_sys::console::log_1(&format!("Model: '{:?}' vs '{:?}'", 
-                                backend_agent.model, 
-                                agent_update.model).into());
-                            
+                            // In debug builds print a diff summary – keeps production console clean.
+                            if cfg!(debug_assertions) {
+                                web_sys::console::log_1(&format!("Comparing agent {}: Backend vs Frontend", agent_id).into());
+                                web_sys::console::log_1(&format!("Name: '{}' vs '{}'", 
+                                    backend_agent.name, 
+                                    agent_update.name.as_ref().unwrap_or(&String::new())).into());
+                                web_sys::console::log_1(&format!("System Instructions: '{:?}' vs '{:?}'", 
+                                    backend_agent.system_instructions, 
+                                    agent_update.system_instructions).into());
+                                web_sys::console::log_1(&format!("Model: '{:?}' vs '{:?}'", 
+                                    backend_agent.model, 
+                                    agent_update.model).into());
+                            }
+
                             // Compare name (String vs Option<String>)
                             let name_changed = backend_agent.name != *agent_update.name.as_ref().unwrap_or(&String::new());
-                            // Compare system_instructions (Option<String> vs Option<String>)
-                            // We are not updating system/task instructions via this path anymore
+                            // Compare system_instructions – currently not saved via this path
                             let sys_instr_changed = false;
-                            // Compare model (Option<String> vs Option<String>) – still relevant once we wire model editing
+                            // Compare model (Option<String> vs Option<String>)
                             let model_changed = backend_agent.model != agent_update.model;
-                            
-                            if name_changed {
-                                web_sys::console::log_1(&"Name differs".into());
+
+                            if cfg!(debug_assertions) {
+                                if name_changed {
+                                    web_sys::console::log_1(&"Name differs".into());
+                                }
+                                if sys_instr_changed {
+                                    web_sys::console::log_1(&"System instructions differ".into());
+                                }
+                                if model_changed {
+                                    web_sys::console::log_1(&"Model differs".into());
+                                }
                             }
-                            if sys_instr_changed {
-                                web_sys::console::log_1(&"System instructions differ".into());
-                            }
-                            if model_changed {
-                                web_sys::console::log_1(&"Model differs".into());
-                            }
-                            
+
                             name_changed || sys_instr_changed || model_changed
                         } else {
-                            // If we don't have backend data, assume we need to update
-                            web_sys::console::log_1(&format!("No backend data for agent {}, will update", agent_id).into());
+                            // No backend snapshot; assume update needed
+                            if cfg!(debug_assertions) {
+                                web_sys::console::log_1(&format!("No backend data for agent {}, will update", agent_id).into());
+                            }
                             true
                         };
                         
@@ -175,11 +180,15 @@ pub fn save_state_to_api(app_state: &AppState) {
                             if let Err(e) = ApiClient::update_agent(agent_id, &agent_json).await {
                                 web_sys::console::error_1(&format!("Error updating agent in API: {:?}", e).into());
                             } else {
-                                web_sys::console::log_1(&format!("Updated agent {} in API (with changes)", agent_id).into());
+                                if cfg!(debug_assertions) {
+                                    web_sys::console::log_1(&format!("Updated agent {} in API (with changes)", agent_id).into());
+                                }
                             }
                         } else {
                             // No changes detected, log it differently
-                            web_sys::console::log_1(&format!("Verified agent {} in API (no changes)", agent_id).into());
+                            if cfg!(debug_assertions) {
+                                web_sys::console::log_1(&format!("Verified agent {} in API (no changes)", agent_id).into());
+                            }
                         }
                     }
                 }

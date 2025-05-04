@@ -615,8 +615,12 @@ fn refresh_dashboard_after_change() -> Result<(), JsValue> {
         });
     }
     
-    // Then refresh UI after state changes (in a completely separate borrow)
-    crate::state::AppState::refresh_ui_after_state_change()
+    // Quick-win: avoid the heavyweight unmount/mount cycle that
+    // refresh_ui_after_state_change() performs.  A simple save is
+    // enough after drag-end; the RAF render loop (or the direct
+    // draw_nodes call in the drag handler) already repaints.
+
+    Ok(())
 }
 
 // Add a new function to set up drag and drop events
