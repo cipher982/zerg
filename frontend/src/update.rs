@@ -276,13 +276,27 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 let dx = current_x - state.drag_last_x;
                 let dy = current_y - state.drag_last_y;
                
-                state.viewport_x -= dx;
-                state.viewport_y -= dy;
+                // The drag delta is measured in screen-space pixels. Convert the
+                // movement into world coordinates by dividing by the current
+                // zoom level so panning speed remains constant regardless of
+                // zoom factor.
+                let zoom = state.zoom_level;
+
+                state.viewport_x -= dx / zoom;
+                state.viewport_y -= dy / zoom;
                
                 state.drag_last_x = current_x;
                 state.drag_last_y = current_y;
                
                 state.state_modified = true;
+
+                // Trigger an immediate repaint so the canvas visually follows
+                // the cursor in real-time.  This used to happen implicitly via
+                // `refresh_ui_after_state_change()` but that heavy DOM
+                // remount was removed in the previous cleanup.  Explicitly
+                // redrawing here restores the smooth panning behaviour without
+                // re-creating the entire canvas element.
+                state.draw_nodes();
             }
         },
        
