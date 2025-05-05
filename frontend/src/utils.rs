@@ -130,6 +130,75 @@ pub fn logout() -> Result<(), JsValue> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Debug overlay & logging (compiled only in debug builds)
+// ---------------------------------------------------------------------------
+
+#[cfg(debug_assertions)]
+pub mod debug {
+    use std::collections::VecDeque;
+    use wasm_bindgen::JsValue;
+    use web_sys::CanvasRenderingContext2d;
+
+    /// Maximum ring buffer capacity.
+    pub const RING_CAP: usize = 200;
+
+    /// Draw the translucent overlay that shows the last few debug lines.
+    pub fn draw_overlay(ctx: &CanvasRenderingContext2d, ring: &VecDeque<String>) {
+        if ring.is_empty() {
+            return;
+        }
+
+        const PADDING: f64 = 4.0;
+        const LINE_HEIGHT: f64 = 14.0;
+        const MAX_LINES: usize = 10;
+
+        let lines: Vec<&String> = ring.iter().rev().take(MAX_LINES).collect();
+        let height = (lines.len() as f64) * LINE_HEIGHT + PADDING * 2.0;
+        let width = 400.0;
+
+        ctx.save();
+        ctx.set_fill_style(&JsValue::from_str("rgba(0,0,0,0.6)"));
+        ctx.fill_rect(0.0, 0.0, width, height);
+        ctx.set_font("12px monospace");
+        ctx.set_fill_style(&JsValue::from_str("#8aff8a"));
+
+        for (idx, line) in lines.iter().enumerate() {
+            let y = PADDING + LINE_HEIGHT * (idx as f64 + 1.0) - 3.0;
+            let _ = ctx.fill_text(line, PADDING, y);
+        }
+
+        ctx.restore();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// debug_log! macro (noop in release)
+// ---------------------------------------------------------------------------
+
+#[macro_export]
+macro_rules! debug_log {
+    ($($t:tt)*) => {{
+        #[cfg(debug_assertions)]
+        {
+            let msg = format!($($t)*);
+            web_sys::console::log_1(&msg.clone().into());
+
+            use crate::state::APP_STATE;
+            use crate::utils::debug::RING_CAP;
+            APP_STATE.with(|cell| {
+                let mut st = cell.borrow_mut();
+                if st.debug_ring.len() >= RING_CAP {
+                    st.debug_ring.pop_front();
+                }
+                st.debug_ring.push_back(msg);
+                st.mark_dirty();
+            });
+        }
+    }};
+}
+
+
 // wasm-bindgen tests ----------------------------------------------------------
 
 #[cfg(test)]

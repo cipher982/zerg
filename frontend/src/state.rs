@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::{HashMap, HashSet};
+use std::collections::VecDeque;
 use web_sys::{HtmlCanvasElement, CanvasRenderingContext2d, WebSocket};
 use crate::models::{
     Node,
@@ -159,6 +160,12 @@ pub struct AppState {
     // Track which agents have their full run history expanded (>5 rows)
     pub run_history_expanded: HashSet<u32>,
 
+    // ---------------------------------------------------------------
+    // Debug overlay (only compiled in debug builds)
+    // ---------------------------------------------------------------
+    #[cfg(debug_assertions)]
+    pub debug_ring: VecDeque<String>,
+
     /// Runs currently in `running` status for which the dashboard should show
     /// a ticking duration value.  Stores *run_id* (primary key) – agent_id can
     /// be looked up via `agent_runs` map if required.
@@ -269,6 +276,9 @@ impl AppState {
 
             // The very first frame must draw the freshly created canvas.
             dirty: true,
+
+            #[cfg(debug_assertions)]
+            debug_ring: VecDeque::new(),
 
             // -------------------------------------------------------------------
             // Authentication state – look for a persisted JWT.

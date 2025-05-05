@@ -4,7 +4,7 @@ Audience: **new frontend engineer** joining the project to finish the canvas-per
 refactor and related quality-of-life tasks.  Everything you need – context,
 file paths, call-stacks – is collected here so you can ramp up in minutes.
 
-> Status @ 2025-05-04: the initial “single requestAnimationFrame renderer” is
+> Status @ 2025-05-06: the initial “single requestAnimationFrame renderer” is
 > merged.  The canvas now repaints only when `AppState.dirty == true`.  All
 > *direct* calls to `draw_nodes()` were removed from reducers, and the RAF
 > loop performs the paint + clears the flag.
@@ -47,10 +47,10 @@ repaints via the `MarkCanvasDirty` message.
 | ID | Title | Value | Effort | Status |
 |----|-------|-------|--------|--------|
 | P1 | Debounce `save_state_to_api()` | ★★★★★ | ★★☆☆☆ | ✅ **shipped (2025-05-04)** |
-| P2 | Replace view mount/unmount with CSS toggling | ★★★★☆ | ★★☆☆☆ | ⏩ **next** |
+| P2 | Replace view mount/unmount with CSS toggling | ★★★★☆ | ★★☆☆☆ | ✅ **shipped (2025-05-06)** |
 | P3 | Remove stray `mark_dirty()` calls in helpers | ★★☆☆☆ | ☆☆☆☆☆ | ✅ **shipped (2025-05-04)** |
-| P4 | `debug_log!` macro + on-screen ring-buffer | ★★☆☆☆ | ★☆☆☆☆ | 🔜 week-3 |
-| P5 | Batch “layout” PATCH endpoint (frontend + backend) | ★★★★☆ | ★★★☆☆ | 🔜 week-4 |
+| P4 | `debug_log!` macro + on-screen ring-buffer | ★★☆☆☆ | ★☆☆☆☆ | ✅ **shipped (2025-05-06)** |
+| P5 | Batch “layout” PATCH endpoint (frontend caller missing) | ★★★★☆ | ★★★☆☆ | ⏩ **next** (backend stub ready) |
 
 
 ## 3 · File guide for each task
@@ -100,8 +100,8 @@ Steps:
 
 ### P5 · Layout PATCH batching
 
-* **backend/zerg/routers/graph_layout.py** (to be created).
-* **frontend/src/network/api_client.rs** – new `patch_layout(payload)`.
+* **backend/zerg/routers/graph_layout.py** – ✅ stub shipped (returns 204; will be extended).
+* **frontend/src/network/api_client.rs** – new `patch_layout(payload)` (TBD).
 * **frontend/src/storage.rs** – when debounce fires, send one payload with
   `{ nodes: {id: {x,y}}, viewport: {x,y,zoom} }`.
 

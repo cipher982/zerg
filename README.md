@@ -243,6 +243,9 @@ This architecture creates a seamless real-time experience: when an agent is crea
   - With the `LLM_TOKEN_STREAM` feature flag the backend forwards **each individual token** as it is generated (`chunk_type="assistant_token"`).  
   - Full message chunks (`assistant_message`, `tool_output`) are still emitted so clients without token mode remain compatible.
 
+• **Debug Ring-Buffer Overlay (dev builds)**  
+  - Build the frontend with `./build-debug.sh` and every `debug_log!()` call appears in a translucent overlay on the canvas – invaluable when testing on devices without a JS console.
+
 • **ReAct-style Functional Agents**  
   - Pure agent definitions live in `backend/zerg/agents_def/*` and are composed with LangGraph's Functional API.  
   - `AgentRunner` compiles the definition at runtime and handles DB persistence plus WebSocket streaming.

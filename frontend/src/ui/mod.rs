@@ -22,6 +22,15 @@ pub fn setup_animation_loop() {
             let mut st = state.borrow_mut();
             if st.dirty {
                 st.draw_nodes();
+
+                // Draw debug overlay (debug builds only)
+                #[cfg(debug_assertions)]
+                {
+                    if let Some(ctx) = st.context.as_ref() {
+                        crate::utils::debug::draw_overlay(ctx, &st.debug_ring);
+                    }
+                }
+
                 st.dirty = false;
             }
 
