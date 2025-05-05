@@ -32,17 +32,69 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
     status.set_class_name("yellow"); // initial colour
     status.set_inner_html("Status: Connecting");
 
-    let api_status = document.create_element("div")?;
-    api_status.set_id("api-status");
-    api_status.set_inner_html("API: Ready");
-
     status_bar.append_child(&status)?;
-    status_bar.append_child(&api_status)?;
+
+    // Add an (initially empty) layout status span that will be aligned to the
+    // right by the flex layout (`justify-content: space-between`).  We *do
+    // not* insert any text here so the bar looks identical to previous builds
+    // until an error/warning is displayed.
+
+    let layout_status = document.create_element("div")?;
+    layout_status.set_id("layout-status");
+    layout_status.set_class_name("");
+    layout_status.set_inner_html("");
+
+    status_bar.append_child(&layout_status)?;
 
     // Inject into DOM
     let body = document.body().ok_or(JsValue::from_str("No <body> element found"))?;
     body.append_child(&header)?;
     body.append_child(&status_bar)?;
+
+    // -------------------------------------------------------------------
+    // Reliability fix – ensure any *pending* canvas layout changes are
+    // flushed to the backend when the user navigates away (tab close,
+    // refresh, browser back gesture, etc.).  We hook into the `pagehide`
+    // event which fires reliably across modern browsers whenever the page
+    // is being unloaded *or* moved into the back/forward cache.  Using
+    // `visibilitychange` alone is insufficient because pages kept alive in
+    // bfcache do not trigger a regular unload.
+    // -------------------------------------------------------------------
+
+    if let Some(window) = web_sys::window() {
+        // Closure is intentionally leaked (`forget`) because it must live
+        // for the entire page lifetime – there is no corresponding remove
+        // listener during normal operation.
+        let on_pagehide = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
+            crate::state::APP_STATE.with(|s| {
+                // Attempt to persist without panicking if another borrow is
+                // active – unloading happens late in the event loop when no
+                // other borrows exist.
+                if let Ok(mut st) = s.try_borrow_mut() {
+                    // Force-clear dragging flags so persistence logic emits
+                    // the PATCH even if the user closes the tab mid-drag.
+                    st.is_dragging_agent = false;
+                    st.canvas_dragging = false;
+
+                    // Force a persistence attempt even if
+                    // `state_modified` was already reset by the most recent
+                    // animation tick.  Without this the final layout change
+                    // could be lost when the user closes the tab *very*
+                    // quickly after releasing the mouse.
+                    st.state_modified = true;
+
+                    let _ = st.save_if_modified();
+                }
+            });
+        });
+
+        // SAFETY: `.unchecked_ref()` is safe because the closure type
+        // matches the required `&Function` signature for addEventListener.
+        let _ = window.add_event_listener_with_callback("pagehide", on_pagehide.as_ref().unchecked_ref());
+
+        // Leak – see comment above.
+        on_pagehide.forget();
+    }
 
     Ok(())
 }

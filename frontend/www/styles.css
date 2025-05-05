@@ -492,13 +492,25 @@ button {
     background-color: #e74c3c;
 }
 
+#layout-status.red {
+    color: #e74c3c;
+}
+
 #status.yellow {
     background-color: #f1c40f;
     color: #2c3e50;  /* darker text for better contrast on yellow */
 }
 
+#layout-status.yellow {
+    color: #f1c40f;
+}
+
 #status.green {
     background-color: #2ecc71;
+}
+
+#layout-status.green {
+    color: #2ecc71;
 }
 
 /* Activity indicator (network port style) */

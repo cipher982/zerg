@@ -116,6 +116,17 @@ impl ApiClient {
         Self::fetch_json(&url, "POST", None).await
     }
 
+    // -------------------------------------------------------------------
+    // Canvas layout (Phase-B)
+    // -------------------------------------------------------------------
+
+    /// Retrieve the persisted canvas layout for the authenticated user.
+    /// Returns an **empty string** if the backend responded with 204.
+    pub async fn get_layout() -> Result<String, JsValue> {
+        let url = format!("{}/api/graph/layout", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
     // Thread management
     pub async fn get_threads(agent_id: Option<u32>) -> Result<String, JsValue> {
         let url = if let Some(id) = agent_id {
@@ -188,6 +199,23 @@ impl ApiClient {
     pub async fn update_current_user(patch_json: &str) -> Result<String, JsValue> {
         let url = format!("{}/api/users/me", Self::api_base_url());
         Self::fetch_json(&url, "PUT", Some(patch_json)).await
+    }
+
+    // -------------------------------------------------------------------
+    // Canvas layout persistence (graph editor)
+    // -------------------------------------------------------------------
+
+    /// Persist batched node positions + viewport to the backend.
+    ///
+    /// The backend acknowledges with HTTP 204 (no-content).  We therefore
+    /// convert the successful `fetch_json` result (an empty string) into `()`
+    /// so callers can use the function in a boolean-style `match` without
+    /// caring about a body.
+    pub async fn patch_layout(payload_json: &str) -> Result<(), JsValue> {
+        let url = format!("{}/api/graph/layout", Self::api_base_url());
+        Self::fetch_json(&url, "PATCH", Some(payload_json))
+            .await
+            .map(|_| ())
     }
 
     // Helper function to make fetch requests

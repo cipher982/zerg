@@ -19,7 +19,7 @@ use config::ApiConfig;
 use wasm_bindgen::prelude::*;
 
 lazy_static! {
-    static ref API_CONFIG: RwLock<Option<ApiConfig>> = RwLock::new(None);
+static ref API_CONFIG: RwLock<Option<ApiConfig>> = RwLock::new(None);
 }
 
 /// Initialize the API configuration. Must be called before any network operations.
@@ -45,8 +45,14 @@ fn get_api_config() -> Result<std::sync::RwLockReadGuard<'static, Option<ApiConf
 
 /// Get the WebSocket URL
 pub(crate) fn get_ws_url() -> Result<String, &'static str> {
-    let base_url = get_api_config()
-        .map(|config| config.as_ref().expect("API config not initialized").ws_url())?;
+    let maybe_url = {
+        let guard = API_CONFIG.read().unwrap();
+        guard.as_ref().map(|cfg| cfg.ws_url())
+    };
+
+    // Use the configured URL or fall back to a sensible default so unit and
+    // wasm-bindgen tests can run without the full app bootstrap.
+    let base_url = maybe_url.unwrap_or_else(|| ApiConfig::default().ws_url());
 
     // If a JWT is present in localStorage append it as query parameter so the
     // backend can authenticate the WebSocket upgrade request.
@@ -61,6 +67,10 @@ pub(crate) fn get_ws_url() -> Result<String, &'static str> {
 
 /// Get the base URL for API calls
 pub(crate) fn get_api_base_url() -> Result<String, &'static str> {
-    get_api_config()
-        .map(|config| config.as_ref().expect("API config not initialized").base_url().to_string())
-} 
+    let maybe_base = {
+        let guard = API_CONFIG.read().unwrap();
+        guard.as_ref().map(|cfg| cfg.base_url().to_string())
+    };
+
+    Ok(maybe_base.unwrap_or_else(|| ApiConfig::default().base_url().to_string()))
+}

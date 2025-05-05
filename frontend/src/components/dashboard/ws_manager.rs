@@ -114,9 +114,10 @@ impl DashboardWsManager {
             state_ref.borrow().agents.keys().cloned().collect()
         });
 
+        // Subscribe to each existing agent individually – backend does not
+        // support wildcards for normal runtime traffic.
         for aid in agent_ids {
             let topic = format!("agent:{}", aid);
-            // Cast the concrete closure type to the trait object type expected by TopicManager.
             let cloned: TopicHandler = Rc::clone(&handler) as TopicHandler;
             topic_manager.subscribe(topic, cloned)?;
         }
