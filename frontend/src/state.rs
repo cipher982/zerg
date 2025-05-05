@@ -801,11 +801,11 @@ impl AppState {
     // Save state if modified
     pub fn save_if_modified(&mut self) -> Result<(), JsValue> {
         if self.state_modified {
-            // Save to API as the source of truth
+            // Persist to localStorage and schedule the *single* API PATCH
+            // call via ``save_state``.  We removed the second direct call to
+            // `save_state_to_api` to avoid duplicate network requests for the
+            // same state update.
             let result = crate::storage::save_state(self);
-            
-            // Save to the API
-            crate::storage::save_state_to_api(self);
             
             // Sync agent messages – removed as part of node/agent decoupling
             

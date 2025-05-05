@@ -9,6 +9,9 @@ from sqlalchemy.orm import Session
 from zerg.models.models import Agent
 from zerg.models.models import AgentMessage
 from zerg.models.models import AgentRun
+
+# Canvas layout model (Phase-B)
+from zerg.models.models import CanvasLayout
 from zerg.models.models import Thread
 from zerg.models.models import ThreadMessage
 from zerg.models.models import Trigger
@@ -505,3 +508,61 @@ def mark_failed(
 def list_runs(db: Session, agent_id: int, *, limit: int = 20):
     """Return the most recent runs for *agent_id* ordered DESC by id."""
     return db.query(AgentRun).filter(AgentRun.agent_id == agent_id).order_by(AgentRun.id.desc()).limit(limit).all()
+
+
+# ---------------------------------------------------------------------------
+# Canvas layout helpers (Phase-B)
+# ---------------------------------------------------------------------------
+
+
+def upsert_canvas_layout(db: Session, user_id: int | None, nodes: dict, viewport: dict | None):
+    """Insert **or** update the *canvas layout* for *(user_id, workspace=NULL)*.
+
+    The helper uses an *atomic* SQL ``INSERT … ON CONFLICT DO UPDATE`` so that
+    concurrent requests cannot create duplicate rows or accidentally lose
+    updates.  It relies on the UNIQUE(user_id, workspace) constraint declared
+    on the ``CanvasLayout`` model.
+    """
+
+    from sqlalchemy.dialects.sqlite import insert  # Local import to avoid mandatory PG deps
+    from sqlalchemy.sql import func
+
+    if user_id is None:
+        raise ValueError("upsert_canvas_layout: `user_id` must not be None, auth dependency failed?")
+
+    workspace_val = None  # Reserved for future multi-tenant feature
+
+    stmt = (
+        insert(CanvasLayout)
+        .values(
+            user_id=user_id,
+            workspace=workspace_val,
+            nodes_json=nodes,
+            viewport=viewport,
+        )
+        .on_conflict_do_update(
+            index_elements=["user_id", "workspace"],
+            set_={
+                "nodes_json": nodes,
+                "viewport": viewport,
+                # Explicitly bump timestamp – SQLite will not evaluate the
+                # column default on an UPDATE.
+                "updated_at": func.now(),
+            },
+        )
+    )
+
+    db.execute(stmt)
+    db.commit()
+
+    # Return the *current* row so callers can inspect the stored payload.
+    return db.query(CanvasLayout).filter_by(user_id=user_id, workspace=None).first()
+
+
+def get_canvas_layout(db: Session, user_id: int | None):
+    """Return the persisted canvas layout for *user_id* (or None)."""
+
+    if user_id is None:
+        return None
+
+    return db.query(CanvasLayout).filter_by(user_id=user_id, workspace=None).first()

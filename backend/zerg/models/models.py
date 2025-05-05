@@ -7,6 +7,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import Text
+from sqlalchemy import UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -87,6 +88,68 @@ class Agent(Base):
 
     # Relationship to execution runs (added in the *Run History* feature).
     runs = relationship("AgentRun", back_populates="agent", cascade="all, delete-orphan")
+
+
+# ---------------------------------------------------------------------------
+# CanvasLayout – persist per-user canvas/UI state (Phase-B)
+# ---------------------------------------------------------------------------
+
+
+class CanvasLayout(Base):
+    """Persisted *canvas layout* for a user.
+
+    At the moment every user stores at most **one** layout (keyed by
+    ``workspace`` = NULL).  The table is future-proofed for multi-tenant
+    scenarios by including an optional *workspace* column.
+    """
+
+    __tablename__ = "canvas_layouts"
+
+    # Enforce *one layout per (user, workspace)*.  Workspace is currently
+    # always ``NULL`` but the uniqueness constraint makes future multi-tenant
+    # work easier and allows us to rely on an atomic *upsert* in the CRUD
+    # helper.
+    __table_args__ = (
+        # NOTE: SQLite supports the ON CONFLICT clause that references this
+        # UNIQUE constraint, enabling an atomic UPSERT in
+        # ``crud.upsert_canvas_layout``.
+        UniqueConstraint("user_id", "workspace", name="uix_user_workspace_layout"),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    # Foreign key to *users* – **NOT NULL**.  A NULL value would break the
+    # UNIQUE(user_id, workspace) constraint in SQLite because every row that
+    # contains a NULL is considered *distinct*.  That would allow unlimited
+    # duplicate layouts for anonymous users which is *never* what we want.
+    #
+    # For the dev-mode bypass (`AUTH_DISABLED`) the helper in
+    # `zerg.dependencies.auth` ensures a deterministic *dev@local* user row
+    # is always present so a proper `user_id` exists.
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # Reserved for a future multi-tenant feature where a user can switch
+    # between different *workspaces*.
+    workspace = Column(String, nullable=True)
+
+    # Raw JSON blobs coming from the WASM frontend.
+    nodes_json = Column(JSON, nullable=False)
+    viewport = Column(JSON, nullable=True)
+
+    # Track last update timestamp (creation time is implicit – equals first
+    # value of *updated_at*).
+    # Let the **database** rather than Python set and update the timestamp so
+    # values are consistent across multiple application instances and not
+    # subject to clock skew.
+    updated_at = Column(
+        DateTime,
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # ORM relationship back to the owning user – one-to-one convenience.
+    user = relationship("User", backref="canvas_layout", uselist=False)
 
 
 class AgentMessage(Base):

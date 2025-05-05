@@ -15,11 +15,17 @@ from typing import Dict
 from typing import Optional
 
 from fastapi import APIRouter
+from fastapi import Depends
 from fastapi import Response
 from fastapi import status
 from pydantic import BaseModel
 from pydantic import Field
 from pydantic import validator
+from sqlalchemy.orm import Session
+
+from zerg.crud import crud
+from zerg.database import get_db
+from zerg.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/graph", tags=["canvas"])
 
@@ -46,13 +52,38 @@ class LayoutUpdate(BaseModel):
         return v
 
 
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+
 @router.patch("/layout", status_code=status.HTTP_204_NO_CONTENT)
-async def patch_layout(_payload: LayoutUpdate) -> Response:  # noqa: D401 – simple stub
-    """Persist batched canvas layout (stub).
+async def patch_layout(
+    payload: LayoutUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+) -> Response:
+    """Upsert the authenticated user's canvas layout."""
 
-    Future work: store in DB, broadcast over WebSocket so other tabs update.
-    """
+    # Convert Pydantic models → plain dicts for JSON storage.
+    nodes_dict = {k: v.dict() for k, v in payload.nodes.items()}
+    viewport_dict = payload.viewport.dict() if payload.viewport is not None else None
 
-    # For the prototype we simply acknowledge the request so the frontend can
-    # consider its save successful.
+    crud.upsert_canvas_layout(db, getattr(current_user, "id", None), nodes_dict, viewport_dict)
+
+    # Consider broadcasting update over WebSocket in a future enhancement.
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/layout")
+async def get_layout(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Return the stored layout for the authenticated user (if any)."""
+
+    layout = crud.get_canvas_layout(db, getattr(current_user, "id", None))
+    if layout is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    return {"nodes": layout.nodes_json, "viewport": layout.viewport}

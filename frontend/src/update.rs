@@ -263,6 +263,12 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.dragging = None;
             state.is_dragging_agent = false;
             state.state_modified = true;
+
+            // Persist the final position immediately so a quick page refresh
+            // right after dropping a node does not lose the change.  We
+            // ignore any error here – the periodic *auto-save* timer will
+            // retry in case of intermittent failures.
+            let _ = state.save_if_modified();
         },
        
         Message::StartCanvasDrag { start_x, start_y } => {
@@ -305,6 +311,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::StopCanvasDrag => {
             state.canvas_dragging = false;
             state.state_modified = true;
+
+            // Persist final viewport immediately so a quick tab close after a
+            // pan operation still records the new position.  Mirrors the
+            // behaviour of `StopDragging` for node moves.
+            let _ = state.save_if_modified();
         },
        
         Message::ZoomCanvas { new_zoom, viewport_x, viewport_y } => {
@@ -923,6 +934,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // After updating the agent list trigger a label refresh so all
             // visual nodes show the latest agent names.
             commands.push(Command::SendMessage(Message::RefreshCanvasLabels));
+
+            // Reconcile placeholder canvas nodes that were inserted while the
+            // agent list was still loading.  This upgrades them to proper
+            // AgentIdentity nodes with correct labels.
+            crate::storage::fix_stub_nodes();
         },
 
         // ------------------------------------------------------------------

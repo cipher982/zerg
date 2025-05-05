@@ -177,6 +177,28 @@ fn setup_test() -> (DashboardWsManager, Rc<RefCell<MockTopicManager>>, Rc<RefCel
 async fn test_dashboard_manager_subscribe() {
     // Get both Rc types from setup
     let (mut manager, concrete_mock_rc, trait_object_rc) = setup_test();
+
+    // Insert a dummy agent so the production code subscribes to exactly one
+    // concrete topic ("agent:1") instead of zero, which is expected runtime
+    // behaviour.
+    crate::state::APP_STATE.with(|st| {
+        use crate::models::ApiAgent;
+        st.borrow_mut().agents.insert(1, ApiAgent {
+            id: Some(1),
+            name: "Dummy".to_string(),
+            status: None,
+            system_instructions: None,
+            task_instructions: None,
+            model: None,
+            temperature: None,
+            created_at: None,
+            updated_at: None,
+            schedule: None,
+            next_run_at: None,
+            last_run_at: None,
+            last_error: None,
+        });
+    });
     
     // Pass the TRAIT OBJECT to the method under test
     let result = manager.subscribe_to_agent_events(trait_object_rc.clone());
@@ -185,19 +207,42 @@ async fn test_dashboard_manager_subscribe() {
     // Use the CONCRETE MOCK Rc to verify calls
     let calls = concrete_mock_rc.borrow().get_calls();
     assert_eq!(calls.len(), 1, "Expected 1 call to mock topic manager");
-    assert_eq!(calls[0], "subscribe::agent:*", "Expected subscribe call for agent:*");
+    assert_eq!(calls[0], "subscribe::agent:1", "Expected subscribe call for agent:1");
     
     assert!(manager.agent_subscription_handler.is_some(), "Manager should store the handler");
 
     // Use the CONCRETE MOCK Rc to verify handlers
-    let handlers = concrete_mock_rc.borrow().get_handlers("agent:*");
-    assert_eq!(handlers.len(), 1, "Mock should have one handler for agent:*");
+    // Ensure the handler was registered on the concrete per-agent topic that
+    // the DashboardWsManager subscribes to (wild-card topics are *not*
+    // supported by the backend at runtime).
+    let handlers = concrete_mock_rc.borrow().get_handlers("agent:1");
+    assert_eq!(handlers.len(), 1, "Mock should have one handler for agent:1");
 }
 
 #[wasm_bindgen_test]
 async fn test_dashboard_manager_cleanup() {
     // Get both Rc types
     let (mut manager, concrete_mock_rc, trait_object_rc) = setup_test();
+
+    // Insert dummy agent with id 1 as in subscribe test
+    crate::state::APP_STATE.with(|st| {
+        use crate::models::ApiAgent;
+        st.borrow_mut().agents.insert(1, ApiAgent {
+            id: Some(1),
+            name: "Dummy".to_string(),
+            status: None,
+            system_instructions: None,
+            task_instructions: None,
+            model: None,
+            temperature: None,
+            created_at: None,
+            updated_at: None,
+            schedule: None,
+            next_run_at: None,
+            last_run_at: None,
+            last_error: None,
+        });
+    });
 
     // Setup: Subscribe first using the TRAIT OBJECT
     manager.subscribe_to_agent_events(trait_object_rc.clone()).expect("Subscribe failed during setup");
@@ -212,12 +257,12 @@ async fn test_dashboard_manager_cleanup() {
     // Verification: Check calls using the CONCRETE MOCK Rc
     let calls = concrete_mock_rc.borrow().get_calls();
     assert_eq!(calls.len(), 1, "Expected 1 call to mock topic manager during cleanup");
-    assert_eq!(calls[0], "unsubscribe_handler::agent:*", "Expected unsubscribe_handler call for agent:*");
+    assert_eq!(calls[0], "unsubscribe_handler::agent:1", "Expected unsubscribe_handler call for agent:1");
 
     assert!(manager.agent_subscription_handler.is_none(), "Manager should clear the handler on cleanup");
 
     // Verification: Check handlers using the CONCRETE MOCK Rc
-    let handlers_after_cleanup = concrete_mock_rc.borrow().get_handlers("agent:*");
+    let handlers_after_cleanup = concrete_mock_rc.borrow().get_handlers("agent:1");
     assert!(!handlers_after_cleanup.iter().any(|h| Rc::ptr_eq(h, &handler_rc)), "Handler should be removed from mock topic manager");
 }
 

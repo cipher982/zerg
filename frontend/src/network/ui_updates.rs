@@ -49,3 +49,24 @@ pub fn flash_activity() {
         }
     }
 } 
+
+/// Update the *layout* persistence status area at the bottom bar.
+/// `color` should be a CSS class such as "red", "yellow", "green" that the
+/// stylesheet already defines.  The function is a no-op when the DOM element
+/// does not exist yet (e.g. very early during bootstrap).
+pub fn update_layout_status(msg: &str, color: &str) {
+    if let Some(window) = web_sys::window() {
+        if let Some(document) = window.document() {
+            if let Some(el) = document.get_element_by_id("layout-status") {
+                // Remove any previously set colour classes before adding the
+                // new one to avoid class-name accumulation or stale styles.
+                let class_list = el.class_list();
+                for c in ["red", "yellow", "green"] {
+                    let _ = class_list.remove_1(c);
+                }
+                let _ = class_list.add_1(color);
+                el.set_text_content(Some(msg));
+            }
+        }
+    }
+}

@@ -86,6 +86,20 @@ Here's the minimal set of commands to get Agent Platform running locally:
 3. Run frontend tests:
    » ./frontend/run_frontend_tests.sh
 
+   The test runner needs a headless-capable Chrome or Firefox binary. On
+   macOS, the usual drag-and-drop installation stores the executable
+   inside the *.app* bundle so it is **not** on `$PATH`. The script now
+   tries, in order:
+   1. Any `google-chrome` / `chromium` or `firefox` already on `$PATH`.
+   2. Homebrew wrappers in `/opt/homebrew/bin/google-chrome`.
+   3. The default bundle locations
+      `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` and
+      `/Applications/Firefox.app/Contents/MacOS/firefox`.
+
+   You can also override the detection by setting
+   `CHROME_BIN=/absolute/path/to/chrome` or `FIREFOX_BIN=…` before
+   running the script.
+
 ### (Optional) Pre‑rendering
 1. cd prerender  
 2. npm install  

@@ -4,13 +4,26 @@ use crate::state::AppState;
 use crate::models::{Node, Workflow, ApiAgent};
 use std::collections::HashMap;
 use crate::network::ApiClient;
+use crate::network::ui_updates::update_layout_status;
 use wasm_bindgen_futures::spawn_local;
+use gloo_timers::future::TimeoutFuture;
+use std::sync::atomic::{AtomicU64, Ordering};
+use crate::models::NodeType;
 // Additional helpers and legacy extension traits – these will gradually be
 // trimmed once the new storage pipeline stabilises.
 
 // Add API URL configuration
 #[allow(dead_code)]
 const API_BASE_URL: &str = "http://localhost:8001/api";
+
+// ---------------------------------------------------------------------------
+// Debounced *layout save* helper – we track a *sequence number* that is
+// incremented every time `save_state_to_api` is called.  A delayed task
+// records the sequence number it saw and, after the timeout, only proceeds
+// with the network request if no newer call has happened in the meantime.
+// ---------------------------------------------------------------------------
+
+static SAVE_SEQ: AtomicU64 = AtomicU64::new(0);
 
 // Structure to store viewport data
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -69,13 +82,149 @@ pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
 pub fn load_state(app_state: &mut AppState) -> Result<bool, JsValue> {
     // Load data from API
     load_state_from_api(app_state);
+
+    // Phase-B: attempt to hydrate canvas layout from backend *before* reading
+    // the localStorage fallback.  This keeps the behaviour identical when the
+    // remote call fails or returns 204 (no content).
+    try_load_layout_from_api();
     
     // Also load workflows
     load_workflows(app_state)?;
+
+    // -------------------------------------------------------------------
+    // NOTE – LocalStorage fallback removed
+    // -------------------------------------------------------------------
+    // Historically the canvas restored node positions and viewport data from
+    // `localStorage` if the remote `/api/graph/layout` endpoint returned an
+    // error or had not been implemented yet.  This behaviour masked genuine
+    // persistence issues – the UI appeared to work even though the changes
+    // were *not* saved to the server.  To make such problems visible we now
+    // rely exclusively on the backend-provided layout.  If that request fails
+    // or returns 204 the canvas will start with an empty scene and default
+    // viewport, prompting developers to investigate the underlying network or
+    // backend problem instead of unknowingly working with stale local data.
     
     // Return true to indicate we started the loading process
     // Actual loading happens asynchronously
     Ok(true)
+}
+
+// ---------------------------------------------------------------------------
+// Canvas layout – remote load helper (Phase-B)
+// ---------------------------------------------------------------------------
+
+fn try_load_layout_from_api() {
+    // Spawn future that attempts to GET /api/graph/layout.  We deliberately
+    // *do not* block the caller because the initial render should not wait
+    // on network I/O.
+
+    use serde::Deserialize;
+    use crate::models::{CanvasNode, NodeType};
+    use crate::constants::{DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT, NODE_COLOR_GENERIC};
+
+    spawn_local(async {
+        match crate::network::ApiClient::get_layout().await {
+            Ok(body) if !body.is_empty() => {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body) {
+                    // ------------------------------------------------------------------
+                    // 1. Apply viewport first (if present)
+                    // ------------------------------------------------------------------
+                    if let Some(vp_val) = val.get("viewport") {
+                        #[derive(Deserialize)]
+                        struct Vp { x: f64, y: f64, zoom: f64 }
+
+                        if let Ok(vp) = serde_json::from_value::<Vp>(vp_val.clone()) {
+                            crate::state::APP_STATE.with(|s| {
+                                let mut st = s.borrow_mut();
+                                st.viewport_x = vp.x;
+                                st.viewport_y = vp.y;
+                                st.zoom_level = vp.zoom;
+                            });
+                        }
+                    }
+
+                    // ------------------------------------------------------------------
+                    // 2. Merge/insert node positions
+                    // ------------------------------------------------------------------
+                    if let Some(nodes_val) = val.get("nodes") {
+                        #[derive(Deserialize)]
+                        struct Pos { x: f64, y: f64 }
+
+                        if let Ok(pos_map) = serde_json::from_value::<std::collections::HashMap<String, Pos>>(nodes_val.clone()) {
+                            crate::state::APP_STATE.with(|s| {
+                                let mut st = s.borrow_mut();
+
+                                for (id, pos) in pos_map {
+                                    match st.nodes.get_mut(&id) {
+                                        Some(node) => {
+                                            node.x = pos.x;
+                                            node.y = pos.y;
+                                        }
+                                        None => {
+                                            // Insert a *stub* node so at least the layout is respected.
+                                            st.nodes.insert(id.clone(), CanvasNode {
+                                                node_id: id.clone(),
+                                                agent_id: None,
+                                                x: pos.x,
+                                                y: pos.y,
+                                                width: DEFAULT_NODE_WIDTH,
+                                                height: DEFAULT_NODE_HEIGHT,
+                                                color: NODE_COLOR_GENERIC.to_string(),
+                                                text: id.clone(),
+                                                node_type: NodeType::GenericNode,
+                                                parent_id: None,
+                                                is_selected: false,
+                                                is_dragging: false,
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+
+                    // Trigger UI update
+                    if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                        web_sys::console::error_1(&format!("Failed to refresh UI after layout load: {:?}", e).into());
+                    }
+
+                    // Log number of nodes & viewport after remote hydration
+                    crate::state::APP_STATE.with(|s| {
+                        let st = s.borrow();
+                        web_sys::console::log_1(&format!(
+                            "[layout] remote load success – nodes={} viewport=({}, {}, {})",
+                            st.nodes.len(), st.viewport_x, st.viewport_y, st.zoom_level
+                        ).into());
+                    });
+
+                    // ------------------------------------------------------------------
+                    // 3. Reconcile any *stub* nodes that were inserted because the
+                    //    corresponding agent data was not yet available when the
+                    //    layout payload was processed.  Now that the async
+                    //    agents fetch may have completed we can upgrade their
+                    //    labels & node_type.
+                    // ------------------------------------------------------------------
+                    fix_stub_nodes();
+                }
+            }
+            Err(e) => {
+                // Visible alert so missing persistence is *immediately* obvious
+                update_layout_status(
+                    "Layout: load failed – using empty scene", "red");
+
+                // Log full error to console for debugging.
+                web_sys::console::error_1(&format!("Remote layout fetch failed: {:?}", e).into());
+            }
+            _ => {
+                // Got 204 – backend responded with "no content".  Inform the
+                // user so they realise a first save is still required.
+                update_layout_status(
+                    "Layout: no saved layout yet", "yellow");
+
+                web_sys::console::log_1(&"No remote canvas layout found (204)".into());
+            }
+        }
+    });
 }
 
 /// Clear all stored data
@@ -88,45 +237,71 @@ pub fn clear_storage() -> Result<(), JsValue> {
 
 /// Save app state to API (transitional approach)
 pub fn save_state_to_api(app_state: &AppState) {
-    // Skip API interaction completely.  Canvas state (positions, zoom, etc.)
-    // is persisted locally; agent metadata is managed via the Agent modal
-    // which already calls the dedicated update endpoint.  By removing the
-    // comparison & PATCH logic we avoid:
-    //   • redundant network traffic on every drag-stop
-    //   • confusing console output in debug builds
-    //   • accidental overwrites when multiple tabs are open.
-
-    // We keep the early-exit that throttles saves while an active drag is in
-    // progress because the caller (`StopDragging`) may still fire rapidly
-    // when the mouse is moving.
-
-    if app_state.is_dragging_agent {
+    // If a drag is still in progress we don’t schedule a save – StopDragging
+    // will call us again.  This avoids enqueuing dozens of timers while the
+    // user moves the mouse.
+    // Skip persistence if the user is actively dragging **either** an agent
+    // node *or* the entire canvas viewport.  A fresh call will be issued by
+    // the `StopDragging` / `StopCanvasDrag` handlers once the pointer is
+    // released so no data is lost.
+    if app_state.is_dragging_agent || app_state.canvas_dragging {
         return;
     }
 
-    // Persist viewport & node positions to localStorage only – this is
-    // synchronous, extremely fast and avoids any server round-trips.
-    // (Future: send batched "layout" payload to backend once a dedicated
-    // endpoint exists.)
+    // The canvas layout is now persisted **exclusively** to the backend.
+    // We intentionally removed the legacy localStorage fallback so that any
+    // save failures become immediately visible during development instead of
+    // being masked by stale client-side data.
 
-    if let Some(window) = web_sys::window() {
-        if let Ok(Some(storage)) = window.local_storage() {
-            // Nodes
-            if let Ok(nodes_json) = to_string(&app_state.nodes) {
-                let _ = storage.set_item("nodes", &nodes_json);
-            }
+    // ------------------------------------------------------------------
+    // Debounce network save – PATCH /api/graph/layout
+    // ------------------------------------------------------------------
 
-            // Viewport
-            let viewport_data = ViewportData {
-                x: app_state.viewport_x,
-                y: app_state.viewport_y,
-                zoom: app_state.zoom_level,
-            };
-            if let Ok(vp_json) = to_string(&viewport_data) {
-                let _ = storage.set_item("viewport", &vp_json);
-            }
+    use serde_json::json;
+
+    let my_seq = SAVE_SEQ.fetch_add(1, Ordering::SeqCst) + 1;
+    update_layout_status("Layout: saving…", "yellow");
+
+    spawn_local(async move {
+        TimeoutFuture::new(300).await;
+
+        if SAVE_SEQ.load(Ordering::SeqCst) != my_seq {
+            // A newer save displaced us.
+            return;
         }
-    }
+
+        // Serialise *latest* state after debounce period.
+        use serde_json::json;
+        crate::state::APP_STATE.with(|state_ref| {
+            let st = state_ref.borrow();
+
+            let mut layout_nodes = std::collections::HashMap::new();
+            for (id, node) in &st.nodes {
+                layout_nodes.insert(id.clone(), json!({ "x": node.x, "y": node.y }));
+            }
+
+            let payload = json!({
+                "nodes": layout_nodes,
+                "viewport": {
+                    "x": st.viewport_x,
+                    "y": st.viewport_y,
+                    "zoom": st.zoom_level,
+                }
+            });
+
+            let payload_str = payload.to_string();
+
+            spawn_local(async move {
+                match crate::network::ApiClient::patch_layout(&payload_str).await {
+                    Ok(_) => update_layout_status("Layout: saved", "green"),
+                    Err(e) => {
+                        update_layout_status("Layout: save failed", "red");
+                        web_sys::console::error_1(&format!("layout save failed: {:?}", e).into());
+                    }
+                }
+            });
+        });
+    });
 }
 
 /// Load app state from API
@@ -172,6 +347,12 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                                 // In a real app, you might want to display a UI message or button
                                 // that lets users generate nodes for their agents
                             }
+
+                            // Now that `state.agents` is populated attempt to
+                            // reconcile any placeholder canvas nodes that were
+                            // loaded from the saved layout *before* the agent
+                            // list arrived.
+                            fix_stub_nodes();
                         });
                     },
                     Err(e) => {
@@ -328,6 +509,72 @@ fn save_nodes_to_api(nodes: &HashMap<String, Node>) -> Result<(), JsValue> {
     }
     
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Helper – replace placeholder *stub* nodes with real AgentIdentity nodes once
+// the agent list has been loaded.  A stub node is identified by:
+//   • `node.text` starts with "node_" (legacy naming convention), and
+//   • `node.agent_id == None`
+// ---------------------------------------------------------------------------
+
+pub(crate) fn fix_stub_nodes() {
+    use crate::state::APP_STATE;
+
+    APP_STATE.with(|state_ref| {
+        let mut st = match state_ref.try_borrow_mut() {
+            Ok(b) => b,
+            Err(_) => return, // Early exit if already mutably borrowed
+        };
+
+        // Work with *copies* to avoid Rust's strict aliasing rules.
+
+        let mut agent_pool: Vec<(u32, String)> = st
+            .agents
+            .iter()
+            .filter(|(aid, _)| !st.agent_id_to_node_id.contains_key(aid))
+            .map(|(&aid, a)| (aid, a.name.clone()))
+            .collect();
+
+        if agent_pool.is_empty() {
+            return; // Nothing to reconcile
+        }
+
+        // Collect candidate placeholder node ids first.
+        let candidate_ids: Vec<String> = st
+            .nodes
+            .iter()
+            .filter_map(|(id, n)| {
+                if n.agent_id.is_none() {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let mut upgraded_any = false;
+
+        for node_id in candidate_ids {
+            if agent_pool.is_empty() {
+                break;
+            }
+
+            if let Some(node) = st.nodes.get_mut(&node_id) {
+                if let Some((aid, name)) = agent_pool.pop() {
+                    node.text = name.clone();
+                    node.node_type = NodeType::AgentIdentity;
+                    node.agent_id = Some(aid);
+                    st.agent_id_to_node_id.insert(aid, node_id.clone());
+                    upgraded_any = true;
+                }
+            }
+        }
+
+        if upgraded_any {
+            st.mark_dirty();
+        }
+    });
 }
 
 // Save workflows to localStorage

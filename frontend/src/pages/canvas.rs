@@ -93,6 +93,15 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     canvas_container.set_attribute("style", "display: block;")?;
     
     web_sys::console::log_1(&"CANVAS: Setup canvas drawing (no state borrowed)".into());
+
+    // ------------------------------------------------------------------
+    // Diagnostics – log how many nodes are currently in APP_STATE so we can
+    // confirm whether layout hydration happened before the canvas mounts.
+    // ------------------------------------------------------------------
+    crate::state::APP_STATE.with(|s| {
+        let st = s.borrow();
+        web_sys::console::log_1(&format!("CANVAS: nodes in state = {}", st.nodes.len()).into());
+    });
     // Set up canvas resizing and drawing (without borrowing APP_STATE)
     if let Some(canvas_elem) = document.get_element_by_id("node-canvas") {
         if let Ok(canvas) = canvas_elem.dyn_into::<web_sys::HtmlCanvasElement>() {
