@@ -116,9 +116,13 @@ pub fn logout() -> Result<(), JsValue> {
         if let Some(document) = window.document() {
             // If overlay not present create it.
             if document.get_element_by_id("login-overlay").is_none() {
-                // Build-time embedded client ID (may be empty in local dev)
-                let client_id: &str = option_env!("GOOGLE_CLIENT_ID").unwrap_or("");
-                crate::components::auth::mount_login_overlay(&document, client_id);
+                let client_id: String = crate::state::APP_STATE.with(|st| {
+                    st.borrow()
+                        .google_client_id
+                        .clone()
+                        .unwrap_or_default()
+                });
+                crate::components::auth::mount_login_overlay(&document, &client_id);
             } else {
                 if let Some(el) = document.get_element_by_id("login-overlay") {
                     el.set_class_name("login-overlay");

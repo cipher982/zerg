@@ -46,79 +46,89 @@ pub fn start() -> Result<(), JsValue> {
     let document = window.document().expect("should have a document on window");
 
     // -------------------------------------------------------------------
-    // Stage 4 – Google Sign-In overlay logic with *AUTH_DISABLED* env var
+    // NEW: Discover runtime flags from /api/system/info before deciding on
+    //       the authentication flow.  This avoids the need to synchronise
+    //       env vars between backend and frontend during local dev.
     // -------------------------------------------------------------------
 
-    // Detect compile-time env var.  When you build the frontend with
-    // `AUTH_DISABLED=1 ./build-debug.sh` the macro expands accordingly.
-    let auth_disabled_env: &str = option_env!("AUTH_DISABLED").unwrap_or("");
-    let auth_disabled = matches!(auth_disabled_env.to_lowercase().as_str(), "1" | "true" | "yes");
+    // Perform the network call in a *blocking* fashion for this early stage
+    // by using `spawn_local` and returning early from `start()`.  The rest of
+    // the bootstrap happens inside the async block.
 
-    if auth_disabled {
-        // Bypass auth completely – mark as logged in and continue startup.
-        // Mark as logged in **before** we call bootstrap so the normal flow
-        // (data loading etc.) proceeds.
-        state::APP_STATE.with(|s| {
-            s.borrow_mut().logged_in = true;
-        });
+    let doc_clone = document.clone();
+    spawn_local(async move {
+        // Attempt to fetch the system info endpoint.  If it fails we fall
+        // back to the previous compile-time logic so production builds that
+        // are already configured continue to work.
 
-        // Perform normal UI bootstrap (creates header, status-bar, etc.)
-        bootstrap_app_after_login(&document)?;
-
-        // Now that the header DOM exists, inject a *dummy developer user* so
-        // the avatar & dropdown render even though real auth is disabled.
-        let dummy_user = crate::models::CurrentUser {
-            id: 0,
-            email: "dev@example.com".to_string(),
-            display_name: Some("Developer".to_string()),
-            avatar_url: None,
-            prefs: None,
+        let sys_info_json = match network::api_client::ApiClient::fetch_system_info().await {
+            Ok(j) => j,
+            Err(e) => {
+                web_sys::console::warn_1(&format!("Failed to fetch /system/info: {:?}", e).into());
+                "{}".to_string()
+            }
         };
 
-        dispatch_global_message(crate::messages::Message::CurrentUserLoaded(dummy_user));
-        return Ok(());
-    }
-
-    // Otherwise follow the normal flow: if we *already* have a JWT we skip
-    // the overlay, else show Google sign-in.
-    let needs_login = state::APP_STATE.with(|s| !s.borrow().logged_in);
-
-    if needs_login {
-        // --------------------------------------------------------------------
-        // Auth feature-flag handling
-        // --------------------------------------------------------------------
-        //  * `GOOGLE_AUTH_ENABLED` – when **truthy** ("1", "true", "yes") the
-        //    Google sign-in overlay is allowed to appear.
-        //  * `GOOGLE_CLIENT_ID`        – OAuth client that the Identity API
-        //    should use.  It can remain defined permanently in your `.env`
-        //    file so you don’t have to export it manually; simply toggle the
-        //    overlay with the flag above.
-        // --------------------------------------------------------------------
-
-        let auth_enabled_raw: &str = option_env!("GOOGLE_AUTH_ENABLED").unwrap_or("false");
-        let auth_enabled = matches!(auth_enabled_raw.to_ascii_lowercase().as_str(), "1" | "true" | "yes");
-
-        if auth_enabled {
-            // Compile-time embedded Google Client ID (may still be empty if the
-            // developer omitted it from .env).
-            let client_id: &str = option_env!("GOOGLE_CLIENT_ID").unwrap_or("");
-
-            if client_id.is_empty() {
-                // Feature enabled but ID missing → warn loudly.
-                web_sys::console::error_1(&"GOOGLE_CLIENT_ID not set – cannot present sign-in overlay".into());
-            } else {
-                // Show overlay and pause further bootstrap until the user
-                // completes the sign-in flow.
-                auth::mount_login_overlay(&document, client_id);
-                return Ok(());
-            }
+        #[derive(serde::Deserialize)]
+        struct SysInfo {
+            #[serde(default)]
+            auth_disabled: bool,
+            #[serde(default)]
+            google_client_id: Option<String>,
         }
-        // Auth disabled → fall through to normal bootstrap.
-    }
 
-    // Logged in already → continue normal bootstrap
-    bootstrap_app_after_login(&document)?;
+        let info: SysInfo = serde_json::from_str(&sys_info_json).unwrap_or(SysInfo {
+            auth_disabled: false,
+            google_client_id: None,
+        });
 
+        // Store google_client_id in global state for later reuse (e.g. after
+        // a manual logout when we need to recreate the overlay quickly).
+        state::APP_STATE.with(|st| {
+            st.borrow_mut().google_client_id = info.google_client_id.clone();
+        });
+
+        if info.auth_disabled {
+            // ─── Dev mode ───
+            state::APP_STATE.with(|st| st.borrow_mut().logged_in = true);
+
+            if let Err(e) = bootstrap_app_after_login(&doc_clone) {
+                web_sys::console::error_1(&e);
+            }
+
+            let dummy_user = crate::models::CurrentUser {
+                id: 0,
+                email: "dev@local".to_string(),
+                display_name: Some("Developer".to_string()),
+                avatar_url: None,
+                prefs: None,
+            };
+            dispatch_global_message(crate::messages::Message::CurrentUserLoaded(dummy_user));
+            return;
+        }
+
+        // ─── Auth enabled ───
+        // If we *already* have a JWT → bootstrap immediately.
+        if state::APP_STATE.with(|s| s.borrow().logged_in) {
+            if let Err(e) = bootstrap_app_after_login(&doc_clone) {
+                web_sys::console::error_1(&e);
+            }
+            return;
+        }
+
+        // Otherwise show Google Sign-In overlay (needs client_id).
+        let client_id = info.google_client_id.as_deref().unwrap_or("");
+
+        if client_id.is_empty() {
+            web_sys::console::error_1(&"Google Client ID missing but authentication is enabled".into());
+            return;
+        }
+
+        auth::mount_login_overlay(&doc_clone, client_id);
+    });
+
+    // Nothing else to do synchronously – actual bootstrap continues in async
+    // block above.
     Ok(())
 }
 
