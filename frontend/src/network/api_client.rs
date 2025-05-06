@@ -185,6 +185,43 @@ impl ApiClient {
     // Authentication & User profile
     // -------------------------------------------------------------------
 
+    // -------------------------------------------------------------------
+    // System information (public)
+    // -------------------------------------------------------------------
+
+    /// Fetch `/api/system/info` which returns runtime feature flags needed
+    /// by the SPA before login has been determined.
+    pub async fn fetch_system_info() -> Result<String, JsValue> {
+        use web_sys::{Headers, Request, RequestInit, Response};
+
+        let url = format!("{}/api/system/info", Self::api_base_url());
+
+        let mut opts = RequestInit::new();
+        opts.set_method("GET");
+        opts.set_mode(RequestMode::Cors);
+
+        // No Authorization header – endpoint is public.
+        let headers = Headers::new()?;
+        opts.set_headers(&headers);
+
+        let request = Request::new_with_str_and_init(&url, &opts)?;
+        let window = web_sys::window().expect("window");
+        let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;
+        let resp: Response = resp_value.dyn_into()?;
+
+        if !resp.ok() {
+            let status = resp.status();
+            let status_text = resp.status_text();
+            return Err(JsValue::from_str(&format!(
+                "system-info request failed: {} {}",
+                status, status_text
+            )));
+        }
+
+        let text = JsFuture::from(resp.text()?).await?;
+        Ok(text.as_string().unwrap_or_default())
+    }
+
     /// Fetch the authenticated user's profile (`/api/users/me`).  Caller is
     /// responsible for ensuring that a valid JWT is already present in
     /// localStorage – otherwise the request will fail with 401.

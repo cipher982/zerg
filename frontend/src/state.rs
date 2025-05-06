@@ -157,6 +157,16 @@ pub struct AppState {
     // UI state for collapsible tool call indicators
     pub tool_ui_states: HashMap<String, ToolUiState>,
 
+    // -------------------------------------------------------------------
+    // Runtime configuration flags fetched from `/api/system/info`
+    // -------------------------------------------------------------------
+
+    /// Google OAuth client ID returned by the backend.  *None* until the
+    /// initial system-info request completes.  Stored so that subsequent
+    /// calls (e.g. after a manual logout) can recreate the login overlay
+    /// without requiring another network round-trip.
+    pub google_client_id: Option<String>,
+
     // Track which agents have their full run history expanded (>5 rows)
     pub run_history_expanded: HashSet<u32>,
 
@@ -300,6 +310,8 @@ impl AppState {
             // successfully calls `/api/users/me` after a login or page
             // refresh.
             current_user: None,
+
+            google_client_id: None,
         }
     }
 
