@@ -36,7 +36,6 @@ from fastapi import HTTPException
 from fastapi import status
 from sqlalchemy.orm import Session
 
-from zerg.crud import crud
 from zerg.database import get_db
 from zerg.events import EventType
 from zerg.events import event_bus
@@ -100,7 +99,24 @@ async def gmail_webhook(
         if (trg.config or {}).get("provider") == "gmail"
     ]
 
+    fired_count = 0
+
+    # Use *X-Goog-Message-Number* as a stand-in for history diff so we can
+    # decide whether this callback represents *new* data without calling the
+    # real Gmail API (keeps CI offline-safe).
+
+    msg_no_int: int | None = None
+    if x_goog_message_number and x_goog_message_number.isdigit():
+        msg_no_int = int(x_goog_message_number)
+
     for trg in triggers:
+        cfg = trg.config or {}
+        last_seen = int(cfg.get("last_msg_no", 0))  # coerce in case JSON stored str
+
+        # Fire only if message number increases (simple dedup)
+        if msg_no_int is not None and msg_no_int <= last_seen:
+            continue
+
         await event_bus.publish(
             EventType.TRIGGER_FIRED,
             {
@@ -111,7 +127,27 @@ async def gmail_webhook(
             },
         )
 
-        # Schedule agent execution (non-blocking)
         await scheduler_service.run_agent_task(trg.agent_id)  # type: ignore[arg-type]
 
-    return {"status": "accepted", "trigger_count": len(triggers)}
+        fired_count += 1
+
+        # Persist new msg number so subsequent callbacks dedup
+        if msg_no_int is not None:
+            cfg["last_msg_no"] = msg_no_int
+
+            # Assign & flag change so SQLAlchemy persists mutation
+            trg.config = cfg  # type: ignore[assignment]
+
+            try:
+                from sqlalchemy.orm.attributes import flag_modified  # type: ignore
+
+                flag_modified(trg, "config")
+            except ImportError:  # pragma: no cover – fallback
+                pass
+
+            db.add(trg)
+            db.add(trg)
+
+    db.commit()
+
+    return {"status": "accepted", "trigger_count": fired_count}

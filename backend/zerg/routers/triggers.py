@@ -47,20 +47,40 @@ router = APIRouter(
 
 
 @router.post("/", response_model=TriggerSchema, status_code=status.HTTP_201_CREATED)
-def create_trigger(trigger_in: TriggerCreate, db: Session = Depends(get_db)):
-    """Create a new trigger for an agent."""
+async def create_trigger(trigger_in: TriggerCreate, db: Session = Depends(get_db)):
+    """Create a new trigger for an agent.
 
-    # Ensure agent exists
+    If the trigger is of type *email* and the provider is **gmail** we kick off
+    an asynchronous helper that ensures a Gmail *watch* is registered.  The
+    call is awaited so tests (which run inside the same event-loop) can verify
+    the side-effects synchronously without sprinkling ``asyncio.sleep`` hacks.
+    """
+
+    # Ensure agent exists -------------------------------------------------
     agent = crud.get_agent(db, trigger_in.agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
+    # Persist trigger -----------------------------------------------------
     trg = crud.create_trigger(
         db,
         agent_id=trigger_in.agent_id,
         trigger_type=trigger_in.type,
         config=trigger_in.config,
     )
+
+    # ------------------------------------------------------------------
+    # Provider-specific post-create hooks
+    # ------------------------------------------------------------------
+    if trg.type == "email" and (trg.config or {}).get("provider") == "gmail":
+        # Defer heavy IO to the email trigger service
+        from zerg.services.email_trigger_service import email_trigger_service  # noqa: WPS433 lazy import
+
+        try:
+            await email_trigger_service.initialize_gmail_trigger(db, trg)
+        except Exception as exc:  # pragma: no cover – do not fail overall request
+            logger.exception("Failed to initialise Gmail trigger %s: %s", trg.id, exc)
+
     return trg
 
 

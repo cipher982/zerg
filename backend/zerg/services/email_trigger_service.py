@@ -11,26 +11,19 @@ The service follows the same start/stop interface as ``SchedulerService`` so
 from __future__ import annotations
 
 import asyncio
-import logging
-from contextlib import suppress
-from typing import Optional
 
 # HTTP helpers
 import json
+import logging
 import urllib.parse
 import urllib.request
-
-# Use the default session factory so tests can monkey-patch it easily via
-# ``zerg.database.default_session_factory`` (as they already do for the
-# SchedulerService).  We deliberately avoid importing ``SessionLocal`` – a
-# simple alias – because that would bind to the *original* sessionmaker *before*
-# tests get a chance to swap it out.
+from contextlib import suppress
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from zerg.database import default_session_factory
-from zerg.events import EventType
-from zerg.events import event_bus
+from zerg.models.models import Trigger
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +51,7 @@ class EmailTriggerService:
 
     async def start(self):
         if self._task is not None:
-            logger.debug("EmailTriggerService already running – start() call ignored")
+            logger.debug("EmailTriggerService already running, start() call ignored")
             return
 
         self._shutdown_event.clear()
@@ -103,37 +96,43 @@ class EmailTriggerService:
                 pass
 
     async def _check_email_triggers(self):
-        """Scan DB for *email* triggers and log presence.
+        """Process *email* triggers.
 
-        The real implementation will connect to the mailserver defined in each
-        trigger's ``config`` JSON and inspect new e-mails.  For now we merely
-        look for the existence of such triggers so the stub does something
-        useful during development.
+        Current responsibilities per trigger:
+        1. Renew Gmail watches that are about to expire.
+        2. Perform lightweight polling (token refresh), stub.
+        3. (Future) IMAP / provider-specific checks.
         """
 
-        # Use synchronous SQLAlchemy session inside a threadpool via asyncio.to_thread
-        def _db_query() -> list[int]:
-            with default_session_factory() as session:  # type: Session
+        # Fetch *full* trigger rows so we can mutate their config JSON later
+        def _db_query() -> list["Trigger"]:
+            with default_session_factory() as session:
                 from zerg.models.models import Trigger
 
-                rows = (
-                    session.query(Trigger.id)
-                    .filter(Trigger.type == "email")
-                    .all()
-                )
-                return [row[0] for row in rows]
+                return session.query(Trigger).filter(Trigger.type == "email").all()
 
         triggers = await asyncio.to_thread(_db_query)
 
         if not triggers:
             return
 
-        # ------------------------------------------------------------------
-        # Phase-2: support *gmail* provider (readonly) ------------------------
-        # ------------------------------------------------------------------
+        for trg in triggers:
+            provider = (trg.config or {}).get("provider")
+            if provider != "gmail":
+                # Other providers will be added later
+                continue
 
-        for trg_id in triggers:
-            await self._handle_gmail_trigger(trg_id)
+            # 1) Renew watch if needed
+            try:
+                await self._maybe_renew_gmail_watch(trg)
+            except Exception as exc:  # pragma: no cover
+                logger.exception("Failed to renew Gmail watch for trigger %s: %s", trg.id, exc)
+
+            # 2) Token refresh / placeholder polling
+            try:
+                await self._handle_gmail_trigger(trg.id)
+            except Exception as exc:  # pragma: no cover
+                logger.exception("Error in gmail trigger handler %s: %s", trg.id, exc)
 
     # ------------------------------------------------------------------
     # Gmail helpers
@@ -150,8 +149,9 @@ class EmailTriggerService:
         """
 
         # Lazy import to avoid circulars
-        from zerg.models.models import Trigger, User  # noqa: WPS433
         from zerg.database import default_session_factory  # noqa: WPS433
+        from zerg.models.models import Trigger  # noqa: WPS433
+        from zerg.models.models import User  # noqa: WPS433
 
         with default_session_factory() as session:
             trg: Trigger | None = session.query(Trigger).filter(Trigger.id == trigger_id).first()
@@ -164,9 +164,7 @@ class EmailTriggerService:
 
             # MVP: pick first user with refresh token.  Future: link trigger to
             # specific user once agents are owned by users.
-            user: User | None = (
-                session.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
-            )
+            user: User | None = session.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
 
             if user is None:
                 logger.warning("No user with gmail_refresh_token found – skip trigger %s", trigger_id)
@@ -232,6 +230,167 @@ class EmailTriggerService:
             raise RuntimeError(f"invalid token response: {payload}")
 
         return access_token
+
+    # ------------------------------------------------------------------
+    # Watch renewal helpers --------------------------------------------
+    # ------------------------------------------------------------------
+
+    async def _maybe_renew_gmail_watch(self, trigger):  # noqa: D401 – short name
+        """Renew Gmail watch if expiry is within 24 h.
+
+        We operate fully with **stub** data when running under the test
+        suite or dev mode so no external network traffic is generated.  The
+        method therefore delegates to ``_renew_gmail_watch_stub`` which
+        returns new history / expiry values.
+        """
+
+        from datetime import datetime
+        from datetime import timezone
+
+        cfg = trigger.config or {}
+        expiry_ts = cfg.get("watch_expiry")  # milliseconds since epoch
+
+        if expiry_ts is None:
+            # Cannot decide – trigger likely never initialised yet
+            return
+
+        now_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+
+        # Renew if expiry within next 24 hours (86400*1000 ms)
+        if expiry_ts - now_ms > 24 * 60 * 60 * 1000:
+            return  # still valid
+
+        # Renew ----------------------------------------------------------
+        logger.info("Renewing Gmail watch for trigger %s", trigger.id)
+
+        try:
+            new_watch = await asyncio.to_thread(self._renew_gmail_watch_stub)
+        except Exception as exc:  # pragma: no cover
+            logger.error("Failed to renew Gmail watch: %s", exc)
+            return
+
+        cfg.update(new_watch)
+        trigger.config = cfg  # type: ignore[assignment]
+
+        try:
+            from sqlalchemy.orm.attributes import flag_modified  # type: ignore
+
+            flag_modified(trigger, "config")
+        except ImportError:  # pragma: no cover
+            pass
+
+        # Persist
+        with default_session_factory() as session:
+            session.merge(trigger)
+            session.commit()
+
+    @staticmethod
+    def _renew_gmail_watch_stub():
+        """Return new watch meta – identical to *start* stub."""
+
+        from datetime import datetime
+        from datetime import timedelta
+        from datetime import timezone
+
+        now = datetime.now(tz=timezone.utc)
+        return {
+            "history_id": int(now.timestamp()),
+            "watch_expiry": int((now + timedelta(days=7)).timestamp() * 1000),
+        }
+
+    # ------------------------------------------------------------------
+    # Public helpers called by router hooks -----------------------------
+    # ------------------------------------------------------------------
+
+    async def initialize_gmail_trigger(self, db_session: Session, trigger):  # noqa: D401 – short name
+        """Ensure Gmail *watch* registration & baseline history id.
+
+        This helper is invoked right after an *email* trigger of provider
+        **gmail** is created.  The logic is deliberately very light-weight for
+        now – we *do not* perform the network request to Google by default so
+        CI remains free of external dependencies.  Instead we:
+
+        1. Look up any user who has a ``gmail_refresh_token`` (dev/CI only has
+           one user row).  In the future triggers will be linked to a specific
+           user.
+        2. If the trigger config already contains ``history_id`` we assume the
+           watch is active and do nothing.
+        3. Otherwise we generate a **dummy** history_id plus an expiry that is
+           7 days in the future.  Tests can monkey-patch the private helper
+           ``_start_gmail_watch`` to return deterministic values.
+        4. Persist the updated config JSON on the trigger row.
+
+        A follow-up milestone will replace step 3 with a real call to the
+        *watch* endpoint and will store the returned ``historyId`` &
+        ``expiration``.
+        """
+
+        from zerg.models.models import User  # noqa: WPS433 local import to avoid cycle
+
+        if (trigger.config or {}).get("history_id") is not None:
+            logger.debug("Trigger %s already has Gmail watch metadata – skip init", trigger.id)
+            return
+
+        # Pick *any* user with gmail refresh token for MVP ----------------
+        user: User | None = db_session.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
+
+        if user is None:
+            logger.warning("No gmail-connected user found – cannot register watch for trigger %s", trigger.id)
+            return  # Cannot proceed – will try later when service runs
+
+        # ------------------------------------------------------------------
+        # In production we would obtain an access_token and call Gmail here.
+        # The call is encapsulated in a private helper so tests can patch it.
+        # ------------------------------------------------------------------
+
+        try:
+            watch_info = await asyncio.to_thread(self._start_gmail_watch_stub)
+        except Exception as exc:  # pragma: no cover – network failure etc.
+            logger.error("Failed to start Gmail watch for trigger %s: %s", trigger.id, exc)
+            return
+
+        # Merge into trigger.config ----------------------------------------
+        cfg = dict(trigger.config or {})
+        cfg.update(
+            {
+                "history_id": watch_info["history_id"],
+                "watch_expiry": watch_info["watch_expiry"],
+            }
+        )
+        trigger.config = cfg  # type: ignore[assignment]
+
+        # Flag JSON column as modified so SQLAlchemy persists it
+        try:
+            from sqlalchemy.orm.attributes import flag_modified  # type: ignore
+
+            flag_modified(trigger, "config")
+        except ImportError:  # pragma: no cover
+            pass
+
+        db_session.add(trigger)
+        db_session.commit()
+
+    # ------------------------------------------------------------------
+    # Stub for Gmail watch registration --------------------------------
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _start_gmail_watch_stub():
+        """Return dummy watch metadata (for dev / CI).
+
+        The real implementation will contact the Gmail API – this stub keeps
+        unit-tests self-contained and allows monkey-patching.
+        """
+
+        from datetime import datetime
+        from datetime import timedelta
+        from datetime import timezone
+
+        now = datetime.now(tz=timezone.utc)
+        return {
+            "history_id": 1,
+            "watch_expiry": int((now + timedelta(days=7)).timestamp() * 1000),
+        }
 
 
 # Public singleton, mirroring ``scheduler_service`` pattern.
