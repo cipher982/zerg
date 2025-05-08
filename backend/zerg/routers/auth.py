@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 
 from zerg.crud import crud
 from zerg.database import get_db
-from zerg.schemas.schemas import TokenOut
 from zerg.dependencies.auth import get_current_user
+from zerg.schemas.schemas import TokenOut
 
 load_dotenv()
 

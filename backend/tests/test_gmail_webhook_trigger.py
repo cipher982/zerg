@@ -20,7 +20,6 @@ import pytest
 from zerg.routers import auth as auth_router
 from zerg.services.scheduler_service import scheduler_service
 
-
 # ---------------------------------------------------------------------------
 # Helper fixtures / monkey-patching
 # ---------------------------------------------------------------------------
@@ -72,25 +71,39 @@ async def test_gmail_webhook_triggers_agent(client, db_session):
     assert connect_resp.status_code == 200, connect_resp.text
 
     # 4) Monkey-patch run_agent_task so we can assert call ---------------
-    called = {"flag": False, "agent_id": None}
+    called = {"count": 0, "agent_id": None}
 
     async def _stub_run_agent_task(aid: int):  # noqa: D401 – stub
-        called["flag"] = True
+        called["count"] += 1
         called["agent_id"] = aid
 
     original = scheduler_service.run_agent_task
     scheduler_service.run_agent_task = _stub_run_agent_task  # type: ignore[assignment]
 
     try:
-        # 5) Fire Gmail webhook ---------------------------------------
-        headers = {"X-Goog-Channel-Token": "123"}
+        # 5) Fire Gmail webhook (msg_no=1) -----------------------------
+        headers = {"X-Goog-Channel-Token": "123", "X-Goog-Message-Number": "1"}
         wh_resp = client.post("/api/email/webhook/google", headers=headers)
         assert wh_resp.status_code == 202, wh_resp.text
 
         # Allow event-loop tasks a tiny slice
         await asyncio.sleep(0)
 
-        assert called["flag"], "SchedulerService should have been invoked"
+        assert called["count"] == 1
         assert called["agent_id"] == agent_id
+
+        # Inspect stored last_msg_no before second callback
+        from zerg.models.models import Trigger
+
+        stored = db_session.query(Trigger).filter(Trigger.id == trigger_id).first()
+        assert stored is not None
+        assert stored.config.get("last_msg_no") == 1
+
+        # 6) Fire webhook again with SAME message number → should dedup
+        wh_resp2 = client.post("/api/email/webhook/google", headers=headers)
+        assert wh_resp2.status_code == 202, wh_resp2.text
+
+        await asyncio.sleep(0)
+        assert called["count"] == 1, "Second webhook with same msg_no should not trigger run"
     finally:
         scheduler_service.run_agent_task = original  # type: ignore[assignment]

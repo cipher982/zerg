@@ -201,60 +201,41 @@
 ---
 
 ### 🚧 Phase 3 – Gmail Watch & History Diff  (next sprint)
-
 – Auto-create / renew `watch` after Gmail connect.  
 – Call Gmail History API with `startHistoryId`.  
 – Fire trigger only for *new* matching messages.
 
-### 🚧 Phase 4 – Outlook provider
+**Progress 2025-05-08 → 2025-05-09**
 
-– Replicate OAuth + push flow via Microsoft Graph.  
-– 60-minute subscription renewal in SchedulerService.
+✅ **Watch auto-creation (stub)** – When a *gmail* email-trigger is created the
+backend now calls `EmailTriggerService.initialize_gmail_trigger`. The helper
+stores a `history_id` & `watch_expiry` field inside the trigger `config`
+JSON (stub values during development, real API call TBD).  Comprehensive unit
+test `test_gmail_watch_initialisation.py` added.
 
-### 🚧 Phase 5 – Front-end CRUD / UX
+🔄 **Renewal & History diff** – still pending.
+
+2025-05-09 (commit <hash>)
+
+✅ **Watch renewal (stub)** – EmailTriggerService now renews Gmail watches when
+`watch_expiry` is within 24 h.  Renewal logic uses a stubbed helper and is
+fully unit-tested (`test_gmail_watch_renewal.py`).
+
+✅ **Webhook de-duplication** – Gmail webhook handler stores
+`last_msg_no` (header *X-Goog-Message-Number*) per trigger and fires only once
+per message.  Added test `test_gmail_webhook_trigger.py` to assert dedup.
+
+🔄 **History diff API call & advanced filters** – next.
+
+🔄 **Filtering new messages** – pending.
+
+
+### 🚧 Phase 4 – Front-end CRUD / UX
 
 – “Connect Gmail” button (in progress – `google_code_flow.rs`).  
 – Trigger list & wizard in Agent modal.  
 – Real-time toast & run history filter.
 
-### Phase 6 – Docs & Examples
+### Phase 5 – Docs & Examples
 
 – Update README, write `docs/triggers_email.md` example walk-through.
-
----
-
-### (Old Roadmap below – will be pruned after Phase-3 ships)
-
-* **Phase 2 – Email Polling**  
-  – Replace *“IMAP-only”* plan with a dual-strategy:  
-    1. **Preferred (OAuth + Push API)**  
-       • Gmail → Gmail API “watch” + Pub/Sub / webhook  
-       • Outlook → Microsoft Graph “subscription”  
-       • Flow: user clicks “Connect Gmail / Outlook”, backend stores refresh-token, registers push subscription, provider calls our `/api/email/webhook/{provider}` endpoint, we fetch the new message, apply filters, then publish `TRIGGER_FIRED` and schedule the agent.  
-    2. **Fallback (Generic IMAP polling)**  
-       • For custom mail hosts we keep the existing IMAP polling loop.  
-  – Update EmailTriggerService to:  
-       • skip polling for provider-push triggers,  
-       • renew provider subscriptions,  
-       • mark trigger `disconnected` on token expiry or webhook failures.
-
-  Sub-Tasks (T-series):
-  • **T2-a OAuth Frontend UX:** “Connect Gmail / Outlook” modal with consent screens.  
-  • **T2-b Backend OAuth handlers:** token exchange, refresh, secure storage.  
-  • **T2-c Provider webhook endpoints:** `/api/email/webhook/google`, `/api/email/webhook/microsoft`, signature validation.  
-  • **T2-d Subscription management helpers:** create/renew/delete watches.  
-  • **T2-e Filter engine:** evaluate subject/from/to rules before firing trigger.  
-  • **T2-f IMAP fallback:** only if `config.provider == "generic-imap"`.
-
-* **Phase 3 – Frontend CRUD**  
-  – Surface trigger list in Agent modal.  
-  – Add wizard for Email setup (server, port, TLS, credentials, filters).  
-  – Webhook trigger UI (display endpoint + secret token, rotate secret).
-
-* **Phase 4 – Real-time UX**  
-  – Show toast/log entry when trigger fires.  
-  – Filter run history by trigger type.
-
-* **Phase 5 – Docs & Examples**  
-  – Update README with cURL examples for webhook.  
-  – Provide Gmail IMAP walkthrough in docs/triggers_email.md.

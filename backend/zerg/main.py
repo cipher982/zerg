@@ -23,6 +23,7 @@ from zerg.database import initialize_database
 from zerg.routers.admin import router as admin_router
 from zerg.routers.agents import router as agents_router
 from zerg.routers.auth import router as auth_router
+from zerg.routers.email_webhooks import router as email_webhook_router
 from zerg.routers.graph_layout import router as graph_router
 from zerg.routers.models import router as models_router
 from zerg.routers.runs import router as runs_router
@@ -31,10 +32,10 @@ from zerg.routers.threads import router as threads_router
 from zerg.routers.triggers import router as triggers_router
 from zerg.routers.users import router as users_router
 from zerg.routers.websocket import router as websocket_router
-from zerg.routers.email_webhooks import router as email_webhook_router
-from zerg.services.scheduler_service import scheduler_service
+
 # Email trigger polling service (stub for now)
 from zerg.services.email_trigger_service import email_trigger_service
+from zerg.services.scheduler_service import scheduler_service
 
 # fmt: on
 
