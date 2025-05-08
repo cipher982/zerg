@@ -201,6 +201,9 @@ class MessageResponse(BaseModel):
 class TriggerBase(BaseModel):
     agent_id: int
     type: str = "webhook"
+    # Arbitrary configuration for non-webhook triggers (e.g. email server
+    # settings).  For webhook triggers this is usually ``null``.
+    config: Optional[Dict[str, Any]] = None
 
 
 class TriggerCreate(TriggerBase):

@@ -55,7 +55,12 @@ def create_trigger(trigger_in: TriggerCreate, db: Session = Depends(get_db)):
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    trg = crud.create_trigger(db, agent_id=trigger_in.agent_id, trigger_type=trigger_in.type)
+    trg = crud.create_trigger(
+        db,
+        agent_id=trigger_in.agent_id,
+        trigger_type=trigger_in.type,
+        config=trigger_in.config,
+    )
     return trg
 
 

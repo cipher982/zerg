@@ -50,6 +50,17 @@ class User(Base):
     # Login tracking
     last_login = Column(DateTime, nullable=True)
 
+    # -------------------------------------------------------------------
+    # Google Mail integration (Phase-2 Email Triggers)
+    # -------------------------------------------------------------------
+    # When a user connects their Gmail account with *offline_access* scope we
+    # receive a **refresh token** that allows the backend to fetch short-lived
+    # access-tokens without further user interaction.  Persist the token
+    # encrypted-at-rest in a future iteration – for now we store the raw value
+    # because unit-tests run against an ephemeral in-memory SQLite database.
+
+    gmail_refresh_token = Column(String, nullable=True)
+
     # Timestamps -------------------------------------------------------------
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -209,6 +220,12 @@ class Trigger(Base):
     # Shared secret that must accompany incoming webhook calls.  Very simple
     # scheme for now – a random hex string.
     secret = Column(String, nullable=False, unique=True, index=True)
+
+    # Optional JSON blob with trigger-specific configuration.  This keeps the
+    # model forward-compatible so new trigger types (e.g. *email*, *slack*)
+    # can persist arbitrary settings without schema migrations.  For webhook
+    # triggers the column is generally **NULL**.
+    config = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, server_default=func.now())
 

@@ -160,6 +160,7 @@ def update_user(
     display_name: str | None = None,
     avatar_url: str | None = None,
     prefs: Optional[Dict[str, Any]] = None,
+    gmail_refresh_token: str | None = None,
 ) -> User | None:
     """Partial update for the *User* table.
 
@@ -177,6 +178,8 @@ def update_user(
         user.avatar_url = avatar_url
     if prefs is not None:
         user.prefs = prefs
+    if gmail_refresh_token is not None:
+        user.gmail_refresh_token = gmail_refresh_token
 
     db.commit()
     db.refresh(user)
@@ -188,14 +191,32 @@ def update_user(
 # ------------------------------------------------------------
 
 
-def create_trigger(db: Session, agent_id: int, trigger_type: str = "webhook", secret: Optional[str] = None):
-    """Create a new trigger for an agent."""
+def create_trigger(
+    db: Session,
+    *,
+    agent_id: int,
+    trigger_type: str = "webhook",
+    secret: Optional[str] = None,
+    config: Optional[Dict[str, Any]] = None,
+):
+    """Create a new trigger for an agent.
+
+    The **secret** is only relevant for webhook triggers.  For future trigger
+    types we still persist a secret so external systems can authenticate when
+    hitting the generic `/events` endpoint (or skip when not applicable).
+    """
+
     from uuid import uuid4
 
     if secret is None:
         secret = uuid4().hex
 
-    db_trigger = Trigger(agent_id=agent_id, type=trigger_type, secret=secret)
+    db_trigger = Trigger(
+        agent_id=agent_id,
+        type=trigger_type,
+        secret=secret,
+        config=config,
+    )
     db.add(db_trigger)
     db.commit()
     db.refresh(db_trigger)
