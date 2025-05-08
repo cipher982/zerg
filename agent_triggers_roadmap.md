@@ -84,10 +84,12 @@
 
 ### Outstanding backend work (🔄)
 
-1. **Gmail Watch & Message Diff**  
-   • Automatically create `watch` after user connects Gmail.  
-   • Use Gmail History API to identify *new* messages only.  
-   • Evaluate trigger filters before firing.
+1. **Gmail Watch & Message Diff**  *(partially shipped – remaining items below)*  
+   • ✅ Auto-create watch (stub)  
+   • ✅ History diff + basic filters (query / from / subject / labels)  
+   • 🔄 Replace stubs with real Gmail `watch` / `stop` / `history` calls in
+     staging & prod  
+   • 🔄 Harden retry / quota handling.
 
 2. **Provider abstraction**  
    • Add Outlook (Microsoft Graph) implementation mirroring Gmail flow.  
@@ -96,6 +98,7 @@
 3. **Security hardening**  
    • Validate Google-signed JWT on webhook calls.  
    • Encrypt refresh-tokens at rest.
+   • Fail-safe handling when `GOOGLE_CLIENT_ID/SECRET` are missing in prod.
 
 4. **Observability**  
    • Detailed logging + metrics for e-mail polling / push latency.
@@ -200,34 +203,52 @@
 
 ---
 
-### 🚧 Phase 3 – Gmail Watch & History Diff  (next sprint)
-– Auto-create / renew `watch` after Gmail connect.  
-– Call Gmail History API with `startHistoryId`.  
-– Fire trigger only for *new* matching messages.
-
-**Progress 2025-05-08 → 2025-05-09**
-
-✅ **Watch auto-creation (stub)** – When a *gmail* email-trigger is created the
-backend now calls `EmailTriggerService.initialize_gmail_trigger`. The helper
-stores a `history_id` & `watch_expiry` field inside the trigger `config`
-JSON (stub values during development, real API call TBD).  Comprehensive unit
 test `test_gmail_watch_initialisation.py` added.
+### 🚧 Phase 3 – Gmail Watch & History Diff  *(ongoing – 2025-05 → 2025-06)*
 
-🔄 **Renewal & History diff** – still pending.
+Milestone goal: end-to-end *push* flow that only fires runs for **new**
+messages which pass user-defined filters.
 
-2025-05-09 (commit <hash>)
+**Implemented so far**
 
-✅ **Watch renewal (stub)** – EmailTriggerService now renews Gmail watches when
-`watch_expiry` is within 24 h.  Renewal logic uses a stubbed helper and is
-fully unit-tested (`test_gmail_watch_renewal.py`).
+✅ *Watch auto-creation* (stub) – `initialize_gmail_trigger` persists
+`history_id` & `watch_expiry` into `trigger.config`.  See
+`test_gmail_watch_initialisation.py`.
 
-✅ **Webhook de-duplication** – Gmail webhook handler stores
-`last_msg_no` (header *X-Goog-Message-Number*) per trigger and fires only once
-per message.  Added test `test_gmail_webhook_trigger.py` to assert dedup.
+✅ *Watch renewal* (stub) – `EmailTriggerService._maybe_renew_gmail_watch`
+updates expiry when <24 h.  Unit-tested (`test_gmail_watch_renewal.py`).
 
-🔄 **History diff API call & advanced filters** – next.
+✅ *Webhook de-duplication* – Handler tracks `last_msg_no` to avoid double
+processing.  Covered by `test_gmail_webhook_trigger.py`.
 
-🔄 **Filtering new messages** – pending.
+✅ *History diff + filtering* – `_handle_gmail_trigger` now:
+   1. Exchanges **refresh_token → access_token** via
+      `gmail_api.exchange_refresh_token` (requires
+      `GOOGLE_CLIENT_ID/SECRET` env vars – tests stub this).
+   2. Calls `gmail_api.list_history(start_history_id)` and flattens the
+      result to message-IDs.
+   3. Fetches metadata for each message and evaluates
+      `email_filtering.matches()` which currently supports:
+      • query (substring)
+      • from_contains / subject_contains
+      • label_include / label_exclude
+   4. Fires `TRIGGER_FIRED` events *and* schedules the agent run via
+      `scheduler_service.run_agent_task`.
+
+**Still stubbed / pending**
+
+• Real network calls for *watch* creation/renewal (currently
+  `_start_gmail_watch_stub` / `_renew_gmail_watch_stub`).
+• JWT validation of Gmail webhook (`Authorization:` header).
+• Robust back-off & quota handling around Gmail API requests.
+• Encryption of stored `gmail_refresh_token`.
+
+**Test impact**
+
+Because token exchange is now part of the flow, **unit tests must monkey-patch
+`gmail_api.exchange_refresh_token`** or set dummy `GOOGLE_CLIENT_ID` /
+`GOOGLE_CLIENT_SECRET` in the environment.  A failing test is a hint that the
+patch is missing.
 
 
 ### 🚧 Phase 4 – Front-end CRUD / UX
@@ -235,6 +256,10 @@ per message.  Added test `test_gmail_webhook_trigger.py` to assert dedup.
 – “Connect Gmail” button (in progress – `google_code_flow.rs`).  
 – Trigger list & wizard in Agent modal.  
 – Real-time toast & run history filter.
+
+**Backend prerequisite finished** – `/api/auth/google/gmail` endpoint is now
+stable; once the front-end stores the returned *success* flag the user’s
+refresh-token is ready for the trigger service.
 
 ### Phase 5 – Docs & Examples
 

@@ -13,10 +13,7 @@ from __future__ import annotations
 import asyncio
 
 # HTTP helpers
-import json
 import logging
-import urllib.parse
-import urllib.request
 from contextlib import suppress
 from typing import Optional
 
@@ -80,7 +77,7 @@ class EmailTriggerService:
         Runs until ``_shutdown_event`` is set.
         """
 
-        poll_interval_s = 60  # configurable later
+        poll_interval_s = 600  # 10-minute safety-net poll; configurable via env later
 
         while not self._shutdown_event.is_set():
             try:
@@ -149,10 +146,16 @@ class EmailTriggerService:
         """
 
         # Lazy import to avoid circulars
-        from zerg.database import default_session_factory  # noqa: WPS433
+        from zerg.events import EventType  # noqa: WPS433 – avoid top level
+        from zerg.events import event_bus  # noqa: WPS433
         from zerg.models.models import Trigger  # noqa: WPS433
         from zerg.models.models import User  # noqa: WPS433
+        from zerg.services import email_filtering  # noqa: WPS433 – match helper
+        from zerg.services import gmail_api  # noqa: WPS433 local import to avoid cycles
+        from zerg.services.scheduler_service import scheduler_service  # noqa: WPS433
 
+        # Re-load trigger inside a fresh session so it is attached => we can
+        # mutate ``config`` and commit at the end.
         with default_session_factory() as session:
             trg: Trigger | None = session.query(Trigger).filter(Trigger.id == trigger_id).first()
             if trg is None:
@@ -160,76 +163,157 @@ class EmailTriggerService:
                 return
 
             if (trg.config or {}).get("provider") != "gmail":
-                return  # Not a gmail trigger – we will support others later
+                return  # Not a gmail trigger – will support others later
 
-            # MVP: pick first user with refresh token.  Future: link trigger to
-            # specific user once agents are owned by users.
+            # ------------------------------------------------------------------
+            # Resolve *user* that owns refresh-token (MVP: first available)
+            # ------------------------------------------------------------------
             user: User | None = session.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
 
             if user is None:
-                logger.warning("No user with gmail_refresh_token found – skip trigger %s", trigger_id)
+                logger.warning("No Gmail-connected user found – cannot poll trigger %s", trg.id)
                 return
 
+            # ------------------------------------------------------------------
+            # OAuth – refresh → access token (cached for 55 min)
+            # ------------------------------------------------------------------
             refresh_token = user.gmail_refresh_token  # type: ignore[assignment]
-            try:
-                access_token = await asyncio.to_thread(self._exchange_refresh_token, refresh_token)
-            except Exception as exc:  # pragma: no cover – network error
-                logger.error("Failed to exchange gmail refresh_token: %s", exc)
+
+            # minimal in-memory cache keyed by refresh-token string
+            token_cache: dict[str, tuple[str, float]] = getattr(self, "_token_cache", {})
+            self._token_cache = token_cache  # store back on instance
+
+            import time as _time_mod
+
+            now = _time_mod.time()
+            cached = token_cache.get(refresh_token)
+            access_token: str
+            if cached and cached[1] > now:
+                access_token = cached[0]
+            else:
+                try:
+                    access_token = await asyncio.to_thread(
+                        gmail_api.exchange_refresh_token,
+                        refresh_token,
+                    )
+                except Exception as exc:  # pragma: no cover – network error
+                    logger.error("Failed to exchange refresh_token: %s", exc)
+                    return
+
+                # cache for 55 minutes
+                token_cache[refresh_token] = (access_token, now + 55 * 60)
+
+            # ------------------------------------------------------------------
+            # History diff call – get additions since last stored history_id
+            # ------------------------------------------------------------------
+            start_hid = int((trg.config or {}).get("history_id", 0))
+
+            history_records = await asyncio.to_thread(
+                gmail_api.list_history,
+                access_token,
+                start_hid,
+            )
+
+            if not history_records:
+                logger.debug("Trigger %s – no new history records", trg.id)
+                return  # nothing to do
+
+            # Flatten message IDs -----------------------------------------------
+            message_ids: list[str] = []
+            max_hid = start_hid
+            for h in history_records:
+                try:
+                    hid_int = int(h["id"])
+                    max_hid = max(max_hid, hid_int)
+                except Exception:  # noqa: BLE001 – tolerant parsing
+                    pass
+
+                for added in h.get("messagesAdded", []):
+                    msg = added.get("message", {})
+                    mid = msg.get("id")
+                    if mid:
+                        message_ids.append(str(mid))
+
+            if not message_ids:
+                logger.debug("Trigger %s – history records contained no messages", trg.id)
+                # Still advance history id to avoid re-processing same empty diff
+                if max_hid > start_hid:
+                    (trg.config or {}).update({"history_id": max_hid})
+                    try:
+                        from sqlalchemy.orm.attributes import flag_modified  # type: ignore
+
+                        flag_modified(trg, "config")
+                    except ImportError:
+                        pass
+                    session.add(trg)
+                    session.commit()
                 return
 
-            # For now we just log.  Replace with Gmail API call in Phase-3.
+            # ------------------------------------------------------------------
+            # Process each message – filter & possibly trigger agent
+            # ------------------------------------------------------------------
+            filters = (trg.config or {}).get("filters")
+
+            fired_any = False
+            for mid in message_ids:
+                meta = await asyncio.to_thread(
+                    gmail_api.get_message_metadata,
+                    access_token,
+                    mid,
+                )
+
+                if not meta:
+                    continue  # skip on error
+
+                if not email_filtering.matches(meta, filters):
+                    continue
+
+                # Fire!
+                await event_bus.publish(
+                    EventType.TRIGGER_FIRED,
+                    {
+                        "trigger_id": trg.id,
+                        "agent_id": trg.agent_id,
+                        "provider": "gmail",
+                        "message_id": mid,
+                    },
+                )
+
+                await scheduler_service.run_agent_task(trg.agent_id)  # type: ignore[arg-type]
+                fired_any = True
+
+            # ------------------------------------------------------------------
+            # Persist *new* history id (largest seen)
+            # ------------------------------------------------------------------
+            if max_hid > start_hid:
+                cfg = dict(trg.config or {})
+                cfg["history_id"] = max_hid
+                trg.config = cfg  # type: ignore[assignment]
+
+                try:
+                    from sqlalchemy.orm.attributes import flag_modified  # type: ignore
+
+                    flag_modified(trg, "config")
+                except ImportError:  # pragma: no cover
+                    pass
+
+                session.add(trg)
+                session.commit()
+
             logger.info(
-                "[EmailTriggerService] Obtained Gmail access_token (len=%s) for trigger %s",
-                len(access_token),
-                trigger_id,
+                "Gmail trigger %s processed %s messages (fired=%s)",
+                trg.id,
+                len(message_ids),
+                fired_any,
             )
 
     # ------------------------------------------------------------------
     # Static utility ----------------------------------------------------
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _exchange_refresh_token(refresh_token: str) -> str:
-        """Blocking helper that swaps *refresh_token* → *access_token*.
-
-        Raises an exception if Google returns an error.  The caller is
-        expected to run this in a threadpool via ``asyncio.to_thread``.
-        """
-
-        import os
-
-        client_id = os.getenv("GOOGLE_CLIENT_ID")
-        client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-
-        if not client_id or not client_secret:
-            raise RuntimeError("GOOGLE_CLIENT_ID / SECRET not set – cannot refresh token")
-
-        data = {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-        }
-
-        encoded = urllib.parse.urlencode(data).encode()
-
-        req = urllib.request.Request(
-            "https://oauth2.googleapis.com/token",
-            data=encoded,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310
-                payload = json.loads(resp.read().decode())
-        except Exception as exc:  # network / HTTP error
-            raise RuntimeError("token endpoint request failed") from exc
-
-        access_token = payload.get("access_token")
-        if not access_token:
-            raise RuntimeError(f"invalid token response: {payload}")
-
-        return access_token
+    # `_exchange_refresh_token` was moved to `zerg.services.gmail_api` so the
+    # logic can be re-used by other services.  The old helper is deleted to
+    # avoid duplicate code paths.
 
     # ------------------------------------------------------------------
     # Watch renewal helpers --------------------------------------------

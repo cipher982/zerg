@@ -18,6 +18,7 @@ import asyncio
 import pytest
 
 from zerg.routers import auth as auth_router
+from zerg.services import gmail_api as gmail_api_mod
 from zerg.services.scheduler_service import scheduler_service
 
 # ---------------------------------------------------------------------------
@@ -70,14 +71,29 @@ async def test_gmail_webhook_triggers_agent(client, db_session):
     connect_resp = client.post("/api/auth/google/gmail", json={"auth_code": "dummy"})
     assert connect_resp.status_code == 200, connect_resp.text
 
-    # 4) Monkey-patch run_agent_task so we can assert call ---------------
+    # 4) Monkey-patch Gmail helpers + scheduler so diff logic sees one message
+
+    def _stub_list_history(_access: str, _start_id: int):  # noqa: D401 – stub sync
+        return [{"id": "1001", "messagesAdded": [{"message": {"id": "mid-1"}}]}]
+
+    def _stub_get_meta(_access: str, _mid: str):  # noqa: D401 – stub sync
+        return {
+            "id": _mid,
+            "labelIds": ["INBOX"],
+            "headers": {"From": "alice@example.com", "Subject": "Hello"},
+        }
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(gmail_api_mod, "list_history", _stub_list_history)
+    monkeypatch.setattr(gmail_api_mod, "get_message_metadata", _stub_get_meta)
+
     called = {"count": 0, "agent_id": None}
 
-    async def _stub_run_agent_task(aid: int):  # noqa: D401 – stub
+    async def _stub_run_agent_task(aid: int):  # noqa: D401 – stub async
         called["count"] += 1
         called["agent_id"] = aid
 
-    original = scheduler_service.run_agent_task
+    original_run = scheduler_service.run_agent_task
     scheduler_service.run_agent_task = _stub_run_agent_task  # type: ignore[assignment]
 
     try:
@@ -106,4 +122,5 @@ async def test_gmail_webhook_triggers_agent(client, db_session):
         await asyncio.sleep(0)
         assert called["count"] == 1, "Second webhook with same msg_no should not trigger run"
     finally:
-        scheduler_service.run_agent_task = original  # type: ignore[assignment]
+        scheduler_service.run_agent_task = original_run  # type: ignore[assignment]
+        monkeypatch.undo()
