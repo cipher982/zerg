@@ -82,7 +82,7 @@
 * EmailTriggerService singleton (polls, refresh-token → access-token)
 * Tests: webhook + gmail flow
 
-### Outstanding backend work (🔄)
+### Outstanding backend work (🔄) – updated 2025-05-10
 
 1. **Gmail Watch & Message Diff**  *(partially shipped – remaining items below)*  
    • ✅ Auto-create watch (stub)  
@@ -102,6 +102,11 @@
 
 4. **Observability**  
    • Detailed logging + metrics for e-mail polling / push latency.
+
+5. **Test coverage**  
+   • 🟢 done for history progression & dedup.  
+   • 🔄 still add standalone unit tests for email_filtering.matches variants
+     and token-cache reuse path (low priority once provider abstraction lands).
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---
@@ -234,6 +239,16 @@ processing.  Covered by `test_gmail_webhook_trigger.py`.
       • label_include / label_exclude
    4. Fires `TRIGGER_FIRED` events *and* schedules the agent run via
       `scheduler_service.run_agent_task`.
+
+✅ *Cross-session commit/refresh fix* – Webhook handler now commits
+`last_msg_no` *before* calling the helper and then refreshes the instance so
+concurrent updates to `history_id` are merged correctly (2025-05-10).
+
+✅ *High-level regression tests* – Added
+`test_gmail_webhook_history_progress.py` ensuring
+    • history_id advances to the highest value from Gmail History diff
+    • a new X-Goog-Message-Number triggers another agent run.
+  Suite now **114 passed** / 15 skipped.
 
 **Still stubbed / pending**
 

@@ -136,10 +136,27 @@ async def gmail_webhook(
             flag_modified(trg, "config")
             db.add(trg)
 
+        # Commit *last_msg_no* so it is visible to the helper running in a
+        # separate DB session.  Committing inside the loop keeps webhook
+        # latency low and simplifies cross-session merge logic.
+        db.commit()
+
         fired_count += 1
 
         # Kick off full history diff so filtering & EventBus publishing happen
         await email_trigger_service._handle_gmail_trigger(trg.id)  # type: ignore[attr-defined]
+
+        # ------------------------------------------------------------------
+        # Refresh *trg* on this session so we do not overwrite fields (like
+        # history_id) that may have been updated inside the helper which
+        # uses a *separate* database session.
+        # ------------------------------------------------------------------
+        # Refresh the instance so we see any updates performed by the helper
+        # (e.g. ``history_id`` advancement) **and** keep our ``last_msg_no``.
+        try:
+            db.refresh(trg)
+        except Exception:  # pragma: no cover
+            pass
 
     db.commit()
 

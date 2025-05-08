@@ -84,6 +84,10 @@ async def test_gmail_webhook_triggers_agent(client, db_session):
         }
 
     monkeypatch = pytest.MonkeyPatch()
+    # ------------------------------------------------------------------
+    # Patch *token refresh* so the handler does not require real env vars
+    # ------------------------------------------------------------------
+    monkeypatch.setattr(gmail_api_mod, "exchange_refresh_token", lambda _rt: "access-token-dummy")
     monkeypatch.setattr(gmail_api_mod, "list_history", _stub_list_history)
     monkeypatch.setattr(gmail_api_mod, "get_message_metadata", _stub_get_meta)
 
