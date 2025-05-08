@@ -37,9 +37,16 @@ from fastapi import status
 from sqlalchemy.orm import Session
 
 from zerg.database import get_db
-from zerg.events import EventType
-from zerg.events import event_bus
-from zerg.services.scheduler_service import scheduler_service
+
+# Event publication and agent execution are handled inside
+# `EmailTriggerService` from now on.  The router only enqueues the service
+# call so we keep webhook latency minimal.
+
+# Note: we *do not* start/stop the service here – it is already mounted by
+# `zerg.main` during application start.
+
+# Trigger processing moved into EmailTriggerService so webhook no longer
+# schedules agent runs directly.
 
 logger = logging.getLogger(__name__)
 
@@ -101,52 +108,38 @@ async def gmail_webhook(
 
     fired_count = 0
 
-    # Use *X-Goog-Message-Number* as a stand-in for history diff so we can
-    # decide whether this callback represents *new* data without calling the
-    # real Gmail API (keeps CI offline-safe).
+    # Use *X-Goog-Message-Number* as a quick dedup mechanism so we do not call
+    # the expensive Gmail *history* API multiple times for the same push.
 
     msg_no_int: int | None = None
     if x_goog_message_number and x_goog_message_number.isdigit():
         msg_no_int = int(x_goog_message_number)
 
+    from sqlalchemy.orm.attributes import flag_modified  # local import
+
+    from zerg.services.email_trigger_service import email_trigger_service  # noqa: WPS433
+
     for trg in triggers:
         cfg = trg.config or {}
-        last_seen = int(cfg.get("last_msg_no", 0))  # coerce in case JSON stored str
+        last_seen = int(cfg.get("last_msg_no", 0))
 
-        # Fire only if message number increases (simple dedup)
+        # Deduplicate – if Google re-sends push with same message number we
+        # skip processing entirely.
         if msg_no_int is not None and msg_no_int <= last_seen:
             continue
 
-        await event_bus.publish(
-            EventType.TRIGGER_FIRED,
-            {
-                "trigger_id": trg.id,
-                "agent_id": trg.agent_id,
-                "provider": "gmail",
-                "resource_id": x_goog_resource_id,
-            },
-        )
-
-        await scheduler_service.run_agent_task(trg.agent_id)  # type: ignore[arg-type]
+        # Persist new msg number immediately so concurrent callbacks are
+        # deduplicated even if the History diff processing takes a while.
+        if msg_no_int is not None:
+            cfg["last_msg_no"] = msg_no_int
+            trg.config = cfg  # type: ignore[assignment]
+            flag_modified(trg, "config")
+            db.add(trg)
 
         fired_count += 1
 
-        # Persist new msg number so subsequent callbacks dedup
-        if msg_no_int is not None:
-            cfg["last_msg_no"] = msg_no_int
-
-            # Assign & flag change so SQLAlchemy persists mutation
-            trg.config = cfg  # type: ignore[assignment]
-
-            try:
-                from sqlalchemy.orm.attributes import flag_modified  # type: ignore
-
-                flag_modified(trg, "config")
-            except ImportError:  # pragma: no cover – fallback
-                pass
-
-            db.add(trg)
-            db.add(trg)
+        # Kick off full history diff so filtering & EventBus publishing happen
+        await email_trigger_service._handle_gmail_trigger(trg.id)  # type: ignore[attr-defined]
 
     db.commit()
 
