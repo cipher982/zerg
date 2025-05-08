@@ -56,7 +56,9 @@ def _verify_google_id_token(id_token_str: str) -> dict[str, Any]:
 def _issue_access_token(user_id: int, email: str, expires_delta: timedelta = timedelta(minutes=30)) -> str:
     """Return signed HS256 access token."""
 
-    expiry = datetime.utcnow() + expires_delta
+    from datetime import timezone
+
+    expiry = datetime.now(timezone.utc) + expires_delta
     # Import python-jose lazily to avoid hard dependency during unit tests.
     try:
         from jose import jwt  # type: ignore
@@ -86,10 +88,14 @@ def _issue_access_token(user_id: int, email: str, expires_delta: timedelta = tim
 
         jwt = _MiniJWT  # type: ignore
 
+    # ``exp`` must be an **integer** UNIX timestamp so that json.dumps (used
+    # by the lightweight fallback encoder below) can serialise the payload
+    # without hitting "Object of type datetime is not JSON serialisable".
+
     payload = {
         "sub": str(user_id),
         "email": email,
-        "exp": expiry,
+        "exp": int(expiry.timestamp()),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 

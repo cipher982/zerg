@@ -72,6 +72,8 @@ Here's the minimal set of commands to get Agent Platform running locally:
 2. Copy the example environment file:  
    » cp backend/.env.example .env  
    (Insert your OPENAI_API_KEY in the .env file to enable AI calls.)   
+   If you want to **disable** the Google-login overlay during local testing keep `AUTH_DISABLED=1` (already in the template).
+   For production remember to populate `GOOGLE_CLIENT_ID`, `JWT_SECRET` and `TRIGGER_SIGNING_SECRET`.
 3. Run backend server:  
    » uv run python -m uvicorn zerg.main:app --reload --port 8001
 4. Run backend tests:
@@ -85,6 +87,25 @@ Here's the minimal set of commands to get Agent Platform running locally:
    » ./build-debug.sh (debug build with source maps)  
 3. Run frontend tests:
    » ./frontend/run_frontend_tests.sh
+
+### Authentication (new as of May 2025)
+
+The platform now ships a *Google Sign-In* authentication layer.
+
+* **Local development** – leave `AUTH_DISABLED=1` (default in `.env.example`).  The backend injects a deterministic `dev@local` user so the UI skips the login overlay.
+* **Production / staging** – set the following **required** variables in your environment or `.env` file:
+
+  ```bash
+  GOOGLE_CLIENT_ID="your-gcp-oauth-client.apps.googleusercontent.com"
+  JWT_SECRET="change-this-to-a-long-random-string"
+  AUTH_DISABLED="0"        # or simply remove the variable
+  # Required only if you use webhook triggers
+  TRIGGER_SIGNING_SECRET="super-secret-hex"
+  ```
+
+  On first load the SPA shows a Google button in a full-screen overlay.  After sign-in the backend issues a **short-lived JWT** which the browser stores in `localStorage` and forwards on every REST / WebSocket request.
+
+> The login overlay is **not** shown in dev-mode so tests and local hacking remain friction-free.
 
    The test runner needs a headless-capable Chrome or Firefox binary. On
    macOS, the usual drag-and-drop installation stores the executable
@@ -270,6 +291,15 @@ This architecture creates a seamless real-time experience: when an agent is crea
 
 • **Canvas Editor written in Rust/wgpu‑free 2‑D renderer**  
   - Custom rendering for efficient performance and fluid user interactions.
+
+• **Google Sign-In Authentication (May 2025)**  
+  - Production deployments require users to authenticate with their Google account.  
+  - The backend issues short-lived HS256 JWTs; the SPA stores them in `localStorage` and attaches `Authorization: Bearer …` to every fetch/WebSocket request.  
+  - For local development you can bypass the login overlay by setting `AUTH_DISABLED=1`.
+
+• **HMAC-Secured Webhook Triggers**  
+  - `/api/triggers/{id}/events` now validates `X-Zerg-Timestamp` and `X-Zerg-Signature` headers (HMAC-SHA256 using `TRIGGER_SIGNING_SECRET`).  
+  - Blocks replay attacks beyond ±5 minutes.
 
 • **Cron-style scheduling via SchedulerService**  
   - ✅ Shipped – APScheduler now triggers `AgentRunner` on the defined CRON schedule.
