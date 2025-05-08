@@ -85,14 +85,32 @@ Stage 5 – Trigger hardening (HMAC header)
 | 5.2 | Implement 5-min replay-window & HMAC-SHA256 validation                | same | [x] |
 | 5.3 | Update tests (see `tests/test_triggers.py`)                           | `backend/tests/…` | [x] |
 
+> **Update (2025-05-07):** Stages **4** (Frontend integration) and **5**
+> (Trigger hardening) have landed on `main`.  Google Sign-In is now fully
+> wired from browser → backend, JWTs are attached to REST & WebSocket
+> traffic, and webhook triggers are protected via HMAC-SHA256 with a
+> ±5-minute replay window.
+>
+> **Remaining scope before we can call the Auth MVP *done*:**
+>
+> • **Stage 6** – add backend auth unit/integration tests (items 6.1-6.3).
+> • **Stage 6** – ✅ **completed** (tests merged 2025-05-07)
+> • **Stage 7** – docs & housekeeping (README, ops security note, pre-commit) – *next up*.
+>
+> **Future hardening idea** (post-MVP): the WebSocket endpoint currently
+> accepts the connection *before* validating the `token` query-parameter. We
+> should consider a *Stage 8* that calls `get_current_user()` inside
+> `routers/websocket.py` and closes unauthenticated clients with close-code
+> **4401**.
+
 -------------------------------------------------------------------------------
 Stage 6 – Tests & quality gates
 -------------------------------------------------------------------------------
 | # | Task | Code Location | Status |
 |---|------|---------------|--------|
-| 6.1 | Unit-tests for ID-token verification & JWT minting                    | `backend/tests/test_auth_google.py` (new) | [ ] |
-| 6.2 | Integration test: unauthenticated request returns 401 (prod-mode)     | same | [ ] |
-| 6.3 | Integration test: `AUTH_DISABLED=1` bypass works                      | same | [ ] |
+| 6.1 | Unit-tests for ID-token verification & JWT minting                    | `backend/tests/test_auth_google.py` | [x] |
+| 6.2 | Integration test: unauthenticated request returns 401 (prod-mode)     | same | [x] |
+| 6.3 | Integration test: `AUTH_DISABLED=1` bypass works                      | same | [x] |
 | 6.4 | Front-end wasm-bindgen test: auth utils & logout helpers             | `frontend/src/utils.rs` | [x] |
 
 -------------------------------------------------------------------------------
