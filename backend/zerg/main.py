@@ -31,7 +31,10 @@ from zerg.routers.threads import router as threads_router
 from zerg.routers.triggers import router as triggers_router
 from zerg.routers.users import router as users_router
 from zerg.routers.websocket import router as websocket_router
+from zerg.routers.email_webhooks import router as email_webhook_router
 from zerg.services.scheduler_service import scheduler_service
+# Email trigger polling service (stub for now)
+from zerg.services.email_trigger_service import email_trigger_service
 
 # fmt: on
 
@@ -76,6 +79,7 @@ app.include_router(threads_router, prefix=f"{API_PREFIX}{THREADS_PREFIX}")
 app.include_router(models_router, prefix=f"{API_PREFIX}{MODELS_PREFIX}")
 app.include_router(websocket_router, prefix=API_PREFIX)
 app.include_router(admin_router, prefix=API_PREFIX)
+app.include_router(email_webhook_router, prefix=f"{API_PREFIX}")
 app.include_router(triggers_router, prefix=f"{API_PREFIX}")
 app.include_router(runs_router, prefix=f"{API_PREFIX}")
 app.include_router(auth_router, prefix=f"{API_PREFIX}")
@@ -95,9 +99,11 @@ async def startup_event():
         initialize_database()
         logger.info("Database tables initialized")
 
-        # Start scheduler service
+        # Start core background services ----------------------------------
         await scheduler_service.start()
-        logger.info("Scheduler service initialized")
+        await email_trigger_service.start()
+
+        logger.info("Background services initialised (scheduler + email triggers)")
     except Exception as e:
         logger.error(f"Error during startup: {e}")
 
@@ -106,8 +112,11 @@ async def startup_event():
 async def shutdown_event():
     """Clean up services on app shutdown."""
     try:
+        # Stop background services (ignore errors so shutdown continues)
         await scheduler_service.stop()
-        logger.info("Scheduler service stopped")
+        await email_trigger_service.stop()
+
+        logger.info("Background services stopped")
     except Exception as e:
         logger.error(f"Error stopping scheduler service: {e}")
 

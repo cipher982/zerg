@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from zerg.crud import crud
 from zerg.database import get_db
 from zerg.schemas.schemas import TokenOut
+from zerg.dependencies.auth import get_current_user
 
 load_dotenv()
 
@@ -28,6 +29,14 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
+
+# Client secret is required for *server-side* OAuth code exchange when users
+# connect their Gmail account to enable *email triggers*.  The variable is
+# intentionally **optional** so that the regular Google Sign-In flow (which
+# only needs the *client ID* for ID-token verification) keeps working in
+# existing development setups.
+
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
 
 def _verify_google_id_token(id_token_str: str) -> dict[str, Any]:
@@ -101,6 +110,70 @@ def _issue_access_token(user_id: int, email: str, expires_delta: timedelta = tim
 
 
 # ---------------------------------------------------------------------------
+# Gmail *offline_access* helper – Phase-2 Email Triggers
+# ---------------------------------------------------------------------------
+
+
+def _exchange_google_auth_code(auth_code: str, *, redirect_uri: str | None = None) -> dict[str, str]:
+    """Exchange an *authorization code* for tokens via Google's OAuth endpoint.
+
+    The function returns the full token response as a dictionary.  We are
+    primarily interested in the ``refresh_token`` which we persist so that the
+    forthcoming *Email Trigger Service* can fetch short-lived access tokens on
+    demand.
+
+    The call requires a **client secret** which must be provided via the
+    ``GOOGLE_CLIENT_SECRET`` environment variable.  In unit-tests the function
+    is usually monkey-patched so no external HTTP call is performed.
+    """
+
+    if GOOGLE_CLIENT_ID is None or GOOGLE_CLIENT_SECRET is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google OAuth client not configured",
+        )
+
+    import json
+    import urllib.parse
+    import urllib.request
+
+    token_endpoint = "https://oauth2.googleapis.com/token"
+
+    data = {
+        "code": auth_code,
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "grant_type": "authorization_code",
+        # The recommended value for SPA → backend hand-off is ``postmessage``.
+        # Callers can override by passing an explicit redirect_uri.
+        "redirect_uri": redirect_uri or "postmessage",
+    }
+
+    # Encode as application/x-www-form-urlencoded
+    encoded = urllib.parse.urlencode(data).encode()
+
+    req = urllib.request.Request(
+        token_endpoint,
+        data=encoded,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 – trusted URL
+            payload = json.loads(resp.read().decode())
+    except Exception as exc:  # pragma: no cover – network failure mapped to 502
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Google token exchange failed") from exc
+
+    if "refresh_token" not in payload:
+        # The most common reason is that *offline* access was not requested or
+        # the user previously granted access.  We surface a descriptive error
+        # so the frontend can re-prompt with `prompt=consent`.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No refresh_token in Google response")
+
+    return payload  # Contains refresh_token, access_token, expires_in, scope, …
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -136,3 +209,50 @@ def google_sign_in(body: dict[str, str], db: Session = Depends(get_db)) -> Token
 
     # 4. Return response
     return TokenOut(access_token=access_token, expires_in=30 * 60)
+
+
+# ---------------------------------------------------------------------------
+# Gmail connection endpoint (Phase-2 Email Triggers)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/google/gmail", status_code=status.HTTP_200_OK)
+def connect_gmail(
+    body: dict[str, str],
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+) -> dict[str, str]:
+    """Store *offline* Gmail permissions for the **current** user.
+
+    Expected body: ``{ "auth_code": "<code from OAuth consent window>" }``.
+
+    The frontend must request the following when launching the consent screen::
+
+        scope=https://www.googleapis.com/auth/gmail.readonly
+        access_type=offline
+        prompt=consent
+
+    The *refresh token* returned by Google is stored on the user row.  The
+    endpoint returns a simple JSON confirmation so the client knows the
+    account is connected.
+    """
+
+    auth_code = body.get("auth_code")
+    if not auth_code:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="auth_code missing")
+
+    # 1. Exchange code for tokens (patched to stub out in unit-tests)
+    token_payload = _exchange_google_auth_code(auth_code)
+
+    refresh_token: str = token_payload["refresh_token"]
+
+    # 2. Persist on current user row
+    updated = crud.update_user(
+        db,
+        current_user.id,
+        gmail_refresh_token=refresh_token,
+    )
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    return {"status": "connected"}
