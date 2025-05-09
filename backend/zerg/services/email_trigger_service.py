@@ -20,6 +20,10 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from zerg.database import default_session_factory
+
+# Metrics
+from zerg.metrics import gmail_api_error_total
+from zerg.metrics import gmail_watch_renew_total
 from zerg.models.models import Trigger
 
 logger = logging.getLogger(__name__)
@@ -198,6 +202,7 @@ class EmailTriggerService:
                     )
                 except Exception as exc:  # pragma: no cover – network error
                     logger.error("Failed to exchange refresh_token: %s", exc)
+                    gmail_api_error_total.inc()
                     return
 
                 # cache for 55 minutes
@@ -351,10 +356,15 @@ class EmailTriggerService:
             new_watch = await asyncio.to_thread(self._renew_gmail_watch_stub)
         except Exception as exc:  # pragma: no cover
             logger.error("Failed to renew Gmail watch: %s", exc)
+            # Metrics ---------------------------------------------------
+            gmail_api_error_total.inc()
             return
 
         cfg.update(new_watch)
         trigger.config = cfg  # type: ignore[assignment]
+
+        # Metrics -------------------------------------------------------
+        gmail_watch_renew_total.inc()
 
         try:
             from sqlalchemy.orm.attributes import flag_modified  # type: ignore
