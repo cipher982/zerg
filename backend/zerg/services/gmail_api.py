@@ -25,6 +25,143 @@ from typing import Dict
 from typing import List
 
 logger = logging.getLogger(__name__)
+# ---------------------------------------------------------------------------
+# Push *watch* helpers
+# ---------------------------------------------------------------------------
+
+# Gmail delivers push notifications to Cloud Pub/Sub *or* direct HTTPS
+# endpoints.  For the Agent Platform we only support the **HTTPS** variant so
+# users do not need a GCP project with Pub/Sub enabled.  The relevant REST
+# endpoint is:
+#
+#     POST https://gmail.googleapis.com/gmail/v1/users/me/watch
+#
+# Request body example (JSON):
+#     {
+#         "topicName": "projects/my-project/topics/gmail",
+#         "labelIds": ["INBOX"],
+#         "labelFilterAction": "include"
+#     }
+#
+# The response JSON contains two fields we care about:
+#     • ``historyId``  – baseline to start *history* diff from.
+#     • ``expiration`` – UNIX ms timestamp when the watch expires (max 7 days).
+#
+# In addition to creating the initial watch we also expose a small helper that
+# simply **re-creates** the watch to renew it once the expiration comes
+# close.  Gmail does not currently offer an explicit *renew* endpoint – the
+# recommended workflow is to call *watch* again which implicitly stops the
+# old channel and starts a new one.  Therefore ``renew_watch`` is merely an
+# alias that calls ``start_watch``.
+
+
+def _post_json(url: str, access_token: str, payload: Dict[str, Any]) -> Dict[str, Any]:  # noqa: D401 – helper
+    data_bytes = json.dumps(payload, separators=(",", ":")).encode()
+    req = urllib.request.Request(
+        url,
+        data=data_bytes,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 – trusted URL
+        return json.loads(resp.read().decode())
+
+
+def start_watch(
+    *,
+    access_token: str,
+    callback_url: str,
+    label_ids: List[str] | None = None,
+) -> Dict[str, Any]:  # noqa: D401 – helper
+    """Register (or re-register) a Gmail *watch*.
+
+    Parameters
+    ----------
+    access_token
+        Short-lived OAuth access token with the ``gmail.readonly`` scope.
+    callback_url
+        Public HTTPS URL that Google will POST push notifications to.
+    label_ids
+        If provided, limit notifications to specific labels (default:
+        ``["INBOX"]``).
+
+    Returns
+    -------
+    dict
+        ``{"history_id": <int>, "watch_expiry": <int>}``
+    """
+
+    url = "https://gmail.googleapis.com/gmail/v1/users/me/watch"
+
+    body = {
+        # *topicName* is mandatory even for HTTPS watches but is ignored by
+        # Google – any dummy value is accepted.  Using the callback URL keeps
+        # the JSON intuitive when inspecting network traces.
+        "topicName": callback_url,
+        "labelFilterAction": "include",
+        "labelIds": label_ids or ["INBOX"],
+    }
+
+    try:
+        payload = _post_json(url, access_token, body)
+    except Exception as exc:  # pragma: no cover – network / auth failure
+        logger.warning("start_watch network failure: %s", exc)
+        raise RuntimeError("gmail watch request failed") from exc
+
+    try:
+        history_id = int(payload["historyId"])
+        expiry_ms = int(payload["expiration"])
+    except Exception as exc:  # noqa: BLE001 – robust parsing
+        raise RuntimeError(f"unexpected watch response: {payload}") from exc
+
+    return {"history_id": history_id, "watch_expiry": expiry_ms}
+
+
+def renew_watch(
+    *,
+    access_token: str,
+    callback_url: str,
+    label_ids: List[str] | None = None,
+) -> Dict[str, Any]:  # noqa: D401 – helper
+    """Renew an existing watch by creating a fresh one.
+
+    Gmail recommends calling *watch* again once the current channel expires
+    – no dedicated *renew* endpoint exists.  Therefore this helper simply
+    delegates to ``start_watch``.
+    """
+
+    return start_watch(access_token=access_token, callback_url=callback_url, label_ids=label_ids)
+
+
+# ---------------------------------------------------------------------------
+# Stop Gmail push notifications helper
+# ---------------------------------------------------------------------------
+
+
+def stop_watch(*, access_token: str) -> bool:  # noqa: D401 – helper
+    """Stop the current push channel for the Gmail *user*.
+
+    Google’s API treats *stop* as idempotent – it clears all existing
+    push channels for the authorised user and returns HTTP 204 on success.
+
+    We return ``True`` when the request succeeds (HTTP 2xx) and ``False`` on
+    any network / auth failure so callers can decide whether to retry or
+    fall back silently.
+    """
+
+    url = "https://gmail.googleapis.com/gmail/v1/users/me/stop"
+
+    try:
+        # Re-use the helper so we inherit consistent headers & timeout.
+        _post_json(url, access_token, {})  # body is empty JSON
+        return True
+    except Exception as exc:  # pragma: no cover – offline / auth error
+        logger.warning("stop_watch network failure: %s", exc)
+        return False
 
 
 # ---------------------------------------------------------------------------
