@@ -95,6 +95,50 @@ pub fn execute_fetch_command(cmd: Command) {
                 }
             });
         },
+
+        // -----------------------------------------------------------
+        // Trigger helpers
+        // -----------------------------------------------------------
+
+        Command::FetchTriggers(agent_id) => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_triggers(agent_id).await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<Vec<crate::models::Trigger>>(&json_str) {
+                            Ok(triggers) => dispatch_global_message(crate::messages::Message::TriggersLoaded { agent_id, triggers }),
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse triggers: {:?}", e).into()),
+                        }
+                    }
+                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch triggers: {:?}", e).into()),
+                }
+            });
+        },
+
+        Command::CreateTrigger { payload_json } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::create_trigger(&payload_json).await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<crate::models::Trigger>(&json_str) {
+                            Ok(trigger) => {
+                                let agent_id = trigger.agent_id;
+                                dispatch_global_message(crate::messages::Message::TriggerCreated { agent_id, trigger });
+                            }
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse new trigger: {:?}", e).into()),
+                        }
+                    }
+                    Err(e) => web_sys::console::error_1(&format!("Failed to create trigger: {:?}", e).into()),
+                }
+            });
+        },
+
+        Command::DeleteTrigger(trigger_id) => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::delete_trigger(trigger_id).await {
+                    Ok(()) => dispatch_global_message(crate::messages::Message::TriggerDeleted { agent_id: 0, trigger_id }),
+                    Err(e) => web_sys::console::error_1(&format!("Failed to delete trigger: {:?}", e).into()),
+                }
+            });
+        },
         _ => web_sys::console::warn_1(&"Unexpected command type in execute_fetch_command".into())
     }
 }

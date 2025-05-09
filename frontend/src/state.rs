@@ -11,6 +11,7 @@ use crate::models::{
     ApiAgent,
     ApiThread,
     ApiThreadMessage,
+    Trigger,
 };
 use crate::models::ApiAgentRun;
 
@@ -152,6 +153,13 @@ pub struct AppState {
     // Map `agent_id -> recent runs (ordered newest-first, max 20)`
     pub agent_runs: HashMap<u32, Vec<ApiAgentRun>>, 
 
+    // ---------------------------------------------------------------
+    // Trigger management (NEW – Phase A)
+    // ---------------------------------------------------------------
+    /// All triggers grouped by their owning agent.  Populated lazily when a
+    /// user opens the *Triggers* tab in the agent modal.
+    pub triggers: HashMap<u32, Vec<Trigger>>, // agent_id → triggers
+
     // Agent Debug modal (None when hidden)
     pub agent_debug_pane: Option<AgentDebugPane>,
     // UI state for collapsible tool call indicators
@@ -273,6 +281,9 @@ impl AppState {
             expanded_agent_rows: HashSet::new(),
 
             agent_runs: HashMap::new(),
+
+            // Trigger map starts empty – filled on demand.
+            triggers: HashMap::new(),
 
             agent_debug_pane: None,
             // Initialize UI state for tool call indicators
@@ -1145,6 +1156,9 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::FetchAgents |
             cmd @ Command::FetchAgentRuns(_) |
             cmd @ Command::FetchAgentDetails(_) => crate::command_executors::execute_fetch_command(cmd),
+            cmd @ Command::FetchTriggers(_) |
+            cmd @ Command::CreateTrigger { .. } |
+            cmd @ Command::DeleteTrigger(_) => crate::command_executors::execute_fetch_command(cmd),
             
             cmd @ Command::CreateThread { .. } |
             cmd @ Command::SendThreadMessage { .. } |

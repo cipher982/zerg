@@ -182,6 +182,36 @@ impl ApiClient {
     }
 
     // -------------------------------------------------------------------
+    // Trigger management (Phase A)
+    // -------------------------------------------------------------------
+
+    /// Retrieve all triggers for a given agent.  The backend does not yet
+    /// expose `/agents/{id}/triggers`, therefore we hit generic collection
+    /// route with a query param.  Once the backend ships the nested route we
+    /// can simply change the URL – call-sites remain unchanged.
+    #[allow(dead_code)]
+    pub async fn get_triggers(agent_id: u32) -> Result<String, JsValue> {
+        let url = format!("{}/api/triggers?agent_id={}", Self::api_base_url(), agent_id);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    /// Create a new trigger.  `trigger_json` must be a valid JSON body that
+    /// matches the backend `TriggerCreate` schema (agent_id, type, config).
+    #[allow(dead_code)]
+    pub async fn create_trigger(trigger_json: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/triggers", Self::api_base_url());
+        Self::fetch_json(&url, "POST", Some(trigger_json)).await
+    }
+
+    /// Delete an existing trigger by id.
+    #[allow(dead_code)]
+    pub async fn delete_trigger(trigger_id: u32) -> Result<(), JsValue> {
+        let url = format!("{}/api/triggers/{}", Self::api_base_url(), trigger_id);
+        let _ = Self::fetch_json(&url, "DELETE", None).await?;
+        Ok(())
+    }
+
+    // -------------------------------------------------------------------
     // Authentication & User profile
     // -------------------------------------------------------------------
 
