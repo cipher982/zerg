@@ -88,6 +88,7 @@ The core Gmail-based *email* trigger path (watch registration → push webhook  
 * DELETE /triggers/{id} now stops Gmail watch (clean-up)
 * Security hardening: encrypted refresh-tokens, optional Google JWT validation
 * Regression tests: watch initialisation, renewal, history progression, stop-watch clean-up
+* **Observability groundwork:** Prometheus counters + `/metrics` route implemented (2025-05-09 commit `metrics.py`).
 
 ### Outstanding backend work (🔄) – updated 2025-05-09
 
@@ -106,8 +107,8 @@ The core Gmail-based *email* trigger path (watch registration → push webhook  
    • Improve UX when `GOOGLE_CLIENT_ID/SECRET` are missing.
 
 4. **Observability**  
-   • Emit Prometheus counters (`trigger_fired_total`, `gmail_watch_renew_total`, `gmail_api_error_total`).  
-   • Add JSON logs for every watch renewal and trigger fire.
+   ✅ *Prometheus counters shipped* – `trigger_fired_total`, `gmail_watch_renew_total`, `gmail_api_error_total` are now registered in `zerg.metrics` and available via a new `/metrics` endpoint (text exposition format).  
+   • Next: add histograms (latency, token counts) and structured JSON logs for each trigger event.
 
 5. **Test coverage**  
    • Unit-tests for `email_filtering.matches` edge cases.  
@@ -266,6 +267,35 @@ concurrent updates to `history_id` are merged correctly (2025-05-10).
 • AES-GCM encryption (current XOR scheme is placeholder).  
 • Enable JWT validation by default in prod envs (remove opt-in flag).  
 
+### ✅ Phase 3.5 – Metrics & Observability (2025-05-09)
+
+🎯 *Goal*: first-class visibility into trigger volume and Gmail interactions.
+
+**Delivered**
+
+• **Prometheus integration** – Added optional dependency `prometheus-client` and
+  new module `zerg.metrics` registering the following counters:
+  `trigger_fired_total`, `gmail_watch_renew_total`, `gmail_api_error_total`.
+
+• **Instrumentation** – Counters are incremented in
+  `routers/triggers.py` (webhook events) and
+  `services/email_trigger_service.py` (watch renewal & API error paths).
+
+• **/metrics endpoint** – New router exposes the text exposition format; the
+  route returns *501* if the library is not available so minimal CI
+  environments continue to work without the extra dependency.
+
+• **Logging** – Added `logger.info` lines around watch renewals including the
+  trigger ID and processed message counts (stepping stone for structured logs).
+
+**Next Observability steps**
+
+1. Histogram buckets for: trigger end-to-end latency, Gmail API latency, and
+   agent run duration.
+2. Structured JSON logs (or OpenTelemetry spans) for every trigger event.
+3. Alerting rules in staging: >1% gmail_api_error_total over 5 min = page.
+
+
 **Test impact**
 
 Because token exchange is now part of the flow, **unit tests must monkey-patch
@@ -287,3 +317,57 @@ refresh-token is ready for the trigger service.
 ### Phase 5 – Docs & Examples
 
 – Update README, write `docs/triggers_email.md` example walk-through.
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---
+
+## 2025-05-09 – **Detailed Front-end Implementation Plan**  *(tracking section)*
+
+This section captures the concrete, incremental steps required to surface **Trigger** functionality in the Rust/WASM front-end.  Each phase should compile and be testable in isolation so that partial PRs can land without breaking `main`.
+
+### Phase A – API & Data-model groundwork
+
+1. `frontend/src/models.rs`
+   • Add a `Trigger` struct (Serde-derived) matching the backend schema.
+
+2. `frontend/src/network/api_client.rs`
+   • New helpers: `get_triggers(agent_id)`, `create_trigger`, `delete_trigger`.
+
+3. State layer
+   • Extend `AppState` with `triggers: HashMap<u32, Vec<Trigger>>` keyed by `agent_id`.
+   • Messages: `LoadTriggers(agent_id)`, `TriggersLoaded(agent_id, Vec<Trigger>)`, `TriggerCreated`, `TriggerDeleted`.
+
+### Phase B – Agent-Modal UI
+
+4. `components/agent_config_modal.rs`
+   • Add a **“Triggers”** tab.
+   • List existing triggers with copy-to-clipboard for webhook secrets.
+   • “Add Trigger” wizard: choose type (`webhook`, `email:gmail`).
+
+### Phase C – Gmail Connect flow
+
+5. Implement / finish `google_code_flow.rs`
+   • Launch Google Identity Services code-client.
+   • POST auth-code → `/api/auth/google/gmail`.
+   • Persist `gmail_connected` flag in `AppState`.
+
+6. Wizard checks the flag before allowing **email** trigger creation.
+
+### Phase D – Real-time UX polish
+
+7. Listen for `run.created` WS messages where `trigger != manual/schedule` and toast “Trigger fired”.
+
+8. (Optional) later subscribe to future `trigger:{id}` topics.
+
+### Phase E – Dashboard surfacing
+
+9. Add a “Triggers” badge / column in the Dashboard agent list (shows count).
+
+### Phase F – Tests & QA
+
+10. WASM tests: Trigger (de)serialisation, modal Msg dispatch.
+11. Manual UX pass: dark-mode contrast, clipboard success feedback, error banners.
+
+*Progress tracker:*  
+`[ ]` Phase A  `[ ]` Phase B  `[ ]` Phase C  `[ ]` Phase D  `[ ]` Phase E  `[ ]` Phase F
+

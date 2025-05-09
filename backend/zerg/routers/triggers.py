@@ -32,6 +32,9 @@ from zerg.dependencies.auth import get_current_user
 from zerg.events import EventType
 from zerg.events import event_bus
 
+# Metrics
+from zerg.metrics import trigger_fired_total
+
 # Schemas
 from zerg.schemas.schemas import Trigger as TriggerSchema
 from zerg.schemas.schemas import TriggerCreate
@@ -194,6 +197,12 @@ async def fire_trigger_event(
         EventType.TRIGGER_FIRED,
         {"trigger_id": trg.id, "agent_id": trg.agent_id, "payload": payload},
     )
+
+    # Metrics -----------------------------------------------------------
+    try:
+        trigger_fired_total.inc()
+    except Exception:  # pragma: no cover – guard against misconfig
+        pass
 
     # 5) Fire agent immediately (non-blocking)
     await scheduler_service.run_agent_task(trg.agent_id)  # type: ignore[arg-type]
