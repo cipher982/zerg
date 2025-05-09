@@ -17,6 +17,12 @@ from zerg.models.models import ThreadMessage
 from zerg.models.models import Trigger
 
 # Added for authentication
+# NOTE: For return type hints we avoid the newer *PEP 604* union syntax
+# ``User | None`` because the SQLAlchemy DeclarativeMeta proxy that backs the
+# ``User`` model overrides the bitwise OR operator which leads to a run-time
+# ``TypeError`` when the annotation is evaluated during module import on
+# Python 3.13.  Using the classic ``Optional[User]`` sidesteps the issue
+# without requiring ``from __future__ import annotations``.
 from zerg.models.models import User
 from zerg.schemas.schemas import RunStatus
 from zerg.schemas.schemas import RunTrigger
@@ -122,12 +128,12 @@ def delete_agent(db: Session, agent_id: int):
 # ------------------------------------------------------------
 
 
-def get_user(db: Session, user_id: int) -> User | None:
+def get_user(db: Session, user_id: int) -> Optional[User]:
     """Return user by primary key."""
     return db.query(User).filter(User.id == user_id).first()
 
 
-def get_user_by_email(db: Session, email: str) -> User | None:
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
     """Return user by e-mail address (case-insensitive)."""
     return (
         db.query(User)
@@ -136,7 +142,13 @@ def get_user_by_email(db: Session, email: str) -> User | None:
     )
 
 
-def create_user(db: Session, *, email: str, provider: str | None = None, provider_user_id: str | None = None) -> User:
+def create_user(
+    db: Session,
+    *,
+    email: str,
+    provider: Optional[str] = None,
+    provider_user_id: Optional[str] = None,
+) -> User:
     """Insert new user row.
 
     Caller is expected to ensure uniqueness beforehand; we do not upsert here.
@@ -157,11 +169,11 @@ def update_user(
     db: Session,
     user_id: int,
     *,
-    display_name: str | None = None,
-    avatar_url: str | None = None,
+    display_name: Optional[str] = None,
+    avatar_url: Optional[str] = None,
     prefs: Optional[Dict[str, Any]] = None,
-    gmail_refresh_token: str | None = None,
-) -> User | None:
+    gmail_refresh_token: Optional[str] = None,
+) -> Optional[User]:
     """Partial update for the *User* table.
 
     Only the provided fields are modified – `None` leaves the column unchanged.
@@ -538,7 +550,12 @@ def list_runs(db: Session, agent_id: int, *, limit: int = 20):
 # ---------------------------------------------------------------------------
 
 
-def upsert_canvas_layout(db: Session, user_id: int | None, nodes: dict, viewport: dict | None):
+def upsert_canvas_layout(
+    db: Session,
+    user_id: Optional[int],
+    nodes: dict,
+    viewport: Optional[dict],
+):
     """Insert **or** update the *canvas layout* for *(user_id, workspace=NULL)*.
 
     The helper uses an *atomic* SQL ``INSERT … ON CONFLICT DO UPDATE`` so that
@@ -582,7 +599,7 @@ def upsert_canvas_layout(db: Session, user_id: int | None, nodes: dict, viewport
     return db.query(CanvasLayout).filter_by(user_id=user_id, workspace=None).first()
 
 
-def get_canvas_layout(db: Session, user_id: int | None):
+def get_canvas_layout(db: Session, user_id: Optional[int]):
     """Return the persisted canvas layout for *user_id* (or None)."""
 
     if user_id is None:
