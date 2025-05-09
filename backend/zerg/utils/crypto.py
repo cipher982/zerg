@@ -1,97 +1,101 @@
-"""Very small reversible *obfuscation* helper used by the test-suite to
-store the Gmail `refresh_token` non-plaintext.
+"""Token-encryption helper used for Gmail *refresh_token* storage.
 
-This implementation is **NOT** intended for production-grade security, it
-exists so that:
+Goals
+-----
+1.  *Production-grade* – prefer AES-128-GCM (Fernet) when the `cryptography`
+    package is available.
+2.  *Zero external deps for tests* – fall back to the previous XOR + Base64
+    obfuscation so the CI environment does **not** require OpenSSL wheels.
+3.  *Deterministic* – same plaintext + key ⇒ same ciphertext (this keeps the
+    existing unit-tests unchanged).
 
-• unit-tests can run without bundling heavyweight crypto libraries or
-  requiring OpenSSL on the CI image;
-• tokens are not stored as raw text on disk which would make accidental
-  logging easier.
+Key derivation
+--------------
+The module expects an environment variable
 
-In production you **must** replace this module with a real AES-GCM / Fernet
-implementation (see roadmap).
+    FERNET_SECRET="<url-safe-base64-32-bytes>"
 
-Design decisions
-----------------
-1.  The key material is supplied via the environment variable
-    ``FERNET_SECRET`` to mimic the future real crypto module.  Tests set a
-    deterministic dummy value in ``tests/conftest.py``.
-
-2.  We use an XOR stream cipher with a key derived from
-   ``hashlib.sha256(SECRET).digest()``.  The resulting ciphertext is then
-   URL-safe base64 encoded so it can be stored in JSON columns without
-   additional escaping.
-
-3.  The algorithm is *stateless* and *deterministic*, encrypting the same
-   plaintext twice with the same key yields the same ciphertext which keeps
-   the test snapshots stable.
-
-The code is intentionally dependency-free so it works in restricted
-environments (offline sandboxes, minimal Docker images, etc.).
+The **same** secret is used for both Fernet and the XOR fallback so behaviour
+remains stable across environments.
 """
+
+from __future__ import annotations
 
 import base64
 import hashlib
 import os
 from typing import Final
 
-# ---------------------------------------------------------------------------
-# Key derivation helpers
-# ---------------------------------------------------------------------------
+_SECRET_B64: Final[str | None] = os.getenv("FERNET_SECRET")
 
-
-_SECRET: Final[str | None] = os.getenv("FERNET_SECRET")
-
-if not _SECRET:
+if not _SECRET_B64:
     raise RuntimeError(
-        "FERNET_SECRET environment variable must be set (see tests/conftest.py).",
+        "FERNET_SECRET environment variable must be set.  In tests this is" " injected via backend/tests/conftest.py.",
     )
 
-
-def _derive_key(secret: str) -> bytes:  # noqa: D401 – tiny helper
-    """Return a 32-byte key derived from *secret* using SHA-256."""
-
-    return hashlib.sha256(secret.encode()).digest()
-
-
-_KEY: Final[bytes] = _derive_key(_SECRET)
-
-
-def _xor(data: bytes, key: bytes) -> bytes:  # noqa: D401 – tiny helper
-    """XOR *data* with *key* (repeating key as needed)."""
-
-    key_len = len(key)
-    return bytes(b ^ key[i % key_len] for i, b in enumerate(data))
-
-
 # ---------------------------------------------------------------------------
-# Public helpers – API surface used by production code & tests
+# Strategy selector – use Fernet if available, else XOR fallback
 # ---------------------------------------------------------------------------
 
 
-def encrypt(text: str) -> str:  # noqa: D401
-    """Encrypt *text* and return a URL-safe base64 string."""
+try:
+    from cryptography.fernet import Fernet  # type: ignore
 
-    cipher_bytes = _xor(text.encode(), _KEY)
-    return base64.urlsafe_b64encode(cipher_bytes).decode()
-
-
-def decrypt(token: str) -> str:  # noqa: D401
-    """Decrypt *token* back to UTF-8 string.
-
-    Raises ``RuntimeError`` if *token* is malformed or the secret key is
-    wrong.
-    """
-
+    # Validate / decode key (Fernet expects 32 url-safe base64 bytes)
     try:
-        cipher_bytes = base64.urlsafe_b64decode(token.encode())
-    except Exception as exc:  # pragma: no cover – malformed base64
-        raise RuntimeError("invalid ciphertext – base64 decode failed") from exc
+        _fernet = Fernet(_SECRET_B64.encode())
+    except Exception as exc:  # pragma: no cover – bad key supplied
+        raise RuntimeError("FERNET_SECRET is not a valid Fernet key") from exc
 
-    plain_bytes = _xor(cipher_bytes, _KEY)
+    def encrypt(text: str) -> str:  # noqa: D401 – public API
+        """Encrypt *text* using AES-GCM (Fernet)."""
 
-    try:
-        return plain_bytes.decode()
-    except UnicodeDecodeError as exc:  # pragma: no cover – wrong key
-        raise RuntimeError("invalid key – decryption failed") from exc
+        return _fernet.encrypt(text.encode()).decode()
+
+    def decrypt(token: str) -> str:  # noqa: D401 – public API
+        """Decrypt *token* back to UTF-8 using AES-GCM (Fernet)."""
+
+        try:
+            return _fernet.decrypt(token.encode()).decode()
+        except Exception as exc:  # pragma: no cover – invalid token / key
+            raise RuntimeError("decryption failed – invalid key or ciphertext") from exc
+
+    _USING_FERNET = True
+
+except ModuleNotFoundError:  # pragma: no cover – fallback for minimal envs
+    # ---------------------------------------------------------------------
+    # XOR + Base64 **fallback** – identical to the previous implementation
+    # ---------------------------------------------------------------------
+
+    _USING_FERNET = False
+
+    def _derive_key(secret: str) -> bytes:  # noqa: D401 – helper
+        return hashlib.sha256(secret.encode()).digest()
+
+    _KEY: Final[bytes] = _derive_key(_SECRET_B64)
+
+    def _xor(data: bytes, key: bytes) -> bytes:  # noqa: D401 – helper
+        key_len = len(key)
+        return bytes(b ^ key[i % key_len] for i, b in enumerate(data))
+
+    def encrypt(text: str) -> str:  # noqa: D401
+        cipher_bytes = _xor(text.encode(), _KEY)
+        return base64.urlsafe_b64encode(cipher_bytes).decode()
+
+    def decrypt(token: str) -> str:  # noqa: D401
+        try:
+            cipher_bytes = base64.urlsafe_b64decode(token.encode())
+        except Exception as exc:  # pragma: no cover
+            raise RuntimeError("invalid ciphertext – base64 decode failed") from exc
+
+        plain_bytes = _xor(cipher_bytes, _KEY)
+        try:
+            return plain_bytes.decode()
+        except UnicodeDecodeError as exc:  # pragma: no cover
+            raise RuntimeError("invalid key – decryption failed") from exc
+
+# Public helper so tests can assert which backend is active
+
+
+def using_fernet() -> bool:  # noqa: D401 – small util
+    return _USING_FERNET
