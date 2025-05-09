@@ -369,5 +369,7 @@ This section captures the concrete, incremental steps required to surface **Trig
 11. Manual UX pass: dark-mode contrast, clipboard success feedback, error banners.
 
 *Progress tracker:*  
-`[ ]` Phase A  `[ ]` Phase B  `[ ]` Phase C  `[ ]` Phase D  `[ ]` Phase E  `[ ]` Phase F
+`[x]` **Phase A** – data-model & API helpers  
+`[~]` **Phase B** – modal UI (tab skeleton merged; list & wizard WIP)  
+`[ ]` Phase C  `[ ]` Phase D  `[ ]` Phase E  `[ ]` Phase F
 

@@ -18,8 +18,6 @@ use serde_json;
 use rand;
 use chrono;
 use std::collections::HashSet;
-use std::rc::Rc;
-use std::cell::RefCell;
 
 // Bring legacy helper trait into scope so its methods are usable on CanvasNode
 // Legacy helper trait no longer needed after decoupling cleanup.
@@ -547,6 +545,59 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
            
             if let Some(history_tab) = document.get_element_by_id("history-tab") {
                 history_tab.set_class_name("tab-button active");
+            }
+        },
+
+        // -----------------------------------------------------------
+        // NEW: Switch to Triggers tab
+        // -----------------------------------------------------------
+        Message::SwitchToTriggersTab => {
+            let window = web_sys::window().expect("no global window exists");
+            let document = window.document().expect("should have a document");
+
+            // Hide main & history content, show triggers content
+            if let Some(main_content) = document.get_element_by_id("main-content") {
+                let _ = main_content.set_attribute("style", "display: none;");
+            }
+            if let Some(history_content) = document.get_element_by_id("history-content") {
+                let _ = history_content.set_attribute("style", "display: none;");
+            }
+            if let Some(triggers_content) = document.get_element_by_id("triggers-content") {
+                let _ = triggers_content.set_attribute("style", "display: block;");
+            }
+
+            // Update active tab highlighting
+            if let Some(main_tab) = document.get_element_by_id("main-tab") {
+                main_tab.set_class_name("tab-button");
+            }
+            if let Some(history_tab) = document.get_element_by_id("history-tab") {
+                history_tab.set_class_name("tab-button");
+            }
+            if let Some(triggers_tab) = document.get_element_by_id("triggers-tab") {
+                triggers_tab.set_class_name("tab-button active");
+            }
+
+            // Determine agent_id from modal attribute so we can decide whether
+            // to fetch triggers & render list.
+            let agent_id_opt = document
+                .get_element_by_id("agent-modal")
+                .and_then(|m| m.get_attribute("data-agent-id"))
+                .and_then(|s| s.parse::<u32>().ok());
+
+            if let Some(agent_id) = agent_id_opt {
+                // Fetch from backend only if not already loaded.
+                if !state.triggers.contains_key(&agent_id) {
+                    commands.push(Command::FetchTriggers(agent_id));
+                }
+
+                // Always render current state (may be empty placeholder).
+                commands.push(Command::UpdateUI(Box::new(move || {
+                    if let Some(win) = web_sys::window() {
+                        if let Some(doc) = win.document() {
+                            let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
+                        }
+                    }
+                })));
             }
         },
        
@@ -2082,6 +2133,76 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     }
                 })));
             }
+        },
+
+        // -----------------------------------------------------------------
+        // Trigger management (Phase A minimal state sync)
+        // -----------------------------------------------------------------
+
+        Message::LoadTriggers(agent_id) => {
+            // Fire network command – actual update comes via TriggersLoaded.
+            commands.push(Command::FetchTriggers(agent_id));
+        },
+
+        Message::TriggersLoaded { agent_id, triggers } => {
+            state.triggers.insert(agent_id, triggers);
+
+            // If modal is open on Triggers tab, refresh the list (TODO – will
+            // be implemented in Phase B).  For now we simply mark canvas
+            // dirty which is a no-op for modal but keeps behaviour
+            // consistent with other update paths.
+            state.mark_dirty();
+
+            // If triggers tab for this agent is currently visible, re-render.
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        // Check if triggers-content is visible (style display)
+                        if let Some(content) = doc.get_element_by_id("triggers-content") {
+                            if content.get_attribute("style").map(|s| s.contains("display: block")).unwrap_or(false) {
+                                let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
+                            }
+                        }
+                    }
+                }
+            })));
+        },
+
+        Message::TriggerCreated { agent_id, trigger } => {
+            state.triggers.entry(agent_id).or_default().push(trigger);
+            state.mark_dirty();
+
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
+                    }
+                }
+            })));
+        },
+
+        Message::TriggerDeleted { agent_id, trigger_id } => {
+            if let Some(list) = state.triggers.get_mut(&agent_id) {
+                list.retain(|t| t.id != trigger_id);
+            }
+            state.mark_dirty();
+
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
+                    }
+                }
+            })));
+        },
+
+        // UI requested new trigger creation – translate into network command.
+        Message::RequestCreateTrigger { payload_json } => {
+            commands.push(Command::CreateTrigger { payload_json });
+        },
+
+        Message::RequestDeleteTrigger { trigger_id } => {
+            commands.push(Command::DeleteTrigger(trigger_id));
         },
 
         // Toggle compact/full run history view

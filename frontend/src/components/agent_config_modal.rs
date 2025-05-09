@@ -16,6 +16,9 @@ use wasm_bindgen::JsCast;
 
 use crate::state::APP_STATE;
 use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
+use crate::state::dispatch_global_message;
+use crate::models::Trigger;
+use wasm_bindgen::closure::Closure;
 
 /// Thin wrapper around the existing agent configuration modal.  The internal
 /// fields will expand once we fully migrate DOM ownership.
@@ -41,6 +44,58 @@ impl AgentConfigModal {
             if modal.get_attribute("data-listeners-attached").is_none() {
                 Self::attach_listeners(document)?;
                 let _ = modal.set_attribute("data-listeners-attached", "true");
+            }
+
+            // -----------------------------------------------------------------
+            // HOT-FIX: legacy HTML templates might already ship a modal DOM that
+            // predates the new *Triggers* tab.  When such an element exists we
+            // *augment* it in-place so users don’t need to fully clear cache /
+            // hard-refresh.  The check is idempotent – if the tab already
+            // exists we skip all work.
+            // -----------------------------------------------------------------
+
+            if document.get_element_by_id("triggers-tab").is_none() {
+                // Add button next to Main tab (after any History tab if present)
+                if let Some(tab_container) = document.query_selector("#agent-modal .tab-container").ok().flatten() {
+                    let triggers_tab = document.create_element("button")?;
+                    triggers_tab.set_class_name("tab-button");
+                    triggers_tab.set_id("triggers-tab");
+                    triggers_tab.set_inner_html("Triggers");
+                    tab_container.append_child(&triggers_tab)?;
+                }
+
+                // Add content wrapper equivalent to build_dom() variant
+                if document.get_element_by_id("triggers-content").is_none() {
+                    let triggers_content = document.create_element("div")?;
+                    triggers_content.set_class_name("tab-content");
+                    triggers_content.set_id("triggers-content");
+                    triggers_content.set_attribute("style", "display:none;")?;
+
+                    let list_el = document.create_element("ul")?;
+                    list_el.set_id("triggers-list");
+                    list_el.set_class_name("triggers-list");
+                    triggers_content.append_child(&list_el)?;
+
+                    let info_p = document.create_element("p")?;
+                    info_p.set_id("triggers-empty-info");
+                    info_p.set_inner_html("No triggers yet. Click the button below to add one.");
+                    info_p.set_attribute("style", "display:none;")?;
+                    triggers_content.append_child(&info_p)?;
+
+                    let add_trigger_btn = document.create_element("button")?;
+                    add_trigger_btn.set_id("add-trigger-btn");
+                    add_trigger_btn.set_class_name("primary-btn");
+                    add_trigger_btn.set_inner_html("Add Trigger");
+                    triggers_content.append_child(&add_trigger_btn)?;
+
+                    // Append after existing tab-content containers
+                    if let Some(modal_content) = document.query_selector("#agent-modal .modal-content").ok().flatten() {
+                        modal_content.append_child(&triggers_content)?;
+                    }
+                }
+
+                // Newly injected pieces need listeners.
+                Self::attach_listeners(document)?;
             }
         }
         Ok(Self)
@@ -90,13 +145,55 @@ impl AgentConfigModal {
         main_tab.set_id("main-tab");
         main_tab.set_inner_html("Main");
 
+        // --------------------------------------------------------------
+        // NEW: Triggers tab (Phase B – MVP skeleton)
+        // --------------------------------------------------------------
+
+        let triggers_tab = document.create_element("button")?;
+        triggers_tab.set_class_name("tab-button");
+        triggers_tab.set_id("triggers-tab");
+        triggers_tab.set_inner_html("Triggers");
+
 
         tab_container.append_child(&main_tab)?;
+        tab_container.append_child(&triggers_tab)?;
 
         // Main content
         let main_content = document.create_element("div")?;
         main_content.set_class_name("tab-content");
         main_content.set_id("main-content");
+
+        // --------------------------------------------------------------
+        // Triggers content wrapper (hidden by default)
+        // --------------------------------------------------------------
+
+        let triggers_content = document.create_element("div")?;
+        triggers_content.set_class_name("tab-content");
+        triggers_content.set_id("triggers-content");
+        // Hidden until the user clicks the tab button.
+        triggers_content.set_attribute("style", "display:none;")?;
+
+        // Placeholder message while we build out the real UI – avoids an
+        // empty pane.
+        // List container – populated dynamically by `render_triggers_list()`.
+        let list_el = document.create_element("ul")?;
+        list_el.set_id("triggers-list");
+        list_el.set_class_name("triggers-list");
+        triggers_content.append_child(&list_el)?;
+
+        // Inline info paragraph (updated dynamically depending on list).
+        let info_p = document.create_element("p")?;
+        info_p.set_id("triggers-empty-info");
+        info_p.set_inner_html("No triggers yet. Click the button below to add one.");
+        info_p.set_attribute("style", "display:none;")?;
+        triggers_content.append_child(&info_p)?;
+
+        // Add Trigger button
+        let add_trigger_btn = document.create_element("button")?;
+        add_trigger_btn.set_id("add-trigger-btn");
+        add_trigger_btn.set_class_name("primary-btn");
+        add_trigger_btn.set_inner_html("Add Trigger");
+        triggers_content.append_child(&add_trigger_btn)?;
 
         // --- Agent name ---
         let name_label = document.create_element("label")?;
@@ -290,6 +387,11 @@ impl AgentConfigModal {
         // Append schedule container to main_content
         main_content.append_child(&sched_container)?;
 
+        // --------------------------------------------------------------
+        // Final assembly – add both tab contents to modal
+        // --------------------------------------------------------------
+
+
 
         // --- Buttons ---
         let button_container = document.create_element("div")?;
@@ -305,6 +407,7 @@ impl AgentConfigModal {
         modal_content.append_child(&modal_header)?;
         modal_content.append_child(&tab_container)?;
         modal_content.append_child(&main_content)?;
+        modal_content.append_child(&triggers_content)?;
         modal_content.append_child(&button_container)?;
 
         modal.append_child(&modal_content)?;
@@ -367,24 +470,70 @@ impl AgentConfigModal {
             cb.forget();
         }
 
-        // Tab switching – simple class toggle
-        if let (Some(main_tab), Some(history_tab)) = (
-            document.get_element_by_id("main-tab"),
-            document.get_element_by_id("history-tab"),
-        ) {
-            // Main
+        // Tab switching – simple class toggle (Main, History, Triggers)
+        if let Some(main_tab) = document.get_element_by_id("main-tab") {
             let cb_main = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SwitchToMainTab);
             }));
             main_tab.add_event_listener_with_callback("click", cb_main.as_ref().unchecked_ref())?;
             cb_main.forget();
+        }
 
-            // History
+        if let Some(history_tab) = document.get_element_by_id("history-tab") {
             let cb_hist = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SwitchToHistoryTab);
             }));
             history_tab.add_event_listener_with_callback("click", cb_hist.as_ref().unchecked_ref())?;
             cb_hist.forget();
+        }
+
+        if let Some(triggers_tab) = document.get_element_by_id("triggers-tab") {
+            let cb_trg = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+                dispatch(crate::messages::Message::SwitchToTriggersTab);
+            }));
+            triggers_tab.add_event_listener_with_callback("click", cb_trg.as_ref().unchecked_ref())?;
+            cb_trg.forget();
+        }
+
+        // --------------------
+        // Add Trigger button
+        // --------------------
+        if let Some(add_btn) = document.get_element_by_id("add-trigger-btn") {
+            // We will prompt the user for trigger type (simple prompt) –
+            // future iterations can open a proper modal.
+            let cb_add = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+                // Obtain agent_id from the modal root attribute.
+                let window = web_sys::window().expect("window");
+                let document = window.document().expect("document");
+                if let Some(modal) = document.get_element_by_id("agent-modal") {
+                    if let Some(agent_id_str) = modal.get_attribute("data-agent-id") {
+                        if let Ok(agent_id) = agent_id_str.parse::<u32>() {
+                            // Very naive type selection – prompt().
+                            let trigger_type = window
+                                .prompt_with_message_and_default("Enter trigger type (webhook):", "webhook")
+                                .unwrap_or(None)
+                                .unwrap_or_else(|| "webhook".to_string());
+
+                            if trigger_type.trim().is_empty() {
+                                return;
+                            }
+
+                            // Construct payload JSON.
+                            let payload_json = if trigger_type == "webhook" {
+                                format!("{{\"agent_id\": {}, \"type\": \"webhook\"}}", agent_id)
+                            } else {
+                                // For unsupported types show alert and abort.
+                                let _ = window.alert_with_message("Unsupported trigger type – only 'webhook' is implemented yet.");
+                                return;
+                            };
+
+                            dispatch(crate::messages::Message::RequestCreateTrigger { payload_json });
+                        }
+                    }
+                }
+            }));
+            add_btn.add_event_listener_with_callback("click", cb_add.as_ref().unchecked_ref())?;
+            cb_add.forget();
         }
 
         // Save
@@ -1003,4 +1152,93 @@ impl AgentConfigModal {
         }
         Ok(())
     }
+}
+
+// -----------------------------------------------------------------------------
+// Public helpers – trigger list rendering & interactivity
+// -----------------------------------------------------------------------------
+
+/// Re-render the `<ul id="triggers-list">` element for the given agent.
+/// The function is idempotent – the list is cleared on every call so we can
+/// safely call after every state change.  It attaches new event listeners for
+/// copy / delete buttons on each row.
+pub fn render_triggers_list(document: &Document, agent_id: u32) -> Result<(), JsValue> {
+    use wasm_bindgen::JsCast;
+
+    // Resolve list element.
+    let list_el = match document.get_element_by_id("triggers-list") {
+        Some(el) => el,
+        None => return Ok(()), // Not visible (tab closed)
+    };
+
+    // Fetch triggers for this agent from global state.
+    let triggers: Vec<Trigger> = APP_STATE.with(|state_rc| {
+        state_rc
+            .borrow()
+            .triggers
+            .get(&agent_id)
+            .cloned()
+            .unwrap_or_default()
+    });
+
+    // Toggle info paragraph.
+    if let Some(info_p) = document.get_element_by_id("triggers-empty-info") {
+        if triggers.is_empty() {
+            let _ = info_p.set_attribute("style", "display:block;color:#777;margin-bottom:8px;");
+        } else {
+            let _ = info_p.set_attribute("style", "display:none;");
+        }
+    }
+
+    // Clear current list.
+    list_el.set_inner_html("");
+
+    for trig in triggers.iter() {
+        // <li class="trigger-item">
+        let li = document.create_element("li")?;
+        li.set_class_name("trigger-item");
+        li.set_attribute("data-trigger-id", &trig.id.to_string())?;
+
+        // Type badge
+        let badge = document.create_element("span")?;
+        badge.set_class_name("trigger-type-badge");
+        badge.set_inner_html(match trig.r#type.as_str() {
+            "webhook" => "Webhook",
+            "email" => "Email",
+            other => other,
+        });
+        li.append_child(&badge)?;
+
+        // Secret code (click to copy as well)
+        let secret_code = document.create_element("code")?;
+        secret_code.set_class_name("trigger-secret");
+        secret_code.set_inner_html(&trig.secret);
+        li.append_child(&secret_code)?;
+
+        // Show secret in a <code> element – user can manually select & copy.
+
+        // Delete (trash) button
+        let del_btn = document.create_element("button")?;
+        del_btn.set_class_name("delete-trigger-btn");
+        del_btn.set_inner_html("🗑");
+
+        {
+            let trig_id = trig.id;
+            let cb_del = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+                let win = web_sys::window().expect("window");
+                if win.confirm_with_message("Delete this trigger?").unwrap_or(false) {
+                    dispatch_global_message(crate::messages::Message::RequestDeleteTrigger { trigger_id: trig_id });
+                    // The UI will refresh via TriggerDeleted handler.
+                }
+            }));
+            del_btn.add_event_listener_with_callback("click", cb_del.as_ref().unchecked_ref())?;
+            cb_del.forget();
+        }
+
+        li.append_child(&del_btn)?;
+
+        list_el.append_child(&li)?;
+    }
+
+    Ok(())
 }
