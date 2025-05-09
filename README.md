@@ -23,6 +23,7 @@ Agent Platform is a full-stack application combining a Rust + WebAssembly (WASM)
 13. [How It Works](#how-it-works)  
 14. [Extending the Project & Future Plans](#extending-the-project--future-plans)  
 15. [Testing & Verification](#testing--verification)  
+16. [Authentication](#authentication)  
 
 --------------------------------------------------------------------------------
 ## Overview
@@ -90,6 +91,10 @@ Here's the minimal set of commands to get Agent Platform running locally:
 
 ### Authentication (new as of May 2025)
 
+(A concise overview is given here – a more detailed explanation of the Google
+Sign-In flow, JWT minting and the `AUTH_DISABLED` dev shortcut is available in
+[`docs/auth_overview.md`](docs/auth_overview.md).)
+
 The platform now ships a *Google Sign-In* authentication layer.
 
 * **Local development** – leave `AUTH_DISABLED=1` (default in `.env.example`).  The backend injects a deterministic `dev@local` user so the UI skips the login overlay.
@@ -130,6 +135,29 @@ The platform now ships a *Google Sign-In* authentication layer.
 Visit http://localhost:8002 to see the UI.  
 
 **Note for new developers:** Agents are scheduled if their `schedule` field is set (as a CRON string). There is no separate boolean flag for scheduling.
+
+-------------------------------------------------------------------------------
+## Authentication
+
+The platform uses **Google Sign-In** for production deployments but offers a
+"no-questions-asked" local-dev mode:
+
+1. **Production / staging** – set the three required secrets:
+   ```bash
+   GOOGLE_CLIENT_ID="your-oauth-client.apps.googleusercontent.com"
+   JWT_SECRET="change-this-to-a-long-random-string"
+   TRIGGER_SIGNING_SECRET="hex-string"          # only needed if you use triggers
+   ```
+   On first load the SPA shows a Google button.  After sign-in the backend
+   issues a **30-minute JWT** which the browser stores in `localStorage` and
+   forwards on every REST & WebSocket request.
+
+2. **Local development** – leave `AUTH_DISABLED=1` (default in `.env.example`).
+   The backend injects a deterministic `dev@local` user so the UI skips the
+   overlay and all tests run without mocking auth.
+
+For a deeper dive (token flow diagrams, code pointers, CLI cheat-sheet) see
+[`docs/auth_overview.md`](docs/auth_overview.md).
 
 --------------------------------------------------------------------------------
 ## Architecture Overview
