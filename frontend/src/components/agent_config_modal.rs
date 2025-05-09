@@ -49,7 +49,7 @@ impl AgentConfigModal {
             // -----------------------------------------------------------------
             // HOT-FIX: legacy HTML templates might already ship a modal DOM that
             // predates the new *Triggers* tab.  When such an element exists we
-            // *augment* it in-place so users don’t need to fully clear cache /
+            // *augment* it in-place so users don't need to fully clear cache /
             // hard-refresh.  The check is idempotent – if the tab already
             // exists we skip all work.
             // -----------------------------------------------------------------
@@ -71,22 +71,65 @@ impl AgentConfigModal {
                     triggers_content.set_id("triggers-content");
                     triggers_content.set_attribute("style", "display:none;")?;
 
-                    let list_el = document.create_element("ul")?;
-                    list_el.set_id("triggers-list");
-                    list_el.set_class_name("triggers-list");
-                    triggers_content.append_child(&list_el)?;
-
-                    let info_p = document.create_element("p")?;
-                    info_p.set_id("triggers-empty-info");
-                    info_p.set_inner_html("No triggers yet. Click the button below to add one.");
-                    info_p.set_attribute("style", "display:none;")?;
-                    triggers_content.append_child(&info_p)?;
-
+                    // ----- empty wrapper with CTA -----
+                    let empty_div = document.create_element("div")?;
+                    empty_div.set_id("triggers-empty");
+                    let p = document.create_element("p")?;
+                    p.set_inner_html("Connect external events to your agent – create a trigger to get started.");
+                    empty_div.append_child(&p)?;
                     let add_trigger_btn = document.create_element("button")?;
                     add_trigger_btn.set_id("add-trigger-btn");
-                    add_trigger_btn.set_class_name("primary-btn");
+                    add_trigger_btn.set_class_name("btn-primary");
                     add_trigger_btn.set_inner_html("Add Trigger");
-                    triggers_content.append_child(&add_trigger_btn)?;
+                    empty_div.append_child(&add_trigger_btn)?;
+                    triggers_content.append_child(&empty_div)?;
+
+                    // ----- form card (hidden) -----
+                    let form_card = document.create_element("div")?;
+                    form_card.set_id("add-trigger-form");
+                    form_card.set_class_name("card");
+                    form_card.set_attribute("style", "display:none;padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
+
+                    let lbl = document.create_element("label")?;
+                    lbl.set_inner_html("Type");
+                    lbl.set_attribute("for", "trigger-type-select")?;
+                    form_card.append_child(&lbl)?;
+
+                    let sel = document.create_element("select")?;
+                    sel.set_id("trigger-type-select");
+                    sel.set_class_name("input-select");
+                    let opt1 = document.create_element("option")?;
+                    opt1.set_attribute("value", "webhook")?;
+                    opt1.set_inner_html("Webhook – send POST requests");
+                    sel.append_child(&opt1)?;
+                    let opt2 = document.create_element("option")?;
+                    opt2.set_attribute("value", "email:gmail")?;
+                    opt2.set_inner_html("Email (Gmail) – coming soon…");
+                    opt2.set_attribute("disabled", "true")?;
+                    sel.append_child(&opt2)?;
+                    form_card.append_child(&sel)?;
+
+                    let act = document.create_element("div")?;
+                    act.set_attribute("style", "margin-top:12px;display:flex;gap:8px;")?;
+                    let cancel_btn = document.create_element("button")?;
+                    cancel_btn.set_id("cancel-add-trigger");
+                    cancel_btn.set_class_name("btn");
+                    cancel_btn.set_inner_html("Cancel");
+                    act.append_child(&cancel_btn)?;
+                    let create_btn = document.create_element("button")?;
+                    create_btn.set_id("create-trigger");
+                    create_btn.set_class_name("btn-primary");
+                    create_btn.set_inner_html("Create Trigger");
+                    act.append_child(&create_btn)?;
+                    form_card.append_child(&act)?;
+                    triggers_content.append_child(&form_card)?;
+
+                    // ----- list -----
+                    let list_ul = document.create_element("ul")?;
+                    list_ul.set_id("triggers-list");
+                    list_ul.set_class_name("triggers-list");
+                    list_ul.set_attribute("style", "margin-top:12px;")?;
+                    triggers_content.append_child(&list_ul)?;
 
                     // Append after existing tab-content containers
                     if let Some(modal_content) = document.query_selector("#agent-modal .modal-content").ok().flatten() {
@@ -175,25 +218,89 @@ impl AgentConfigModal {
 
         // Placeholder message while we build out the real UI – avoids an
         // empty pane.
-        // List container – populated dynamically by `render_triggers_list()`.
+        // -----------------------------------------------------------------
+        // Empty-state wrapper with CTA button
+        // -----------------------------------------------------------------
+
+        let empty_wrapper = document.create_element("div")?;
+        empty_wrapper.set_id("triggers-empty");
+
+        let empty_p = document.create_element("p")?;
+        empty_p.set_inner_html("Connect external events to your agent – create a trigger to get started.");
+        empty_wrapper.append_child(&empty_p)?;
+
+        let add_trigger_btn = document.create_element("button")?;
+        add_trigger_btn.set_id("add-trigger-btn");
+        add_trigger_btn.set_class_name("btn-primary");
+        add_trigger_btn.set_inner_html("Add Trigger");
+        empty_wrapper.append_child(&add_trigger_btn)?;
+
+        triggers_content.append_child(&empty_wrapper)?;
+
+        // -----------------------------------------------------------------
+        // Inline *Add Trigger* form (hidden until CTA clicked)
+        // -----------------------------------------------------------------
+
+        let form_card = document.create_element("div")?;
+        form_card.set_id("add-trigger-form");
+        form_card.set_class_name("card");
+        form_card.set_attribute("style", "display:none;padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
+
+        // Type label + select
+        let type_label = document.create_element("label")?;
+        type_label.set_inner_html("Type");
+        type_label.set_attribute("for", "trigger-type-select")?;
+
+        let type_select = document.create_element("select")?;
+        type_select.set_id("trigger-type-select");
+        type_select.set_class_name("input-select");
+
+        // Option – webhook (enabled)
+        let opt_webhook = document.create_element("option")?;
+        opt_webhook.set_attribute("value", "webhook")?;
+        opt_webhook.set_inner_html("Webhook – send POST requests");
+        type_select.append_child(&opt_webhook)?;
+
+        // Option – email:gmail (disabled for now)
+        let opt_gmail = document.create_element("option")?;
+        opt_gmail.set_attribute("value", "email:gmail")?;
+        opt_gmail.set_inner_html("Email (Gmail) – coming soon…");
+        opt_gmail.set_attribute("disabled", "true")?;
+        type_select.append_child(&opt_gmail)?;
+
+        form_card.append_child(&type_label)?;
+        form_card.append_child(&type_select)?;
+
+        // Actions row
+        let actions_div = document.create_element("div")?;
+        actions_div.set_class_name("actions-row");
+        actions_div.set_attribute("style", "margin-top:12px;display:flex;gap:8px;")?;
+
+        let cancel_btn = document.create_element("button")?;
+        cancel_btn.set_id("cancel-add-trigger");
+        cancel_btn.set_class_name("btn");
+        cancel_btn.set_inner_html("Cancel");
+
+        let create_btn = document.create_element("button")?;
+        create_btn.set_id("create-trigger");
+        create_btn.set_class_name("btn-primary");
+        create_btn.set_inner_html("Create Trigger");
+
+        actions_div.append_child(&cancel_btn)?;
+        actions_div.append_child(&create_btn)?;
+        form_card.append_child(&actions_div)?;
+
+        triggers_content.append_child(&form_card)?;
+
+        // -----------------------------------------------------------------
+        // Triggers list – populated dynamically
+        // -----------------------------------------------------------------
+
         let list_el = document.create_element("ul")?;
         list_el.set_id("triggers-list");
         list_el.set_class_name("triggers-list");
+        list_el.set_attribute("style", "margin-top:12px;")?;
         triggers_content.append_child(&list_el)?;
-
-        // Inline info paragraph (updated dynamically depending on list).
-        let info_p = document.create_element("p")?;
-        info_p.set_id("triggers-empty-info");
-        info_p.set_inner_html("No triggers yet. Click the button below to add one.");
-        info_p.set_attribute("style", "display:none;")?;
-        triggers_content.append_child(&info_p)?;
-
-        // Add Trigger button
-        let add_trigger_btn = document.create_element("button")?;
-        add_trigger_btn.set_id("add-trigger-btn");
-        add_trigger_btn.set_class_name("primary-btn");
-        add_trigger_btn.set_inner_html("Add Trigger");
-        triggers_content.append_child(&add_trigger_btn)?;
 
         // --- Agent name ---
         let name_label = document.create_element("label")?;
@@ -463,7 +570,7 @@ impl AgentConfigModal {
 
         // Close (×) button
         if let Some(btn) = document.get_element_by_id("modal-close") {
-            let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+            let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::CloseAgentModal);
             }));
             btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
@@ -472,7 +579,7 @@ impl AgentConfigModal {
 
         // Tab switching – simple class toggle (Main, History, Triggers)
         if let Some(main_tab) = document.get_element_by_id("main-tab") {
-            let cb_main = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+            let cb_main = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SwitchToMainTab);
             }));
             main_tab.add_event_listener_with_callback("click", cb_main.as_ref().unchecked_ref())?;
@@ -480,7 +587,7 @@ impl AgentConfigModal {
         }
 
         if let Some(history_tab) = document.get_element_by_id("history-tab") {
-            let cb_hist = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+            let cb_hist = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SwitchToHistoryTab);
             }));
             history_tab.add_event_listener_with_callback("click", cb_hist.as_ref().unchecked_ref())?;
@@ -488,57 +595,89 @@ impl AgentConfigModal {
         }
 
         if let Some(triggers_tab) = document.get_element_by_id("triggers-tab") {
-            let cb_trg = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+            let cb_trg = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SwitchToTriggersTab);
             }));
             triggers_tab.add_event_listener_with_callback("click", cb_trg.as_ref().unchecked_ref())?;
             cb_trg.forget();
         }
 
-        // --------------------
-        // Add Trigger button
-        // --------------------
+        // -------- Add Trigger flow UI ----------
+        // Show form
         if let Some(add_btn) = document.get_element_by_id("add-trigger-btn") {
-            // We will prompt the user for trigger type (simple prompt) –
-            // future iterations can open a proper modal.
-            let cb_add = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
-                // Obtain agent_id from the modal root attribute.
-                let window = web_sys::window().expect("window");
-                let document = window.document().expect("document");
-                if let Some(modal) = document.get_element_by_id("agent-modal") {
-                    if let Some(agent_id_str) = modal.get_attribute("data-agent-id") {
-                        if let Ok(agent_id) = agent_id_str.parse::<u32>() {
-                            // Very naive type selection – prompt().
-                            let trigger_type = window
-                                .prompt_with_message_and_default("Enter trigger type (webhook):", "webhook")
-                                .unwrap_or(None)
-                                .unwrap_or_else(|| "webhook".to_string());
-
-                            if trigger_type.trim().is_empty() {
-                                return;
-                            }
-
-                            // Construct payload JSON.
-                            let payload_json = if trigger_type == "webhook" {
-                                format!("{{\"agent_id\": {}, \"type\": \"webhook\"}}", agent_id)
-                            } else {
-                                // For unsupported types show alert and abort.
-                                let _ = window.alert_with_message("Unsupported trigger type – only 'webhook' is implemented yet.");
-                                return;
-                            };
-
-                            dispatch(crate::messages::Message::RequestCreateTrigger { payload_json });
-                        }
+            let cb_show = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    if let Some(empty_div) = doc.get_element_by_id("triggers-empty") {
+                        let _ = empty_div.set_attribute("style", "display:none;");
+                    }
+                    if let Some(form) = doc.get_element_by_id("add-trigger-form") {
+                        let _ = form.set_attribute("style", "display:block;padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;");
                     }
                 }
             }));
-            add_btn.add_event_listener_with_callback("click", cb_add.as_ref().unchecked_ref())?;
-            cb_add.forget();
+            add_btn.add_event_listener_with_callback("click", cb_show.as_ref().unchecked_ref())?;
+            cb_show.forget();
         }
+
+        // Cancel form
+        if let Some(cancel_btn) = document.get_element_by_id("cancel-add-trigger") {
+            let cb_cancel = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    if let Some(form) = doc.get_element_by_id("add-trigger-form") {
+                        let _ = form.set_attribute("style", "display:none;");
+                    }
+                    if let Some(empty_div) = doc.get_element_by_id("triggers-empty") {
+                        let _ = empty_div.set_attribute("style", "display:block;");
+                    }
+                }
+            }));
+            cancel_btn.add_event_listener_with_callback("click", cb_cancel.as_ref().unchecked_ref())?;
+            cb_cancel.forget();
+        }
+
+        // Create trigger
+        if let Some(create_btn) = document.get_element_by_id("create-trigger") {
+            let cb_create = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    // Determine agent_id
+                    let agent_id_opt = doc.get_element_by_id("agent-modal")
+                        .and_then(|m| m.get_attribute("data-agent-id"))
+                        .and_then(|s| s.parse::<u32>().ok());
+                    if agent_id_opt.is_none() { return; }
+                    let agent_id = agent_id_opt.unwrap();
+
+                    // Read type value
+                    let type_value = doc.get_element_by_id("trigger-type-select")
+                        .and_then(|e| e.dyn_into::<web_sys::HtmlSelectElement>().ok())
+                        .map(|sel| sel.value())
+                        .unwrap_or_else(|| "webhook".to_string());
+
+                    if type_value == "email:gmail" {
+                        // Gmail triggers not yet supported – ignore click.
+                        return;
+                    }
+
+                    let payload_json = format!("{{\"agent_id\": {}, \"type\": \"{}\"}}", agent_id, type_value);
+                    dispatch_global_message(crate::messages::Message::RequestCreateTrigger { payload_json });
+
+                    // Hide form, show empty again – list will refresh on success
+                    if let Some(form) = doc.get_element_by_id("add-trigger-form") {
+                        let _ = form.set_attribute("style", "display:none;");
+                    }
+                    if let Some(empty_div) = doc.get_element_by_id("triggers-empty") {
+                        let _ = empty_div.set_attribute("style", "display:block;");
+                    }
+                }
+            }));
+            create_btn.add_event_listener_with_callback("click", cb_create.as_ref().unchecked_ref())?;
+            cb_create.forget();
+        }
+
+        // Legacy prompt-based handler removed.
 
         // Save
         if let Some(save_btn) = document.get_element_by_id("save-agent") {
-            let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+            let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 let window = web_sys::window().unwrap();
                 let document = window.document().unwrap();
 
@@ -685,7 +824,7 @@ impl AgentConfigModal {
 
         // Send task
         if let Some(send_btn) = document.get_element_by_id("send-task") {
-            let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+            let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SendTaskToAgent);
             }));
             send_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
@@ -845,7 +984,7 @@ impl AgentConfigModal {
             if let Ok(freq_select) = freq_sel.dyn_into::<HtmlSelectElement>() {
                 let doc_clone = document.clone();
                 let select_for_listener = freq_select.clone();
-                let cb = WasmClosure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+            let cb = WasmClosure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                     let val = select_for_listener.value();
                     toggle_inputs(&val, &doc_clone);
                     update_summary(&doc_clone);
@@ -866,7 +1005,7 @@ impl AgentConfigModal {
         for id in &input_ids {
             if let Some(inp) = document.get_element_by_id(id) {
                 let doc_clone = document.clone();
-                let cb = WasmClosure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+                let cb = WasmClosure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                     update_summary(&doc_clone);
                 }));
                 inp.add_event_listener_with_callback("input", cb.as_ref().unchecked_ref())?;
@@ -1181,13 +1320,9 @@ pub fn render_triggers_list(document: &Document, agent_id: u32) -> Result<(), Js
             .unwrap_or_default()
     });
 
-    // Toggle info paragraph.
-    if let Some(info_p) = document.get_element_by_id("triggers-empty-info") {
-        if triggers.is_empty() {
-            let _ = info_p.set_attribute("style", "display:block;color:#777;margin-bottom:8px;");
-        } else {
-            let _ = info_p.set_attribute("style", "display:none;");
-        }
+    // Toggle empty wrapper visibility
+    if let Some(empty_div) = document.get_element_by_id("triggers-empty") {
+        let _ = empty_div.set_attribute("style", if triggers.is_empty() { "display:block;" } else { "display:none;" });
     }
 
     // Clear current list.
@@ -1224,12 +1359,8 @@ pub fn render_triggers_list(document: &Document, agent_id: u32) -> Result<(), Js
 
         {
             let trig_id = trig.id;
-            let cb_del = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
-                let win = web_sys::window().expect("window");
-                if win.confirm_with_message("Delete this trigger?").unwrap_or(false) {
-                    dispatch_global_message(crate::messages::Message::RequestDeleteTrigger { trigger_id: trig_id });
-                    // The UI will refresh via TriggerDeleted handler.
-                }
+            let cb_del = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+                dispatch_global_message(crate::messages::Message::RequestDeleteTrigger { trigger_id: trig_id });
             }));
             del_btn.add_event_listener_with_callback("click", cb_del.as_ref().unchecked_ref())?;
             cb_del.forget();

@@ -316,6 +316,16 @@ refresh-token is ready for the trigger service.
 
 ### Phase 5 – Docs & Examples
 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+## Lessons learned from Phase B (UI spike)
+
+1. **Never use native browser dialogs** (`alert / confirm / prompt`) inside the modal flow – they freeze the event loop and look off-brand.  All confirmations/input should be handled by in-app elements.  
+2. **Runtime DOM patching** proved valuable: users might still have an old modal HTML snippet in localStorage; injecting the new Triggers tab at runtime avoided cache-clear support tickets.  
+3. **Utility classes > new CSS** – by re-using existing `btn-primary`, `card`, `input-select` we shipped a visually consistent pane with zero CSS additions.  
+4. **Inline wizard > full modal** – the small inline “Add Trigger” card reduced context switching and performed better on narrow tablet viewports.
+
+
 – Update README, write `docs/triggers_email.md` example walk-through.
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -368,8 +378,9 @@ This section captures the concrete, incremental steps required to surface **Trig
 10. WASM tests: Trigger (de)serialisation, modal Msg dispatch.
 11. Manual UX pass: dark-mode contrast, clipboard success feedback, error banners.
 
-*Progress tracker:*  
+*Progress tracker (updated 2025-05-10):*  
 `[x]` **Phase A** – data-model & API helpers  
-`[~]` **Phase B** – modal UI (tab skeleton merged; list & wizard WIP)  
-`[ ]` Phase C  `[ ]` Phase D  `[ ]` Phase E  `[ ]` Phase F
+`[x]` **Phase B** – modal UI (Triggers tab, list, Add Trigger wizard, basic CRUD)  
+`[ ]` **Phase C** – Gmail connect + email trigger enable  
+`[ ]` Phase D  `[ ]` Phase E  `[ ]` Phase F
 
