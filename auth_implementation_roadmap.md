@@ -74,7 +74,8 @@ Stage 4 – Front-end integration
 | 4.11 | Logout flow (clear token, show overlay, close WS)                    | frontend | [x] |
 | 4.12 | JWT expiry / 401 handling → automatic re-login (refresh TBD)         | frontend / backend | [x] |
 | 4.13 | Replace `eval()` glue with safe JS interop (CSP-friendly)             | `frontend/src/components/auth.rs` | [x] |
-| 4.14 | Build-time injection of `GOOGLE_CLIENT_ID` via env! macro            | build scripts | [x] |
+| 4.14 | Provide `GOOGLE_CLIENT_ID` to the frontend                           | runtime fetch via `/api/system/info` | [x] |
+|      | (final impl switched from compile-time `env!` to runtime flags)      |               |     |
 
 -------------------------------------------------------------------------------
 Stage 5 – Trigger hardening (HMAC header)
@@ -91,17 +92,11 @@ Stage 5 – Trigger hardening (HMAC header)
 > traffic, and webhook triggers are protected via HMAC-SHA256 with a
 > ±5-minute replay window.
 >
-> **Remaining scope before we can call the Auth MVP *done*:**
->
-> • **Stage 6** – add backend auth unit/integration tests (items 6.1-6.3).
-> • **Stage 6** – ✅ **completed** (tests merged 2025-05-07)
-> • **Stage 7** – docs & housekeeping (README, ops security note, pre-commit) – *next up*.
->
-> **Future hardening idea** (post-MVP): the WebSocket endpoint currently
-> accepts the connection *before* validating the `token` query-parameter. We
-> should consider a *Stage 8* that calls `get_current_user()` inside
-> `routers/websocket.py` and closes unauthenticated clients with close-code
-> **4401**.
+> **Current status (2025-05-09)**
+
+• Stage 6 tests are merged and green ✅  
+• **Stage 7** – README quick-start (**7.1 ✅**) and security-ops note (**7.2 ✅**) are done; Ruff/pre-commit housekeeping (7.3) still open.  
+• **Stage 8** – front-end token param handled (**8.3 ✅**); backend validation (8.1 / 8.2) and tests (8.4) still pending.
 
 -------------------------------------------------------------------------------
 Stage 6 – Tests & quality gates
@@ -118,9 +113,19 @@ Stage 7 – Docs & housekeeping
 -------------------------------------------------------------------------------
 | # | Task | Code Location | Status |
 |---|------|---------------|--------|
-| 7.1 | Update **README.md** quick-start (mention Google sign-in & bypass)    | `README.md` | [ ] |
-| 7.2 | Add security note to `ops_roadmap.md` → “Phase A shipped”             | `ops_roadmap.md` | [ ] |
+| 7.1 | Update **README.md** quick-start (mention Google sign-in & bypass)    | `README.md` | [x] |
+| 7.2 | Add security note to `docs/auth_overview.md` → “Phase A shipped”      | `docs/auth_overview.md` | [x] |
 | 7.3 | Verify `pre-commit` passes & bump `ruff.toml` exclude list if needed  | repo root | [ ] |
+
+-------------------------------------------------------------------------------
+Stage 8 – WebSocket auth hardening *(post-MVP)*
+-------------------------------------------------------------------------------
+| # | Task | Code Location | Status |
+|---|------|---------------|--------|
+| 8.1 | Validate `token` query-param in `routers/websocket.py` *before* `accept()` | `backend/zerg/routers/websocket.py` | [ ] |
+| 8.2 | Close unauthenticated clients with close-code **4401**                 | same | [ ] |
+| 8.3 | Ensure frontend always appends `?token=<jwt>`                          | `frontend/src/network/ws_client_v2.rs` | [x] |
+| 8.4 | Add tests for accepted / rejected WS connections                       | `backend/tests/test_websocket_auth.py` | [ ] |
 
 -------------------------------------------------------------------------------
 Appendix – Dev user helper
