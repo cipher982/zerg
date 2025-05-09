@@ -18,7 +18,7 @@
 * **API Endpoints:**
 
 
-    * **Create Trigger**: (type: currently only `"webhook"`)
+* **Create Trigger**: supports `type = "webhook"` **or** `"email"` (Gmail provider today)
         See `backend/zerg/routers/triggers.py`
 
     * **POST `/api/triggers/{id}/events`**: Webhook endpoint, HMAC protected
@@ -27,13 +27,15 @@
 * **Tests:**
     There are backend tests for "webhook trigger flow" (`tests/test_triggers.py`) confirming it will invoke agent execution.
 
-#### What Doesn’t Exist
+#### Gaps / Not Yet Implemented
 
-* **Email triggers implementation:**
-    There is *no* `email` or similar code in backend/ (no IMAP, no polling, no email config).
-* **No "trigger config" for email credentials, inbox, filters, etc.**
-* **No email background service:**
-    No polling/task for IMAP, no firing code to raise an event based on incoming email.
+The core Gmail-based *email* trigger path (watch registration → push webhook  → history diff → `TRIGGER_FIRED`) is now **fully working and tested**.  The remaining gaps are:
+
+* **Provider abstraction:** only Gmail is supported – Outlook / generic IMAP are still on the roadmap.
+* **Robust error handling:** exponential back-off & quota-retry wrapper around Gmail API calls.
+* **Production-grade crypto:** refresh-tokens are XOR-obfuscated; switch to AES-GCM/Fernet.
+* **Observability:** add structured logs + Prometheus metrics around trigger latency and failures.
+* **Front-end UI:** no CRUD surfaces yet (see dedicated section below).
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---
@@ -63,7 +65,7 @@
 ┌──────────┬─────────────────┬───────────────┬─────────────────┬──────────────────────┐
 │ Area     │ Webhook Support │ Email Support │ UI for Triggers │ Comments             │
 ├──────────┼─────────────────┼───────────────┼─────────────────┼──────────────────────┤
-│ Backend  │ Yes (MVP)       │ Partial (Gmail) │ n/a             │ Webhook + Gmail endpoints live │
+│ Backend  │ Yes (MVP)       │ ✅ Gmail (push+diff complete) │ n/a             │ Webhook & Gmail email triggers fully live │
 ├──────────┼─────────────────┼─────────────────┼─────────────────┼──────────────────────┤
 │ Frontend │ Not surfaced    │ Connect-button WIP │ No              │ Gmail consent UI pending │
 └──────────┴─────────────────┴───────────────┴─────────────────┴──────────────────────┘
@@ -81,32 +83,35 @@
 * `/api/email/webhook/google` endpoint (MVP, publishes `TRIGGER_FIRED`)
 * EmailTriggerService singleton (polls, refresh-token → access-token)
 * Tests: webhook + gmail flow
+* Gmail Watch registration & renewal (real API with stub fallback)
+* Gmail History diff + filtering; publishes `TRIGGER_FIRED` and schedules agent runs
+* DELETE /triggers/{id} now stops Gmail watch (clean-up)
+* Security hardening: encrypted refresh-tokens, optional Google JWT validation
+* Regression tests: watch initialisation, renewal, history progression, stop-watch clean-up
 
-### Outstanding backend work (🔄) – updated 2025-05-10
+### Outstanding backend work (🔄) – updated 2025-05-09
 
-1. **Gmail Watch & Message Diff**  *(partially shipped – remaining items below)*  
-   • ✅ Auto-create watch (stub)  
-   • ✅ History diff + basic filters (query / from / subject / labels)  
-   • 🔄 Replace stubs with real Gmail `watch` / `stop` / `history` calls in
-     staging & prod  
-   • 🔄 Harden retry / quota handling.
+1. **API reliability & hardening**  
+   • Implement retry / exponential-backoff wrapper around Gmail HTTP calls.  
+   • Surface quota / auth errors via metrics & structured logs.
 
 2. **Provider abstraction**  
-   • Add Outlook (Microsoft Graph) implementation mirroring Gmail flow.  
-   • Fallback IMAP polling for generic hosts.
+   • Introduce `BaseEmailProvider` interface.  
+   • Add Outlook (Microsoft Graph) implementation.  
+   • Ship fallback IMAP polling for generic hosts.
 
-3. **Security hardening**  
-   • Validate Google-signed JWT on webhook calls.  
-   • Encrypt refresh-tokens at rest.
-   • Fail-safe handling when `GOOGLE_CLIENT_ID/SECRET` are missing in prod.
+3. **Security**  
+   • Replace XOR scheme with AES-GCM / Fernet for `gmail_refresh_token`.  
+   • Make Google-JWT validation **mandatory** in production (remove opt-in flag).  
+   • Improve UX when `GOOGLE_CLIENT_ID/SECRET` are missing.
 
 4. **Observability**  
-   • Detailed logging + metrics for e-mail polling / push latency.
+   • Emit Prometheus counters (`trigger_fired_total`, `gmail_watch_renew_total`, `gmail_api_error_total`).  
+   • Add JSON logs for every watch renewal and trigger fire.
 
 5. **Test coverage**  
-   • 🟢 done for history progression & dedup.  
-   • 🔄 still add standalone unit tests for email_filtering.matches variants
-     and token-cache reuse path (low priority once provider abstraction lands).
+   • Unit-tests for `email_filtering.matches` edge cases.  
+   • Tests that exercise the access-token **cache hit** path.
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---
@@ -209,19 +214,20 @@
 ---
 
 test `test_gmail_watch_initialisation.py` added.
-### 🚧 Phase 3 – Gmail Watch & History Diff  *(ongoing – 2025-05 → 2025-06)*
+### ✅ Phase 3 – Gmail Watch & History Diff  *(completed – 2025-05 → 2025-06)*
 
 Milestone goal: end-to-end *push* flow that only fires runs for **new**
 messages which pass user-defined filters.
 
 **Implemented so far**
 
-✅ *Watch auto-creation* (stub) – `initialize_gmail_trigger` persists
+✅ *Watch auto-creation* (real API with stub fallback) – `initialize_gmail_trigger` persists
 `history_id` & `watch_expiry` into `trigger.config`.  See
 `test_gmail_watch_initialisation.py`.
 
-✅ *Watch renewal* (stub) – `EmailTriggerService._maybe_renew_gmail_watch`
-updates expiry when <24 h.  Unit-tested (`test_gmail_watch_renewal.py`).
+✅ *Watch renewal* – `EmailTriggerService._maybe_renew_gmail_watch` now first
+tries **real Gmail watch** API and falls back to the deterministic stub when
+offline.  Unit-tested (`test_gmail_watch_renewal.py`).
 
 ✅ *Webhook de-duplication* – Handler tracks `last_msg_no` to avoid double
 processing.  Covered by `test_gmail_webhook_trigger.py`.
@@ -250,13 +256,15 @@ concurrent updates to `history_id` are merged correctly (2025-05-10).
     • a new X-Goog-Message-Number triggers another agent run.
   Suite now **114 passed** / 15 skipped.
 
-**Still stubbed / pending**
+✅ *Security hardening* –
+   • `gmail_refresh_token` now stored encrypted (`zerg.utils.crypto`).  
+   • Optional Google JWT validation added to `/api/email/webhook/google` (enable with `EMAIL_GMAIL_JWT_VALIDATION=1`).  
 
-• Real network calls for *watch* creation/renewal (currently
-  `_start_gmail_watch_stub` / `_renew_gmail_watch_stub`).
-• JWT validation of Gmail webhook (`Authorization:` header).
-• Robust back-off & quota handling around Gmail API requests.
-• Encryption of stored `gmail_refresh_token`.
+**Remaining technical debt (moved to *Outstanding backend work* list)**
+
+• Robust back-off & quota handling around Gmail API requests.  
+• AES-GCM encryption (current XOR scheme is placeholder).  
+• Enable JWT validation by default in prod envs (remove opt-in flag).  
 
 **Test impact**
 

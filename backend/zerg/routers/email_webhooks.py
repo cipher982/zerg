@@ -27,6 +27,7 @@ added later.  For now we only verify that the dev/CI tests set a dummy
 from __future__ import annotations
 
 import logging
+import os
 from typing import Dict
 
 from fastapi import APIRouter
@@ -59,12 +60,60 @@ router = APIRouter(tags=["email-webhooks"])
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Helper – optional JWT validation
+# ---------------------------------------------------------------------------
+
+
+def _validate_google_jwt(auth_header: str | None):  # noqa: D401 – helper
+    """Validate Google-signed JWT contained in ``Authorization: Bearer …``.
+
+    The validation is **optional** during development and CI because the
+    "google-auth" package may not be available and internet access is
+    disabled.  Enable strict validation by setting
+
+        EMAIL_GMAIL_JWT_VALIDATION = 1
+
+    in the environment.
+    """
+
+    if os.getenv("EMAIL_GMAIL_JWT_VALIDATION", "0") != "1":
+        return  # disabled – skip
+
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    parts = auth_header.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid Authorization header format")
+
+    token = parts[1]
+
+    try:
+        from google.auth.transport import requests as google_requests  # type: ignore
+        from google.oauth2 import id_token  # type: ignore
+
+        id_token.verify_oauth2_token(token, google_requests.Request())
+    except ModuleNotFoundError:
+        # Library not installed – treat as disabled unless explicitly
+        # required.
+        if os.getenv("EMAIL_GMAIL_JWT_VALIDATION", "0") == "1":
+            raise HTTPException(status_code=500, detail="google-auth not installed for JWT validation")
+    except Exception as exc:  # broad – any verification error
+        raise HTTPException(status_code=401, detail="Invalid Google JWT") from exc
+
+
+# The *Authorization* header is optional by default – see helper above – but
+# declared here so FastAPI includes it in the generated OpenAPI schema.
+
+
 @router.post("/email/webhook/google", status_code=status.HTTP_202_ACCEPTED)
 async def gmail_webhook(
     *,
     x_goog_channel_token: str = Header(..., alias="X-Goog-Channel-Token"),
     x_goog_resource_id: str | None = Header(None, alias="X-Goog-Resource-Id"),
     x_goog_message_number: str | None = Header(None, alias="X-Goog-Message-Number"),
+    authorization: str | None = Header(None, alias="Authorization"),
     payload: Dict | None = None,  # Google sends no body – future-proof
     db: Session = Depends(get_db),
 ):
@@ -84,8 +133,16 @@ async def gmail_webhook(
     )
 
     # ------------------------------------------------------------------
-    # In the next phase we will verify the JWT (Authorization header)
+    # Validate Google-signed JWT (optional)
     # ------------------------------------------------------------------
+
+    try:
+        _validate_google_jwt(authorization)
+    except HTTPException:
+        raise  # re-raise so FastAPI sends proper response
+    except Exception as exc:  # pragma: no cover – should not happen
+        logger.exception("Unexpected JWT validation error: %s", exc)
+        raise HTTPException(status_code=500, detail="JWT validation internal error") from exc
 
     # For now we require *some* channel token so accidental public hits are
     # rejected with 400 rather than executing arbitrary triggers.

@@ -5,6 +5,7 @@ an EventType.TRIGGER_FIRED event.  The SchedulerService listens for that event
 and executes the associated agent immediately.
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -44,6 +45,60 @@ router = APIRouter(
     tags=["triggers"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+# ---------------------------------------------------------------------------
+# DELETE /triggers/{id}
+# ---------------------------------------------------------------------------
+
+
+@router.delete("/{trigger_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_trigger(
+    *,
+    trigger_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+):
+    """Delete a trigger.
+
+    Special handling for *email* provider **gmail**:
+
+    • Attempts to call Gmail *stop* endpoint so push notifications are
+      turned off immediately on user’s mailbox.  The call is best effort –
+      network/auth failures are logged but do not abort the deletion.
+    """
+
+    # 1) Fetch the trigger (needed before deletion to inspect type/config)
+    trg = crud.get_trigger(db, trigger_id)
+    if trg is None:
+        raise HTTPException(status_code=404, detail="Trigger not found")
+
+    # 2) Provider-specific cleanup --------------------------------------
+    if trg.type == "email" and (trg.config or {}).get("provider") == "gmail":
+        try:
+            from zerg.models.models import User  # local import to avoid cycles
+            from zerg.services import gmail_api  # local
+            from zerg.utils import crypto as _crypto  # lazy
+
+            # Pick any gmail-connected user (MVP logic)
+            user: User | None = db.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
+
+            if user is not None:
+                refresh_token = _crypto.decrypt(user.gmail_refresh_token)  # type: ignore[arg-type]
+
+                access_token = await asyncio.to_thread(  # type: ignore[attr-defined]
+                    gmail_api.exchange_refresh_token,
+                    refresh_token,
+                )
+
+                # Fire stop_watch in thread pool so we don’t block event loop
+                await asyncio.to_thread(gmail_api.stop_watch, access_token=access_token)  # type: ignore[attr-defined]
+        except Exception as exc:  # pragma: no cover – best-effort cleanup
+            logger.warning("Failed to stop Gmail watch for trigger %s: %s", trg.id, exc)
+
+    # 3) Finally delete ---------------------------------------------------
+    crud.delete_trigger(db, trigger_id)
+
+    return None  # 204 no content
 
 
 @router.post("/", response_model=TriggerSchema, status_code=status.HTTP_201_CREATED)

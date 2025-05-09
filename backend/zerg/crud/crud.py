@@ -179,7 +179,9 @@ def update_user(
     if prefs is not None:
         user.prefs = prefs
     if gmail_refresh_token is not None:
-        user.gmail_refresh_token = gmail_refresh_token
+        from zerg.utils import crypto  # local import to avoid top-level dependency in non-auth paths
+
+        user.gmail_refresh_token = crypto.encrypt(gmail_refresh_token)
 
     db.commit()
     db.refresh(user)
