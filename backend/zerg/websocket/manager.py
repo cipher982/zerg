@@ -154,10 +154,12 @@ class TopicConnectionManager:
         for client_id in disconnected_clients:
             # Remove websocket reference if still present
             self.active_connections.pop(client_id, None)
+            self.client_users.pop(client_id, None)
             await self.unsubscribe_from_topic(client_id, topic)
-        # If the client is now subscribed to no topics, drop the mapping entirely
-        if client_id in self.client_topics and not self.client_topics[client_id]:
-            del self.client_topics[client_id]
+
+            # Drop mapping entirely if no topics remain
+            if client_id in self.client_topics and not self.client_topics[client_id]:
+                del self.client_topics[client_id]
 
     async def _handle_agent_event(self, data: Dict[str, Any]) -> None:
         """Handle agent-related events from the event bus."""

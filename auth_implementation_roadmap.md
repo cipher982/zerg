@@ -132,8 +132,8 @@ Stage 8 – WebSocket auth hardening *(post-MVP)*
 | 8.2 | In `routers/websocket.py` verify `token` *before* `accept()`; on failure close **4401**       | `backend/zerg/routers/websocket.py`         | [x] |
 | 8.3 | Front-end always appends `?token=<jwt>`                                                      | `frontend/src/network/ws_client_v2.rs`      | [x] |
 | 8.4 | Tests: (i) blocked w/o token (ii) succeeds w/ token (iii) bypass mode                         | `backend/tests/test_websocket_auth.py`      | [x] |
-| 8.5 | Propagate resolved `user_id` to `TopicConnectionManager` (prep per-user topics)               | `backend/zerg/websocket/manager.py`         | [ ] |
-| 8.6 | Docs: mention WebSocket close-code **4401 Unauthorized**                                      | `docs/auth_overview.md`                     | [ ] |
+| 8.5 | Propagate resolved `user_id` to `TopicConnectionManager` (prep per-user topics)               | `backend/zerg/websocket/manager.py`         | [x] |
+| 8.6 | Docs: mention WebSocket close-code **4401 Unauthorized**                                      | `docs/auth_overview.md`                     | [x] |
 
 -------------------------------------------------------------------------------
 Appendix – Dev user helper
