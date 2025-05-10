@@ -41,6 +41,20 @@ How the flow works (happy path)
    • aborts with **401** on any error.
 
 -------------------------------------------------------------------------------
+WebSocket authentication & close-codes
+-------------------------------------------------------------------------------
+
+The `/api/ws` endpoint authenticates the connection **before** completing the
+WebSocket handshake.  If the `?token=<jwt>` query parameter is missing or
+invalid the server closes the socket with code **4401 – Unauthorized**.  The
+frontend listens for this close-code (or an HTTP 401) and forces a logout so
+the user can sign back in.
+
+When `AUTH_DISABLED=1` the development bypass applies here as well – the
+server accepts the connection even without a token and still publishes topic
+updates.
+
+-------------------------------------------------------------------------------
 Dev-mode bypass
 -------------------------------------------------------------------------------
 
