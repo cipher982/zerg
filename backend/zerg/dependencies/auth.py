@@ -184,9 +184,15 @@ def _get_or_create_dev_user(db: Session):
 
     user = crud.get_user_by_email(db, DEV_EMAIL)
     if user is not None:
+        # If dev user exists, ensure its role is ADMIN for dev purposes
+        if user.role != "ADMIN":
+            user.role = "ADMIN"
+            db.commit()
+            db.refresh(user)
         return user
 
-    return crud.create_user(db, email=DEV_EMAIL, provider=None)
+    # Create dev user with ADMIN role
+    return crud.create_user(db, email=DEV_EMAIL, provider=None, role="ADMIN")
 
 
 # ---------------------------------------------------------------------------

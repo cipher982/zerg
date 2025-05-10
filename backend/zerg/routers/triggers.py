@@ -11,7 +11,9 @@ import hmac
 import json
 import logging
 import time
-from typing import Dict
+from typing import Dict  # Added List, Optional
+from typing import List  # Added List, Optional
+from typing import Optional  # Added List, Optional
 
 # FastAPI helpers
 from fastapi import APIRouter
@@ -20,6 +22,7 @@ from fastapi import Depends
 from fastapi import Header
 from fastapi import HTTPException
 from fastapi import Path
+from fastapi import Query  # Added Query
 from fastapi import status
 from sqlalchemy.orm import Session
 
@@ -208,3 +211,15 @@ async def fire_trigger_event(
     await scheduler_service.run_agent_task(trg.agent_id)  # type: ignore[arg-type]
 
     return {"status": "accepted"}
+
+
+@router.get("/", response_model=List[TriggerSchema])
+def list_triggers(
+    db: Session = Depends(get_db),
+    agent_id: Optional[int] = Query(None, description="Filter triggers by agent ID"),
+):
+    """
+    List all triggers, optionally filtered by agent_id.
+    """
+    triggers = crud.get_triggers(db, agent_id=agent_id)
+    return triggers

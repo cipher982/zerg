@@ -256,6 +256,16 @@ def delete_trigger(db: Session, trigger_id: int):
     return True
 
 
+def get_triggers(db: Session, agent_id: Optional[int] = None) -> List[Trigger]:
+    """
+    Retrieve triggers, optionally filtered by agent_id.
+    """
+    query = db.query(Trigger)
+    if agent_id is not None:
+        query = query.filter(Trigger.agent_id == agent_id)
+    return query.order_by(Trigger.id).all()
+
+
 # Agent Message CRUD operations
 def get_agent_messages(db: Session, agent_id: int, skip: int = 0, limit: int = 100):
     """Get all messages for a specific agent"""

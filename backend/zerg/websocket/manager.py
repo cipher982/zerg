@@ -11,6 +11,7 @@ from typing import Dict
 from typing import Set
 
 from fastapi import WebSocket
+from fastapi.encoders import jsonable_encoder
 
 from zerg.events import EventType
 from zerg.events import event_bus
@@ -177,7 +178,8 @@ class TopicConnectionManager:
 
         agent_id = data["id"]
         topic = f"agent:{agent_id}"
-        await self.broadcast_to_topic(topic, {"type": data.get("event_type", "agent_event"), "data": data})
+        serialized_data = jsonable_encoder(data)
+        await self.broadcast_to_topic(topic, {"type": data.get("event_type", "agent_event"), "data": serialized_data})
 
     async def _handle_thread_event(self, data: Dict[str, Any]) -> None:
         """Handle thread-related events from the event bus."""
@@ -186,7 +188,8 @@ class TopicConnectionManager:
 
         thread_id = data["thread_id"]
         topic = f"thread:{thread_id}"
-        await self.broadcast_to_topic(topic, {"type": data.get("event_type", "thread_event"), "data": data})
+        serialized_data = jsonable_encoder(data)
+        await self.broadcast_to_topic(topic, {"type": data.get("event_type", "thread_event"), "data": serialized_data})
 
     async def _handle_run_event(self, data: Dict[str, Any]) -> None:
         """Forward run events to the *agent:* topic so dashboards update."""
@@ -195,7 +198,8 @@ class TopicConnectionManager:
 
         agent_id = data["agent_id"]
         topic = f"agent:{agent_id}"
-        await self.broadcast_to_topic(topic, {"type": "run_update", "data": data})
+        serialized_data = jsonable_encoder(data)
+        await self.broadcast_to_topic(topic, {"type": "run_update", "data": serialized_data})
 
     async def _handle_user_event(self, data: Dict[str, Any]) -> None:
         """Forward user events to `user:{id}` topic so other tabs update."""
@@ -204,7 +208,8 @@ class TopicConnectionManager:
             return
 
         topic = f"user:{user_id}"
-        await self.broadcast_to_topic(topic, {"type": "user_update", "data": data})
+        serialized_data = jsonable_encoder(data)
+        await self.broadcast_to_topic(topic, {"type": "user_update", "data": serialized_data})
 
 
 # Create a global instance of the new connection manager
