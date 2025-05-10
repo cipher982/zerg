@@ -42,6 +42,17 @@ pub enum DebugTab {
     RawJson,
 }
 
+// ---------------------------------------------------------------------------
+// Agent Configuration Modal – currently three fixed tabs.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentConfigTab {
+    Main,
+    History,
+    Triggers,
+}
+
 #[derive(Debug, Clone)]
 pub struct AgentDebugPane {
     pub agent_id: u32,
@@ -145,6 +156,12 @@ pub struct AppState {
     /// we can adapt placeholder/bubble logic accordingly.
     pub token_mode_threads: HashSet<u32>,
     pub current_agent_id: Option<u32>,
+
+    /// Currently selected tab inside the *Agent Configuration* modal.  Kept
+    /// here so business logic can switch tabs without directly touching the
+    /// DOM (single-source-of-truth).  Defaults to `Main` when the modal is
+    /// first opened.
+    pub agent_modal_tab: AgentConfigTab,
 
     // Track which agent rows are expanded in the dashboard UI so we can
     // preserve open/closed state across re‑renders.
@@ -285,6 +302,8 @@ impl AppState {
 
             token_mode_threads: HashSet::new(),
             current_agent_id: None,
+
+            agent_modal_tab: AgentConfigTab::Main,
 
             expanded_agent_rows: HashSet::new(),
 

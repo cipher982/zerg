@@ -24,6 +24,7 @@ mod models_config;
 mod pages;
 mod scheduling;
 mod utils;
+mod dom_utils;
 mod auth;
 
 

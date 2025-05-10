@@ -54,52 +54,52 @@ impl AgentConfigModal {
             // exists we skip all work.
             // -----------------------------------------------------------------
 
-            if document.get_element_by_id("triggers-tab").is_none() {
+            if document.get_element_by_id("agent-triggers-tab").is_none() {
                 // Add button next to Main tab (after any History tab if present)
                 if let Some(tab_container) = document.query_selector("#agent-modal .tab-container").ok().flatten() {
                     let triggers_tab = document.create_element("button")?;
                     triggers_tab.set_class_name("tab-button");
-                    triggers_tab.set_id("triggers-tab");
+                    triggers_tab.set_id("agent-triggers-tab");
                     triggers_tab.set_inner_html("Triggers");
                     tab_container.append_child(&triggers_tab)?;
                 }
 
                 // Add content wrapper equivalent to build_dom() variant
-                if document.get_element_by_id("triggers-content").is_none() {
+                if document.get_element_by_id("agent-triggers-content").is_none() {
                     let triggers_content = document.create_element("div")?;
                     triggers_content.set_class_name("tab-content");
-                    triggers_content.set_id("triggers-content");
+                    triggers_content.set_id("agent-triggers-content");
                     triggers_content.set_attribute("style", "display:none;")?;
 
                     // ----- empty wrapper with CTA -----
                     let empty_div = document.create_element("div")?;
-                    empty_div.set_id("triggers-empty");
+                    empty_div.set_id("agent-triggers-empty");
                     let p = document.create_element("p")?;
                     p.set_inner_html("Connect external events to your agent – create a trigger to get started.");
                     empty_div.append_child(&p)?;
 
             // Gmail connect row (only visible when not yet connected)
             let gmail_row = document.create_element("div")?;
-            gmail_row.set_id("gmail-connect-row");
+            gmail_row.set_id("agent-gmail-connect-row");
             gmail_row.set_attribute("style", "margin-top:8px;")?;
 
             // Button placeholder – we toggle visibility later in
             // `render_gmail_connect_status`.
             let connect_btn = document.create_element("button")?;
-            connect_btn.set_id("connect-gmail-btn");
+            connect_btn.set_id("agent-connect-gmail-btn");
             connect_btn.set_class_name("btn-primary");
             connect_btn.set_inner_html("Connect Gmail");
             gmail_row.append_child(&connect_btn)?;
 
             let connected_span = document.create_element("span")?;
-            connected_span.set_id("gmail-connected-span");
+            connected_span.set_id("agent-gmail-connected-span");
             connected_span.set_inner_html("Gmail connected ✓");
             connected_span.set_attribute("style", "display:none;color:var(--success-color);margin-left:4px;")?;
             gmail_row.append_child(&connected_span)?;
 
             empty_div.append_child(&gmail_row)?;
                     let add_trigger_btn = document.create_element("button")?;
-                    add_trigger_btn.set_id("add-trigger-btn");
+                    add_trigger_btn.set_id("agent-add-trigger-btn");
                     add_trigger_btn.set_class_name("btn-primary");
                     add_trigger_btn.set_inner_html("Add Trigger");
                     empty_div.append_child(&add_trigger_btn)?;
@@ -107,17 +107,17 @@ impl AgentConfigModal {
 
                     // ----- form card (hidden) -----
                     let form_card = document.create_element("div")?;
-                    form_card.set_id("add-trigger-form");
+                    form_card.set_id("agent-add-trigger-form");
                     form_card.set_class_name("card");
                     form_card.set_attribute("style", "display:none;padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
 
                     let lbl = document.create_element("label")?;
                     lbl.set_inner_html("Type");
-                    lbl.set_attribute("for", "trigger-type-select")?;
+                    lbl.set_attribute("for", "agent-trigger-type-select")?;
                     form_card.append_child(&lbl)?;
 
                     let sel = document.create_element("select")?;
-                    sel.set_id("trigger-type-select");
+                    sel.set_id("agent-trigger-type-select");
                     sel.set_class_name("input-select");
                     let opt1 = document.create_element("option")?;
                     opt1.set_attribute("value", "webhook")?;
@@ -135,12 +135,12 @@ impl AgentConfigModal {
                     let act = document.create_element("div")?;
                     act.set_attribute("style", "margin-top:12px;display:flex;gap:8px;")?;
                     let cancel_btn = document.create_element("button")?;
-                    cancel_btn.set_id("cancel-add-trigger");
+                    cancel_btn.set_id("agent-cancel-add-trigger");
                     cancel_btn.set_class_name("btn");
                     cancel_btn.set_inner_html("Cancel");
                     act.append_child(&cancel_btn)?;
                     let create_btn = document.create_element("button")?;
-                    create_btn.set_id("create-trigger");
+                    create_btn.set_id("agent-create-trigger");
                     create_btn.set_class_name("btn-primary");
                     create_btn.set_inner_html("Create Trigger");
                     act.append_child(&create_btn)?;
@@ -149,7 +149,7 @@ impl AgentConfigModal {
 
                     // ----- list -----
                     let list_ul = document.create_element("ul")?;
-                    list_ul.set_id("triggers-list");
+                    list_ul.set_id("agent-triggers-list");
                     list_ul.set_class_name("triggers-list");
                     list_ul.set_attribute("style", "margin-top:12px;")?;
                     triggers_content.append_child(&list_ul)?;
@@ -211,7 +211,7 @@ impl AgentConfigModal {
 
         let main_tab = document.create_element("button")?;
         main_tab.set_class_name("tab-button active");
-        main_tab.set_id("main-tab");
+        main_tab.set_id("agent-main-tab");
         main_tab.set_inner_html("Main");
 
         // --------------------------------------------------------------
@@ -220,7 +220,7 @@ impl AgentConfigModal {
 
         let triggers_tab = document.create_element("button")?;
         triggers_tab.set_class_name("tab-button");
-        triggers_tab.set_id("triggers-tab");
+        triggers_tab.set_id("agent-triggers-tab");
         triggers_tab.set_inner_html("Triggers");
 
 
@@ -230,7 +230,7 @@ impl AgentConfigModal {
         // Main content
         let main_content = document.create_element("div")?;
         main_content.set_class_name("tab-content");
-        main_content.set_id("main-content");
+        main_content.set_id("agent-main-content");
 
         // --------------------------------------------------------------
         // Triggers content wrapper (hidden by default)
@@ -238,7 +238,7 @@ impl AgentConfigModal {
 
         let triggers_content = document.create_element("div")?;
         triggers_content.set_class_name("tab-content");
-        triggers_content.set_id("triggers-content");
+        triggers_content.set_id("agent-triggers-content");
         // Hidden until the user clicks the tab button.
         triggers_content.set_attribute("style", "display:none;")?;
 
@@ -249,14 +249,14 @@ impl AgentConfigModal {
         // -----------------------------------------------------------------
 
         let empty_wrapper = document.create_element("div")?;
-        empty_wrapper.set_id("triggers-empty");
+        empty_wrapper.set_id("agent-triggers-empty");
 
         let empty_p = document.create_element("p")?;
         empty_p.set_inner_html("Connect external events to your agent – create a trigger to get started.");
         empty_wrapper.append_child(&empty_p)?;
 
         let add_trigger_btn = document.create_element("button")?;
-        add_trigger_btn.set_id("add-trigger-btn");
+        add_trigger_btn.set_id("agent-add-trigger-btn");
         add_trigger_btn.set_class_name("btn-primary");
         add_trigger_btn.set_inner_html("Add Trigger");
         empty_wrapper.append_child(&add_trigger_btn)?;
@@ -268,17 +268,17 @@ impl AgentConfigModal {
         // -----------------------------------------------------------------
 
         let form_card = document.create_element("div")?;
-        form_card.set_id("add-trigger-form");
+        form_card.set_id("agent-add-trigger-form");
         form_card.set_class_name("card");
         form_card.set_attribute("style", "display:none;padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
 
         // Type label + select
         let type_label = document.create_element("label")?;
         type_label.set_inner_html("Type");
-        type_label.set_attribute("for", "trigger-type-select")?;
+        type_label.set_attribute("for", "agent-trigger-type-select")?;
 
         let type_select = document.create_element("select")?;
-        type_select.set_id("trigger-type-select");
+        type_select.set_id("agent-trigger-type-select");
         type_select.set_class_name("input-select");
 
         // Option – webhook (enabled)
@@ -303,12 +303,12 @@ impl AgentConfigModal {
         actions_div.set_attribute("style", "margin-top:12px;display:flex;gap:8px;")?;
 
         let cancel_btn = document.create_element("button")?;
-        cancel_btn.set_id("cancel-add-trigger");
+        cancel_btn.set_id("agent-cancel-add-trigger");
         cancel_btn.set_class_name("btn");
         cancel_btn.set_inner_html("Cancel");
 
         let create_btn = document.create_element("button")?;
-        create_btn.set_id("create-trigger");
+        create_btn.set_id("agent-create-trigger");
         create_btn.set_class_name("btn-primary");
         create_btn.set_inner_html("Create Trigger");
 
@@ -323,7 +323,7 @@ impl AgentConfigModal {
         // -----------------------------------------------------------------
 
         let list_el = document.create_element("ul")?;
-        list_el.set_id("triggers-list");
+        list_el.set_id("agent-triggers-list");
         list_el.set_class_name("triggers-list");
         list_el.set_attribute("style", "margin-top:12px;")?;
         triggers_content.append_child(&list_el)?;
@@ -604,7 +604,7 @@ impl AgentConfigModal {
         }
 
         // Tab switching – simple class toggle (Main, History, Triggers)
-        if let Some(main_tab) = document.get_element_by_id("main-tab") {
+        if let Some(main_tab) = document.get_element_by_id("agent-main-tab") {
             let cb_main = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SwitchToMainTab);
             }));
@@ -612,7 +612,7 @@ impl AgentConfigModal {
             cb_main.forget();
         }
 
-        if let Some(history_tab) = document.get_element_by_id("history-tab") {
+        if let Some(history_tab) = document.get_element_by_id("agent-history-tab") {
             let cb_hist = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SwitchToHistoryTab);
             }));
@@ -620,7 +620,7 @@ impl AgentConfigModal {
             cb_hist.forget();
         }
 
-        if let Some(triggers_tab) = document.get_element_by_id("triggers-tab") {
+        if let Some(triggers_tab) = document.get_element_by_id("agent-triggers-tab") {
             let cb_trg = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SwitchToTriggersTab);
             }));
@@ -630,13 +630,13 @@ impl AgentConfigModal {
 
         // -------- Add Trigger flow UI ----------
         // Show form
-        if let Some(add_btn) = document.get_element_by_id("add-trigger-btn") {
+        if let Some(add_btn) = document.get_element_by_id("agent-add-trigger-btn") {
             let cb_show = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-                    if let Some(empty_div) = doc.get_element_by_id("triggers-empty") {
+                    if let Some(empty_div) = doc.get_element_by_id("agent-triggers-empty") {
                         let _ = empty_div.set_attribute("style", "display:none;");
                     }
-                    if let Some(form) = doc.get_element_by_id("add-trigger-form") {
+                    if let Some(form) = doc.get_element_by_id("agent-add-trigger-form") {
                         let _ = form.set_attribute("style", "display:block;padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;");
                     }
                 }
@@ -646,13 +646,13 @@ impl AgentConfigModal {
         }
 
         // Cancel form
-        if let Some(cancel_btn) = document.get_element_by_id("cancel-add-trigger") {
+        if let Some(cancel_btn) = document.get_element_by_id("agent-cancel-add-trigger") {
             let cb_cancel = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-                    if let Some(form) = doc.get_element_by_id("add-trigger-form") {
+                    if let Some(form) = doc.get_element_by_id("agent-add-trigger-form") {
                         let _ = form.set_attribute("style", "display:none;");
                     }
-                    if let Some(empty_div) = doc.get_element_by_id("triggers-empty") {
+                    if let Some(empty_div) = doc.get_element_by_id("agent-triggers-empty") {
                         let _ = empty_div.set_attribute("style", "display:block;");
                     }
                 }
@@ -662,7 +662,7 @@ impl AgentConfigModal {
         }
 
         // Create trigger
-        if let Some(create_btn) = document.get_element_by_id("create-trigger") {
+        if let Some(create_btn) = document.get_element_by_id("agent-create-trigger") {
             let cb_create = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
                     // Determine agent_id
@@ -673,7 +673,7 @@ impl AgentConfigModal {
                     let agent_id = agent_id_opt.unwrap();
 
                     // Read type value
-                    let type_value = doc.get_element_by_id("trigger-type-select")
+                    let type_value = doc.get_element_by_id("agent-trigger-type-select")
                         .and_then(|e| e.dyn_into::<web_sys::HtmlSelectElement>().ok())
                         .map(|sel| sel.value())
                         .unwrap_or_else(|| "webhook".to_string());
@@ -690,10 +690,10 @@ impl AgentConfigModal {
                     dispatch_global_message(crate::messages::Message::RequestCreateTrigger { payload_json });
 
                     // Hide form, show empty again – list will refresh on success
-                    if let Some(form) = doc.get_element_by_id("add-trigger-form") {
+                    if let Some(form) = doc.get_element_by_id("agent-add-trigger-form") {
                         let _ = form.set_attribute("style", "display:none;");
                     }
-                    if let Some(empty_div) = doc.get_element_by_id("triggers-empty") {
+                    if let Some(empty_div) = doc.get_element_by_id("agent-triggers-empty") {
                         let _ = empty_div.set_attribute("style", "display:block;");
                     }
                 }
@@ -703,7 +703,7 @@ impl AgentConfigModal {
         }
 
         // Gmail Connect button
-        if let Some(conn_btn) = document.get_element_by_id("connect-gmail-btn") {
+        if let Some(conn_btn) = document.get_element_by_id("agent-connect-gmail-btn") {
             let cb_conn = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 // Kick off OAuth flow (frontend stub for now)
                 crate::auth::google_code_flow::initiate_gmail_connect();
@@ -1341,15 +1341,15 @@ impl AgentConfigModal {
 pub fn render_gmail_connect_status(document: &Document) -> Result<(), JsValue> {
     let connected = crate::state::APP_STATE.with(|st| st.borrow().gmail_connected);
 
-    if let Some(btn) = document.get_element_by_id("connect-gmail-btn") {
+    if let Some(btn) = document.get_element_by_id("agent-connect-gmail-btn") {
         let _ = btn.set_attribute("style", if connected { "display:none;" } else { "" });
     }
-    if let Some(span) = document.get_element_by_id("gmail-connected-span") {
+    if let Some(span) = document.get_element_by_id("agent-gmail-connected-span") {
         let _ = span.set_attribute("style", if connected { "display:inline;color:var(--success-color);" } else { "display:none;" });
     }
 
     // Enable/disable <option data-gmail-option>
-    if let Some(sel) = document.get_element_by_id("trigger-type-select") {
+    if let Some(sel) = document.get_element_by_id("agent-trigger-type-select") {
         if let Ok(select_el) = sel.dyn_into::<web_sys::HtmlSelectElement>() {
             for i in 0..select_el.length() {
                 if let Some(opt) = select_el.item(i) {
@@ -1371,7 +1371,7 @@ pub fn render_gmail_connect_status(document: &Document) -> Result<(), JsValue> {
 // Public helpers – trigger list rendering & interactivity
 // -----------------------------------------------------------------------------
 
-/// Re-render the `<ul id="triggers-list">` element for the given agent.
+/// Re-render the `<ul id="agent-triggers-list">` element for the given agent.
 /// The function is idempotent – the list is cleared on every call so we can
 /// safely call after every state change.  It attaches new event listeners for
 /// copy / delete buttons on each row.
@@ -1379,7 +1379,7 @@ pub fn render_triggers_list(document: &Document, agent_id: u32) -> Result<(), Js
     use wasm_bindgen::JsCast;
 
     // Resolve list element.
-    let list_el = match document.get_element_by_id("triggers-list") {
+    let list_el = match document.get_element_by_id("agent-triggers-list") {
         Some(el) => el,
         None => return Ok(()), // Not visible (tab closed)
     };
@@ -1395,7 +1395,7 @@ pub fn render_triggers_list(document: &Document, agent_id: u32) -> Result<(), Js
     });
 
     // Toggle empty wrapper visibility
-    if let Some(empty_div) = document.get_element_by_id("triggers-empty") {
+    if let Some(empty_div) = document.get_element_by_id("agent-triggers-empty") {
         let _ = empty_div.set_attribute("style", if triggers.is_empty() { "display:block;" } else { "display:none;" });
     }
 
