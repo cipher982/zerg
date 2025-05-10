@@ -18,3 +18,20 @@ repos:
             files: ^backend/
         -   id: ruff-format
             files: ^backend/
+
+# # ---------------------------------------------------------------------------
+# # Local hooks – Rust lint and DOM-ID prefix guard (frontend)
+# # ---------------------------------------------------------------------------
+# -   repo: local
+#     hooks:
+#       - id: rust-clippy
+#         name: "rust-clippy (frontend)"
+#         language: system
+#         entry: bash -c 'cd frontend && cargo clippy --quiet -- -D warnings'
+#         files: ^frontend/
+
+# #      - id: dom-id-prefix-check
+# #        name: "DOM id prefix rule"
+# #        language: system
+# #        entry: bash -c 'grep -R --line-number --perl-regexp "id=\"(?!agent-|workflow-|global-)" frontend/src | if read var; then echo "✖ Non-namespaced DOM id detected:"; echo "$var"; exit 1; fi'
+# #        pass_filenames: false

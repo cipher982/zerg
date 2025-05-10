@@ -150,6 +150,12 @@ pub enum Message {
     SwitchToHistoryTab,
     /// Switch to the *Triggers* tab in the agent modal
     SwitchToTriggersTab,
+
+    /// Unified variant – switch to the given tab.  Prefer this over the
+    /// legacy `SwitchTo*Tab` helpers.  The update handler keeps
+    /// backwards-compatibility by mapping the old variants to this one so we
+    /// can migrate call-sites incrementally.
+    SetAgentTab(crate::state::AgentConfigTab),
     
     // Auto-save operations
     UpdateSystemInstructions(String),
