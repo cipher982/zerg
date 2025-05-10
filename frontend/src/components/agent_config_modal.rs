@@ -77,6 +77,27 @@ impl AgentConfigModal {
                     let p = document.create_element("p")?;
                     p.set_inner_html("Connect external events to your agent – create a trigger to get started.");
                     empty_div.append_child(&p)?;
+
+            // Gmail connect row (only visible when not yet connected)
+            let gmail_row = document.create_element("div")?;
+            gmail_row.set_id("gmail-connect-row");
+            gmail_row.set_attribute("style", "margin-top:8px;")?;
+
+            // Button placeholder – we toggle visibility later in
+            // `render_gmail_connect_status`.
+            let connect_btn = document.create_element("button")?;
+            connect_btn.set_id("connect-gmail-btn");
+            connect_btn.set_class_name("btn-primary");
+            connect_btn.set_inner_html("Connect Gmail");
+            gmail_row.append_child(&connect_btn)?;
+
+            let connected_span = document.create_element("span")?;
+            connected_span.set_id("gmail-connected-span");
+            connected_span.set_inner_html("Gmail connected ✓");
+            connected_span.set_attribute("style", "display:none;color:var(--success-color);margin-left:4px;")?;
+            gmail_row.append_child(&connected_span)?;
+
+            empty_div.append_child(&gmail_row)?;
                     let add_trigger_btn = document.create_element("button")?;
                     add_trigger_btn.set_id("add-trigger-btn");
                     add_trigger_btn.set_class_name("btn-primary");
@@ -104,8 +125,10 @@ impl AgentConfigModal {
                     sel.append_child(&opt1)?;
                     let opt2 = document.create_element("option")?;
                     opt2.set_attribute("value", "email:gmail")?;
-                    opt2.set_inner_html("Email (Gmail) – coming soon…");
-                    opt2.set_attribute("disabled", "true")?;
+                    opt2.set_inner_html("Email (Gmail)");
+                    // Disable until gmail_connected flag is true – we toggle
+                    // dynamically in `render_gmail_connect_status`.
+                    opt2.set_attribute("data-gmail-option", "true")?;
                     sel.append_child(&opt2)?;
                     form_card.append_child(&sel)?;
 
@@ -141,6 +164,9 @@ impl AgentConfigModal {
                 Self::attach_listeners(document)?;
             }
         }
+        // Ensure Gmail connect status elements reflect current app state.
+        let _ = render_gmail_connect_status(document);
+
         Ok(Self)
     }
 
@@ -653,8 +679,11 @@ impl AgentConfigModal {
                         .unwrap_or_else(|| "webhook".to_string());
 
                     if type_value == "email:gmail" {
-                        // Gmail triggers not yet supported – ignore click.
-                        return;
+                        let connected = crate::state::APP_STATE.with(|st| st.borrow().gmail_connected);
+                        if !connected {
+                            // Gmail not connected yet – ignore.
+                            return;
+                        }
                     }
 
                     let payload_json = format!("{{\"agent_id\": {}, \"type\": \"{}\"}}", agent_id, type_value);
@@ -671,6 +700,16 @@ impl AgentConfigModal {
             }));
             create_btn.add_event_listener_with_callback("click", cb_create.as_ref().unchecked_ref())?;
             cb_create.forget();
+        }
+
+        // Gmail Connect button
+        if let Some(conn_btn) = document.get_element_by_id("connect-gmail-btn") {
+            let cb_conn = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                // Kick off OAuth flow (frontend stub for now)
+                crate::auth::google_code_flow::initiate_gmail_connect();
+            }));
+            conn_btn.add_event_listener_with_callback("click", cb_conn.as_ref().unchecked_ref())?;
+            cb_conn.forget();
         }
 
         // Legacy prompt-based handler removed.
@@ -1291,6 +1330,41 @@ impl AgentConfigModal {
         }
         Ok(())
     }
+}
+
+// -----------------------------------------------------------------------------
+// Public helpers – rendered from update.rs when gmail_connected flag changes
+// -----------------------------------------------------------------------------
+
+/// Refresh visibility of the Gmail connect UI row depending on
+/// `APP_STATE.gmail_connected`.
+pub fn render_gmail_connect_status(document: &Document) -> Result<(), JsValue> {
+    let connected = crate::state::APP_STATE.with(|st| st.borrow().gmail_connected);
+
+    if let Some(btn) = document.get_element_by_id("connect-gmail-btn") {
+        let _ = btn.set_attribute("style", if connected { "display:none;" } else { "" });
+    }
+    if let Some(span) = document.get_element_by_id("gmail-connected-span") {
+        let _ = span.set_attribute("style", if connected { "display:inline;color:var(--success-color);" } else { "display:none;" });
+    }
+
+    // Enable/disable <option data-gmail-option>
+    if let Some(sel) = document.get_element_by_id("trigger-type-select") {
+        if let Ok(select_el) = sel.dyn_into::<web_sys::HtmlSelectElement>() {
+            for i in 0..select_el.length() {
+                if let Some(opt) = select_el.item(i) {
+                    if opt.get_attribute("data-gmail-option").is_some() {
+                        if connected {
+                            let _ = opt.remove_attribute("disabled");
+                        } else {
+                            let _ = opt.set_attribute("disabled", "true");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 // -----------------------------------------------------------------------------

@@ -178,6 +178,14 @@ pub struct AppState {
     // Track which agents have their full run history expanded (>5 rows)
     pub run_history_expanded: HashSet<u32>,
 
+    // -------------------------------------------------------------------
+    // Gmail integration status (Phase C)
+    // -------------------------------------------------------------------
+
+    /// True once the user connected Gmail via OAuth.  Controls whether the
+    /// “Email (Gmail)” option in the *Add Trigger* wizard is clickable.
+    pub gmail_connected: bool,
+
     // ---------------------------------------------------------------
     // Debug overlay (only compiled in debug builds)
     // ---------------------------------------------------------------
@@ -290,6 +298,9 @@ impl AppState {
             tool_ui_states: HashMap::new(),
 
             run_history_expanded: HashSet::new(),
+
+            // Gmail yet to be connected.
+            gmail_connected: false,
 
             running_runs: HashSet::new(),
 

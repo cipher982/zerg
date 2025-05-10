@@ -385,6 +385,35 @@ This section captures the concrete, incremental steps required to surface **Trig
 `[ ]` Phase D  `[ ]` Phase E  `[ ]` Phase F
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## 2025-05-12 – Front-end Phase C groundwork landed (stub)
+
+Commit `<hash>` introduces the UI and state plumbing for Gmail connect:
+
+• `gmail_connected` flag added to `AppState`; toggled by new
+  `Message::GmailConnected`.
+• Triggers tab now shows a “Connect Gmail” button and ✓ badge once connected.
+• “Email (Gmail)” option in the Add-Trigger wizard is dynamically enabled only
+  when `gmail_connected == true`.
+• New module `frontend/src/auth/google_code_flow.rs` holds
+  `initiate_gmail_connect()` – currently a stub that immediately dispatches
+  `GmailConnected` so the UI path can be demoed without real OAuth.
+
+**What’s still missing to complete Phase C**
+
+1. Real Google Identity Services integration
+   – Add JS bindings (`initCodeClient`) via `wasm_bindgen`.  
+   – Pass `client_id` from `APP_STATE.google_client_id`.  
+   – Exchange `auth_code` → refresh-token (`POST /api/auth/google/gmail`).  
+   – On HTTP 200 dispatch `GmailConnected`; on error show toast.
+
+2. Persist gmail_connected flag on reload
+   – Once backend exposes a “/users/me” field or `system/info` reflects
+     connection status, load it at startup to avoid requiring reconnection.
+
+After 1 + 2 are done we can mark **Phase C** complete and move to Phase D
+real-time toasts & dashboard surfacing.
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## 2025-05-12 – Additional Context / Clarifications  *(added after end-to-end code review)*
 
 This section was appended after verifying the current `main` branch on

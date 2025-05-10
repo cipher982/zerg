@@ -2196,6 +2196,23 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             })));
         },
 
+        // -----------------------------------------------------------
+        // Gmail OAuth flow – Phase C (frontend-only stub)
+        // -----------------------------------------------------------
+
+        Message::GmailConnected => {
+            state.gmail_connected = true;
+
+            // Re-render UI pieces that depend on the flag (Triggers tab).
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::agent_config_modal::render_gmail_connect_status(&doc);
+                    }
+                }
+            })));
+        },
+
         // UI requested new trigger creation – translate into network command.
         Message::RequestCreateTrigger { payload_json } => {
             commands.push(Command::CreateTrigger { payload_json });

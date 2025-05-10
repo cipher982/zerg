@@ -230,6 +230,12 @@ pub enum Message {
     /// User clicked delete on a trigger row.
     RequestDeleteTrigger { trigger_id: u32 },
 
+    // -------------------------------------------------------------------
+    // Gmail OAuth flow (Phase C)
+    // -------------------------------------------------------------------
+    /// OAuth flow succeeded – the backend confirmed refresh-token storage.
+    GmailConnected,
+
     /// Toggle between compact (first 5) and full run list for an agent row
     ToggleRunHistory { agent_id: u32 },
     ReceiveStreamStart(u32),          // Start of streaming response for thread_id
