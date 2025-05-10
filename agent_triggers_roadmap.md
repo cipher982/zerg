@@ -384,3 +384,52 @@ This section captures the concrete, incremental steps required to surface **Trig
 `[ ]` **Phase C** – Gmail connect + email trigger enable  
 `[ ]` Phase D  `[ ]` Phase E  `[ ]` Phase F
 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+## 2025-05-12 – Additional Context / Clarifications  *(added after end-to-end code review)*
+
+This section was appended after verifying the current `main` branch on
+2025-05-12.  Keep it in sync with future changes.
+
+1. **Phases A & B confirmed shipped**  
+   If you can open the *Agent Configuration* modal and see the “Triggers” tab
+   with the “Add Trigger” inline wizard, you are on the correct build.  It is
+   fully wired: selecting **Webhook** → POST `/api/triggers` → list refreshes
+   with secret shown.
+
+   • Trigger model 👉 `frontend/src/models.rs`  
+   • REST helpers 👉 `frontend/src/network/api_client.rs`  
+   • Msg / Command plumbing 👉 `frontend/src/messages.rs`, `frontend/src/update.rs`, `frontend/src/command_executors.rs`  
+   • Modal UI 👉 `frontend/src/components/agent_config_modal.rs`
+
+2. **Webhook HMAC quick-start**  
+   A valid call to `/api/triggers/{id}/events` must include:
+
+   ```text
+   X-Zerg-Timestamp: <unix-epoch-seconds>
+   X-Zerg-Signature: <hex(hmac_sha256(TRIGGER_SIGNING_SECRET, "{ts}.{raw_body}"))>
+   ```
+
+   Implementation details live in `backend/zerg/routers/triggers.py`.
+
+3. **Critical env vars**  
+   • `TRIGGER_SIGNING_SECRET` – required by webhook consumers.  
+   • `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` – mandatory for Phase C.  
+   • `EMAIL_GMAIL_JWT_VALIDATION=1` enables stricter Gmail webhook checks in
+     prod.
+
+4. **Styling rule-of-thumb**  
+   The Triggers tab re-uses utility classes (`btn-primary`, `card`, etc.).
+   Please consult design-system owners before adding new CSS.
+
+5. **Next engineering focus** – Phase C  
+   Implement Google Identity Services code-client in
+   `frontend/src/auth/google_code_flow.rs` (file not yet created).  On success
+   POST the `auth_code` to `/api/auth/google/gmail` and set
+   `state.gmail_connected = true`.
+
+6. **Testing tip**  
+   When writing WASM unit tests for triggers (Phase F) enable the
+   `wasm_test` feature flag which swaps real `fetch` calls for
+   `gloo::net::http::FakeTransport`.
+
+
