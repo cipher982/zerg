@@ -63,7 +63,15 @@ class TopicConnectionManager:
         self.active_connections[client_id] = websocket
         self.client_topics[client_id] = set()
         self.client_users[client_id] = user_id
-        logger.info(f"Client {client_id} connected")
+
+        # Auto-subscribe the socket to its personal topic so profile updates
+        # propagate across tabs/devices without requiring an explicit
+        # subscribe message from the client.
+        if user_id is not None:
+            personal_topic = f"user:{user_id}"
+            await self.subscribe_to_topic(client_id, personal_topic)
+
+        logger.info("Client %s connected (user=%s)", client_id, user_id)
 
     async def disconnect(self, client_id: str) -> None:
         """Remove a client connection and clean up subscriptions.

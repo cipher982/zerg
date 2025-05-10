@@ -164,7 +164,7 @@ Stage 9 – Per-user topics & permissions *(stretch)*
 -------------------------------------------------------------------------------
 | # | Task | Code Location | Status |
 |---|------|---------------|--------|
-| 9.1 | TopicManager supports `user:{id}` topic for profile / settings updates | `backend/zerg/websocket/manager.py` | [ ] |
-| 9.2 | Front-end subscribes to current-user topic (refresh user state on change) | `frontend/src/network/topic_manager.rs` | [ ] |
-| 9.3 | Permission groundwork: add `role` column (USER / ADMIN) to User model  | `backend/zerg/models/models.py` | [ ] |
+| 9.1 | TopicManager supports `user:{id}` topic for profile / settings updates | `backend/zerg/websocket/manager.py` | [x] |
+| 9.2 | Front-end subscribes to current-user topic (refresh user state on change) | `frontend/src/update.rs` | [x] |
+| 9.3 | Permission groundwork: add `role` column (USER / ADMIN) to User model  | `backend/zerg/models/models.py` | [x] |
 

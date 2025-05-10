@@ -14,11 +14,12 @@ from zerg.database import initialize_database
 
 # Auth dependency
 from zerg.dependencies.auth import get_current_user
+from zerg.dependencies.auth import require_admin
 
 router = APIRouter(
     prefix="/admin",
     tags=["admin"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(get_current_user), Depends(require_admin)],
 )
 
 logger = logging.getLogger(__name__)
