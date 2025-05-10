@@ -16,6 +16,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from zerg.database import default_session_factory
+
+# Auth helper --------------------------------------------------------------
+from zerg.dependencies.auth import validate_ws_jwt
 from zerg.schemas.ws_messages import ErrorMessage
 from zerg.websocket.handlers import dispatch_message
 from zerg.websocket.manager import topic_manager
@@ -38,7 +41,11 @@ def get_websocket_session(session_factory: sessionmaker = None) -> Session:
 
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, initial_topics: Optional[str] = None):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    initial_topics: Optional[str] = None,
+    token: Optional[str] = None,
+):
     """WebSocket endpoint supporting topic-based subscriptions.
 
     Args:
@@ -48,6 +55,23 @@ async def websocket_endpoint(websocket: WebSocket, initial_topics: Optional[str]
     """
     client_id = str(uuid.uuid4())
     logger.info(f"New WebSocket connection attempt from client {client_id}")
+
+    # ------------------------------------------------------------------
+    # Authenticate BEFORE accepting the WebSocket handshake.  If auth fails
+    # we close with code 4401 and return early (Stage-8 hardening).
+    # ------------------------------------------------------------------
+
+    db_for_auth = get_websocket_session()
+    try:
+        try:
+            user = validate_ws_jwt(token, db_for_auth)
+            logger.debug("WebSocket auth succeeded for user %s (client %s)", getattr(user, "id", "?"), client_id)
+        except Exception as exc:  # pragma: no cover – handled below
+            logger.info("WebSocket auth failed (%s) – closing connection", exc)
+            await websocket.close(code=4401, reason="Unauthorized")
+            return
+    finally:
+        db_for_auth.close()
 
     try:
         await websocket.accept()

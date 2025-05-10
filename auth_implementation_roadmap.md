@@ -121,17 +121,17 @@ Stage 7 – Docs & housekeeping
 |---|------|---------------|--------|
 | 7.1 | Update **README.md** quick-start (mention Google sign-in & bypass)    | `README.md` | [x] |
 | 7.2 | Add security note to `docs/auth_overview.md` → “Phase A shipped”      | `docs/auth_overview.md` | [x] |
-| 7.3 | Verify `pre-commit` passes, fix new Ruff warnings, bump `ruff.toml` exclude list if needed | repo root | [~] |
+| 7.3 | Verify `pre-commit` passes, fix new Ruff warnings, bump `ruff.toml` exclude list if needed | repo root | [x] |
 
 -------------------------------------------------------------------------------
 Stage 8 – WebSocket auth hardening *(post-MVP)*
 -------------------------------------------------------------------------------
 | # | Task | Code Location | Status |
 |----|------------------------------------------------------------------------------------------------|---------------------------------------------|--------|
-| 8.1 | Extract `validate_ws_jwt()` helper (reuse logic from `get_current_user`)                      | `zerg/dependencies/auth.py`                 | [ ] |
-| 8.2 | In `routers/websocket.py` verify `token` *before* `accept()`; on failure close **4401**       | `backend/zerg/routers/websocket.py`         | [ ] |
+| 8.1 | Extract `validate_ws_jwt()` helper (reuse logic from `get_current_user`)                      | `zerg/dependencies/auth.py`                 | [x] |
+| 8.2 | In `routers/websocket.py` verify `token` *before* `accept()`; on failure close **4401**       | `backend/zerg/routers/websocket.py`         | [x] |
 | 8.3 | Front-end always appends `?token=<jwt>`                                                      | `frontend/src/network/ws_client_v2.rs`      | [x] |
-| 8.4 | Tests: (i) blocked w/o token (ii) succeeds w/ token (iii) bypass mode                         | `backend/tests/test_websocket_auth.py`      | [ ] |
+| 8.4 | Tests: (i) blocked w/o token (ii) succeeds w/ token (iii) bypass mode                         | `backend/tests/test_websocket_auth.py`      | [x] |
 | 8.5 | Propagate resolved `user_id` to `TopicConnectionManager` (prep per-user topics)               | `backend/zerg/websocket/manager.py`         | [ ] |
 | 8.6 | Docs: mention WebSocket close-code **4401 Unauthorized**                                      | `docs/auth_overview.md`                     | [ ] |
 

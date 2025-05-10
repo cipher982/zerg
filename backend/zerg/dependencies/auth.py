@@ -187,3 +187,54 @@ def _get_or_create_dev_user(db: Session):
         return user
 
     return crud.create_user(db, email=DEV_EMAIL, provider=None)
+
+
+# ---------------------------------------------------------------------------
+# Helper for WebSocket authentication (Stage 8)
+# ---------------------------------------------------------------------------
+
+
+def validate_ws_jwt(token: str | None, db: Session):
+    """Validate JWT passed as ``?token=…`` in WebSocket URL.
+
+    Mirrors :pyfunc:`get_current_user` but works in the *WebSocket* context
+    where we cannot rely on an HTTP *Authorization* header.  Returns the
+    resolved ``User`` row or raises ``HTTPException`` *(401)*.
+    """
+
+    # 1. Development bypass -------------------------------------------------
+    if AUTH_DISABLED:
+        return _get_or_create_dev_user(db)
+
+    # 2. Require a token ----------------------------------------------------
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+
+    # 3. Decode / verify  ---------------------------------------------------
+    try:
+        # Prefer python-jose if available.
+        try:
+            from jose import jwt  # type: ignore
+
+            payload: dict[str, Any] = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        except ModuleNotFoundError:
+            payload = _decode_jwt_fallback(token, JWT_SECRET)
+
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
+    # 4. Lookup user --------------------------------------------------------
+    user_id_claim = payload.get("sub")
+    if user_id_claim is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
+
+    try:
+        user_id = int(user_id_claim)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
+
+    user = crud.get_user(db, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+
+    return user
