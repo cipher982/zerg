@@ -28,6 +28,9 @@ class TopicConnectionManager:
         self.topic_subscriptions: Dict[str, Set[str]] = {}
         # Map of client_id to set of subscribed topics
         self.client_topics: Dict[str, Set[str]] = {}
+        # Map client_id -> authenticated user_id (optional)
+        self.client_users: Dict[str, int | None] = {}
+
         # Register for relevant events
         self._setup_event_handlers()
 
@@ -50,7 +53,7 @@ class TopicConnectionManager:
         # User events (e.g., profile updated) – broadcast to dedicated topic
         event_bus.subscribe(EventType.USER_UPDATED, self._handle_user_event)
 
-    async def connect(self, client_id: str, websocket: WebSocket) -> None:
+    async def connect(self, client_id: str, websocket: WebSocket, user_id: int | None = None) -> None:
         """Register a new client connection.
 
         Args:
@@ -59,6 +62,7 @@ class TopicConnectionManager:
         """
         self.active_connections[client_id] = websocket
         self.client_topics[client_id] = set()
+        self.client_users[client_id] = user_id
         logger.info(f"Client {client_id} connected")
 
     async def disconnect(self, client_id: str) -> None:
@@ -68,6 +72,8 @@ class TopicConnectionManager:
             client_id: The client ID to remove
         """
         if client_id in self.active_connections:
+            # Clean user mapping
+            self.client_users.pop(client_id, None)
             # Remove from active connections
             del self.active_connections[client_id]
 
