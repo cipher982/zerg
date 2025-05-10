@@ -37,6 +37,11 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
+    # Role / permission level – currently "USER" or "ADMIN".  Use a simple
+    # VARCHAR instead of a full Enum so we can add roles without migrations
+    # in development.  In production we might switch to Enum later.
+    role = Column(String, nullable=False, default="USER")
+
     # -------------------------------------------------------------------
     # Personalisation fields (introduced in *User Personalisation* feature)
     # -------------------------------------------------------------------

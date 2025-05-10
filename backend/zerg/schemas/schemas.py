@@ -62,6 +62,7 @@ class UserOut(BaseModel):
     avatar_url: Optional[str] = None
     prefs: Optional[Dict[str, Any]] = None
     last_login: Optional[datetime] = None
+    role: str = "USER"
 
     class Config:
         from_attributes = True

@@ -190,6 +190,20 @@ def _get_or_create_dev_user(db: Session):
 
 
 # ---------------------------------------------------------------------------
+# Admin guard – ensures the current user has role == "ADMIN"
+# ---------------------------------------------------------------------------
+
+
+def require_admin(current_user=Depends(get_current_user)):
+    """Raise 403 if the authenticated user is **not** an administrator."""
+
+    if getattr(current_user, "role", "USER") != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
+
+    return current_user
+
+
+# ---------------------------------------------------------------------------
 # Helper for WebSocket authentication (Stage 8)
 # ---------------------------------------------------------------------------
 

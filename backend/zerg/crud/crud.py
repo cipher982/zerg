@@ -148,12 +148,18 @@ def create_user(
     email: str,
     provider: Optional[str] = None,
     provider_user_id: Optional[str] = None,
+    role: str = "USER",
 ) -> User:
     """Insert new user row.
 
     Caller is expected to ensure uniqueness beforehand; we do not upsert here.
     """
-    new_user = User(email=email, provider=provider, provider_user_id=provider_user_id)
+    new_user = User(
+        email=email,
+        provider=provider,
+        provider_user_id=provider_user_id,
+        role=role,
+    )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
