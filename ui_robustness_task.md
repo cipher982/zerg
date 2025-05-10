@@ -193,6 +193,24 @@ frontend/e2e/*                      (Playwright config + spec)
 5. Decide on framework (Yew / Leptos spike) and storyboard pages for visual
    diff tests.
 
+### 7.5 Visibility-helper rollout (same day follow-up)
+
+✔ **Chat View migrated** – replaced five inline `set_attribute("style", …display… )`
+  calls with `dom_utils::hide()` / `dom_utils::show()`.
+
+✔ **Dashboard navigation** – `NavigateToDashboard` reducer path in `update.rs`
+  now hides the Chat container via the helper, eliminating another raw style
+  toggle.
+
+  _grep tally_  ➜  **~10** direct `display:none` writes remain across the code-
+  base (mainly inside the debug modal).  We are over the halfway mark.
+
+✔ Added missing `use crate::dom_utils` imports where necessary so the helpers
+  compile without fully-qualified paths.
+
+_Outcome_ – We validate that the helper works across **pages** (Chat ↔ Dash)
+as well as **modals**.  Momentum for finishing task 3 in the TODO list.
+
 The quick-wins are now merged; future work can iterate without the original
 bug resurfacing.
 

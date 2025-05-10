@@ -1379,7 +1379,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 if let Some(document) = web_sys::window().unwrap().document() {
                     // First hide the chat view container
                     if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
-                        let _ = chat_container.set_attribute("style", "display: none;");
+                        hide(&chat_container);
                     }
                     
                     if let Err(e) = crate::views::render_active_view_by_type(&crate::storage::ActiveView::Dashboard, &document) {
