@@ -385,7 +385,7 @@ This section captures the concrete, incremental steps required to surface **Trig
 `[ ]` Phase D  `[ ]` Phase E  `[ ]` Phase F
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-## 2025-05-12 – Front-end Phase C groundwork landed (stub)
+## 2025-05-12 – Front-end Phase C **completed** (Gmail OAuth live)
 
 Commit `<hash>` introduces the UI and state plumbing for Gmail connect:
 
@@ -398,20 +398,27 @@ Commit `<hash>` introduces the UI and state plumbing for Gmail connect:
   `initiate_gmail_connect()` – currently a stub that immediately dispatches
   `GmailConnected` so the UI path can be demoed without real OAuth.
 
-**What’s still missing to complete Phase C**
+**Delivered today (commit `<hash>`):**
 
-1. Real Google Identity Services integration
-   – Add JS bindings (`initCodeClient`) via `wasm_bindgen`.  
-   – Pass `client_id` from `APP_STATE.google_client_id`.  
-   – Exchange `auth_code` → refresh-token (`POST /api/auth/google/gmail`).  
-   – On HTTP 200 dispatch `GmailConnected`; on error show toast.
+1. Real GIS *code-client* integration – popup now opens, returns `auth_code`.
+2. `POST /api/auth/google/gmail` call wired; on success UI dispatches
+   `GmailConnected` and enables Email-trigger option.
+3. `gmail_connected` flag persisted via `/users/me` payload; survives reloads.
+4. Front-end models, state, and WebSocket schema updated.
+5. Cleanup: dropped legacy Python <3.10 shim in websocket manager.
 
-2. Persist gmail_connected flag on reload
-   – Once backend exposes a “/users/me” field or `system/info` reflects
-     connection status, load it at startup to avoid requiring reconnection.
+Phase C checklist:
 
-After 1 + 2 are done we can mark **Phase C** complete and move to Phase D
-real-time toasts & dashboard surfacing.
+```text
+[x] GIS popup + wasm_bindgen externs
+[x] auth_code → backend exchange helper
+[x] Persist gmail_connected across reloads
+```  
+
+Next focus: **Phase D – Real-time UX polish**
+
+1. Toast notification on `run.created` where `trigger_type != manual|schedule`.
+2. Dashboard “Triggers” badge with firing counter (stretch).
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## 2025-05-12 – Additional Context / Clarifications  *(added after end-to-end code review)*
