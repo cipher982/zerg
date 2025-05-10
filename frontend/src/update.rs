@@ -32,8 +32,15 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // Auth / profile handling
         // ---------------------------------------------------------------
         Message::CurrentUserLoaded(user) => {
-            state.current_user = Some(user);
+            // Store a *clone* inside the state so that we can still access the
+            // original `user` value below without running into move issues.
+            state.current_user = Some(user.clone());
             state.logged_in = true;
+
+            // Persist Gmail connection status so the Triggers tab can enable
+            // the e-mail trigger option without requiring another network
+            // call.
+            state.gmail_connected = user.gmail_connected;
 
             // Mount / refresh user menu asynchronously after borrow ends.
             commands.push(Command::UpdateUI(Box::new(|| {

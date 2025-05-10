@@ -66,6 +66,16 @@ class User(Base):
 
     gmail_refresh_token = Column(String, nullable=True)
 
+    # -------------------------------------------------------------------
+    # Convenience property used by the API layer / Pydantic models.
+    # -------------------------------------------------------------------
+
+    @property
+    def gmail_connected(self) -> bool:  # noqa: D401 – simple boolean accessor
+        """Return *True* if the user granted offline Gmail access (refresh token stored)."""
+
+        return self.gmail_refresh_token is not None
+
     # Timestamps -------------------------------------------------------------
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -103,6 +103,7 @@ pub fn start() -> Result<(), JsValue> {
                 display_name: Some("Developer".to_string()),
                 avatar_url: None,
                 prefs: None,
+                gmail_connected: false,
             };
             dispatch_global_message(crate::messages::Message::CurrentUserLoaded(dummy_user));
             return;
