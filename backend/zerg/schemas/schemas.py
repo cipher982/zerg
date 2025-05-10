@@ -64,6 +64,13 @@ class UserOut(BaseModel):
     last_login: Optional[datetime] = None
     role: str = "USER"
 
+    # -------------------- Gmail integration (Phase-C) --------------------
+    # Whether the authenticated user already connected their Gmail account.
+    # Convenience flag derived from the presence of a refresh-token – exposed
+    # so the WASM frontend can enable e-mail trigger creation without an
+    # extra round-trip.
+    gmail_connected: bool = False
+
     class Config:
         from_attributes = True
 

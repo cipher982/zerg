@@ -222,6 +222,10 @@ pub struct CurrentUser {
 
     #[serde(default)]
     pub prefs: Option<serde_json::Value>,
+
+    // ---------------- Gmail integration (Phase-C) ----------------
+    #[serde(default)]
+    pub gmail_connected: bool,
 }
 
 // -----------------------------------------------------------------------------

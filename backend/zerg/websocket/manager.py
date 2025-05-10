@@ -1,7 +1,8 @@
 """Topic-based WebSocket connection manager.
 
-This module provides a new connection manager that supports topic-based subscriptions
-and integrates with the event bus for a unified real-time messaging system.
+Manages WebSocket connections with topic-based subscriptions and relays
+EventBus events to connected clients.  Requires Python ≥ 3.10 so modern Union
+syntax (``int | None``) is available – no backwards-compat hacks.
 """
 
 import logging
