@@ -16,7 +16,7 @@ use wasm_bindgen::closure::Closure;
 
 use web_sys::{Document, Element};
 
-use crate::components::modal as shared_modal;
+use crate::components::{modal as shared_modal, tab_bar};
 use crate::messages::Message;
 use crate::state::{dispatch_global_message, AppState, DebugTab};
 
@@ -82,26 +82,23 @@ pub fn render_agent_debug_modal(state: &AppState, document: &Document) -> Result
 
     content.append_child(&header_container)?;
 
-    // Tabs ---------------------------------------------------------------
-    let tabs_container = document.create_element("div")?;
-    tabs_container.set_class_name("tab-container");
-
-    let overview_tab = create_tab_button(
+    // Tabs – use shared TabBar helper then attach click handlers ------------
+    let active_overview = matches!(pane.active_tab, DebugTab::Overview);
+    let tab_container = tab_bar::build_tab_bar(
         document,
-        "Overview",
-        DebugTab::Overview,
-        matches!(pane.active_tab, DebugTab::Overview),
-    )?;
-    let raw_tab = create_tab_button(
-        document,
-        "Raw JSON",
-        DebugTab::RawJson,
-        matches!(pane.active_tab, DebugTab::RawJson),
+        &[("Overview", active_overview), ("Raw JSON", !active_overview)],
     )?;
 
-    tabs_container.append_child(&overview_tab)?;
-    tabs_container.append_child(&raw_tab)?;
-    content.append_child(&tabs_container)?;
+    // Attach listeners to newly created buttons (child_nodes order matches
+    // the slice order above).
+    if let Some(first_btn) = tab_container.first_element_child() {
+        attach_tab_click(&first_btn, DebugTab::Overview);
+    }
+    if let Some(second) = tab_container.last_element_child() {
+        attach_tab_click(&second, DebugTab::RawJson);
+    }
+
+    content.append_child(&tab_container)?;
 
     // Body ---------------------------------------------------------------
     let body = document.create_element("div")?;
@@ -153,25 +150,14 @@ pub fn render_agent_debug_modal(state: &AppState, document: &Document) -> Result
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn create_tab_button(
-    document: &Document,
-    label: &str,
-    tab: DebugTab,
-    active: bool,
-) -> Result<Element, JsValue> {
-    let btn = document.create_element("button")?;
-    btn.set_inner_html(label);
-    btn.set_class_name(if active { "tab-button active" } else { "tab-button" });
-
-    // Click handler → dispatch global message
+// Shared attacher – avoids code duplication inside build logic
+fn attach_tab_click(btn: &Element, tab: DebugTab) {
     let tab_clone = tab.clone();
     let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_evt: web_sys::MouseEvent| {
         dispatch_global_message(Message::SetAgentDebugTab(tab_clone.clone()));
     }));
-    btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+    let _ = btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref());
     cb.forget();
-
-    Ok(btn)
 }
 
 /// Convenience wrapper around the shared helper so external call-sites remain
