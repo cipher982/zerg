@@ -252,6 +252,7 @@ impl From<WsUserUpdate> for crate::models::CurrentUser {
             display_name: ws.display_name,
             avatar_url: ws.avatar_url,
             prefs: None,
+            gmail_connected: false,
         }
     }
 }

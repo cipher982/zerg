@@ -1,5 +1,9 @@
-import asyncio
 import os
+
+# Set *before* any project imports so backend skips background services
+os.environ["TESTING"] = "1"
+
+import asyncio
 import sys
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -27,7 +31,47 @@ from zerg.websocket.manager import topic_manager
 # Disable LangSmith tracing for all tests
 os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ["LANGCHAIN_ENDPOINT"] = ""
+
+# ---------------------------------------------------------------------------
+# Stub *cryptography* so zerg.utils.crypto can import Fernet without the real
+# wheel present.  We only need the API surface used in tests: ``encrypt`` and
+# ``decrypt`` should round-trip the plaintext.
+# ---------------------------------------------------------------------------
+
+if "cryptography" not in sys.modules:  # guard in case real package installed
+    import types as _types
+
+    _crypto_mod = _types.ModuleType("cryptography")
+    _fernet_mod = _types.ModuleType("cryptography.fernet")
+
+    class _FakeFernet:  # noqa: D401 – minimal stub
+        def __init__(self, _key):
+            self._key = _key
+
+        def encrypt(self, data: bytes):  # noqa: D401 – mimic API
+            return data[::-1]  # naive reversible transform
+
+        def decrypt(self, token: bytes):  # noqa: D401
+            return token[::-1]
+
+    _fernet_mod.Fernet = _FakeFernet  # type: ignore[attr-defined]
+    sys.modules["cryptography"] = _crypto_mod
+    sys.modules["cryptography.fernet"] = _fernet_mod
+
 os.environ["LANGCHAIN_API_KEY"] = ""
+
+# ---------------------------------------------------------------------------
+# Crypto – provide deterministic Fernet key for the test suite so refresh
+# tokens are encrypted at rest while keeping decryption reproducible.
+# ---------------------------------------------------------------------------
+# Key generated via ``cryptography.fernet.Fernet.generate_key()`` once and
+# hard-coded here.  The value is **public** and only used in CI/dev tests –
+# production deployments must override via environment variable.
+
+os.environ.setdefault(
+    "FERNET_SECRET",
+    "Mj7MFJspDPjiFBGHZJ5hnx70XAFJ_En6ofIEhn3BoXw=",
+)
 
 # Mock the LangSmith client to prevent any actual API calls
 mock_langsmith = MagicMock()
@@ -321,8 +365,8 @@ def client(db_session):
 
     app.dependency_overrides[get_db] = override_get_db
 
-    client = TestClient(app, backend="asyncio")
-    yield client
+    with TestClient(app, backend="asyncio") as client:
+        yield client
 
     app.dependency_overrides = {}
 
@@ -341,8 +385,8 @@ def test_client(db_session):
 
     app.dependency_overrides[get_db] = override_get_db
 
-    client = TestClient(app, backend="asyncio")
-    yield client
+    with TestClient(app, backend="asyncio") as client:
+        yield client
 
     app.dependency_overrides = {}
 
@@ -475,3 +519,26 @@ def mock_langchain_openai():
         mock_chat = MagicMock()
         mock_chat_openai.return_value = mock_chat
         yield mock_chat_openai
+
+
+# ---------------------------------------------------------------------------
+# Cleanup: stop EmailTriggerService poll loop so pytest can exit immediately
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _shutdown_email_trigger_service():
+    """Ensure background poller is stopped at the end of the test session."""
+
+    from zerg.services.email_trigger_service import email_trigger_service  # noqa: WPS433
+
+    yield  # run tests
+
+    # Cancel poll loop if still running (ignore event-loop already closed)
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.run_until_complete(email_trigger_service.stop())
+    except RuntimeError:
+        # event-loop already closed by pytest – no action needed
+        pass

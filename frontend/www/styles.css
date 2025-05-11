@@ -125,6 +125,14 @@ body {
     display: none !important;
 }
 
+/* Elements that carry the boolean `hidden` attribute should not take any
+   layout space.  All modern browsers already ship this behaviour but we make
+   it explicit so older CSS resets do not override it. */
+
+[hidden] {
+  display: none !important;
+}
+
 /* The new dedicated root containers take the full viewport by default so
    their children can rely on flex/grid layouts without extra wrapping. */
 

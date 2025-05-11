@@ -14,8 +14,15 @@ use web_sys::Document;
 use web_sys::Element;
 use wasm_bindgen::JsCast;
 
+use crate::dom_utils;
+use crate::components::tab_bar;
+
+
 use crate::state::APP_STATE;
 use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
+use crate::state::dispatch_global_message;
+use crate::models::Trigger;
+use wasm_bindgen::closure::Closure;
 
 /// Thin wrapper around the existing agent configuration modal.  The internal
 /// fields will expand once we fully migrate DOM ownership.
@@ -42,7 +49,131 @@ impl AgentConfigModal {
                 Self::attach_listeners(document)?;
                 let _ = modal.set_attribute("data-listeners-attached", "true");
             }
+
+            // -----------------------------------------------------------------
+            // HOT-FIX: legacy HTML templates might already ship a modal DOM that
+            // predates the new *Triggers* tab.  When such an element exists we
+            // *augment* it in-place so users don't need to fully clear cache /
+            // hard-refresh.  The check is idempotent – if the tab already
+            // exists we skip all work.
+            // -----------------------------------------------------------------
+
+            if document.get_element_by_id("agent-triggers-tab").is_none() {
+                // Add button next to Main tab (after any History tab if present)
+                if let Some(tab_container) = document.query_selector("#agent-modal .tab-container").ok().flatten() {
+                    let triggers_tab = document.create_element("button")?;
+                    triggers_tab.set_class_name("tab-button");
+                    triggers_tab.set_id("agent-triggers-tab");
+                    triggers_tab.set_inner_html("Triggers");
+                    tab_container.append_child(&triggers_tab)?;
+                }
+
+                // Add content wrapper equivalent to build_dom() variant
+                if document.get_element_by_id("agent-triggers-content").is_none() {
+                    let triggers_content = document.create_element("div")?;
+                    triggers_content.set_class_name("tab-content");
+                    triggers_content.set_id("agent-triggers-content");
+                    dom_utils::hide(&triggers_content);
+
+                    // ----- empty wrapper with CTA -----
+                    let empty_div = document.create_element("div")?;
+                    empty_div.set_id("agent-triggers-empty");
+                    let p = document.create_element("p")?;
+                    p.set_inner_html("Connect external events to your agent – create a trigger to get started.");
+                    empty_div.append_child(&p)?;
+
+            // Gmail connect row (only visible when not yet connected)
+            let gmail_row = document.create_element("div")?;
+            gmail_row.set_id("agent-gmail-connect-row");
+            gmail_row.set_attribute("style", "margin-top:8px;")?;
+
+            // Button placeholder – we toggle visibility later in
+            // `render_gmail_connect_status`.
+            let connect_btn = document.create_element("button")?;
+            connect_btn.set_id("agent-connect-gmail-btn");
+            connect_btn.set_class_name("btn-primary");
+            connect_btn.set_inner_html("Connect Gmail");
+            gmail_row.append_child(&connect_btn)?;
+
+            let connected_span = document.create_element("span")?;
+            connected_span.set_id("agent-gmail-connected-span");
+            connected_span.set_inner_html("Gmail connected ✓");
+            // Static styling (colour + margin) – visibility handled via helper
+            connected_span.set_attribute("style", "color:var(--success-color);margin-left:4px;")?;
+            dom_utils::hide(&connected_span);
+            gmail_row.append_child(&connected_span)?;
+
+            empty_div.append_child(&gmail_row)?;
+                    let add_trigger_btn = document.create_element("button")?;
+                    add_trigger_btn.set_id("agent-add-trigger-btn");
+                    add_trigger_btn.set_class_name("btn-primary");
+                    add_trigger_btn.set_inner_html("Add Trigger");
+                    empty_div.append_child(&add_trigger_btn)?;
+                    triggers_content.append_child(&empty_div)?;
+
+                    // ----- form card (hidden) -----
+                    let form_card = document.create_element("div")?;
+                    form_card.set_id("agent-add-trigger-form");
+                    form_card.set_class_name("card");
+                    form_card.set_attribute("style", "padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
+                    dom_utils::hide(&form_card);
+
+                    let lbl = document.create_element("label")?;
+                    lbl.set_inner_html("Type");
+                    lbl.set_attribute("for", "agent-trigger-type-select")?;
+                    form_card.append_child(&lbl)?;
+
+                    let sel = document.create_element("select")?;
+                    sel.set_id("agent-trigger-type-select");
+                    sel.set_class_name("input-select");
+                    let opt1 = document.create_element("option")?;
+                    opt1.set_attribute("value", "webhook")?;
+                    opt1.set_inner_html("Webhook – send POST requests");
+                    sel.append_child(&opt1)?;
+                    let opt2 = document.create_element("option")?;
+                    opt2.set_attribute("value", "email:gmail")?;
+                    opt2.set_inner_html("Email (Gmail)");
+                    // Disable until gmail_connected flag is true – we toggle
+                    // dynamically in `render_gmail_connect_status`.
+                    opt2.set_attribute("data-gmail-option", "true")?;
+                    sel.append_child(&opt2)?;
+                    form_card.append_child(&sel)?;
+
+                    let act = document.create_element("div")?;
+                    act.set_attribute("style", "margin-top:12px;display:flex;gap:8px;")?;
+                    let cancel_btn = document.create_element("button")?;
+                    cancel_btn.set_id("agent-cancel-add-trigger");
+                    cancel_btn.set_class_name("btn");
+                    cancel_btn.set_inner_html("Cancel");
+                    act.append_child(&cancel_btn)?;
+                    let create_btn = document.create_element("button")?;
+                    create_btn.set_id("agent-create-trigger");
+                    create_btn.set_class_name("btn-primary");
+                    create_btn.set_inner_html("Create Trigger");
+                    act.append_child(&create_btn)?;
+                    form_card.append_child(&act)?;
+                    triggers_content.append_child(&form_card)?;
+
+                    // ----- list -----
+                    let list_ul = document.create_element("ul")?;
+                    list_ul.set_id("agent-triggers-list");
+                    list_ul.set_class_name("triggers-list");
+                    list_ul.set_attribute("style", "margin-top:12px;")?;
+                    triggers_content.append_child(&list_ul)?;
+
+                    // Append after existing tab-content containers
+                    if let Some(modal_content) = document.query_selector("#agent-modal .modal-content").ok().flatten() {
+                        modal_content.append_child(&triggers_content)?;
+                    }
+                }
+
+                // Newly injected pieces need listeners.
+                Self::attach_listeners(document)?;
+            }
         }
+        // Ensure Gmail connect status elements reflect current app state.
+        let _ = render_gmail_connect_status(document);
+
         Ok(Self)
     }
 
@@ -55,15 +186,11 @@ impl AgentConfigModal {
         use wasm_bindgen::closure::Closure;
         use wasm_bindgen::JsCast;
 
-        // Create modal container
-        let modal = document.create_element("div")?;
-        modal.set_id("agent-modal");
-        modal.set_class_name("modal");
-        modal.set_attribute("style", "display: none;")?;
-
-        // Create modal content
-        let modal_content = document.create_element("div")?;
-        modal_content.set_class_name("modal-content");
+        // -----------------------------------------------------------------
+        // Use shared helper so backdrop + content wrapper follow the same
+        // conventions (`hidden` attribute for visibility, CSS classes, …)
+        // -----------------------------------------------------------------
+        let (modal, modal_content) = crate::components::modal::ensure_modal(document, "agent-modal")?;
 
         // Header
         let modal_header = document.create_element("div")?;
@@ -81,22 +208,119 @@ impl AgentConfigModal {
         modal_header.append_child(&modal_title)?;
         modal_header.append_child(&close_button)?;
 
-        // Tabs: Main
-        let tab_container = document.create_element("div")?;
-        tab_container.set_class_name("tab-container");
+        // Tabs: Main / Triggers – built via shared helper ------------------
+        let tab_container = tab_bar::build_tab_bar(document, &[("Main", true), ("Triggers", false)])?;
 
-        let main_tab = document.create_element("button")?;
-        main_tab.set_class_name("tab-button active");
-        main_tab.set_id("main-tab");
-        main_tab.set_inner_html("Main");
-
-
-        tab_container.append_child(&main_tab)?;
+        // Assign stable IDs so legacy code (attach_listeners) can still look
+        // them up.  Child order matches slice order.
+        if let Some(first_btn) = tab_container.first_element_child() {
+            first_btn.set_id("agent-main-tab");
+        }
+        if let Some(second_btn) = tab_container.last_element_child() {
+            second_btn.set_id("agent-triggers-tab");
+        }
 
         // Main content
         let main_content = document.create_element("div")?;
         main_content.set_class_name("tab-content");
-        main_content.set_id("main-content");
+        main_content.set_id("agent-main-content");
+
+        // --------------------------------------------------------------
+        // Triggers content wrapper (hidden by default)
+        // --------------------------------------------------------------
+
+        let triggers_content = document.create_element("div")?;
+        triggers_content.set_class_name("tab-content");
+        triggers_content.set_id("agent-triggers-content");
+        // Hidden until the user clicks the tab button.
+        dom_utils::hide(&triggers_content);
+
+        // Placeholder message while we build out the real UI – avoids an
+        // empty pane.
+        // -----------------------------------------------------------------
+        // Empty-state wrapper with CTA button
+        // -----------------------------------------------------------------
+
+        let empty_wrapper = document.create_element("div")?;
+        empty_wrapper.set_id("agent-triggers-empty");
+
+        let empty_p = document.create_element("p")?;
+        empty_p.set_inner_html("Connect external events to your agent – create a trigger to get started.");
+        empty_wrapper.append_child(&empty_p)?;
+
+        let add_trigger_btn = document.create_element("button")?;
+        add_trigger_btn.set_id("agent-add-trigger-btn");
+        add_trigger_btn.set_class_name("btn-primary");
+        add_trigger_btn.set_inner_html("Add Trigger");
+        empty_wrapper.append_child(&add_trigger_btn)?;
+
+        triggers_content.append_child(&empty_wrapper)?;
+
+        // -----------------------------------------------------------------
+        // Inline *Add Trigger* form (hidden until CTA clicked)
+        // -----------------------------------------------------------------
+
+        let form_card = document.create_element("div")?;
+        form_card.set_id("agent-add-trigger-form");
+        form_card.set_class_name("card");
+        form_card.set_attribute("style", "padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
+        dom_utils::hide(&form_card);
+
+        // Type label + select
+        let type_label = document.create_element("label")?;
+        type_label.set_inner_html("Type");
+        type_label.set_attribute("for", "agent-trigger-type-select")?;
+
+        let type_select = document.create_element("select")?;
+        type_select.set_id("agent-trigger-type-select");
+        type_select.set_class_name("input-select");
+
+        // Option – webhook (enabled)
+        let opt_webhook = document.create_element("option")?;
+        opt_webhook.set_attribute("value", "webhook")?;
+        opt_webhook.set_inner_html("Webhook – send POST requests");
+        type_select.append_child(&opt_webhook)?;
+
+        // Option – email:gmail (disabled for now)
+        let opt_gmail = document.create_element("option")?;
+        opt_gmail.set_attribute("value", "email:gmail")?;
+        opt_gmail.set_inner_html("Email (Gmail) – coming soon…");
+        opt_gmail.set_attribute("disabled", "true")?;
+        type_select.append_child(&opt_gmail)?;
+
+        form_card.append_child(&type_label)?;
+        form_card.append_child(&type_select)?;
+
+        // Actions row
+        let actions_div = document.create_element("div")?;
+        actions_div.set_class_name("actions-row");
+        actions_div.set_attribute("style", "margin-top:12px;display:flex;gap:8px;")?;
+
+        let cancel_btn = document.create_element("button")?;
+        cancel_btn.set_id("agent-cancel-add-trigger");
+        cancel_btn.set_class_name("btn");
+        cancel_btn.set_inner_html("Cancel");
+
+        let create_btn = document.create_element("button")?;
+        create_btn.set_id("agent-create-trigger");
+        create_btn.set_class_name("btn-primary");
+        create_btn.set_inner_html("Create Trigger");
+
+        actions_div.append_child(&cancel_btn)?;
+        actions_div.append_child(&create_btn)?;
+        form_card.append_child(&actions_div)?;
+
+        triggers_content.append_child(&form_card)?;
+
+        // -----------------------------------------------------------------
+        // Triggers list – populated dynamically
+        // -----------------------------------------------------------------
+
+        let list_el = document.create_element("ul")?;
+        list_el.set_id("agent-triggers-list");
+        list_el.set_class_name("triggers-list");
+        list_el.set_attribute("style", "margin-top:12px;")?;
+        triggers_content.append_child(&list_el)?;
 
         // --- Agent name ---
         let name_label = document.create_element("label")?;
@@ -290,6 +514,11 @@ impl AgentConfigModal {
         // Append schedule container to main_content
         main_content.append_child(&sched_container)?;
 
+        // --------------------------------------------------------------
+        // Final assembly – add both tab contents to modal
+        // --------------------------------------------------------------
+
+
 
         // --- Buttons ---
         let button_container = document.create_element("div")?;
@@ -305,13 +534,8 @@ impl AgentConfigModal {
         modal_content.append_child(&modal_header)?;
         modal_content.append_child(&tab_container)?;
         modal_content.append_child(&main_content)?;
+        modal_content.append_child(&triggers_content)?;
         modal_content.append_child(&button_container)?;
-
-        modal.append_child(&modal_content)?;
-
-        // Inject into DOM (body)
-        let body = document.body().ok_or(JsValue::from_str("No body found"))?;
-        body.append_child(&modal)?;
 
         // ------------------------------------------------------------------
         // UX: Close when clicking on backdrop (outside modal-content)
@@ -360,36 +584,127 @@ impl AgentConfigModal {
 
         // Close (×) button
         if let Some(btn) = document.get_element_by_id("modal-close") {
-            let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+            let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::CloseAgentModal);
             }));
             btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
             cb.forget();
         }
 
-        // Tab switching – simple class toggle
-        if let (Some(main_tab), Some(history_tab)) = (
-            document.get_element_by_id("main-tab"),
-            document.get_element_by_id("history-tab"),
-        ) {
-            // Main
-            let cb_main = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+        // Tab switching – simple class toggle (Main, History, Triggers)
+        if let Some(main_tab) = document.get_element_by_id("agent-main-tab") {
+            let cb_main = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SwitchToMainTab);
             }));
             main_tab.add_event_listener_with_callback("click", cb_main.as_ref().unchecked_ref())?;
             cb_main.forget();
+        }
 
-            // History
-            let cb_hist = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+        if let Some(history_tab) = document.get_element_by_id("agent-history-tab") {
+            let cb_hist = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SwitchToHistoryTab);
             }));
             history_tab.add_event_listener_with_callback("click", cb_hist.as_ref().unchecked_ref())?;
             cb_hist.forget();
         }
 
+        if let Some(triggers_tab) = document.get_element_by_id("agent-triggers-tab") {
+            let cb_trg = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                dispatch(crate::messages::Message::SwitchToTriggersTab);
+            }));
+            triggers_tab.add_event_listener_with_callback("click", cb_trg.as_ref().unchecked_ref())?;
+            cb_trg.forget();
+        }
+
+        // -------- Add Trigger flow UI ----------
+        // Show form
+        if let Some(add_btn) = document.get_element_by_id("agent-add-trigger-btn") {
+            let cb_show = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    if let Some(empty_div) = doc.get_element_by_id("agent-triggers-empty") {
+                        dom_utils::hide(&empty_div);
+                    }
+                    if let Some(form) = doc.get_element_by_id("agent-add-trigger-form") {
+                        dom_utils::show(&form);
+                    }
+                }
+            }));
+            add_btn.add_event_listener_with_callback("click", cb_show.as_ref().unchecked_ref())?;
+            cb_show.forget();
+        }
+
+        // Cancel form
+        if let Some(cancel_btn) = document.get_element_by_id("agent-cancel-add-trigger") {
+            let cb_cancel = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    if let Some(form) = doc.get_element_by_id("agent-add-trigger-form") {
+                        dom_utils::hide(&form);
+                    }
+                    if let Some(empty_div) = doc.get_element_by_id("agent-triggers-empty") {
+                        dom_utils::show(&empty_div);
+                    }
+                }
+            }));
+            cancel_btn.add_event_listener_with_callback("click", cb_cancel.as_ref().unchecked_ref())?;
+            cb_cancel.forget();
+        }
+
+        // Create trigger
+        if let Some(create_btn) = document.get_element_by_id("agent-create-trigger") {
+            let cb_create = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    // Determine agent_id
+                    let agent_id_opt = doc.get_element_by_id("agent-modal")
+                        .and_then(|m| m.get_attribute("data-agent-id"))
+                        .and_then(|s| s.parse::<u32>().ok());
+                    if agent_id_opt.is_none() { return; }
+                    let agent_id = agent_id_opt.unwrap();
+
+                    // Read type value
+                    let type_value = doc.get_element_by_id("agent-trigger-type-select")
+                        .and_then(|e| e.dyn_into::<web_sys::HtmlSelectElement>().ok())
+                        .map(|sel| sel.value())
+                        .unwrap_or_else(|| "webhook".to_string());
+
+                    if type_value == "email:gmail" {
+                        let connected = crate::state::APP_STATE.with(|st| st.borrow().gmail_connected);
+                        if !connected {
+                            // Gmail not connected yet – ignore.
+                            return;
+                        }
+                    }
+
+                    let payload_json = format!("{{\"agent_id\": {}, \"type\": \"{}\"}}", agent_id, type_value);
+                    dispatch_global_message(crate::messages::Message::RequestCreateTrigger { payload_json });
+
+                    // Hide form, show empty again – list will refresh on success
+                    if let Some(form) = doc.get_element_by_id("agent-add-trigger-form") {
+                        dom_utils::hide(&form);
+                    }
+                    if let Some(empty_div) = doc.get_element_by_id("agent-triggers-empty") {
+                        dom_utils::show(&empty_div);
+                    }
+                }
+            }));
+            create_btn.add_event_listener_with_callback("click", cb_create.as_ref().unchecked_ref())?;
+            cb_create.forget();
+        }
+
+        // Gmail Connect button
+        if let Some(conn_btn) = document.get_element_by_id("agent-connect-gmail-btn") {
+            let cb_conn = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                // Kick off OAuth flow (frontend stub for now)
+                crate::auth::google_code_flow::initiate_gmail_connect();
+            }));
+            conn_btn.add_event_listener_with_callback("click", cb_conn.as_ref().unchecked_ref())?;
+            cb_conn.forget();
+        }
+
+        // Legacy prompt-based handler removed.
+
         // Save
         if let Some(save_btn) = document.get_element_by_id("save-agent") {
-            let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+            let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 let window = web_sys::window().unwrap();
                 let document = window.document().unwrap();
 
@@ -536,7 +851,7 @@ impl AgentConfigModal {
 
         // Send task
         if let Some(send_btn) = document.get_element_by_id("send-task") {
-            let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+            let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 dispatch(crate::messages::Message::SendTaskToAgent);
             }));
             send_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
@@ -551,8 +866,11 @@ impl AgentConfigModal {
         let toggle_inputs = |freq: &str, doc: &Document| {
             let set_vis = |id: &str, show: bool| {
                 if let Some(el) = doc.get_element_by_id(&format!("{}-container", id)) {
-                    let style_val = if show { "" } else { "display:none;" };
-                    let _ = el.set_attribute("style", style_val);
+                    if show {
+                        dom_utils::show(&el);
+                    } else {
+                        dom_utils::hide(&el);
+                    }
                 }
             };
 
@@ -696,7 +1014,7 @@ impl AgentConfigModal {
             if let Ok(freq_select) = freq_sel.dyn_into::<HtmlSelectElement>() {
                 let doc_clone = document.clone();
                 let select_for_listener = freq_select.clone();
-                let cb = WasmClosure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+            let cb = WasmClosure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                     let val = select_for_listener.value();
                     toggle_inputs(&val, &doc_clone);
                     update_summary(&doc_clone);
@@ -717,7 +1035,7 @@ impl AgentConfigModal {
         for id in &input_ids {
             if let Some(inp) = document.get_element_by_id(id) {
                 let doc_clone = document.clone();
-                let cb = WasmClosure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
+                let cb = WasmClosure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                     update_summary(&doc_clone);
                 }));
                 inp.add_event_listener_with_callback("input", cb.as_ref().unchecked_ref())?;
@@ -881,7 +1199,11 @@ impl AgentConfigModal {
                         // --- Visibility toggles ---
                         let set_vis = |id: &str, show: bool| {
                             if let Some(el) = document.get_element_by_id(&format!("{}-container", id)) {
-                                let _ = el.set_attribute("style", if show { "" } else { "display:none;" });
+                                if show {
+                                    dom_utils::show(&el);
+                                } else {
+                                    dom_utils::hide(&el);
+                                }
                             }
                         };
 
@@ -948,8 +1270,11 @@ impl AgentConfigModal {
                 // Hide all input containers
                 let set_vis = |id: &str, show: bool| {
                     if let Some(el) = document.get_element_by_id(&format!("{}-container", id)) {
-                        let style_val = if show { "" } else { "display:none;" };
-                        let _ = el.set_attribute("style", style_val);
+                        if show {
+                            dom_utils::show(&el);
+                        } else {
+                            dom_utils::hide(&el);
+                        }
                     }
                 };
                 set_vis("sched-interval", false);
@@ -972,8 +1297,11 @@ impl AgentConfigModal {
             // Hide all input containers
             let set_vis = |id: &str, show: bool| {
                 if let Some(el) = document.get_element_by_id(&format!("{}-container", id)) {
-                    let style_val = if show { "" } else { "display:none;" };
-                    let _ = el.set_attribute("style", style_val);
+                    if show {
+                        dom_utils::show(&el);
+                    } else {
+                        dom_utils::hide(&el);
+                    }
                 }
             };
             set_vis("sched-interval", false);
@@ -990,7 +1318,7 @@ impl AgentConfigModal {
 
         // Finally, show the modal
         if let Some(modal) = document.get_element_by_id("agent-modal") {
-            modal.set_attribute("style", "display: block;")?;
+            crate::components::modal::show(&modal);
         }
 
         Ok(())
@@ -999,8 +1327,138 @@ impl AgentConfigModal {
     /// Hide the modal.
     pub fn close(document: &Document) -> Result<(), JsValue> {
         if let Some(modal) = document.get_element_by_id("agent-modal") {
-            modal.set_attribute("style", "display: none;")?;
+            crate::components::modal::hide(&modal);
         }
         Ok(())
     }
+}
+
+// -----------------------------------------------------------------------------
+// Public helpers – rendered from update.rs when gmail_connected flag changes
+// -----------------------------------------------------------------------------
+
+/// Refresh visibility of the Gmail connect UI row depending on
+/// `APP_STATE.gmail_connected`.
+pub fn render_gmail_connect_status(document: &Document) -> Result<(), JsValue> {
+    let connected = crate::state::APP_STATE.with(|st| st.borrow().gmail_connected);
+
+    if let Some(btn) = document.get_element_by_id("agent-connect-gmail-btn") {
+        if connected {
+            dom_utils::hide(&btn);
+        } else {
+            dom_utils::show(&btn);
+        }
+    }
+    if let Some(span) = document.get_element_by_id("agent-gmail-connected-span") {
+        // Ensure colour always applied
+        let _ = span.set_attribute("style", "color:var(--success-color);margin-left:4px;");
+        if connected {
+            dom_utils::show(&span);
+        } else {
+            dom_utils::hide(&span);
+        }
+    }
+
+    // Enable/disable <option data-gmail-option>
+    if let Some(sel) = document.get_element_by_id("agent-trigger-type-select") {
+        if let Ok(select_el) = sel.dyn_into::<web_sys::HtmlSelectElement>() {
+            for i in 0..select_el.length() {
+                if let Some(opt) = select_el.item(i) {
+                    if opt.get_attribute("data-gmail-option").is_some() {
+                        if connected {
+                            let _ = opt.remove_attribute("disabled");
+                        } else {
+                            let _ = opt.set_attribute("disabled", "true");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+// -----------------------------------------------------------------------------
+// Public helpers – trigger list rendering & interactivity
+// -----------------------------------------------------------------------------
+
+/// Re-render the `<ul id="agent-triggers-list">` element for the given agent.
+/// The function is idempotent – the list is cleared on every call so we can
+/// safely call after every state change.  It attaches new event listeners for
+/// copy / delete buttons on each row.
+pub fn render_triggers_list(document: &Document, agent_id: u32) -> Result<(), JsValue> {
+    use wasm_bindgen::JsCast;
+
+    // Resolve list element.
+    let list_el = match document.get_element_by_id("agent-triggers-list") {
+        Some(el) => el,
+        None => return Ok(()), // Not visible (tab closed)
+    };
+
+    // Fetch triggers for this agent from global state.
+    let triggers: Vec<Trigger> = APP_STATE.with(|state_rc| {
+        state_rc
+            .borrow()
+            .triggers
+            .get(&agent_id)
+            .cloned()
+            .unwrap_or_default()
+    });
+
+    // Toggle empty wrapper visibility
+    if let Some(empty_div) = document.get_element_by_id("agent-triggers-empty") {
+        if triggers.is_empty() {
+            dom_utils::show(&empty_div);
+        } else {
+            dom_utils::hide(&empty_div);
+        }
+    }
+
+    // Clear current list.
+    list_el.set_inner_html("");
+
+    for trig in triggers.iter() {
+        // <li class="trigger-item">
+        let li = document.create_element("li")?;
+        li.set_class_name("trigger-item");
+        li.set_attribute("data-trigger-id", &trig.id.to_string())?;
+
+        // Type badge
+        let badge = document.create_element("span")?;
+        badge.set_class_name("trigger-type-badge");
+        badge.set_inner_html(match trig.r#type.as_str() {
+            "webhook" => "Webhook",
+            "email" => "Email",
+            other => other,
+        });
+        li.append_child(&badge)?;
+
+        // Secret code (click to copy as well)
+        let secret_code = document.create_element("code")?;
+        secret_code.set_class_name("trigger-secret");
+        secret_code.set_inner_html(&trig.secret);
+        li.append_child(&secret_code)?;
+
+        // Show secret in a <code> element – user can manually select & copy.
+
+        // Delete (trash) button
+        let del_btn = document.create_element("button")?;
+        del_btn.set_class_name("delete-trigger-btn");
+        del_btn.set_inner_html("🗑");
+
+        {
+            let trig_id = trig.id;
+            let cb_del = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+                dispatch_global_message(crate::messages::Message::RequestDeleteTrigger { trigger_id: trig_id });
+            }));
+            del_btn.add_event_listener_with_callback("click", cb_del.as_ref().unchecked_ref())?;
+            cb_del.forget();
+        }
+
+        li.append_child(&del_btn)?;
+
+        list_el.append_child(&li)?;
+    }
+
+    Ok(())
 }

@@ -4,7 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::{window, Document};
 use network::ui_updates;
 use crate::state::dispatch_global_message;
-use crate::components::auth;
+use crate::components::auth as components_auth;
 
 // Import modules
 mod models;
@@ -24,6 +24,8 @@ mod models_config;
 mod pages;
 mod scheduling;
 mod utils;
+mod dom_utils;
+mod auth;
 
 
 // Main entry point for the WASM application
@@ -102,6 +104,7 @@ pub fn start() -> Result<(), JsValue> {
                 display_name: Some("Developer".to_string()),
                 avatar_url: None,
                 prefs: None,
+                gmail_connected: false,
             };
             dispatch_global_message(crate::messages::Message::CurrentUserLoaded(dummy_user));
             return;
@@ -124,7 +127,7 @@ pub fn start() -> Result<(), JsValue> {
             return;
         }
 
-        auth::mount_login_overlay(&doc_clone, client_id);
+        components_auth::mount_login_overlay(&doc_clone, client_id);
     });
 
     // Nothing else to do synchronously – actual bootstrap continues in async

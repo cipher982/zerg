@@ -17,6 +17,12 @@ from zerg.models.models import ThreadMessage
 from zerg.models.models import Trigger
 
 # Added for authentication
+# NOTE: For return type hints we avoid the newer *PEP 604* union syntax
+# ``User | None`` because the SQLAlchemy DeclarativeMeta proxy that backs the
+# ``User`` model overrides the bitwise OR operator which leads to a run-time
+# ``TypeError`` when the annotation is evaluated during module import on
+# Python 3.13.  Using the classic ``Optional[User]`` sidesteps the issue
+# without requiring ``from __future__ import annotations``.
 from zerg.models.models import User
 from zerg.schemas.schemas import RunStatus
 from zerg.schemas.schemas import RunTrigger
@@ -122,12 +128,12 @@ def delete_agent(db: Session, agent_id: int):
 # ------------------------------------------------------------
 
 
-def get_user(db: Session, user_id: int) -> User | None:
+def get_user(db: Session, user_id: int) -> Optional[User]:
     """Return user by primary key."""
     return db.query(User).filter(User.id == user_id).first()
 
 
-def get_user_by_email(db: Session, email: str) -> User | None:
+def get_user_by_email(db: Session, email: str) -> Optional[User]:
     """Return user by e-mail address (case-insensitive)."""
     return (
         db.query(User)
@@ -136,12 +142,24 @@ def get_user_by_email(db: Session, email: str) -> User | None:
     )
 
 
-def create_user(db: Session, *, email: str, provider: str | None = None, provider_user_id: str | None = None) -> User:
+def create_user(
+    db: Session,
+    *,
+    email: str,
+    provider: Optional[str] = None,
+    provider_user_id: Optional[str] = None,
+    role: str = "USER",
+) -> User:
     """Insert new user row.
 
     Caller is expected to ensure uniqueness beforehand; we do not upsert here.
     """
-    new_user = User(email=email, provider=provider, provider_user_id=provider_user_id)
+    new_user = User(
+        email=email,
+        provider=provider,
+        provider_user_id=provider_user_id,
+        role=role,
+    )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -157,10 +175,11 @@ def update_user(
     db: Session,
     user_id: int,
     *,
-    display_name: str | None = None,
-    avatar_url: str | None = None,
+    display_name: Optional[str] = None,
+    avatar_url: Optional[str] = None,
     prefs: Optional[Dict[str, Any]] = None,
-) -> User | None:
+    gmail_refresh_token: Optional[str] = None,
+) -> Optional[User]:
     """Partial update for the *User* table.
 
     Only the provided fields are modified – `None` leaves the column unchanged.
@@ -177,6 +196,10 @@ def update_user(
         user.avatar_url = avatar_url
     if prefs is not None:
         user.prefs = prefs
+    if gmail_refresh_token is not None:
+        from zerg.utils import crypto  # local import to avoid top-level dependency in non-auth paths
+
+        user.gmail_refresh_token = crypto.encrypt(gmail_refresh_token)
 
     db.commit()
     db.refresh(user)
@@ -188,14 +211,32 @@ def update_user(
 # ------------------------------------------------------------
 
 
-def create_trigger(db: Session, agent_id: int, trigger_type: str = "webhook", secret: Optional[str] = None):
-    """Create a new trigger for an agent."""
+def create_trigger(
+    db: Session,
+    *,
+    agent_id: int,
+    trigger_type: str = "webhook",
+    secret: Optional[str] = None,
+    config: Optional[Dict[str, Any]] = None,
+):
+    """Create a new trigger for an agent.
+
+    The **secret** is only relevant for webhook triggers.  For future trigger
+    types we still persist a secret so external systems can authenticate when
+    hitting the generic `/events` endpoint (or skip when not applicable).
+    """
+
     from uuid import uuid4
 
     if secret is None:
         secret = uuid4().hex
 
-    db_trigger = Trigger(agent_id=agent_id, type=trigger_type, secret=secret)
+    db_trigger = Trigger(
+        agent_id=agent_id,
+        type=trigger_type,
+        secret=secret,
+        config=config,
+    )
     db.add(db_trigger)
     db.commit()
     db.refresh(db_trigger)
@@ -213,6 +254,16 @@ def delete_trigger(db: Session, trigger_id: int):
     db.delete(trg)
     db.commit()
     return True
+
+
+def get_triggers(db: Session, agent_id: Optional[int] = None) -> List[Trigger]:
+    """
+    Retrieve triggers, optionally filtered by agent_id.
+    """
+    query = db.query(Trigger)
+    if agent_id is not None:
+        query = query.filter(Trigger.agent_id == agent_id)
+    return query.order_by(Trigger.id).all()
 
 
 # Agent Message CRUD operations
@@ -515,7 +566,12 @@ def list_runs(db: Session, agent_id: int, *, limit: int = 20):
 # ---------------------------------------------------------------------------
 
 
-def upsert_canvas_layout(db: Session, user_id: int | None, nodes: dict, viewport: dict | None):
+def upsert_canvas_layout(
+    db: Session,
+    user_id: Optional[int],
+    nodes: dict,
+    viewport: Optional[dict],
+):
     """Insert **or** update the *canvas layout* for *(user_id, workspace=NULL)*.
 
     The helper uses an *atomic* SQL ``INSERT … ON CONFLICT DO UPDATE`` so that
@@ -559,7 +615,7 @@ def upsert_canvas_layout(db: Session, user_id: int | None, nodes: dict, viewport
     return db.query(CanvasLayout).filter_by(user_id=user_id, workspace=None).first()
 
 
-def get_canvas_layout(db: Session, user_id: int | None):
+def get_canvas_layout(db: Session, user_id: Optional[int]):
     """Return the persisted canvas layout for *user_id* (or None)."""
 
     if user_id is None:

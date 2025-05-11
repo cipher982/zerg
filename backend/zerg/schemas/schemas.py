@@ -62,6 +62,14 @@ class UserOut(BaseModel):
     avatar_url: Optional[str] = None
     prefs: Optional[Dict[str, Any]] = None
     last_login: Optional[datetime] = None
+    role: str = "USER"
+
+    # -------------------- Gmail integration (Phase-C) --------------------
+    # Whether the authenticated user already connected their Gmail account.
+    # Convenience flag derived from the presence of a refresh-token – exposed
+    # so the WASM frontend can enable e-mail trigger creation without an
+    # extra round-trip.
+    gmail_connected: bool = False
 
     class Config:
         from_attributes = True
@@ -201,6 +209,9 @@ class MessageResponse(BaseModel):
 class TriggerBase(BaseModel):
     agent_id: int
     type: str = "webhook"
+    # Arbitrary configuration for non-webhook triggers (e.g. email server
+    # settings).  For webhook triggers this is usually ``null``.
+    config: Optional[Dict[str, Any]] = None
 
 
 class TriggerCreate(TriggerBase):

@@ -44,6 +44,36 @@ use serde::{Serialize, Deserialize};
 // Needed for AgentDebug modal (Phase 1)
 use serde_json::Value;
 
+// -----------------------------------------------------------------------------
+//  Trigger model – NEW (Phase A of Triggers front-end work)
+// -----------------------------------------------------------------------------
+
+/// Represents a **Trigger** row returned by the backend `/api/triggers` routes.
+///
+/// The struct mirrors the Pydantic `Trigger` schema (id, agent_id, type,
+/// secret, config, created_at).  Additional backend fields will be ignored at
+/// deserialisation time so we don’t need to bump the version when new
+/// attributes land.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Trigger {
+    pub id: u32,
+    pub agent_id: u32,
+
+    /// Either `"webhook"` or `"email"` (with provider encoded in `config`).
+    pub r#type: String,
+
+    /// Webhook secret token (hex).  Present even for non-webhook triggers so
+    /// that future generic `/events` integrations can authenticate.
+    pub secret: String,
+
+    /// Arbitrary JSON blob – for email triggers holds `provider`, `filters`,
+    /// etc.  Use `serde_json::Value` so we stay schema-less on the client.
+    #[serde(default)]
+    pub config: Option<Value>,
+
+    pub created_at: String,
+}
+
 /// Type of node (e.g., AgentIdentity, UserInput, ResponseOutput)
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum NodeType {
@@ -192,6 +222,10 @@ pub struct CurrentUser {
 
     #[serde(default)]
     pub prefs: Option<serde_json::Value>,
+
+    // ---------------- Gmail integration (Phase-C) ----------------
+    #[serde(default)]
+    pub gmail_connected: bool,
 }
 
 // -----------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 import logging
+import os
 
 from dotenv import load_dotenv
 
@@ -23,7 +24,9 @@ from zerg.database import initialize_database
 from zerg.routers.admin import router as admin_router
 from zerg.routers.agents import router as agents_router
 from zerg.routers.auth import router as auth_router
+from zerg.routers.email_webhooks import router as email_webhook_router
 from zerg.routers.graph_layout import router as graph_router
+from zerg.routers.metrics import router as metrics_router
 from zerg.routers.models import router as models_router
 from zerg.routers.runs import router as runs_router
 from zerg.routers.system import router as system_router
@@ -31,7 +34,18 @@ from zerg.routers.threads import router as threads_router
 from zerg.routers.triggers import router as triggers_router
 from zerg.routers.users import router as users_router
 from zerg.routers.websocket import router as websocket_router
-from zerg.services.scheduler_service import scheduler_service
+
+# Email trigger polling service (stub for now)
+# Background services ---------------------------------------------------------
+#
+# Long-running polling loops like *SchedulerService* and *EmailTriggerService*
+# keep the asyncio event-loop alive.  When the backend is imported by *pytest*
+# those tasks cause the test runner to **hang** after the last test finishes
+# unless they are stopped explicitly.  To make the entire test-suite
+# friction-free we skip service start-up when the environment variable
+# ``TESTING`` is truthy (set automatically by `backend/tests/conftest.py`).
+from zerg.services.email_trigger_service import email_trigger_service  # noqa: E402
+from zerg.services.scheduler_service import scheduler_service  # noqa: E402
 
 # fmt: on
 
@@ -76,12 +90,14 @@ app.include_router(threads_router, prefix=f"{API_PREFIX}{THREADS_PREFIX}")
 app.include_router(models_router, prefix=f"{API_PREFIX}{MODELS_PREFIX}")
 app.include_router(websocket_router, prefix=API_PREFIX)
 app.include_router(admin_router, prefix=API_PREFIX)
+app.include_router(email_webhook_router, prefix=f"{API_PREFIX}")
 app.include_router(triggers_router, prefix=f"{API_PREFIX}")
 app.include_router(runs_router, prefix=f"{API_PREFIX}")
 app.include_router(auth_router, prefix=f"{API_PREFIX}")
 app.include_router(users_router, prefix=f"{API_PREFIX}")
 app.include_router(graph_router, prefix=f"{API_PREFIX}")
 app.include_router(system_router, prefix=API_PREFIX)
+app.include_router(metrics_router)  # no prefix – Prometheus expects /metrics
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -95,9 +111,12 @@ async def startup_event():
         initialize_database()
         logger.info("Database tables initialized")
 
-        # Start scheduler service
-        await scheduler_service.start()
-        logger.info("Scheduler service initialized")
+        # Start core background services ----------------------------------
+        if not os.getenv("TESTING"):
+            await scheduler_service.start()
+            await email_trigger_service.start()
+
+        logger.info("Background services initialised (scheduler + email triggers)")
     except Exception as e:
         logger.error(f"Error during startup: {e}")
 
@@ -106,8 +125,11 @@ async def startup_event():
 async def shutdown_event():
     """Clean up services on app shutdown."""
     try:
-        await scheduler_service.stop()
-        logger.info("Scheduler service stopped")
+        if not os.getenv("TESTING"):
+            await scheduler_service.stop()
+            await email_trigger_service.stop()
+
+        logger.info("Background services stopped")
     except Exception as e:
         logger.error(f"Error stopping scheduler service: {e}")
 

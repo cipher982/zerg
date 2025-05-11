@@ -5,12 +5,15 @@ an EventType.TRIGGER_FIRED event.  The SchedulerService listens for that event
 and executes the associated agent immediately.
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
 import logging
 import time
-from typing import Dict
+from typing import Dict  # Added List, Optional
+from typing import List  # Added List, Optional
+from typing import Optional  # Added List, Optional
 
 # FastAPI helpers
 from fastapi import APIRouter
@@ -19,6 +22,7 @@ from fastapi import Depends
 from fastapi import Header
 from fastapi import HTTPException
 from fastapi import Path
+from fastapi import Query  # Added Query
 from fastapi import status
 from sqlalchemy.orm import Session
 
@@ -30,6 +34,9 @@ from zerg.database import get_db
 from zerg.dependencies.auth import get_current_user
 from zerg.events import EventType
 from zerg.events import event_bus
+
+# Metrics
+from zerg.metrics import trigger_fired_total
 
 # Schemas
 from zerg.schemas.schemas import Trigger as TriggerSchema
@@ -46,16 +53,95 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=TriggerSchema, status_code=status.HTTP_201_CREATED)
-def create_trigger(trigger_in: TriggerCreate, db: Session = Depends(get_db)):
-    """Create a new trigger for an agent."""
+# ---------------------------------------------------------------------------
+# DELETE /triggers/{id}
+# ---------------------------------------------------------------------------
 
-    # Ensure agent exists
+
+@router.delete("/{trigger_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_trigger(
+    *,
+    trigger_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+):
+    """Delete a trigger.
+
+    Special handling for *email* provider **gmail**:
+
+    • Attempts to call Gmail *stop* endpoint so push notifications are
+      turned off immediately on user’s mailbox.  The call is best effort –
+      network/auth failures are logged but do not abort the deletion.
+    """
+
+    # 1) Fetch the trigger (needed before deletion to inspect type/config)
+    trg = crud.get_trigger(db, trigger_id)
+    if trg is None:
+        raise HTTPException(status_code=404, detail="Trigger not found")
+
+    # 2) Provider-specific cleanup --------------------------------------
+    if trg.type == "email" and (trg.config or {}).get("provider") == "gmail":
+        try:
+            from zerg.models.models import User  # local import to avoid cycles
+            from zerg.services import gmail_api  # local
+            from zerg.utils import crypto as _crypto  # lazy
+
+            # Pick any gmail-connected user (MVP logic)
+            user: User | None = db.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
+
+            if user is not None:
+                refresh_token = _crypto.decrypt(user.gmail_refresh_token)  # type: ignore[arg-type]
+
+                access_token = await asyncio.to_thread(  # type: ignore[attr-defined]
+                    gmail_api.exchange_refresh_token,
+                    refresh_token,
+                )
+
+                # Fire stop_watch in thread pool so we don’t block event loop
+                await asyncio.to_thread(gmail_api.stop_watch, access_token=access_token)  # type: ignore[attr-defined]
+        except Exception as exc:  # pragma: no cover – best-effort cleanup
+            logger.warning("Failed to stop Gmail watch for trigger %s: %s", trg.id, exc)
+
+    # 3) Finally delete ---------------------------------------------------
+    crud.delete_trigger(db, trigger_id)
+
+    return None  # 204 no content
+
+
+@router.post("/", response_model=TriggerSchema, status_code=status.HTTP_201_CREATED)
+async def create_trigger(trigger_in: TriggerCreate, db: Session = Depends(get_db)):
+    """Create a new trigger for an agent.
+
+    If the trigger is of type *email* and the provider is **gmail** we kick off
+    an asynchronous helper that ensures a Gmail *watch* is registered.  The
+    call is awaited so tests (which run inside the same event-loop) can verify
+    the side-effects synchronously without sprinkling ``asyncio.sleep`` hacks.
+    """
+
+    # Ensure agent exists -------------------------------------------------
     agent = crud.get_agent(db, trigger_in.agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    trg = crud.create_trigger(db, agent_id=trigger_in.agent_id, trigger_type=trigger_in.type)
+    # Persist trigger -----------------------------------------------------
+    trg = crud.create_trigger(
+        db,
+        agent_id=trigger_in.agent_id,
+        trigger_type=trigger_in.type,
+        config=trigger_in.config,
+    )
+
+    # ------------------------------------------------------------------
+    # Provider-specific post-create hooks
+    # ------------------------------------------------------------------
+    if trg.type == "email" and (trg.config or {}).get("provider") == "gmail":
+        # Defer heavy IO to the email trigger service
+        from zerg.services.email_trigger_service import email_trigger_service  # noqa: WPS433 lazy import
+
+        try:
+            await email_trigger_service.initialize_gmail_trigger(db, trg)
+        except Exception as exc:  # pragma: no cover – do not fail overall request
+            logger.exception("Failed to initialise Gmail trigger %s: %s", trg.id, exc)
+
     return trg
 
 
@@ -115,7 +201,25 @@ async def fire_trigger_event(
         {"trigger_id": trg.id, "agent_id": trg.agent_id, "payload": payload},
     )
 
+    # Metrics -----------------------------------------------------------
+    try:
+        trigger_fired_total.inc()
+    except Exception:  # pragma: no cover – guard against misconfig
+        pass
+
     # 5) Fire agent immediately (non-blocking)
     await scheduler_service.run_agent_task(trg.agent_id)  # type: ignore[arg-type]
 
     return {"status": "accepted"}
+
+
+@router.get("/", response_model=List[TriggerSchema])
+def list_triggers(
+    db: Session = Depends(get_db),
+    agent_id: Optional[int] = Query(None, description="Filter triggers by agent ID"),
+):
+    """
+    List all triggers, optionally filtered by agent_id.
+    """
+    triggers = crud.get_triggers(db, agent_id=agent_id)
+    return triggers
