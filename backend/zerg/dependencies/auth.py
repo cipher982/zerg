@@ -46,8 +46,14 @@ from zerg.database import get_db
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
 
 # Normalise AUTH_DISABLED to boolean – accepts "1", "true", "yes" (case-ins).
-_AUTH_DISABLED_RAW = os.getenv("AUTH_DISABLED", "0").lower()
-AUTH_DISABLED = _AUTH_DISABLED_RAW in {"1", "true", "yes"}
+_AUTH_DISABLED_RAW = os.getenv("AUTH_DISABLED")
+
+# If AUTH_DISABLED is explicitly provided use that value; otherwise fall back
+# to the *TESTING* flag so unit-tests run without dealing with auth boilerplate.
+if _AUTH_DISABLED_RAW is None:
+    _AUTH_DISABLED_RAW = os.getenv("TESTING", "0")
+
+AUTH_DISABLED = _AUTH_DISABLED_RAW.lower() in {"1", "true", "yes"}
 
 # E-mail used for the implicit development user when auth is disabled.
 DEV_EMAIL = "dev@local"

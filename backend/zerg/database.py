@@ -62,18 +62,42 @@ def get_session_factory() -> sessionmaker:
     Returns:
         A sessionmaker instance
     """
+    # ---------------------------------------------------------------------
+    # Tests often import the *zerg.database* module **before** they get the
+    # chance to patch environment variables or monkey-patch the session
+    # factory.  Raising at import time therefore breaks the entire test
+    # discovery phase.  Instead of hard-failing when the variable is missing
+    # we fall back to a local on-disk SQLite file.  When the test-runner sets
+    # ``TESTING=1`` (done in *backend/tests/conftest.py*) we create an
+    # *in-memory* SQLite engine because the file system location is
+    # irrelevant and the tests patch the session/engine anyway.
+    # ---------------------------------------------------------------------
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
-        raise ValueError("DATABASE_URL is not set")
+        if os.getenv("TESTING") == "1":
+            # Use an in-memory database that plays well with StaticPool and
+            # will be swapped out by the fixtures later on.
+            db_url = "sqlite:///:memory:"
+        else:
+            # Default production fallback (dev-friendly, zero config).
+            db_url = "sqlite:///./app.db"
     engine = make_engine(db_url)
     return make_sessionmaker(engine)
 
 
 # Default engine and sessionmaker instances for app usage
-db_url = os.getenv("DATABASE_URL")
-if not db_url:
-    raise ValueError("DATABASE_URL is not set")
-default_engine = make_engine(db_url)
+# Reuse the same relaxed resolution logic from *get_session_factory* so that
+# importing this module never crashes – the returned engine is still safe for
+# overwriting in tests via ``zerg.database.default_engine = …``.
+
+_resolved_db_url = os.getenv("DATABASE_URL")
+if not _resolved_db_url:
+    if os.getenv("TESTING") == "1":
+        _resolved_db_url = "sqlite:///:memory:"
+    else:
+        _resolved_db_url = "sqlite:///./app.db"
+
+default_engine = make_engine(_resolved_db_url)
 default_session_factory = make_sessionmaker(default_engine)
 
 
