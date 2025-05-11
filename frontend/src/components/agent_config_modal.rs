@@ -15,6 +15,7 @@ use web_sys::Element;
 use wasm_bindgen::JsCast;
 
 use crate::dom_utils;
+use crate::components::tab_bar;
 
 
 use crate::state::APP_STATE;
@@ -207,27 +208,17 @@ impl AgentConfigModal {
         modal_header.append_child(&modal_title)?;
         modal_header.append_child(&close_button)?;
 
-        // Tabs: Main
-        let tab_container = document.create_element("div")?;
-        tab_container.set_class_name("tab-container");
+        // Tabs: Main / Triggers – built via shared helper ------------------
+        let tab_container = tab_bar::build_tab_bar(document, &[("Main", true), ("Triggers", false)])?;
 
-        let main_tab = document.create_element("button")?;
-        main_tab.set_class_name("tab-button active");
-        main_tab.set_id("agent-main-tab");
-        main_tab.set_inner_html("Main");
-
-        // --------------------------------------------------------------
-        // NEW: Triggers tab (Phase B – MVP skeleton)
-        // --------------------------------------------------------------
-
-        let triggers_tab = document.create_element("button")?;
-        triggers_tab.set_class_name("tab-button");
-        triggers_tab.set_id("agent-triggers-tab");
-        triggers_tab.set_inner_html("Triggers");
-
-
-        tab_container.append_child(&main_tab)?;
-        tab_container.append_child(&triggers_tab)?;
+        // Assign stable IDs so legacy code (attach_listeners) can still look
+        // them up.  Child order matches slice order.
+        if let Some(first_btn) = tab_container.first_element_child() {
+            first_btn.set_id("agent-main-tab");
+        }
+        if let Some(second_btn) = tab_container.last_element_child() {
+            second_btn.set_id("agent-triggers-tab");
+        }
 
         // Main content
         let main_content = document.create_element("div")?;

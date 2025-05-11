@@ -188,9 +188,10 @@ frontend/e2e/*                      (Playwright config + spec)
 1. **Full codebase ID audit** – Agent Config Modal + Chat view done; dashboard
    & canvas pages still carry raw IDs.  Once renamed we can rely exclusively
    on the new pre-commit hook for enforcement.
-2. **Extract `<Modal>` + `<TabBar>`** – shared `components::modal` helper is in
-   place (see commit 7.7).  Next step: refactor the two existing modals to use
-   it and introduce a small `TabBar` struct to hold active-tab logic.
+2. **Extract `<TabBar>`** – DONE.  `components::tab_bar` landed and both
+   Agent Config **and** Agent Debug modals consume it (commit 7.9).  A small
+   attach helper still wires click-handlers, but the visual markup is now
+   shared.
 3. Framework spike (Yew / Leptos) + Storybook-style preview pages.
 
 ### 7.6 Visibility helpers – **rollout finished** (2025-05-10 evening)
@@ -225,6 +226,40 @@ Implemented `frontend/src/components/modal.rs` that provides:
 
 First consumers will be Agent Debug & Config modals in the next patch; this
 forms the base for extracting a reusable `<TabBar>` component.
+
+### 7.8 Agent Debug & Config modals migrated (2025-05-11 evening)
+
+Both major modals now call `modal::ensure_modal()` and the old inline
+`display:block/none` toggles were replaced with the helper’s `show()` /
+`hide()` wrappers.  Boiler-plate backdrop creation, click-to-close listeners
+and `.modal-content` wrappers are consolidated – reducing each modal by ~40
+lines of repetitive code.
+
+Next milestone: extract `<TabBar>` so tab-button markup is likewise shared.
+
+### 7.9 `<TabBar>` helper + adoption (2025-05-12)
+
+`components/tab_bar.rs` introduces `build_tab_bar()` – a tiny factory that
+generates the standard `.tab-container` / `.tab-button` markup.  Both major
+modals now call the helper and attach their click-handlers right after.  This
+removes another ~30 lines of duplicated DOM code and gives us a single place
+to evolve tab styling.
+
+Lessons learned
+• Stable *IDs* are still needed for listener/wiring in the legacy Agent Config
+  modal – we temporarily set them after creation.  A future refactor will
+  switch that modal to enum-based `Message::SetAgentTab` just like the Debug
+  modal so no ID hacks remain.
+• Helper design: returning bare buttons lets each consumer attach its own
+  callback without higher-order generics – keeps wasm-bindgen lifetimes simple.
+
+Next steps
+1. Refactor `attach_listeners()` in Agent Config Modal to use the attach
+   helper pattern (or migrate to enum-based messages) so IDs can be removed.
+2. Audit remaining ID prefixes on Dashboard & Canvas and enable the grep hook
+   in *enforcing* mode.
+3. Extend `TabBar` with optional builder that accepts `(label, TabVariant)`
+   and auto-generates click handlers for common patterns.
 
 ### 7.5 Visibility-helper rollout (same day follow-up)
 
