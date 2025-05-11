@@ -249,8 +249,22 @@ async def async_get_message_metadata(access_token: str, msg_id: str):  # noqa: D
 
 
 def _make_request(url: str, access_token: str):  # noqa: D401 – tiny helper
+    from time import perf_counter
+
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {access_token}"})
-    return urllib.request.urlopen(req, timeout=10)  # nosec B310
+
+    start_ts = perf_counter()
+
+    try:
+        return urllib.request.urlopen(req, timeout=10)  # nosec B310 – trusted URL
+    finally:
+        # Prometheus histogram – ignore if metrics disabled
+        try:
+            from zerg.metrics import gmail_http_latency_seconds  # noqa: WPS433
+
+            gmail_http_latency_seconds.observe(perf_counter() - start_ts)
+        except Exception:  # pragma: no cover – metrics disabled or import fail
+            pass
 
 
 def list_history(access_token: str, start_history_id: int) -> List[Dict[str, Any]]:  # noqa: D401 – helper

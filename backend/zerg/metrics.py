@@ -36,6 +36,24 @@ try:
         labelnames=("provider", "function"),
     )
 
+    # ------------------------------------------------------------------
+    # Histograms (latency) ---------------------------------------------
+    # ------------------------------------------------------------------
+
+    from prometheus_client import Histogram  # type: ignore  # noqa: WPS433
+
+    gmail_http_latency_seconds = Histogram(
+        "gmail_http_latency_seconds",
+        "Latency of Gmail HTTP requests (seconds)",
+        buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+    )
+
+    trigger_processing_seconds = Histogram(
+        "trigger_processing_seconds",
+        "End-to-end processing time of a single trigger (seconds)",
+        buckets=(0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5),
+    )
+
 except ModuleNotFoundError:  # pragma: no cover – metrics disabled when lib absent
 
     class _NoopCounter:  # noqa: D401 – tiny helper
@@ -49,3 +67,13 @@ except ModuleNotFoundError:  # pragma: no cover – metrics disabled when lib ab
     gmail_watch_renew_total = _NoopCounter()  # type: ignore[assignment]
     gmail_api_error_total = _NoopCounter()  # type: ignore[assignment]
     external_api_retry_total = _NoopCounter()  # type: ignore[assignment]
+
+    # Provide *noop* Histogram so code can call ``observe`` without importing
+    # the optional dependency in minimal CI images.
+
+    class _NoopHistogram:  # noqa: D401 – tiny helper
+        def observe(self, _value: float):  # noqa: D401 – mimic prometheus
+            return None
+
+    gmail_http_latency_seconds = _NoopHistogram()  # type: ignore[assignment]
+    trigger_processing_seconds = _NoopHistogram()  # type: ignore[assignment]
