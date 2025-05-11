@@ -183,15 +183,15 @@ frontend/e2e/*                      (Playwright config + spec)
 • Keep legacy message variants while external call-sites migrate – helps avoid
   giant PRs and eases git-bisect.
 
-### 7.4 Remaining items
+### 7.4 Remaining items  *(auto-updated)*
 
-1. **Full codebase ID audit** – only Agent Config Modal is migrated so far.
-2. Turn on the DOM-ID prefix hook once audit is complete.
-3. Migrate remaining imperative show/hide snippets to dom_utils (search for
-   `set_attribute("style", "display`) – ~14 matches left).
-4. Extract reusable `Modal` + `TabBar` components (Milestone section 3).
-5. Decide on framework (Yew / Leptos spike) and storyboard pages for visual
-   diff tests.
+1. **Full codebase ID audit** – Agent Config Modal + Chat view done; dashboard
+   & canvas pages still carry raw IDs.  Once renamed we can rely exclusively
+   on the new pre-commit hook for enforcement.
+2. **Extract `<Modal>` + `<TabBar>`** – shared `components::modal` helper is in
+   place (see commit 7.7).  Next step: refactor the two existing modals to use
+   it and introduce a small `TabBar` struct to hold active-tab logic.
+3. Framework spike (Yew / Leptos) + Storybook-style preview pages.
 
 ### 7.6 Visibility helpers – **rollout finished** (2025-05-10 evening)
 
@@ -214,6 +214,17 @@ Next up
 2. Start extracting `<Modal>` and `<TabBar>` components.
 
 We are officially style-toggle-free!  🎉
+
+### 7.7 Shared `<Modal>` helper introduced (2025-05-11)
+
+Implemented `frontend/src/components/modal.rs` that provides:
+
+• `ensure_modal(document, id)` – idempotently creates the backdrop +
+  `.modal-content` wrapper and returns both elements.
+• `modal::show()` / `modal::hide()` thin wrappers around dom_utils.
+
+First consumers will be Agent Debug & Config modals in the next patch; this
+forms the base for extracting a reusable `<TabBar>` component.
 
 ### 7.5 Visibility-helper rollout (same day follow-up)
 

@@ -185,15 +185,11 @@ impl AgentConfigModal {
         use wasm_bindgen::closure::Closure;
         use wasm_bindgen::JsCast;
 
-        // Create modal container
-        let modal = document.create_element("div")?;
-        modal.set_id("agent-modal");
-        modal.set_class_name("modal");
-        modal.set_attribute("style", "display: none;")?;
-
-        // Create modal content
-        let modal_content = document.create_element("div")?;
-        modal_content.set_class_name("modal-content");
+        // -----------------------------------------------------------------
+        // Use shared helper so backdrop + content wrapper follow the same
+        // conventions (`hidden` attribute for visibility, CSS classes, …)
+        // -----------------------------------------------------------------
+        let (modal, modal_content) = crate::components::modal::ensure_modal(document, "agent-modal")?;
 
         // Header
         let modal_header = document.create_element("div")?;
@@ -549,12 +545,6 @@ impl AgentConfigModal {
         modal_content.append_child(&main_content)?;
         modal_content.append_child(&triggers_content)?;
         modal_content.append_child(&button_container)?;
-
-        modal.append_child(&modal_content)?;
-
-        // Inject into DOM (body)
-        let body = document.body().ok_or(JsValue::from_str("No body found"))?;
-        body.append_child(&modal)?;
 
         // ------------------------------------------------------------------
         // UX: Close when clicking on backdrop (outside modal-content)
@@ -1337,7 +1327,7 @@ impl AgentConfigModal {
 
         // Finally, show the modal
         if let Some(modal) = document.get_element_by_id("agent-modal") {
-            modal.set_attribute("style", "display: block;")?;
+            crate::components::modal::show(&modal);
         }
 
         Ok(())
@@ -1346,7 +1336,7 @@ impl AgentConfigModal {
     /// Hide the modal.
     pub fn close(document: &Document) -> Result<(), JsValue> {
         if let Some(modal) = document.get_element_by_id("agent-modal") {
-            modal.set_attribute("style", "display: none;")?;
+            crate::components::modal::hide(&modal);
         }
         Ok(())
     }
