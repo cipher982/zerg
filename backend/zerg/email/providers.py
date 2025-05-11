@@ -94,7 +94,6 @@ class GmailProvider:  # noqa: D101 – obvious from context
         # ------------------------------------------------------------------
         # Local imports to avoid import cycles (tests patch some internals)
         # ------------------------------------------------------------------
-        import asyncio
         import logging
         import time as _time_mod
 
@@ -142,7 +141,7 @@ class GmailProvider:  # noqa: D101 – obvious from context
                 access_token = cached[0]
             else:
                 try:
-                    access_token = await asyncio.to_thread(gmail_api.exchange_refresh_token, refresh_token)
+                    access_token = await gmail_api.async_exchange_refresh_token(refresh_token)
                 except Exception as exc:  # pragma: no cover – network error
                     logger.error("Failed to exchange refresh_token: %s", exc)
                     gmail_api_error_total.inc()
@@ -157,7 +156,7 @@ class GmailProvider:  # noqa: D101 – obvious from context
 
             start_hid = int((trg.config or {}).get("history_id", 0))
 
-            history_records = await asyncio.to_thread(gmail_api.list_history, access_token, start_hid)
+            history_records = await gmail_api.async_list_history(access_token, start_hid)
 
             if not history_records:
                 logger.debug("Trigger %s – no new history records", trg.id)
@@ -202,7 +201,7 @@ class GmailProvider:  # noqa: D101 – obvious from context
             fired_any = False
 
             for mid in message_ids:
-                meta = await asyncio.to_thread(gmail_api.get_message_metadata, access_token, mid)
+                meta = await gmail_api.async_get_message_metadata(access_token, mid)
 
                 if not meta:
                     continue  # skip on error
