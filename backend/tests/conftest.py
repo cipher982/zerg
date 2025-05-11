@@ -519,3 +519,26 @@ def mock_langchain_openai():
         mock_chat = MagicMock()
         mock_chat_openai.return_value = mock_chat
         yield mock_chat_openai
+
+
+# ---------------------------------------------------------------------------
+# Cleanup: stop EmailTriggerService poll loop so pytest can exit immediately
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _shutdown_email_trigger_service():
+    """Ensure background poller is stopped at the end of the test session."""
+
+    from zerg.services.email_trigger_service import email_trigger_service  # noqa: WPS433
+
+    yield  # run tests
+
+    # Cancel poll loop if still running (ignore event-loop already closed)
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.run_until_complete(email_trigger_service.stop())
+    except RuntimeError:
+        # event-loop already closed by pytest – no action needed
+        pass

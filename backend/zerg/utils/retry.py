@@ -33,14 +33,18 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import logging
+import os
 import random
 from typing import Awaitable
 from typing import Callable
 from typing import ParamSpec
 from typing import TypeVar
 
-from zerg.metrics import gmail_api_error_total  # Re-use until generic counter lands
-from zerg.utils.log import log
+from zerg.metrics import external_api_retry_total
+from zerg.metrics import gmail_api_error_total
+
+log = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
@@ -80,6 +84,13 @@ def async_retry(
         Optional string used for metrics label (e.g. "gmail", "slack").
     """
 
+    # Shrink retry duration dramatically when running inside the *unit-test*
+    # harness so slow external-path tests do not dominate runtime.
+    if os.getenv("TESTING") == "1":
+        max_attempts = min(max_attempts, 2)
+        base_delay = min(base_delay, 0.01)
+        max_delay = min(max_delay, 0.05)
+
     retriable = retriable or _default_retriable
 
     def decorator(fn: Callable[_P, Awaitable[_T]]) -> Callable[_P, Awaitable[_T]]:
@@ -118,8 +129,11 @@ def async_retry(
                         sleep=sleep_for,
                     )
 
-                    # Metrics placeholder – will be replaced by dedicated counter soon
-                    gmail_api_error_total.inc()
+                    # Increment generic retry metric with labels
+                    try:
+                        external_api_retry_total.labels(provider or fn.__module__, fn.__name__).inc()
+                    except Exception:  # pragma: no cover – metrics disabled
+                        pass
 
                     await asyncio.sleep(sleep_for)
 

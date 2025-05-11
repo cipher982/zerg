@@ -15,6 +15,7 @@ The module purposefully keeps **zero third-party dependencies** – we re-use
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -23,6 +24,8 @@ import urllib.request
 from typing import Any
 from typing import Dict
 from typing import List
+
+from zerg.utils.retry import async_retry
 
 logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
@@ -212,6 +215,32 @@ def exchange_refresh_token(refresh_token: str) -> str:  # noqa: D401 – helper
         raise RuntimeError(f"invalid token response: {payload}")
 
     return access_token  # noqa: WPS331 – explicit return value
+
+
+# ---------------------------------------------------------------------------
+#   Async wrappers with retry – used by GmailProvider ------------------------
+# ---------------------------------------------------------------------------
+
+
+@async_retry(provider="gmail")
+async def async_exchange_refresh_token(refresh_token: str) -> str:  # noqa: D401
+    """Async wrapper for :func:`exchange_refresh_token` with retry."""
+
+    return await asyncio.to_thread(exchange_refresh_token, refresh_token)
+
+
+@async_retry(provider="gmail")
+async def async_list_history(access_token: str, start_history_id: int):  # noqa: D401
+    """Async wrapper for :func:`list_history` with retry."""
+
+    return await asyncio.to_thread(list_history, access_token, start_history_id)
+
+
+@async_retry(provider="gmail")
+async def async_get_message_metadata(access_token: str, msg_id: str):  # noqa: D401
+    """Async wrapper for :func:`get_message_metadata` with retry."""
+
+    return await asyncio.to_thread(get_message_metadata, access_token, msg_id)
 
 
 # ---------------------------------------------------------------------------

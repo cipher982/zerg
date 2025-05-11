@@ -30,12 +30,22 @@ try:
         "Number of errors when interacting with the Gmail API",
     )
 
+    external_api_retry_total = Counter(
+        "external_api_retry_total",
+        "Total retries executed against external providers",
+        labelnames=("provider", "function"),
+    )
+
 except ModuleNotFoundError:  # pragma: no cover – metrics disabled when lib absent
 
     class _NoopCounter:  # noqa: D401 – tiny helper
         def inc(self, _value: int | float = 1):  # noqa: D401 – mimic prometheus
             return None
 
+        def labels(self, *args, **kwargs):  # type: ignore
+            return self
+
     trigger_fired_total = _NoopCounter()  # type: ignore[assignment]
     gmail_watch_renew_total = _NoopCounter()  # type: ignore[assignment]
     gmail_api_error_total = _NoopCounter()  # type: ignore[assignment]
+    external_api_retry_total = _NoopCounter()  # type: ignore[assignment]
