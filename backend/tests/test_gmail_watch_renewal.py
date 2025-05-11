@@ -23,11 +23,13 @@ async def test_gmail_watch_renewal(client, db_session, monkeypatch):
     def _dummy_renew_stub():  # noqa: D401 – stub
         return {"history_id": 777, "watch_expiry": fixed_future_ts}
 
-    from zerg.services.email_trigger_service import EmailTriggerService  # noqa: WPS433
+    # Patch provider stub instead of legacy service helper
+
+    from zerg.email.providers import GmailProvider  # noqa: WPS433
 
     monkeypatch.setattr(
-        EmailTriggerService,
-        "_renew_gmail_watch_stub",
+        GmailProvider,
+        "_renew_watch_stub",
         staticmethod(_dummy_renew_stub),
     )
 
