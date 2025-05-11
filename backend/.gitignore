@@ -1,0 +1,20 @@
+# Build / virtualenv artefacts
+.venv/
+
+# uv runtime directories (created automatically by direnv/uv)
+.uv_cache/
+.uv_tmp/
+
+# SQLite DB used for local dev & tests
+app.db
+
+# PyTest cache
+.pytest_cache/
+
+# __pycache__ directories and compiled files
+__pycache__/
+*.py[cod]
+
+# MacOS metadata & editor swap files
+.DS_Store
+*.swp

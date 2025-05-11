@@ -174,8 +174,6 @@ async def gmail_webhook(
 
     from sqlalchemy.orm.attributes import flag_modified  # local import
 
-    from zerg.services.email_trigger_service import email_trigger_service  # noqa: WPS433
-
     for trg in triggers:
         cfg = trg.config or {}
         last_seen = int(cfg.get("last_msg_no", 0))
@@ -201,7 +199,14 @@ async def gmail_webhook(
         fired_count += 1
 
         # Kick off full history diff so filtering & EventBus publishing happen
-        await email_trigger_service._handle_gmail_trigger(trg.id)  # type: ignore[attr-defined]
+        from zerg.email.providers import get_provider  # local import to avoid cycles
+
+        gmail_provider = get_provider("gmail")
+
+        if gmail_provider is None:
+            logger.error("Gmail provider missing from registry – cannot process trigger %s", trg.id)
+        else:
+            await gmail_provider.process_trigger(trg.id)
 
         # ------------------------------------------------------------------
         # Refresh *trg* on this session so we do not overwrite fields (like
