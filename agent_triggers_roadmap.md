@@ -96,6 +96,7 @@ All backend plumbing for Gmail-based *email* triggers (watch registration → pu
 * DELETE /triggers/{id} now stops Gmail watch (clean-up)
 * Security hardening: encrypted refresh-tokens, optional Google JWT validation
 * Regression tests: watch initialisation, renewal, history progression, stop-watch clean-up
+* **Retry helper**: Central `zerg/utils/retry.py` decorator with expo back-off & jitter (2025-05-13)
 * **Observability groundwork:** Prometheus counters + `/metrics` route implemented (2025-05-09 commit `metrics.py`).
 
 ### Outstanding backend work (🔄) – **refreshed 2025-05-13**
@@ -110,20 +111,22 @@ remaining tasks are now laser-focused:
    🔸 NEXT: Move `_handle_gmail_trigger` logic into `GmailProvider.process_trigger()` and delete legacy private helper.
 
 2. **Reliability**  
-   • Wrap every Gmail HTTP call in a capped exponential back-off + jitter helper.  
-   • Increment new `gmail_api_retry_total` counter; log each retry via **structlog** JSON.
+   ✅ **Retry helper landed** – `zerg/utils/retry.py` provides `@async_retry` with exponential back-off, jitter and JSON-log integration.  
+   🔸 **NEXT:** decorate *gmail_api* helper functions (`exchange_refresh_token`, `list_history`, `get_message_metadata`) with `@async_retry(provider="gmail")`.  
+   🔸 Add `external_api_retry_total{provider,func}` Prometheus counter (follow-up PR, the decorator already increments `gmail_api_error_total` as placeholder).
 
 3. **Observability**  
-   • Convert *all* remaining `logger.*` calls to `log.*` (structlog).  
-   • Add histograms: `gmail_http_latency_seconds`, `trigger_processing_seconds` (labels: provider, status).
+   ◔ Ongoing  
+   • `structlog` helper (`zerg/utils/log.py`) already centralised JSON logs; new retry helper emits structured events.  
+   • Histograms (`gmail_http_latency_seconds`, `trigger_processing_seconds`) still outstanding.
 
 4. **Security**  
    • JWT validation for Gmail webhooks is now *always on* – delete feature flag.  
    • Fernet is the only crypto path; XOR functions have been purged.
 
 5. **Tech-debt clean-up**  
-   • Remove manual `default_session_factory()` calls – use FastAPI DI everywhere.  
-   • Delete any lingering references to the old `legacy_agent_manager`.
+   • Migrate remaining `default_session_factory()` usages (now limited to GmailProvider & EmailTriggerService) to dependency-injected sessions.  
+   • `legacy_agent_manager` module still present → delete once confirm zero imports.
 
 6. **Tests**  
    • Cover `Trigger.config_obj` typed accessor.  
@@ -523,3 +526,40 @@ CI turn red because familiar helpers suddenly vanished.
 
 None – the product has never been deployed to production.  We recreated the
 SQLite DB from scratch during tests; no alembic migrations needed.
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+## Appendix – Shared Retry Helper (added 2025-05-13)
+
+We introduced **one** decorator, `zerg/utils/retry.async_retry`, as the blessed
+way to add exponential back-off.
+
+```python
+from zerg.utils.retry import async_retry, is_retryable_http_exc
+
+
+@async_retry(provider="gmail", retriable=is_retryable_http_exc)
+async def list_history(access_token: str, start_hid: int) -> list[dict]:
+    return await _do_http("GET", url, params={...})
+```
+
+Key numbers (defaults):
+
+* attempts   = 5 (initial + 4 retries)
+* base delay = 1 s   → doubles each retry up to 30 s
+* jitter     = ±25 % (prevents thundering-herd)
+
+What you get “for free”:
+
+* structured JSON log lines (`retry`, `retry-exhausted`)
+* Prometheus counter – until the generic counter lands we bump
+  `gmail_api_error_total` to surface spikes in Grafana
+
+Guidelines
+1. Decorate **provider-boundary functions only** (raw HTTP). Internal
+   business logic and DB operations must fail fast.
+2. If the operation is *not* idempotent, supply a custom `retriable()` that
+   filters by exception type or HTTP status ≠ 409/412/4xx.
+3. New providers should expose their SDK helpers *already* wrapped – call-sites
+   inside the service layer stay clean.
+
