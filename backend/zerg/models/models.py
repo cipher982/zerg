@@ -242,6 +242,35 @@ class Trigger(Base):
     # triggers the column is generally **NULL**.
     config = Column(JSON, nullable=True)
 
+    # -------------------------------------------------------------------
+    # Typed *config* accessor
+    # -------------------------------------------------------------------
+
+    @property
+    def config_obj(self):  # noqa: D401 – typed accessor
+        """Return a :class:`TriggerConfig` parsed from ``config`` JSON.
+
+        No caching / fallback logic – we simply construct a new model every
+        call because the cost is negligible and keeps the implementation
+        straightforward.
+        """
+
+        from zerg.models.trigger_config import TriggerConfig  # local import
+
+        return TriggerConfig(**(self.config or {}))  # type: ignore[arg-type]
+
+    def set_config_obj(self, cfg):  # noqa: D401 – mutator, TriggerConfig param
+        """Assign *cfg* and persist its dict representation."""
+
+        # Persist as raw dict so DB schema remains unchanged
+        # Pydantic v2 uses ``model_dump``; v1 still supports ``dict``.
+        try:
+            raw = cfg.model_dump()  # type: ignore[attr-defined]
+        except AttributeError:
+            raw = cfg.dict()  # type: ignore[attr-defined]
+
+        self.config = raw  # type: ignore[assignment]
+
     created_at = Column(DateTime, server_default=func.now())
 
     # ORM relationships

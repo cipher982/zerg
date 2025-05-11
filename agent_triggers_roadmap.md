@@ -1,4 +1,8 @@
-# Results of Codebase Scan: Trigger Infrastructure & Recommendations
+# Trigger Infrastructure Roadmap (updated 2025-05-13)
+
+> **Key decision** – We fully control every deployment target (dev, CI, prod).
+> That means we can delete compatibility shims and move fast with a simpler,
+> opinionated codebase.
 
 ## Backend: Triggers
 
@@ -94,29 +98,35 @@ All backend plumbing for Gmail-based *email* triggers (watch registration → pu
 * Regression tests: watch initialisation, renewal, history progression, stop-watch clean-up
 * **Observability groundwork:** Prometheus counters + `/metrics` route implemented (2025-05-09 commit `metrics.py`).
 
-### Outstanding backend work (🔄) – updated 2025-05-12
+### Outstanding backend work (🔄) – **refreshed 2025-05-13**
 
-1. **API reliability & hardening**  
-   • Implement retry / exponential-backoff wrapper around Gmail HTTP calls.  
-   • Surface quota / auth errors via metrics & structured logs.
+With the *“own the stack”* decision we removed all legacy fallbacks.  The
+remaining tasks are now laser-focused:
 
-2. **Provider abstraction**  
-   • Introduce `BaseEmailProvider` interface.  
-   • Add Outlook (Microsoft Graph) implementation.  
-   • Ship fallback IMAP polling for generic hosts.
+1. **Provider abstraction**  
+   • Create `EmailProvider` protocol (watch, stop_watch, fetch_history, parse_message).  
+   • Move existing Gmail helpers into `gmail_provider.py`.  
+   • Stub `outlook_provider.py` (raises `NotImplementedError`) so tests compile.
 
-3. **Security**  
-   ✅ `gmail_refresh_token` is now **encrypted-at-rest** using AES-GCM (Fernet) when the `cryptography` package is available; the original XOR-Base64 scheme remains as a fallback in CI.  
-   • Make Google-JWT validation **mandatory** in production (remove opt-in flag).  
-   • Improve UX when `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are missing.
+2. **Reliability**  
+   • Wrap every Gmail HTTP call in a capped exponential back-off + jitter helper.  
+   • Increment new `gmail_api_retry_total` counter; log each retry via **structlog** JSON.
 
-4. **Observability**  
-   ✅ *Prometheus counters shipped* – `trigger_fired_total`, `gmail_watch_renew_total`, `gmail_api_error_total`.  
-   • Next: add histograms (latency, token counts) and structured JSON logs for each trigger event.
+3. **Observability**  
+   • Convert *all* remaining `logger.*` calls to `log.*` (structlog).  
+   • Add histograms: `gmail_http_latency_seconds`, `trigger_processing_seconds` (labels: provider, status).
 
-5. **Test coverage**  
-   • Unit-tests for `email_filtering.matches` edge cases.  
-   • Tests that exercise the access-token **cache hit** path.
+4. **Security**  
+   • JWT validation for Gmail webhooks is now *always on* – delete feature flag.  
+   • Fernet is the only crypto path; XOR functions have been purged.
+
+5. **Tech-debt clean-up**  
+   • Remove manual `default_session_factory()` calls – use FastAPI DI everywhere.  
+   • Delete any lingering references to the old `legacy_agent_manager`.
+
+6. **Tests**  
+   • Cover `Trigger.config_obj` typed accessor.  
+   • Add retry path regression tests (`aresponses` for 5xx, network errors).
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---
@@ -249,7 +259,7 @@ concurrent updates to `history_id` are merged correctly (2025-05-10).
   Suite now **114 passed** / 15 skipped.
 
 ✅ *Security hardening* –
-   • `gmail_refresh_token` is stored **encrypted-at-rest** using AES-GCM (Fernet) when `cryptography` is available; XOR-Base64 fallback otherwise.  
+   • `gmail_refresh_token` is stored **encrypted-at-rest** using AES-GCM (Fernet); legacy XOR fallback has been removed.  
    • Optional Google JWT validation added to `/api/email/webhook/google` (enable with `EMAIL_GMAIL_JWT_VALIDATION=1`).  
 
 **Remaining technical debt (moved to *Outstanding backend work* list)**
@@ -314,6 +324,21 @@ refresh-token is ready for the trigger service.
 2. **Runtime DOM patching** proved valuable: users might still have an old modal HTML snippet in localStorage; injecting the new Triggers tab at runtime avoided cache-clear support tickets.  
 3. **Utility classes > new CSS** – by re-using existing `btn-primary`, `card`, `input-select` we shipped a visually consistent pane with zero CSS additions.  
 4. **Inline wizard > full modal** – the small inline “Add Trigger” card reduced context switching and performed better on narrow tablet viewports.
+
+### 2025-05-13 – Back-end refactor retrospective
+
+1. **Delete defunct fallbacks early** – carrying XOR crypto and std-logging
+   branches bloated the codebase and complicated tests.  As soon as a hard
+   requirement (Fernet, structlog) is accepted organisation-wide, purge the
+   old path instead of keeping a “just in case” toggle.  Simpler code is
+   easier to secure and maintain.
+2. **Typed models over raw dicts** – replacing
+   ``(trigger.config or {}).get("history_id")`` with a `TriggerConfig`
+   dataclass removed several classes of `KeyError` / typo bugs and makes
+   refactors trivial.
+3. **Pick one logging format** – choosing JSON/structlog for every service
+   from day-one avoids a mixed log stack (human vs. machine readable) and
+   speeds up centralised monitoring roll-out.
 
 
 – Update README, write `docs/triggers_email.md` example walk-through.
@@ -456,3 +481,46 @@ This section was appended after verifying the current `main` branch on
    `gloo::net::http::FakeTransport`.
 
 
+
+
+====
+# Backend Refactor – 2025-05-13 Digest
+
+This short “changelog-style” note captures the **why** and **what** of the
+aggressive clean-up we just started.  It is meant for new contributors who saw
+CI turn red because familiar helpers suddenly vanished.
+
+## Why delete fallbacks now?
+
+* **We own the fleet.**  There is no unknown third-party running the backend.
+  Every engineer can upgrade Python, install `cryptography`, etc.
+* **Less surface = less bugs.**  Two encryption paths or two logging
+  back-ends doubles audit effort.  Removing the dead path is the cheapest
+  security hardening available.
+* **Simpler onboarding.**  A *single* way to encrypt, to log, to structure
+  config data keeps the mental model tight for future hires.
+
+## Decisions ratified
+
+| Area                | Old state (up to 2025-05-12)            | New state |
+|---------------------|-----------------------------------------|-----------|
+| Encryption for Gmail refresh-tokens | Fernet **or** XOR fallback | Fernet only – app exits if missing |
+| Logging             | std-logging **or** structlog            | structlog JSON only |
+| Trigger config      | Untyped `dict` everywhere               | Typed `TriggerConfig` Pydantic model |
+| Legacy agent mgr    | File kept for “compat”                  | Deleted |
+
+## Immediate follow-ups
+
+1. Replace remaining `logging.*` calls (<20 hits) with `log.*` from
+   `zerg.utils.log`.
+2. Provider abstraction for email triggers.
+3. Move manual session factories to FastAPI DI (`Depends(get_db)`).
+
+## Migration concerns?
+
+None – the product has never been deployed to production.  We recreated the
+SQLite DB from scratch during tests; no alembic migrations needed.
+
+---
+
+Questions?  Ping `@backend-infra` on Slack.
