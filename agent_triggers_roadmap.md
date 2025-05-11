@@ -103,10 +103,11 @@ All backend plumbing for Gmail-based *email* triggers (watch registration → pu
 With the *“own the stack”* decision we removed all legacy fallbacks.  The
 remaining tasks are now laser-focused:
 
-1. **Provider abstraction**  
-   • Create `EmailProvider` protocol (watch, stop_watch, fetch_history, parse_message).  
-   • Move existing Gmail helpers into `gmail_provider.py`.  
-   • Stub `outlook_provider.py` (raises `NotImplementedError`) so tests compile.
+1. **Provider abstraction**  *(core registry landed — 2025-05-11)*  
+   ✅ Introduce `EmailProvider` protocol and global registry in `zerg/email/providers.py`.  
+   ✅ `GmailProvider` adapter delegates to existing helpers (no behaviour change).  
+   ✅ `OutlookProvider` stub raises `NotImplementedError`.  
+   🔸 NEXT: Move `_handle_gmail_trigger` logic into `GmailProvider.process_trigger()` and delete legacy private helper.
 
 2. **Reliability**  
    • Wrap every Gmail HTTP call in a capped exponential back-off + jitter helper.  
@@ -127,6 +128,8 @@ remaining tasks are now laser-focused:
 6. **Tests**  
    • Cover `Trigger.config_obj` typed accessor.  
    • Add retry path regression tests (`aresponses` for 5xx, network errors).
+
+> **Status 2025-05-11:** `Trigger.config_obj` unit-test added (`test_trigger_config.py`).
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---
@@ -520,7 +523,3 @@ CI turn red because familiar helpers suddenly vanished.
 
 None – the product has never been deployed to production.  We recreated the
 SQLite DB from scratch during tests; no alembic migrations needed.
-
----
-
-Questions?  Ping `@backend-infra` on Slack.

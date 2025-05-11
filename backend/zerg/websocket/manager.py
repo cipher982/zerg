@@ -1,8 +1,7 @@
 """Topic-based WebSocket connection manager.
 
 Manages WebSocket connections with topic-based subscriptions and relays
-EventBus events to connected clients.  Requires Python ≥ 3.10 so modern Union
-syntax (``int | None``) is available – no backwards-compat hacks.
+EventBus events to connected clients.
 """
 
 import logging

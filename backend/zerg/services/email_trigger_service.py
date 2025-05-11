@@ -118,22 +118,44 @@ class EmailTriggerService:
             return
 
         for trg in triggers:
-            provider = (trg.config or {}).get("provider")
-            if provider != "gmail":
-                # Other providers will be added later
+            provider_name = (trg.config or {}).get("provider", "gmail")
+
+            # ------------------------------------------------------------------
+            # Delegate provider-specific handling
+            # ------------------------------------------------------------------
+
+            # Lazy import to avoid top-level dependency when tests patch this
+            from zerg.email.providers import get_provider  # noqa: WPS433 – local import
+
+            provider_impl = get_provider(str(provider_name))
+
+            if provider_impl is None:
+                logger.warning("Unsupported email provider '%s' for trigger %s – skip", provider_name, trg.id)
                 continue
 
-            # 1) Renew watch if needed
-            try:
-                await self._maybe_renew_gmail_watch(trg)
-            except Exception as exc:  # pragma: no cover
-                logger.exception("Failed to renew Gmail watch for trigger %s: %s", trg.id, exc)
+            # Gmail provider still relies on the legacy private helpers inside
+            # this class therefore we *keep* them for now.  Other providers
+            # will be fully self-contained.
 
-            # 2) Token refresh / placeholder polling
+            # Renew watch logic is Gmail-specific and currently lives as a
+            # private method.  Call it directly here to avoid altering the
+            # established tests for now.  For non-Gmail providers we expect
+            # them to handle renewal inside ``process_trigger``.
+
+            if provider_name == "gmail":
+                try:
+                    await self._maybe_renew_gmail_watch(trg)
+                except Exception as exc:  # pragma: no cover
+                    logger.exception("Failed to renew Gmail watch for trigger %s: %s", trg.id, exc)
+
+            # Finally hand over to provider implementation ----------------------------------------------------
+
             try:
-                await self._handle_gmail_trigger(trg.id)
-            except Exception as exc:  # pragma: no cover
-                logger.exception("Error in gmail trigger handler %s: %s", trg.id, exc)
+                await provider_impl.process_trigger(trg.id)
+            except NotImplementedError:
+                logger.info("Provider '%s' not yet implemented – trigger %s skipped", provider_name, trg.id)
+            except Exception as exc:  # pragma: no cover – safety net
+                logger.exception("Error in provider '%s' handler for trigger %s: %s", provider_name, trg.id, exc)
 
     # ------------------------------------------------------------------
     # Gmail helpers

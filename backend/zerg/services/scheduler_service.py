@@ -9,6 +9,7 @@ This module provides the SchedulerService class that handles:
 
 import logging
 
+# APScheduler is part of the mandatory backend dependencies; import directly.
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 

@@ -1,4 +1,5 @@
 import logging
+import os
 
 from dotenv import load_dotenv
 
@@ -35,8 +36,16 @@ from zerg.routers.users import router as users_router
 from zerg.routers.websocket import router as websocket_router
 
 # Email trigger polling service (stub for now)
-from zerg.services.email_trigger_service import email_trigger_service
-from zerg.services.scheduler_service import scheduler_service
+# Background services ---------------------------------------------------------
+#
+# Long-running polling loops like *SchedulerService* and *EmailTriggerService*
+# keep the asyncio event-loop alive.  When the backend is imported by *pytest*
+# those tasks cause the test runner to **hang** after the last test finishes
+# unless they are stopped explicitly.  To make the entire test-suite
+# friction-free we skip service start-up when the environment variable
+# ``TESTING`` is truthy (set automatically by `backend/tests/conftest.py`).
+from zerg.services.email_trigger_service import email_trigger_service  # noqa: E402
+from zerg.services.scheduler_service import scheduler_service  # noqa: E402
 
 # fmt: on
 
@@ -103,8 +112,9 @@ async def startup_event():
         logger.info("Database tables initialized")
 
         # Start core background services ----------------------------------
-        await scheduler_service.start()
-        await email_trigger_service.start()
+        if not os.getenv("TESTING"):
+            await scheduler_service.start()
+            await email_trigger_service.start()
 
         logger.info("Background services initialised (scheduler + email triggers)")
     except Exception as e:
@@ -115,9 +125,9 @@ async def startup_event():
 async def shutdown_event():
     """Clean up services on app shutdown."""
     try:
-        # Stop background services (ignore errors so shutdown continues)
-        await scheduler_service.stop()
-        await email_trigger_service.stop()
+        if not os.getenv("TESTING"):
+            await scheduler_service.stop()
+            await email_trigger_service.stop()
 
         logger.info("Background services stopped")
     except Exception as e:
