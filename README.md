@@ -45,15 +45,24 @@ Agent Platform is designed for users who need to create, manage, and orchestrate
 
 **IMPORTANT:** FOR ANY PYTHON CLI CALLS, USE `uv run` TO RUN THE COMMAND. Also NEVER use pip, use UV ONLY.
 
-• Run the **backend** test-suite via the helper script (which already passes `-p no:warnings` so CI logs stay clean):
+• **Running Backend Tests (MANDATORY METHOD):**
+  To run the backend test suite, you **MUST** use the provided helper script. This script ensures the correct environment, applies necessary flags, and handles other pre-test configurations.
   ```bash
   cd backend && ./run_backend_tests.sh
   ```
 
-• For quick one-off runs you can still call Pytest directly:
-  ```bash
-  cd backend && uv run pytest tests/ -p no:warnings
-  ```
+  **CRITICAL NOTE ON RUNNING BACKEND TESTS:**
+  It is **ESSENTIAL** to use the `run_backend_tests.sh` script as shown above.
+  *   **DO NOT** attempt to run tests using `uv run pytest tests/` directly.
+  *   **ABSOLUTELY NEVER** run tests using `pytest` or `python -m pytest` directly.
+
+  Bypassing the `run_backend_tests.sh` script will likely lead to:
+      *   An incorrect or incomplete testing environment.
+      *   Missing required flags (e.g., the script passes `-p no:warnings` for cleaner CI logs).
+      *   Inconsistent test results or outright failures due to improper setup.
+      *   Potential interference with CI processes or local development state.
+
+  Always use `cd backend && ./run_backend_tests.sh` for reliability and consistency.
 
 An experimental **MCP test-runner** that bootstraps a full local cluster lives under `tools/mcp_test_runner/` – see its README if you need integration-style smoke tests.
 
@@ -668,4 +677,4 @@ All routers are version‑less but live under prefix "/api".
 - Cron → APScheduler → SchedulerService → AgentRunner (scheduled job)
 - Browser subscribes to topics → receives JSON deltas → DOM updates via wasm-bindgen.
 
-This should give you a solid grasp of "everything" without drowning in code. Let me know if you want to zoom into any specific file, execution path or test! 
+This should give you a solid grasp of "everything" without drowning in code. Let me know if you want to zoom into any specific file, execution path or test!
