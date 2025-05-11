@@ -19,6 +19,12 @@ fn hide_by_id(document: &web_sys::Document, id: &str) {
 /// Helper: show a DOM element (`display:block`) if it exists.
 fn show_block_by_id(document: &web_sys::Document, id: &str) {
     if let Some(elem) = document.get_element_by_id(id) {
+        // First remove any `hidden` attribute that may have been set via
+        // `dom_utils::hide()` so the element becomes eligible for layout.
+        let _ = elem.remove_attribute("hidden");
+
+        // Now make sure it is rendered as a block-level element (this keeps
+        // the original intent of the helper).
         let _ = elem.set_attribute("style", "display: block;");
     }
 }
