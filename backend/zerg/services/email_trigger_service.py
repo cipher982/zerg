@@ -144,11 +144,8 @@ class EmailTriggerService:
             # established tests for now.  For non-Gmail providers we expect
             # them to handle renewal inside ``process_trigger``.
 
-            if provider_name == "gmail":
-                try:
-                    await self._maybe_renew_gmail_watch(trg)
-                except Exception as exc:  # pragma: no cover
-                    logger.exception("Failed to renew Gmail watch for trigger %s: %s", trg.id, exc)
+            # GmailProvider now handles watch renewal internally – no need
+            # to call the legacy helper here.
 
             # Finally hand over to provider implementation ----------------------------------------------------
 
