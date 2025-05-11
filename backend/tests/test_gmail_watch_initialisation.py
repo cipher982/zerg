@@ -7,11 +7,8 @@ JSON.  We monkey-patch the private helper so no external network call is made.
 
 from __future__ import annotations
 
-import pytest
 
-
-@pytest.mark.asyncio
-async def test_gmail_trigger_initialises_watch(client, monkeypatch, db_session):
+def test_gmail_trigger_initialises_watch(client, monkeypatch, db_session):
     """Creating a gmail trigger should persist watch metadata."""
 
     # ------------------------------------------------------------------

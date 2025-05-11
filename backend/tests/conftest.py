@@ -1,5 +1,9 @@
-import asyncio
 import os
+
+# Set *before* any project imports so backend skips background services
+os.environ["TESTING"] = "1"
+
+import asyncio
 import sys
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -27,6 +31,33 @@ from zerg.websocket.manager import topic_manager
 # Disable LangSmith tracing for all tests
 os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ["LANGCHAIN_ENDPOINT"] = ""
+
+# ---------------------------------------------------------------------------
+# Stub *cryptography* so zerg.utils.crypto can import Fernet without the real
+# wheel present.  We only need the API surface used in tests: ``encrypt`` and
+# ``decrypt`` should round-trip the plaintext.
+# ---------------------------------------------------------------------------
+
+if "cryptography" not in sys.modules:  # guard in case real package installed
+    import types as _types
+
+    _crypto_mod = _types.ModuleType("cryptography")
+    _fernet_mod = _types.ModuleType("cryptography.fernet")
+
+    class _FakeFernet:  # noqa: D401 – minimal stub
+        def __init__(self, _key):
+            self._key = _key
+
+        def encrypt(self, data: bytes):  # noqa: D401 – mimic API
+            return data[::-1]  # naive reversible transform
+
+        def decrypt(self, token: bytes):  # noqa: D401
+            return token[::-1]
+
+    _fernet_mod.Fernet = _FakeFernet  # type: ignore[attr-defined]
+    sys.modules["cryptography"] = _crypto_mod
+    sys.modules["cryptography.fernet"] = _fernet_mod
+
 os.environ["LANGCHAIN_API_KEY"] = ""
 
 # ---------------------------------------------------------------------------
@@ -334,8 +365,8 @@ def client(db_session):
 
     app.dependency_overrides[get_db] = override_get_db
 
-    client = TestClient(app, backend="asyncio")
-    yield client
+    with TestClient(app, backend="asyncio") as client:
+        yield client
 
     app.dependency_overrides = {}
 
@@ -354,8 +385,8 @@ def test_client(db_session):
 
     app.dependency_overrides[get_db] = override_get_db
 
-    client = TestClient(app, backend="asyncio")
-    yield client
+    with TestClient(app, backend="asyncio") as client:
+        yield client
 
     app.dependency_overrides = {}
 
