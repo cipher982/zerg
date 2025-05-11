@@ -14,6 +14,9 @@ use web_sys::Document;
 use web_sys::Element;
 use wasm_bindgen::JsCast;
 
+use crate::dom_utils;
+
+
 use crate::state::APP_STATE;
 use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
 use crate::state::dispatch_global_message;
@@ -69,7 +72,7 @@ impl AgentConfigModal {
                     let triggers_content = document.create_element("div")?;
                     triggers_content.set_class_name("tab-content");
                     triggers_content.set_id("agent-triggers-content");
-                    triggers_content.set_attribute("style", "display:none;")?;
+                    dom_utils::hide(&triggers_content);
 
                     // ----- empty wrapper with CTA -----
                     let empty_div = document.create_element("div")?;
@@ -94,7 +97,9 @@ impl AgentConfigModal {
             let connected_span = document.create_element("span")?;
             connected_span.set_id("agent-gmail-connected-span");
             connected_span.set_inner_html("Gmail connected ✓");
-            connected_span.set_attribute("style", "display:none;color:var(--success-color);margin-left:4px;")?;
+            // Static styling (colour + margin) – visibility handled via helper
+            connected_span.set_attribute("style", "color:var(--success-color);margin-left:4px;")?;
+            dom_utils::hide(&connected_span);
             gmail_row.append_child(&connected_span)?;
 
             empty_div.append_child(&gmail_row)?;
@@ -109,7 +114,8 @@ impl AgentConfigModal {
                     let form_card = document.create_element("div")?;
                     form_card.set_id("agent-add-trigger-form");
                     form_card.set_class_name("card");
-                    form_card.set_attribute("style", "display:none;padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
+                    form_card.set_attribute("style", "padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
+                    dom_utils::hide(&form_card);
 
                     let lbl = document.create_element("label")?;
                     lbl.set_inner_html("Type");
@@ -240,7 +246,7 @@ impl AgentConfigModal {
         triggers_content.set_class_name("tab-content");
         triggers_content.set_id("agent-triggers-content");
         // Hidden until the user clicks the tab button.
-        triggers_content.set_attribute("style", "display:none;")?;
+        dom_utils::hide(&triggers_content);
 
         // Placeholder message while we build out the real UI – avoids an
         // empty pane.
@@ -270,7 +276,8 @@ impl AgentConfigModal {
         let form_card = document.create_element("div")?;
         form_card.set_id("agent-add-trigger-form");
         form_card.set_class_name("card");
-        form_card.set_attribute("style", "display:none;padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
+        form_card.set_attribute("style", "padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
+        dom_utils::hide(&form_card);
 
         // Type label + select
         let type_label = document.create_element("label")?;
@@ -634,10 +641,10 @@ impl AgentConfigModal {
             let cb_show = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
                     if let Some(empty_div) = doc.get_element_by_id("agent-triggers-empty") {
-                        let _ = empty_div.set_attribute("style", "display:none;");
+                        dom_utils::hide(&empty_div);
                     }
                     if let Some(form) = doc.get_element_by_id("agent-add-trigger-form") {
-                        let _ = form.set_attribute("style", "display:block;padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;");
+                        dom_utils::show(&form);
                     }
                 }
             }));
@@ -650,10 +657,10 @@ impl AgentConfigModal {
             let cb_cancel = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
                     if let Some(form) = doc.get_element_by_id("agent-add-trigger-form") {
-                        let _ = form.set_attribute("style", "display:none;");
+                        dom_utils::hide(&form);
                     }
                     if let Some(empty_div) = doc.get_element_by_id("agent-triggers-empty") {
-                        let _ = empty_div.set_attribute("style", "display:block;");
+                        dom_utils::show(&empty_div);
                     }
                 }
             }));
@@ -691,10 +698,10 @@ impl AgentConfigModal {
 
                     // Hide form, show empty again – list will refresh on success
                     if let Some(form) = doc.get_element_by_id("agent-add-trigger-form") {
-                        let _ = form.set_attribute("style", "display:none;");
+                        dom_utils::hide(&form);
                     }
                     if let Some(empty_div) = doc.get_element_by_id("agent-triggers-empty") {
-                        let _ = empty_div.set_attribute("style", "display:block;");
+                        dom_utils::show(&empty_div);
                     }
                 }
             }));
@@ -878,8 +885,11 @@ impl AgentConfigModal {
         let toggle_inputs = |freq: &str, doc: &Document| {
             let set_vis = |id: &str, show: bool| {
                 if let Some(el) = doc.get_element_by_id(&format!("{}-container", id)) {
-                    let style_val = if show { "" } else { "display:none;" };
-                    let _ = el.set_attribute("style", style_val);
+                    if show {
+                        dom_utils::show(&el);
+                    } else {
+                        dom_utils::hide(&el);
+                    }
                 }
             };
 
@@ -1208,7 +1218,11 @@ impl AgentConfigModal {
                         // --- Visibility toggles ---
                         let set_vis = |id: &str, show: bool| {
                             if let Some(el) = document.get_element_by_id(&format!("{}-container", id)) {
-                                let _ = el.set_attribute("style", if show { "" } else { "display:none;" });
+                                if show {
+                                    dom_utils::show(&el);
+                                } else {
+                                    dom_utils::hide(&el);
+                                }
                             }
                         };
 
@@ -1275,8 +1289,11 @@ impl AgentConfigModal {
                 // Hide all input containers
                 let set_vis = |id: &str, show: bool| {
                     if let Some(el) = document.get_element_by_id(&format!("{}-container", id)) {
-                        let style_val = if show { "" } else { "display:none;" };
-                        let _ = el.set_attribute("style", style_val);
+                        if show {
+                            dom_utils::show(&el);
+                        } else {
+                            dom_utils::hide(&el);
+                        }
                     }
                 };
                 set_vis("sched-interval", false);
@@ -1299,8 +1316,11 @@ impl AgentConfigModal {
             // Hide all input containers
             let set_vis = |id: &str, show: bool| {
                 if let Some(el) = document.get_element_by_id(&format!("{}-container", id)) {
-                    let style_val = if show { "" } else { "display:none;" };
-                    let _ = el.set_attribute("style", style_val);
+                    if show {
+                        dom_utils::show(&el);
+                    } else {
+                        dom_utils::hide(&el);
+                    }
                 }
             };
             set_vis("sched-interval", false);
@@ -1342,10 +1362,20 @@ pub fn render_gmail_connect_status(document: &Document) -> Result<(), JsValue> {
     let connected = crate::state::APP_STATE.with(|st| st.borrow().gmail_connected);
 
     if let Some(btn) = document.get_element_by_id("agent-connect-gmail-btn") {
-        let _ = btn.set_attribute("style", if connected { "display:none;" } else { "" });
+        if connected {
+            dom_utils::hide(&btn);
+        } else {
+            dom_utils::show(&btn);
+        }
     }
     if let Some(span) = document.get_element_by_id("agent-gmail-connected-span") {
-        let _ = span.set_attribute("style", if connected { "display:inline;color:var(--success-color);" } else { "display:none;" });
+        // Ensure colour always applied
+        let _ = span.set_attribute("style", "color:var(--success-color);margin-left:4px;");
+        if connected {
+            dom_utils::show(&span);
+        } else {
+            dom_utils::hide(&span);
+        }
     }
 
     // Enable/disable <option data-gmail-option>
@@ -1396,7 +1426,11 @@ pub fn render_triggers_list(document: &Document, agent_id: u32) -> Result<(), Js
 
     // Toggle empty wrapper visibility
     if let Some(empty_div) = document.get_element_by_id("agent-triggers-empty") {
-        let _ = empty_div.set_attribute("style", if triggers.is_empty() { "display:block;" } else { "display:none;" });
+        if triggers.is_empty() {
+            dom_utils::show(&empty_div);
+        } else {
+            dom_utils::hide(&empty_div);
+        }
     }
 
     // Clear current list.

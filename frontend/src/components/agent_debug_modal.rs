@@ -7,6 +7,7 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element};
+
 use wasm_bindgen::closure::Closure;
 
 use crate::state::{DebugTab, AppState, dispatch_global_message};
@@ -45,7 +46,7 @@ pub fn render_agent_debug_modal(state: &AppState, document: &Document) -> Result
             // Close on background click
             let close_clone = elem.clone();
             let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_evt: web_sys::MouseEvent| {
-                let _ = close_clone.set_attribute("style", "display:none;");
+                crate::dom_utils::hide(&close_clone);
             }));
             elem.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
             cb.forget();
@@ -162,7 +163,7 @@ fn create_tab_button(
 /// Hide and remove the debug modal from the DOM.
 pub fn hide_agent_debug_modal(document: &Document) -> Result<(), JsValue> {
     if let Some(elem) = document.get_element_by_id("agent-debug-modal") {
-        elem.set_attribute("style", "display:none;")?;
+        crate::dom_utils::hide(&elem);
     }
     Ok(())
 }

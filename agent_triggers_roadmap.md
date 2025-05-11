@@ -27,15 +27,14 @@
 * **Tests:**
     There are backend tests for "webhook trigger flow" (`tests/test_triggers.py`) confirming it will invoke agent execution.
 
-#### Gaps / Not Yet Implemented
+#### Current Gaps / Not Yet Implemented
 
-The core Gmail-based *email* trigger path (watch registration → push webhook  → history diff → `TRIGGER_FIRED`) is now **fully working and tested**.  The remaining gaps are:
+All backend plumbing for Gmail-based *email* triggers (watch registration → push webhook → history diff → `TRIGGER_FIRED`) is **implemented and fully covered by tests**.  What is still **open**:
 
-* **Provider abstraction:** only Gmail is supported – Outlook / generic IMAP are still on the roadmap.
-* **Robust error handling:** exponential back-off & quota-retry wrapper around Gmail API calls.
-* **Production-grade crypto:** refresh-tokens are XOR-obfuscated; switch to AES-GCM/Fernet.
-* **Observability:** add structured logs + Prometheus metrics around trigger latency and failures.
-* **Front-end UI:** no CRUD surfaces yet (see dedicated section below).
+* **Provider abstraction:** only Gmail is available – Outlook / generic IMAP remain on the roadmap.
+* **Robust error handling:** add retry / exponential-backoff wrapper around Gmail HTTP requests and surface quota/auth errors via metrics.
+* **Observability:** structured JSON logs, Prometheus **histograms** (latency, token counts) and alert rules are still missing.
+* **Front-end polish:** real-time toast, dashboard badges and minor UX niceties are tracked in the dedicated FE section.
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---
@@ -44,18 +43,23 @@ The core Gmail-based *email* trigger path (watch registration → push webhook  
 
 ### What Exists
 
-* **No visible trigger management UI**
+* **Trigger management UI shipped (Phases A & B)**
 
 
-    * No references to listing/adding triggers in `agent_config_modal.rs` or related files.
+    * The *Agent Configuration* modal now contains a **Triggers** tab with:
+        • List of existing triggers (copy-to-clipboard for webhook secret).  
+        • Inline *Add Trigger* wizard (webhook & email-gmail).  
+        • Delete trigger action.
 
-    * Dashboard: displays runs, possibly logs trigger source (shows manual/schedule/api).
-* **Models & API:**
+    * Dashboard: still only shows run history, a badge with trigger count will be added in Phase E.
+* **Models & API integration:**
 
 
-    * Models and API client code understand `"trigger"` as a *string describing run source* (`manual`, `schedule`, `api`); no trigger objects or trigger management.
+    * `frontend/src/models.rs` defines a `Trigger` struct; `AppState.triggers` caches them by `agent_id`.
 
-    * No code for `email` or `webhook` config, no trigger CRUD calls surfaced.
+    * `api_client.rs` exposes `get_triggers`, `create_trigger`, `delete_trigger`.
+
+    * Gmail connect button (Phase C) implemented in `auth/google_code_flow.rs`.
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---
@@ -65,9 +69,9 @@ The core Gmail-based *email* trigger path (watch registration → push webhook  
 ┌──────────┬─────────────────┬───────────────┬─────────────────┬──────────────────────┐
 │ Area     │ Webhook Support │ Email Support │ UI for Triggers │ Comments             │
 ├──────────┼─────────────────┼───────────────┼─────────────────┼──────────────────────┤
-│ Backend  │ Yes (MVP)       │ ✅ Gmail (push+diff complete) │ n/a             │ Webhook & Gmail email triggers fully live │
+│ Backend  │ Yes (stable)    │ ✅ Gmail (push+diff complete) │ n/a             │ Webhook & Gmail email triggers fully live │
 ├──────────┼─────────────────┼─────────────────┼─────────────────┼──────────────────────┤
-│ Frontend │ Not surfaced    │ Connect-button WIP │ No              │ Gmail consent UI pending │
+│ Frontend │ CRUD modal live │ Connect-button live │ Partial (toast/badge pending) │ Phase D/E polish outstanding │
 └──────────┴─────────────────┴───────────────┴─────────────────┴──────────────────────┘
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -90,7 +94,7 @@ The core Gmail-based *email* trigger path (watch registration → push webhook  
 * Regression tests: watch initialisation, renewal, history progression, stop-watch clean-up
 * **Observability groundwork:** Prometheus counters + `/metrics` route implemented (2025-05-09 commit `metrics.py`).
 
-### Outstanding backend work (🔄) – updated 2025-05-09
+### Outstanding backend work (🔄) – updated 2025-05-12
 
 1. **API reliability & hardening**  
    • Implement retry / exponential-backoff wrapper around Gmail HTTP calls.  
@@ -102,12 +106,12 @@ The core Gmail-based *email* trigger path (watch registration → push webhook  
    • Ship fallback IMAP polling for generic hosts.
 
 3. **Security**  
-   • Replace XOR scheme with AES-GCM / Fernet for `gmail_refresh_token`.  
+   ✅ `gmail_refresh_token` is now **encrypted-at-rest** using AES-GCM (Fernet) when the `cryptography` package is available; the original XOR-Base64 scheme remains as a fallback in CI.  
    • Make Google-JWT validation **mandatory** in production (remove opt-in flag).  
-   • Improve UX when `GOOGLE_CLIENT_ID/SECRET` are missing.
+   • Improve UX when `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are missing.
 
 4. **Observability**  
-   ✅ *Prometheus counters shipped* – `trigger_fired_total`, `gmail_watch_renew_total`, `gmail_api_error_total` are now registered in `zerg.metrics` and available via a new `/metrics` endpoint (text exposition format).  
+   ✅ *Prometheus counters shipped* – `trigger_fired_total`, `gmail_watch_renew_total`, `gmail_api_error_total`.  
    • Next: add histograms (latency, token counts) and structured JSON logs for each trigger event.
 
 5. **Test coverage**  
@@ -117,36 +121,23 @@ The core Gmail-based *email* trigger path (watch registration → push webhook  
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---
 
-## Frontend TODOs
+## Frontend TODOs (updated 2025-05-12)
 
-1. **Trigger Management UI:**
+Phases A, B and C are **shipped** (data-model, modal UI, Gmail OAuth).  The remaining frontend work is largely UX polish:
 
+1. **Phase D – Real-time UX polish**
+   • Show toast/banner when a run is created **via trigger** (run.source ≠ manual/schedule).  
+   • Increment “Triggers fired” badge on the Dashboard agent card.
 
-    * List current triggers for an agent (in modal/dashboard).
+2. **Phase E – Dashboard surfacing**
+   • Add dedicated “Triggers” column (count) and quick-link to modal.
 
-    * “Add trigger” flow that allows selection between `"webhook"` and `"email"` triggers.
+3. **Phase F – Tests & QA**
+   • WASM tests for toast dispatcher + badge rendering.  
+   • Manual dark-mode & narrow-viewport QA.
 
-* For email: UI to collect server/imap config, mailbox, filters, etc.
-
-2. **Gmail Connect UX (In-progress)**
-
-    * “Connect Gmail” button that launches GIS *code client* with
-      `gmail.readonly` + `access_type=offline` + `prompt=consent`.
-    * POSTs `auth_code` to `/api/auth/google/gmail`; store success flag in
-      AppState to show a ✓ badge.
-    * “Disconnect” (DELETE token) – **TODO**.
-
-3. **API Integration:**
-
-
-    * Fetch, create, delete triggers.
-
-* Show trigger status/history per agent.
-
-4. **Real-Time:**
-
-
-* Show when triggers fire (toast overlay, run history badge).
+4. **Disconnect flow**
+   • Button that DELETEs `/api/auth/google/gmail` (endpoint TBD) and clears gmail_connected flag.
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ---
@@ -258,13 +249,12 @@ concurrent updates to `history_id` are merged correctly (2025-05-10).
   Suite now **114 passed** / 15 skipped.
 
 ✅ *Security hardening* –
-   • `gmail_refresh_token` now stored encrypted (`zerg.utils.crypto`).  
+   • `gmail_refresh_token` is stored **encrypted-at-rest** using AES-GCM (Fernet) when `cryptography` is available; XOR-Base64 fallback otherwise.  
    • Optional Google JWT validation added to `/api/email/webhook/google` (enable with `EMAIL_GMAIL_JWT_VALIDATION=1`).  
 
 **Remaining technical debt (moved to *Outstanding backend work* list)**
 
 • Robust back-off & quota handling around Gmail API requests.  
-• AES-GCM encryption (current XOR scheme is placeholder).  
 • Enable JWT validation by default in prod envs (remove opt-in flag).  
 
 ### ✅ Phase 3.5 – Metrics & Observability (2025-05-09)
@@ -449,19 +439,16 @@ This section was appended after verifying the current `main` branch on
 
 3. **Critical env vars**  
    • `TRIGGER_SIGNING_SECRET` – required by webhook consumers.  
-   • `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` – mandatory for Phase C.  
-   • `EMAIL_GMAIL_JWT_VALIDATION=1` enables stricter Gmail webhook checks in
-     prod.
+   • `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` – mandatory for Gmail OAuth.  
+   • `EMAIL_GMAIL_JWT_VALIDATION=1` enables stricter Gmail webhook checks in prod.  
+   • `FERNET_SECRET` – master key for encrypted refresh-token storage (required in all environments; tests inject a deterministic value).
 
 4. **Styling rule-of-thumb**  
    The Triggers tab re-uses utility classes (`btn-primary`, `card`, etc.).
    Please consult design-system owners before adding new CSS.
 
-5. **Next engineering focus** – Phase C  
-   Implement Google Identity Services code-client in
-   `frontend/src/auth/google_code_flow.rs` (file not yet created).  On success
-   POST the `auth_code` to `/api/auth/google/gmail` and set
-   `state.gmail_connected = true`.
+5. **Front-end note** – GIS code-client  
+   The real implementation now lives in `frontend/src/auth/google_code_flow.rs`; `/system/info` injects `google_client_id` so the Rust code can build the parameter object.
 
 6. **Testing tip**  
    When writing WASM unit tests for triggers (Phase F) enable the
