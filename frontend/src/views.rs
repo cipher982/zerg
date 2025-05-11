@@ -7,11 +7,12 @@ use web_sys::Document;
 use crate::storage::ActiveView;
 use wasm_bindgen::JsValue;
 use crate::components::agent_config_modal::AgentConfigModal;
+use crate::dom_utils;
 
 /// Helper: hide a DOM element (`display:none`) if it exists.
 fn hide_by_id(document: &web_sys::Document, id: &str) {
     if let Some(elem) = document.get_element_by_id(id) {
-        let _ = elem.set_attribute("style", "display: none;");
+        dom_utils::hide(&elem);
     }
 }
 
@@ -26,7 +27,7 @@ fn show_block_by_id(document: &web_sys::Document, id: &str) {
 // Handle agent modal display
 pub fn hide_agent_modal(document: &Document) -> Result<(), JsValue> {
     if let Some(modal) = document.get_element_by_id("agent-modal") {
-        modal.set_attribute("style", "display: none;")?;
+        dom_utils::hide(&modal);
     }
     
     Ok(())
@@ -104,7 +105,7 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
             }
             // Show
             if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
-                chat_container.set_attribute("style", "display: flex;")?;
+                crate::dom_utils::show(&chat_container);
             }
 
             if let Some(app_container) = document.get_element_by_id("app-container") {

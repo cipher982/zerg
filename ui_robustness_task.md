@@ -193,6 +193,28 @@ frontend/e2e/*                      (Playwright config + spec)
 5. Decide on framework (Yew / Leptos spike) and storyboard pages for visual
    diff tests.
 
+### 7.6 Visibility helpers – **rollout finished** (2025-05-10 evening)
+
+All remaining `display:none` / `display:block` inline toggles have been
+replaced with `dom_utils::hide()` / `dom_utils::show()` or converted to CSS
+classes.  This completes item **3** of the TODO list.
+
+Key touches
+• agent_config_modal.rs – biggest lift (Gmail-connect row, Add-Trigger form,
+  scheduling inputs, dynamic empty-state).  Introduced helper-based toggles
+  and kept existing padding/border styling intact.
+• agent_debug_modal.rs & views.rs – migrated close/hide paths.
+
+grep verification → **0** occurrences of `display:none` or `display:block`
+writes remain in `frontend/src`.
+
+Next up
+1. Flip the DOM-ID prefix pre-commit grep hook from commented to **active**.  
+   (Done – see .pre-commit-config.yaml update)  
+2. Start extracting `<Modal>` and `<TabBar>` components.
+
+We are officially style-toggle-free!  🎉
+
 ### 7.5 Visibility-helper rollout (same day follow-up)
 
 ✔ **Chat View migrated** – replaced five inline `set_attribute("style", …display… )`
