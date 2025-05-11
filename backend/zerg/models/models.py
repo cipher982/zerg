@@ -37,6 +37,11 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
+    # Role / permission level – currently "USER" or "ADMIN".  Use a simple
+    # VARCHAR instead of a full Enum so we can add roles without migrations
+    # in development.  In production we might switch to Enum later.
+    role = Column(String, nullable=False, default="USER")
+
     # -------------------------------------------------------------------
     # Personalisation fields (introduced in *User Personalisation* feature)
     # -------------------------------------------------------------------
@@ -49,6 +54,27 @@ class User(Base):
 
     # Login tracking
     last_login = Column(DateTime, nullable=True)
+
+    # -------------------------------------------------------------------
+    # Google Mail integration (Phase-2 Email Triggers)
+    # -------------------------------------------------------------------
+    # When a user connects their Gmail account with *offline_access* scope we
+    # receive a **refresh token** that allows the backend to fetch short-lived
+    # access-tokens without further user interaction.  Persist the token
+    # encrypted-at-rest in a future iteration – for now we store the raw value
+    # because unit-tests run against an ephemeral in-memory SQLite database.
+
+    gmail_refresh_token = Column(String, nullable=True)
+
+    # -------------------------------------------------------------------
+    # Convenience property used by the API layer / Pydantic models.
+    # -------------------------------------------------------------------
+
+    @property
+    def gmail_connected(self) -> bool:  # noqa: D401 – simple boolean accessor
+        """Return *True* if the user granted offline Gmail access (refresh token stored)."""
+
+        return self.gmail_refresh_token is not None
 
     # Timestamps -------------------------------------------------------------
     created_at = Column(DateTime, server_default=func.now())
@@ -209,6 +235,41 @@ class Trigger(Base):
     # Shared secret that must accompany incoming webhook calls.  Very simple
     # scheme for now – a random hex string.
     secret = Column(String, nullable=False, unique=True, index=True)
+
+    # Optional JSON blob with trigger-specific configuration.  This keeps the
+    # model forward-compatible so new trigger types (e.g. *email*, *slack*)
+    # can persist arbitrary settings without schema migrations.  For webhook
+    # triggers the column is generally **NULL**.
+    config = Column(JSON, nullable=True)
+
+    # -------------------------------------------------------------------
+    # Typed *config* accessor
+    # -------------------------------------------------------------------
+
+    @property
+    def config_obj(self):  # noqa: D401 – typed accessor
+        """Return a :class:`TriggerConfig` parsed from ``config`` JSON.
+
+        No caching / fallback logic – we simply construct a new model every
+        call because the cost is negligible and keeps the implementation
+        straightforward.
+        """
+
+        from zerg.models.trigger_config import TriggerConfig  # local import
+
+        return TriggerConfig(**(self.config or {}))  # type: ignore[arg-type]
+
+    def set_config_obj(self, cfg):  # noqa: D401 – mutator, TriggerConfig param
+        """Assign *cfg* and persist its dict representation."""
+
+        # Persist as raw dict so DB schema remains unchanged
+        # Pydantic v2 uses ``model_dump``; v1 still supports ``dict``.
+        try:
+            raw = cfg.model_dump()  # type: ignore[attr-defined]
+        except AttributeError:
+            raw = cfg.dict()  # type: ignore[attr-defined]
+
+        self.config = raw  # type: ignore[assignment]
 
     created_at = Column(DateTime, server_default=func.now())
 

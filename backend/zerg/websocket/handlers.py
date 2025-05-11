@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from zerg.crud import crud
+from zerg.schemas.schemas import UserOut
 from zerg.schemas.ws_messages import AgentStateMessage
 from zerg.schemas.ws_messages import ErrorMessage
 from zerg.schemas.ws_messages import MessageType
@@ -205,8 +206,6 @@ async def _subscribe_user(client_id: str, user_id: int, message_id: str, db: Ses
         # Send initial user state – we re-use the *user_update* payload shape
         # already handled by the frontend rather than introducing a new
         # message type.
-        from zerg.schemas.schemas import UserOut  # Local import to avoid cycle
-
         user_payload = UserOut.model_validate(user).model_dump()
 
         await send_to_client(

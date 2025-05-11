@@ -148,6 +148,14 @@ pub enum Message {
     // Tab switching in modal
     SwitchToMainTab,
     SwitchToHistoryTab,
+    /// Switch to the *Triggers* tab in the agent modal
+    SwitchToTriggersTab,
+
+    /// Unified variant – switch to the given tab.  Prefer this over the
+    /// legacy `SwitchTo*Tab` helpers.  The update handler keeps
+    /// backwards-compatibility by mapping the old variants to this one so we
+    /// can migrate call-sites incrementally.
+    SetAgentTab(crate::state::AgentConfigTab),
     
     // Auto-save operations
     UpdateSystemInstructions(String),
@@ -207,7 +215,32 @@ pub enum Message {
     /// Response containing latest runs list
     ReceiveAgentRuns { agent_id: u32, runs: Vec<crate::models::ApiAgentRun> },
     /// Real-time update for a single run via WebSocket
+
     ReceiveRunUpdate { agent_id: u32, run: crate::models::ApiAgentRun },
+
+    // -------------------------------------------------------------------
+    // Trigger management (Phase A)
+    // -------------------------------------------------------------------
+    /// Request the list of triggers for an agent (REST call)
+    LoadTriggers(u32),                 // agent_id
+    /// Response containing current triggers
+    TriggersLoaded { agent_id: u32, triggers: Vec<crate::models::Trigger> },
+    /// A trigger was created via the modal wizard
+    TriggerCreated { agent_id: u32, trigger: crate::models::Trigger },
+    /// A trigger was deleted (list should refresh)
+    TriggerDeleted { agent_id: u32, trigger_id: u32 },
+
+    /// User requested to create a new trigger (UI ➜ update ➜ REST)
+    RequestCreateTrigger { payload_json: String },
+
+    /// User clicked delete on a trigger row.
+    RequestDeleteTrigger { trigger_id: u32 },
+
+    // -------------------------------------------------------------------
+    // Gmail OAuth flow (Phase C)
+    // -------------------------------------------------------------------
+    /// OAuth flow succeeded – the backend confirmed refresh-token storage.
+    GmailConnected,
 
     /// Toggle between compact (first 5) and full run list for an agent row
     ToggleRunHistory { agent_id: u32 },
@@ -312,6 +345,16 @@ pub enum Command {
     
     /// Fetch messages for a thread
     FetchThreadMessages(u32), // thread_id
+
+    // ---------------------------------------------------------------
+    // Trigger-related side-effect commands (Phase A wiring only)
+    // ---------------------------------------------------------------
+    /// Fetch triggers for the specified agent id.
+    FetchTriggers(u32),
+    /// Perform POST /triggers with given JSON payload.
+    CreateTrigger { payload_json: String },
+    /// DELETE /triggers/{id}
+    DeleteTrigger(u32), // trigger_id
     
     /// Create a new thread
     CreateThread {

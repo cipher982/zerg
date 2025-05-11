@@ -11,6 +11,7 @@ use crate::models::{
     ApiAgent,
     ApiThread,
     ApiThreadMessage,
+    Trigger,
 };
 use crate::models::ApiAgentRun;
 
@@ -39,6 +40,17 @@ use crate::update;
 pub enum DebugTab {
     Overview,
     RawJson,
+}
+
+// ---------------------------------------------------------------------------
+// Agent Configuration Modal – currently three fixed tabs.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentConfigTab {
+    Main,
+    History,
+    Triggers,
 }
 
 #[derive(Debug, Clone)]
@@ -145,12 +157,25 @@ pub struct AppState {
     pub token_mode_threads: HashSet<u32>,
     pub current_agent_id: Option<u32>,
 
+    /// Currently selected tab inside the *Agent Configuration* modal.  Kept
+    /// here so business logic can switch tabs without directly touching the
+    /// DOM (single-source-of-truth).  Defaults to `Main` when the modal is
+    /// first opened.
+    pub agent_modal_tab: AgentConfigTab,
+
     // Track which agent rows are expanded in the dashboard UI so we can
     // preserve open/closed state across re‑renders.
     pub expanded_agent_rows: HashSet<u32>,
 
     // Map `agent_id -> recent runs (ordered newest-first, max 20)`
     pub agent_runs: HashMap<u32, Vec<ApiAgentRun>>, 
+
+    // ---------------------------------------------------------------
+    // Trigger management (NEW – Phase A)
+    // ---------------------------------------------------------------
+    /// All triggers grouped by their owning agent.  Populated lazily when a
+    /// user opens the *Triggers* tab in the agent modal.
+    pub triggers: HashMap<u32, Vec<Trigger>>, // agent_id → triggers
 
     // Agent Debug modal (None when hidden)
     pub agent_debug_pane: Option<AgentDebugPane>,
@@ -169,6 +194,14 @@ pub struct AppState {
 
     // Track which agents have their full run history expanded (>5 rows)
     pub run_history_expanded: HashSet<u32>,
+
+    // -------------------------------------------------------------------
+    // Gmail integration status (Phase C)
+    // -------------------------------------------------------------------
+
+    /// True once the user connected Gmail via OAuth.  Controls whether the
+    /// “Email (Gmail)” option in the *Add Trigger* wizard is clickable.
+    pub gmail_connected: bool,
 
     // ---------------------------------------------------------------
     // Debug overlay (only compiled in debug builds)
@@ -270,15 +303,23 @@ impl AppState {
             token_mode_threads: HashSet::new(),
             current_agent_id: None,
 
+            agent_modal_tab: AgentConfigTab::Main,
+
             expanded_agent_rows: HashSet::new(),
 
             agent_runs: HashMap::new(),
+
+            // Trigger map starts empty – filled on demand.
+            triggers: HashMap::new(),
 
             agent_debug_pane: None,
             // Initialize UI state for tool call indicators
             tool_ui_states: HashMap::new(),
 
             run_history_expanded: HashSet::new(),
+
+            // Gmail yet to be connected.
+            gmail_connected: false,
 
             running_runs: HashSet::new(),
 
@@ -1145,6 +1186,9 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::FetchAgents |
             cmd @ Command::FetchAgentRuns(_) |
             cmd @ Command::FetchAgentDetails(_) => crate::command_executors::execute_fetch_command(cmd),
+            cmd @ Command::FetchTriggers(_) |
+            cmd @ Command::CreateTrigger { .. } |
+            cmd @ Command::DeleteTrigger(_) => crate::command_executors::execute_fetch_command(cmd),
             
             cmd @ Command::CreateThread { .. } |
             cmd @ Command::SendThreadMessage { .. } |

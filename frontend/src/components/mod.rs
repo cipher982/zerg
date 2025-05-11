@@ -10,6 +10,8 @@ pub mod agent_config_modal;
 pub mod auth;
 pub mod avatar_badge;
 pub mod user_menu;
+pub mod modal;
+pub mod tab_bar;
 
 // utilities
 

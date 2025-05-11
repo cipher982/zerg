@@ -18,8 +18,87 @@ use serde_json;
 use rand;
 use chrono;
 use std::collections::HashSet;
-use std::rc::Rc;
-use std::cell::RefCell;
+use crate::state::AgentConfigTab;
+use crate::dom_utils::{hide, show, set_active, set_inactive};
+
+// ---------------------------------------------------------------------------
+// Internal helper – encapsulates all DOM + side-effects when the user switches
+// between tabs inside the Agent Configuration modal.  Called by both the
+// unified `SetAgentTab` message handler *and* the legacy `SwitchTo…Tab`
+// variants for backwards compatibility.
+// ---------------------------------------------------------------------------
+
+fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>, tab: AgentConfigTab) {
+    state.agent_modal_tab = tab;
+
+    let window = match web_sys::window() {
+        Some(w) => w,
+        None => return,
+    };
+    let document = match window.document() {
+        Some(d) => d,
+        None => return,
+    };
+
+    let by_id = |id: &str| document.get_element_by_id(id);
+
+    // Content sections
+    let main_c = by_id("agent-main-content");
+    let hist_c = by_id("agent-history-content");
+    let trg_c  = by_id("agent-triggers-content");
+
+    // Tab buttons
+    let main_t = by_id("agent-main-tab");
+    let hist_t = by_id("agent-history-tab");
+    let trg_t  = by_id("agent-triggers-tab");
+
+    // Reset all visibility / active state first
+    if let Some(el) = &main_c { hide(el); }
+    if let Some(el) = &hist_c { hide(el); }
+    if let Some(el) = &trg_c  { hide(el); }
+
+    if let Some(btn) = &main_t { set_inactive(btn); }
+    if let Some(btn) = &hist_t { set_inactive(btn); }
+    if let Some(btn) = &trg_t  { set_inactive(btn); }
+
+    // Activate selected tab
+    match tab {
+        AgentConfigTab::Main => {
+            if let Some(el) = &main_c { show(el); }
+            if let Some(btn) = &main_t { set_active(btn); }
+        }
+        AgentConfigTab::History => {
+            if let Some(el) = &hist_c { show(el); }
+            if let Some(btn) = &hist_t { set_active(btn); }
+        }
+        AgentConfigTab::Triggers => {
+            if let Some(el) = &trg_c { show(el); }
+            if let Some(btn) = &trg_t { set_active(btn); }
+        }
+    }
+
+    // When switching to Triggers we may need to (lazy) fetch triggers.
+    if tab == AgentConfigTab::Triggers {
+        let agent_id_opt = document
+            .get_element_by_id("agent-modal")
+            .and_then(|m| m.get_attribute("data-agent-id"))
+            .and_then(|s| s.parse::<u32>().ok());
+
+        if let Some(agent_id) = agent_id_opt {
+            if !state.triggers.contains_key(&agent_id) {
+                commands.push(Command::FetchTriggers(agent_id));
+            }
+
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
+                    }
+                }
+            })));
+        }
+    }
+}
 
 // Bring legacy helper trait into scope so its methods are usable on CanvasNode
 // Legacy helper trait no longer needed after decoupling cleanup.
@@ -34,8 +113,15 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // Auth / profile handling
         // ---------------------------------------------------------------
         Message::CurrentUserLoaded(user) => {
-            state.current_user = Some(user);
+            // Store a *clone* inside the state so that we can still access the
+            // original `user` value below without running into move issues.
+            state.current_user = Some(user.clone());
             state.logged_in = true;
+
+            // Persist Gmail connection status so the Triggers tab can enable
+            // the e-mail trigger option without requiring another network
+            // call.
+            state.gmail_connected = user.gmail_connected;
 
             // Mount / refresh user menu asynchronously after borrow ends.
             commands.push(Command::UpdateUI(Box::new(|| {
@@ -494,60 +580,33 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
         },
        
+        // Legacy variants – forward to unified handler by converting the
+        // incoming message into `SetAgentTab` and **re-matching**.  This keeps
+        // external call-sites working while we migrate.
         Message::SwitchToMainTab => {
-            // The actual UI update is handled in the view render
-            let window = web_sys::window().expect("no global window exists");
-            let document = window.document().expect("should have a document");
-           
-            // Show main content, hide history content
-            if let Some(main_content) = document.get_element_by_id("main-content") {
-                if let Err(e) = main_content.set_attribute("style", "display: block;") {
-                    web_sys::console::error_1(&format!("Failed to show main content: {:?}", e).into());
-                }
-            }
-           
-            if let Some(history_content) = document.get_element_by_id("history-content") {
-                if let Err(e) = history_content.set_attribute("style", "display: none;") {
-                    web_sys::console::error_1(&format!("Failed to hide history content: {:?}", e).into());
-                }
-            }
-           
-            // Update active tab
-            if let Some(main_tab) = document.get_element_by_id("main-tab") {
-                main_tab.set_class_name("tab-button active");
-            }
-           
-            if let Some(history_tab) = document.get_element_by_id("history-tab") {
-                history_tab.set_class_name("tab-button");
-            }
+            // Simply treat as unified variant.
+            let tab = crate::state::AgentConfigTab::Main;
+            // Reuse the logic by executing the code path directly (copy of
+            // SetAgentTab handler but without the triggers-specific bits for
+            // performance).  We call a small helper.
+            handle_agent_tab_switch(state, &mut commands, tab);
         },
-       
+
         Message::SwitchToHistoryTab => {
-            // The actual UI update is handled in the view render
-            let window = web_sys::window().expect("no global window exists");
-            let document = window.document().expect("should have a document");
-           
-            // Hide main content, show history content
-            if let Some(main_content) = document.get_element_by_id("main-content") {
-                if let Err(e) = main_content.set_attribute("style", "display: none;") {
-                    web_sys::console::error_1(&format!("Failed to hide main content: {:?}", e).into());
-                }
-            }
-           
-            if let Some(history_content) = document.get_element_by_id("history-content") {
-                if let Err(e) = history_content.set_attribute("style", "display: block;") {
-                    web_sys::console::error_1(&format!("Failed to show history content: {:?}", e).into());
-                }
-            }
-           
-            // Update active tab
-            if let Some(main_tab) = document.get_element_by_id("main-tab") {
-                main_tab.set_class_name("tab-button");
-            }
-           
-            if let Some(history_tab) = document.get_element_by_id("history-tab") {
-                history_tab.set_class_name("tab-button active");
-            }
+            let tab = crate::state::AgentConfigTab::History;
+            handle_agent_tab_switch(state, &mut commands, tab);
+        },
+
+        Message::SwitchToTriggersTab => {
+            let tab = crate::state::AgentConfigTab::Triggers;
+            handle_agent_tab_switch(state, &mut commands, tab);
+        },
+
+        // -----------------------------------------------------------
+        // Unified tab switching variant.
+        // -----------------------------------------------------------
+        Message::SetAgentTab(tab) => {
+            handle_agent_tab_switch(state, &mut commands, tab);
         },
        
         Message::UpdateSystemInstructions(instructions) => {
@@ -1320,7 +1379,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 if let Some(document) = web_sys::window().unwrap().document() {
                     // First hide the chat view container
                     if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
-                        let _ = chat_container.set_attribute("style", "display: none;");
+                        hide(&chat_container);
                     }
                     
                     if let Err(e) = crate::views::render_active_view_by_type(&crate::storage::ActiveView::Dashboard, &document) {
@@ -2082,6 +2141,93 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     }
                 })));
             }
+        },
+
+        // -----------------------------------------------------------------
+        // Trigger management (Phase A minimal state sync)
+        // -----------------------------------------------------------------
+
+        Message::LoadTriggers(agent_id) => {
+            // Fire network command – actual update comes via TriggersLoaded.
+            commands.push(Command::FetchTriggers(agent_id));
+        },
+
+        Message::TriggersLoaded { agent_id, triggers } => {
+            state.triggers.insert(agent_id, triggers);
+
+            // If modal is open on Triggers tab, refresh the list (TODO – will
+            // be implemented in Phase B).  For now we simply mark canvas
+            // dirty which is a no-op for modal but keeps behaviour
+            // consistent with other update paths.
+            state.mark_dirty();
+
+            // If triggers tab for this agent is currently visible, re-render.
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        // Check if triggers-content is visible (style display)
+                        if let Some(content) = doc.get_element_by_id("triggers-content") {
+                            if content.get_attribute("style").map(|s| s.contains("display: block")).unwrap_or(false) {
+                                let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
+                            }
+                        }
+                    }
+                }
+            })));
+        },
+
+        Message::TriggerCreated { agent_id, trigger } => {
+            state.triggers.entry(agent_id).or_default().push(trigger);
+            state.mark_dirty();
+
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
+                    }
+                }
+            })));
+        },
+
+        Message::TriggerDeleted { agent_id, trigger_id } => {
+            if let Some(list) = state.triggers.get_mut(&agent_id) {
+                list.retain(|t| t.id != trigger_id);
+            }
+            state.mark_dirty();
+
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
+                    }
+                }
+            })));
+        },
+
+        // -----------------------------------------------------------
+        // Gmail OAuth flow – Phase C (frontend-only stub)
+        // -----------------------------------------------------------
+
+        Message::GmailConnected => {
+            state.gmail_connected = true;
+
+            // Re-render UI pieces that depend on the flag (Triggers tab).
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::agent_config_modal::render_gmail_connect_status(&doc);
+                    }
+                }
+            })));
+        },
+
+        // UI requested new trigger creation – translate into network command.
+        Message::RequestCreateTrigger { payload_json } => {
+            commands.push(Command::CreateTrigger { payload_json });
+        },
+
+        Message::RequestDeleteTrigger { trigger_id } => {
+            commands.push(Command::DeleteTrigger(trigger_id));
         },
 
         // Toggle compact/full run history view

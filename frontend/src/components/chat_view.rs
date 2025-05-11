@@ -1,11 +1,14 @@
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, Event, HtmlInputElement};
-use crate::state::{dispatch_global_message, APP_STATE};
+use wasm_bindgen::JsCast;
+
+use std::collections::HashMap;
+
+use crate::dom_utils;
 use crate::messages::Message;
 use crate::models::{ApiThread, ApiThreadMessage};
-use wasm_bindgen::JsCast;
+use crate::state::{dispatch_global_message, APP_STATE};
 use crate::storage::ActiveView;
-use std::collections::HashMap;
 
 // Main function to setup the chat view
 pub fn setup_chat_view(document: &Document) -> Result<(), JsValue> {
@@ -15,8 +18,8 @@ pub fn setup_chat_view(document: &Document) -> Result<(), JsValue> {
         chat_container.set_id("chat-view-container");
         chat_container.set_class_name("chat-view-container");
         
-        // Initially hide the chat container
-        chat_container.set_attribute("style", "display: none;")?;
+        // Initially hide the chat container using the shared helper
+        dom_utils::hide(&chat_container);
         
         // Add the chat layout structure
         chat_container.set_inner_html(r#"
@@ -132,18 +135,18 @@ fn setup_chat_event_handlers(document: &Document) -> Result<(), JsValue> {
 
 // Function to show the chat view
 pub fn show_chat_view(document: &Document, agent_id: u32) -> Result<(), JsValue> {
-    // Hide other views
+    // Hide other views using the shared helper
     if let Some(dashboard) = document.get_element_by_id("dashboard-container") {
-        dashboard.set_attribute("style", "display: none;")?;
+        dom_utils::hide(&dashboard);
     }
-    
+
     if let Some(canvas) = document.get_element_by_id("canvas-container") {
-        canvas.set_attribute("style", "display: none;")?;
+        dom_utils::hide(&canvas);
     }
-    
+
     // Show chat view
     if let Some(chat_view) = document.get_element_by_id("chat-view-container") {
-        chat_view.set_attribute("style", "display: flex;")?;
+        dom_utils::show(&chat_view);
     }
     
     // Instead of accessing APP_STATE, dispatch a message to update the thread list after the DOM is ready

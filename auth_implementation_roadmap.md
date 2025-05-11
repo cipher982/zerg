@@ -74,7 +74,8 @@ Stage 4 – Front-end integration
 | 4.11 | Logout flow (clear token, show overlay, close WS)                    | frontend | [x] |
 | 4.12 | JWT expiry / 401 handling → automatic re-login (refresh TBD)         | frontend / backend | [x] |
 | 4.13 | Replace `eval()` glue with safe JS interop (CSP-friendly)             | `frontend/src/components/auth.rs` | [x] |
-| 4.14 | Build-time injection of `GOOGLE_CLIENT_ID` via env! macro            | build scripts | [x] |
+| 4.14 | Provide `GOOGLE_CLIENT_ID` to the frontend                           | runtime fetch via `/api/system/info` | [x] |
+|      | (final impl switched from compile-time `env!` to runtime flags)      |               |     |
 
 -------------------------------------------------------------------------------
 Stage 5 – Trigger hardening (HMAC header)
@@ -91,17 +92,17 @@ Stage 5 – Trigger hardening (HMAC header)
 > traffic, and webhook triggers are protected via HMAC-SHA256 with a
 > ±5-minute replay window.
 >
-> **Remaining scope before we can call the Auth MVP *done*:**
->
-> • **Stage 6** – add backend auth unit/integration tests (items 6.1-6.3).
-> • **Stage 6** – ✅ **completed** (tests merged 2025-05-07)
-> • **Stage 7** – docs & housekeeping (README, ops security note, pre-commit) – *next up*.
->
-> **Future hardening idea** (post-MVP): the WebSocket endpoint currently
-> accepts the connection *before* validating the `token` query-parameter. We
-> should consider a *Stage 8* that calls `get_current_user()` inside
-> `routers/websocket.py` and closes unauthenticated clients with close-code
-> **4401**.
+> **Current status (2025-05-09)**
+
+• Stage 6 tests are merged and green ✅  
+• **Stage 7** – README quick-start (**7.1 ✅**) and security-ops note (**7.2 ✅**) are done; Ruff/pre-commit housekeeping (7.3) still open.  
+• **Stage 8** – front-end token param handled (**8.3 ✅**); backend validation (8.1 / 8.2) and tests (8.4) still pending.
+
+> **Checkpoint (2025-05-10):**
+> • 7.3 pre-commit housekeeping still open.  
+> • Stage 8 remains the **only functional gap**: the backend does **not** yet
+>   validate the `token` query-param on WebSocket upgrade, so unauthenticated
+>   clients can connect.  Front-end & close-code handling are already live.
 
 -------------------------------------------------------------------------------
 Stage 6 – Tests & quality gates
@@ -118,9 +119,21 @@ Stage 7 – Docs & housekeeping
 -------------------------------------------------------------------------------
 | # | Task | Code Location | Status |
 |---|------|---------------|--------|
-| 7.1 | Update **README.md** quick-start (mention Google sign-in & bypass)    | `README.md` | [ ] |
-| 7.2 | Add security note to `ops_roadmap.md` → “Phase A shipped”             | `ops_roadmap.md` | [ ] |
-| 7.3 | Verify `pre-commit` passes & bump `ruff.toml` exclude list if needed  | repo root | [ ] |
+| 7.1 | Update **README.md** quick-start (mention Google sign-in & bypass)    | `README.md` | [x] |
+| 7.2 | Add security note to `docs/auth_overview.md` → “Phase A shipped”      | `docs/auth_overview.md` | [x] |
+| 7.3 | Verify `pre-commit` passes, fix new Ruff warnings, bump `ruff.toml` exclude list if needed | repo root | [x] |
+
+-------------------------------------------------------------------------------
+Stage 8 – WebSocket auth hardening *(post-MVP)*
+-------------------------------------------------------------------------------
+| # | Task | Code Location | Status |
+|----|------------------------------------------------------------------------------------------------|---------------------------------------------|--------|
+| 8.1 | Extract `validate_ws_jwt()` helper (reuse logic from `get_current_user`)                      | `zerg/dependencies/auth.py`                 | [x] |
+| 8.2 | In `routers/websocket.py` verify `token` *before* `accept()`; on failure close **4401**       | `backend/zerg/routers/websocket.py`         | [x] |
+| 8.3 | Front-end always appends `?token=<jwt>`                                                      | `frontend/src/network/ws_client_v2.rs`      | [x] |
+| 8.4 | Tests: (i) blocked w/o token (ii) succeeds w/ token (iii) bypass mode                         | `backend/tests/test_websocket_auth.py`      | [x] |
+| 8.5 | Propagate resolved `user_id` to `TopicConnectionManager` (prep per-user topics)               | `backend/zerg/websocket/manager.py`         | [x] |
+| 8.6 | Docs: mention WebSocket close-code **4401 Unauthorized**                                      | `docs/auth_overview.md`                     | [x] |
 
 -------------------------------------------------------------------------------
 Appendix – Dev user helper
@@ -138,6 +151,20 @@ def _get_or_create_dev_user(db: Session) -> User:
     return crud.create_user(db, email=DEV_EMAIL, provider=None)
 ```
 
+FYI: The upcoming `validate_ws_jwt()` helper (see 8.1) will call the same
+logic, so WebSocket connections inherit the **AUTH_DISABLED** development
+bypass automatically.
+
 -------------------------------------------------------------------------------
 This roadmap lives in **`auth_implementation_roadmap.md`** – keep it updated in
 every PR so the whole team sees progress at a glance.  Happy coding! 🛠️
+
+-------------------------------------------------------------------------------
+Stage 9 – Per-user topics & permissions *(stretch)*
+-------------------------------------------------------------------------------
+| # | Task | Code Location | Status |
+|---|------|---------------|--------|
+| 9.1 | TopicManager supports `user:{id}` topic for profile / settings updates | `backend/zerg/websocket/manager.py` | [x] |
+| 9.2 | Front-end subscribes to current-user topic (refresh user state on change) | `frontend/src/update.rs` | [x] |
+| 9.3 | Permission groundwork: add `role` column (USER / ADMIN) to User model  | `backend/zerg/models/models.py` | [x] |
+

@@ -1,7 +1,7 @@
 """Topic-based WebSocket connection manager.
 
-This module provides a new connection manager that supports topic-based subscriptions
-and integrates with the event bus for a unified real-time messaging system.
+Manages WebSocket connections with topic-based subscriptions and relays
+EventBus events to connected clients.
 """
 
 import logging
@@ -10,6 +10,7 @@ from typing import Dict
 from typing import Set
 
 from fastapi import WebSocket
+from fastapi.encoders import jsonable_encoder
 
 from zerg.events import EventType
 from zerg.events import event_bus
@@ -28,6 +29,9 @@ class TopicConnectionManager:
         self.topic_subscriptions: Dict[str, Set[str]] = {}
         # Map of client_id to set of subscribed topics
         self.client_topics: Dict[str, Set[str]] = {}
+        # Map client_id -> authenticated user_id (optional)
+        self.client_users: Dict[str, int | None] = {}
+
         # Register for relevant events
         self._setup_event_handlers()
 
@@ -50,7 +54,7 @@ class TopicConnectionManager:
         # User events (e.g., profile updated) – broadcast to dedicated topic
         event_bus.subscribe(EventType.USER_UPDATED, self._handle_user_event)
 
-    async def connect(self, client_id: str, websocket: WebSocket) -> None:
+    async def connect(self, client_id: str, websocket: WebSocket, user_id: int | None = None) -> None:
         """Register a new client connection.
 
         Args:
@@ -59,7 +63,16 @@ class TopicConnectionManager:
         """
         self.active_connections[client_id] = websocket
         self.client_topics[client_id] = set()
-        logger.info(f"Client {client_id} connected")
+        self.client_users[client_id] = user_id
+
+        # Auto-subscribe the socket to its personal topic so profile updates
+        # propagate across tabs/devices without requiring an explicit
+        # subscribe message from the client.
+        if user_id is not None:
+            personal_topic = f"user:{user_id}"
+            await self.subscribe_to_topic(client_id, personal_topic)
+
+        logger.info("Client %s connected (user=%s)", client_id, user_id)
 
     async def disconnect(self, client_id: str) -> None:
         """Remove a client connection and clean up subscriptions.
@@ -68,6 +81,8 @@ class TopicConnectionManager:
             client_id: The client ID to remove
         """
         if client_id in self.active_connections:
+            # Clean user mapping
+            self.client_users.pop(client_id, None)
             # Remove from active connections
             del self.active_connections[client_id]
 
@@ -148,10 +163,12 @@ class TopicConnectionManager:
         for client_id in disconnected_clients:
             # Remove websocket reference if still present
             self.active_connections.pop(client_id, None)
+            self.client_users.pop(client_id, None)
             await self.unsubscribe_from_topic(client_id, topic)
-        # If the client is now subscribed to no topics, drop the mapping entirely
-        if client_id in self.client_topics and not self.client_topics[client_id]:
-            del self.client_topics[client_id]
+
+            # Drop mapping entirely if no topics remain
+            if client_id in self.client_topics and not self.client_topics[client_id]:
+                del self.client_topics[client_id]
 
     async def _handle_agent_event(self, data: Dict[str, Any]) -> None:
         """Handle agent-related events from the event bus."""
@@ -160,7 +177,8 @@ class TopicConnectionManager:
 
         agent_id = data["id"]
         topic = f"agent:{agent_id}"
-        await self.broadcast_to_topic(topic, {"type": data.get("event_type", "agent_event"), "data": data})
+        serialized_data = jsonable_encoder(data)
+        await self.broadcast_to_topic(topic, {"type": data.get("event_type", "agent_event"), "data": serialized_data})
 
     async def _handle_thread_event(self, data: Dict[str, Any]) -> None:
         """Handle thread-related events from the event bus."""
@@ -169,7 +187,8 @@ class TopicConnectionManager:
 
         thread_id = data["thread_id"]
         topic = f"thread:{thread_id}"
-        await self.broadcast_to_topic(topic, {"type": data.get("event_type", "thread_event"), "data": data})
+        serialized_data = jsonable_encoder(data)
+        await self.broadcast_to_topic(topic, {"type": data.get("event_type", "thread_event"), "data": serialized_data})
 
     async def _handle_run_event(self, data: Dict[str, Any]) -> None:
         """Forward run events to the *agent:* topic so dashboards update."""
@@ -178,7 +197,8 @@ class TopicConnectionManager:
 
         agent_id = data["agent_id"]
         topic = f"agent:{agent_id}"
-        await self.broadcast_to_topic(topic, {"type": "run_update", "data": data})
+        serialized_data = jsonable_encoder(data)
+        await self.broadcast_to_topic(topic, {"type": "run_update", "data": serialized_data})
 
     async def _handle_user_event(self, data: Dict[str, Any]) -> None:
         """Forward user events to `user:{id}` topic so other tabs update."""
@@ -187,7 +207,8 @@ class TopicConnectionManager:
             return
 
         topic = f"user:{user_id}"
-        await self.broadcast_to_topic(topic, {"type": "user_update", "data": data})
+        serialized_data = jsonable_encoder(data)
+        await self.broadcast_to_topic(topic, {"type": "user_update", "data": serialized_data})
 
 
 # Create a global instance of the new connection manager

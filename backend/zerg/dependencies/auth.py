@@ -46,8 +46,14 @@ from zerg.database import get_db
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
 
 # Normalise AUTH_DISABLED to boolean – accepts "1", "true", "yes" (case-ins).
-_AUTH_DISABLED_RAW = os.getenv("AUTH_DISABLED", "0").lower()
-AUTH_DISABLED = _AUTH_DISABLED_RAW in {"1", "true", "yes"}
+_AUTH_DISABLED_RAW = os.getenv("AUTH_DISABLED")
+
+# If AUTH_DISABLED is explicitly provided use that value; otherwise fall back
+# to the *TESTING* flag so unit-tests run without dealing with auth boilerplate.
+if _AUTH_DISABLED_RAW is None:
+    _AUTH_DISABLED_RAW = os.getenv("TESTING", "0")
+
+AUTH_DISABLED = _AUTH_DISABLED_RAW.lower() in {"1", "true", "yes"}
 
 # E-mail used for the implicit development user when auth is disabled.
 DEV_EMAIL = "dev@local"
@@ -184,6 +190,77 @@ def _get_or_create_dev_user(db: Session):
 
     user = crud.get_user_by_email(db, DEV_EMAIL)
     if user is not None:
+        # If dev user exists, ensure its role is ADMIN for dev purposes
+        if user.role != "ADMIN":
+            user.role = "ADMIN"
+            db.commit()
+            db.refresh(user)
         return user
 
-    return crud.create_user(db, email=DEV_EMAIL, provider=None)
+    # Create dev user with ADMIN role
+    return crud.create_user(db, email=DEV_EMAIL, provider=None, role="ADMIN")
+
+
+# ---------------------------------------------------------------------------
+# Admin guard – ensures the current user has role == "ADMIN"
+# ---------------------------------------------------------------------------
+
+
+def require_admin(current_user=Depends(get_current_user)):
+    """Raise 403 if the authenticated user is **not** an administrator."""
+
+    if getattr(current_user, "role", "USER") != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
+
+    return current_user
+
+
+# ---------------------------------------------------------------------------
+# Helper for WebSocket authentication (Stage 8)
+# ---------------------------------------------------------------------------
+
+
+def validate_ws_jwt(token: str | None, db: Session):
+    """Validate JWT passed as ``?token=…`` in WebSocket URL.
+
+    Mirrors :pyfunc:`get_current_user` but works in the *WebSocket* context
+    where we cannot rely on an HTTP *Authorization* header.  Returns the
+    resolved ``User`` row or raises ``HTTPException`` *(401)*.
+    """
+
+    # 1. Development bypass -------------------------------------------------
+    if AUTH_DISABLED:
+        return _get_or_create_dev_user(db)
+
+    # 2. Require a token ----------------------------------------------------
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+
+    # 3. Decode / verify  ---------------------------------------------------
+    try:
+        # Prefer python-jose if available.
+        try:
+            from jose import jwt  # type: ignore
+
+            payload: dict[str, Any] = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        except ModuleNotFoundError:
+            payload = _decode_jwt_fallback(token, JWT_SECRET)
+
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
+    # 4. Lookup user --------------------------------------------------------
+    user_id_claim = payload.get("sub")
+    if user_id_claim is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
+
+    try:
+        user_id = int(user_id_claim)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
+
+    user = crud.get_user(db, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+
+    return user
