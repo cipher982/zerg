@@ -133,9 +133,11 @@ class EmailTriggerService:
                 logger.warning("Unsupported email provider '%s' for trigger %s – skip", provider_name, trg.id)
                 continue
 
-            # Gmail provider still relies on the legacy private helpers inside
-            # this class therefore we *keep* them for now.  Other providers
-            # will be fully self-contained.
+            # Gmail logic now lives **entirely** in ``GmailProvider``.  The
+            # deprecated helper ``_handle_gmail_trigger`` has been turned into
+            # a no-op stub so we can safely skip it here.  Watch renewal logic
+            # is still implemented below because it has not yet been ported to
+            # the provider abstraction.
 
             # Renew watch logic is Gmail-specific and currently lives as a
             # private method.  Call it directly here to avoid altering the
@@ -170,6 +172,22 @@ class EmailTriggerService:
         or *messages.list* endpoint and publish TRIGGER_FIRED events when
         criteria match.
         """
+
+        # ------------------------------------------------------------------
+        # DEPRECATED – logic moved into GmailProvider -------------------
+        # ------------------------------------------------------------------
+
+        import warnings  # local import to avoid top-level dependency
+
+        warnings.warn(
+            "EmailTriggerService._handle_gmail_trigger() is deprecated and no longer used. "
+            "The handling logic has been migrated to zerg.email.providers.GmailProvider.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        logger.debug("_handle_gmail_trigger deprecated stub called for id %%s – no-op", trigger_id)
+        return None  # short-circuit – legacy method retained for back-compat
 
         # Lazy import to avoid circulars
         from zerg.events import EventType  # noqa: WPS433 – avoid top level

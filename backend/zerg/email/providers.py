@@ -92,10 +92,18 @@ class GmailProvider:  # noqa: D101 – obvious from context
         """
 
         # ------------------------------------------------------------------
+        # Measure end-to-end processing time for Prometheus  --------------
+        # ------------------------------------------------------------------
+
+        import time as _time_mod
+
+        start_ts = _time_mod.perf_counter()
+
+        # ------------------------------------------------------------------
         # Local imports to avoid import cycles (tests patch some internals)
         # ------------------------------------------------------------------
+
         import logging
-        import time as _time_mod
 
         from zerg.database import default_session_factory  # local import
         from zerg.events import EventType  # noqa: WPS433 – runtime import
@@ -248,6 +256,17 @@ class GmailProvider:  # noqa: D101 – obvious from context
                 len(message_ids),
                 fired_any,
             )
+
+        # ------------------------------------------------------------------
+        # Prometheus – record overall latency
+        # ------------------------------------------------------------------
+
+        try:
+            from zerg.metrics import trigger_processing_seconds  # noqa: WPS433
+
+            trigger_processing_seconds.observe(_time_mod.perf_counter() - start_ts)
+        except Exception:  # pragma: no cover – metrics disabled or import fail
+            pass
 
 
 # ---------------------------------------------------------------------------

@@ -106,27 +106,28 @@ remaining tasks are now laser-focused:
 
 1. **Provider abstraction**  *(core registry landed — 2025-05-11)*  
    ✅ Introduce `EmailProvider` protocol and global registry in `zerg/email/providers.py`.  
-   ✅ `GmailProvider` adapter delegates to existing helpers (no behaviour change).  
-   ✅ `OutlookProvider` stub raises `NotImplementedError`.  
-   🔸 NEXT: Move `_handle_gmail_trigger` logic into `GmailProvider.process_trigger()` and delete legacy private helper.
+   ✅ `GmailProvider` now **owns the full trigger logic** – legacy helper inside `EmailTriggerService` replaced by a no-op stub (pending final removal).  
+   ✅ `OutlookProvider` stub raises `NotImplementedError` (placeholder for next provider).
 
 2. **Reliability**  
    ✅ **Retry helper landed** – `zerg/utils/retry.py` provides `@async_retry` with exponential back-off, jitter and JSON-log integration.  
    🔸 **NEXT:** decorate *gmail_api* helper functions (`exchange_refresh_token`, `list_history`, `get_message_metadata`) with `@async_retry(provider="gmail")`.  
-   🔸 Add `external_api_retry_total{provider,func}` Prometheus counter (follow-up PR, the decorator already increments `gmail_api_error_total` as placeholder).
+   ✅ Decorated Gmail helpers, added fast async wrappers.  
+   ✅ Added `external_api_retry_total{provider,func}` Prometheus counter.  
+   ✅ Under `TESTING=1` the decorator auto-shrinks delay to 10 ms & `max_attempts=2` so the backend suite finishes in ~1 s instead of 17 s.
 
 3. **Observability**  
-   ◔ Ongoing  
-   • `structlog` helper (`zerg/utils/log.py`) already centralised JSON logs; new retry helper emits structured events.  
-   • Histograms (`gmail_http_latency_seconds`, `trigger_processing_seconds`) still outstanding.
+   ✅ Counters live (`trigger_fired_total`, `gmail_watch_renew_total`, …).  
+   ✅ **NEW:** latency histograms implemented (`gmail_http_latency_seconds`, `trigger_processing_seconds`) and instrumented in `gmail_api._make_request` and `GmailProvider.process_trigger()`.  
+   • Next: switch remaining `logger` calls to structured `log` helper.
 
 4. **Security**  
-   • JWT validation for Gmail webhooks is now *always on* – delete feature flag.  
+   • JWT validation always ON (flag removed); skipped only under `TESTING=1`.
    • Fernet is the only crypto path; XOR functions have been purged.
 
 5. **Tech-debt clean-up**  
    • Migrate remaining `default_session_factory()` usages (now limited to GmailProvider & EmailTriggerService) to dependency-injected sessions.  
-   • `legacy_agent_manager` module still present → delete once confirm zero imports.
+   ✅ `legacy_agent_manager` module deleted – no remaining imports.
 
 6. **Tests**  
    • Cover `Trigger.config_obj` typed accessor.  
