@@ -179,7 +179,7 @@ class GmailProvider:  # noqa: D101 – obvious from context
 
         import logging
 
-        from zerg.database import default_session_factory  # local import
+        from zerg.database import get_session_factory  # local import
         from zerg.events import EventType  # noqa: WPS433 – runtime import
         from zerg.events import event_bus  # noqa: WPS433
         from zerg.metrics import gmail_api_error_total  # noqa: WPS433
@@ -193,7 +193,7 @@ class GmailProvider:  # noqa: D101 – obvious from context
 
         # Re-load the trigger inside a fresh session so we can mutate JSON and
         # commit safely.
-        with default_session_factory() as session:
+        with get_session_factory()() as session:
             trg: Trigger | None = session.query(Trigger).filter(Trigger.id == trigger_id).first()
 
             if trg is None:
