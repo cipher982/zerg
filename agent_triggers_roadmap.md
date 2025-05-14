@@ -99,7 +99,7 @@ All backend plumbing for Gmail-based *email* triggers (watch registration → pu
 * **Retry helper**: Central `zerg/utils/retry.py` decorator with expo back-off & jitter (2025-05-13)
 * **Observability groundwork:** Prometheus counters + `/metrics` route implemented (2025-05-09 commit `metrics.py`).
 
-### Outstanding backend work (🔄) – **refreshed 2025-05-14**
+### Outstanding backend work (🔄) – **refreshed 2025-05-18**
 
 With the *“own the stack”* decision we removed all legacy fallbacks.  The
 remaining tasks are now laser-focused:
@@ -118,9 +118,9 @@ remaining tasks are now laser-focused:
    • Fernet-at-rest for refresh tokens.
 
 4. **Remaining tech-debt**  
-   • Replace the last two `default_session_factory()` usages with DI sessions.  
-   • Convert residual `logger.*` calls in EmailTriggerService to structured `log.*`.  
-   • Optional: tighten unit-test coverage for histogram paths.
+   • Replace the **remaining** `default_session_factory()` usages (4 in prod code, 2 in tests) with DI sessions and remove the helper.  
+   • Convert the few residual `logger.*` calls in EmailTriggerService & GmailProvider to structured `log.*`.  
+   • Optional: add unit-test coverage for the new Prometheus *histogram* helpers once implemented.
 
 > **Status 2025-05-11:** `Trigger.config_obj` unit-test added (`test_trigger_config.py`).
 
@@ -389,11 +389,13 @@ This section captures the concrete, incremental steps required to surface **Trig
 10. WASM tests: Trigger (de)serialisation, modal Msg dispatch.
 11. Manual UX pass: dark-mode contrast, clipboard success feedback, error banners.
 
-*Progress tracker (updated 2025-05-10):*  
+*Progress tracker (updated 2025-05-18):*  
 `[x]` **Phase A** – data-model & API helpers  
-`[x]` **Phase B** – modal UI (Triggers tab, list, Add Trigger wizard, basic CRUD)  
-`[ ]` **Phase C** – Gmail connect + email trigger enable  
-`[ ]` Phase D  `[ ]` Phase E  `[ ]` Phase F
+`[x]` **Phase B** – modal UI (Triggers tab, list, Add-Trigger wizard, basic CRUD)  
+`[x]` **Phase C** – Gmail connect + email trigger enable  
+`[ ]` **Phase D** – real-time toast & badge polish  
+`[ ]` **Phase E** – Dashboard column / surfacing  
+`[ ]` **Phase F** – tests & QA
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ## 2025-05-12 – Front-end Phase C **completed** (Gmail OAuth live)

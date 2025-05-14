@@ -15,11 +15,19 @@ import asyncio
 # HTTP helpers
 import logging
 from contextlib import suppress
+from typing import TYPE_CHECKING
+
+# Typing helpers
 from typing import Optional
+
+# Import for type annotations only to avoid an unconditional runtime dependency
+if TYPE_CHECKING:  # pragma: no cover – import is for static type checkers / linters
+    from sqlalchemy.orm import sessionmaker
 
 from sqlalchemy.orm import Session
 
-from zerg.database import default_session_factory
+# Database helpers
+from zerg.database import get_session_factory
 
 # Metrics
 from zerg.metrics import gmail_api_error_total
@@ -46,7 +54,14 @@ class EmailTriggerService:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self, session_factory: Optional["sessionmaker"] = None):
+        # Lazily initialise the DB session factory so callers (main app or
+        # tests) can inject a custom one.  Falling back to
+        # ``get_session_factory()`` removes the last implicit dependency on
+        # the *default_session_factory* global which we plan to deprecate.
+
+        self._session_factory = session_factory or get_session_factory()
+
         self._task: Optional[asyncio.Task[None]] = None
         self._shutdown_event = asyncio.Event()
 
@@ -107,7 +122,7 @@ class EmailTriggerService:
 
         # Fetch *full* trigger rows so we can mutate their config JSON later
         def _db_query() -> list["Trigger"]:
-            with default_session_factory() as session:
+            with self._session_factory() as session:
                 from zerg.models.models import Trigger
 
                 return session.query(Trigger).filter(Trigger.type == "email").all()
@@ -197,7 +212,7 @@ class EmailTriggerService:
 
         # Re-load trigger inside a fresh session so it is attached => we can
         # mutate ``config`` and commit at the end.
-        with default_session_factory() as session:
+        with self._session_factory() as session:
             trg: Trigger | None = session.query(Trigger).filter(Trigger.id == trigger_id).first()
             if trg is None:
                 logger.warning("Trigger %s disappeared during poll", trigger_id)
@@ -411,7 +426,7 @@ class EmailTriggerService:
             pass
 
         # Persist
-        with default_session_factory() as session:
+        with self._session_factory() as session:
             session.merge(trigger)
             session.commit()
 

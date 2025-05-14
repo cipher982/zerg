@@ -98,6 +98,21 @@ TestingSessionLocal = make_sessionmaker(test_engine)
 # Override default_session_factory to use test sessions for WebSocket
 _db_mod.default_session_factory = TestingSessionLocal
 _ws_router.default_session_factory = TestingSessionLocal
+_db_mod.default_engine = test_engine
+# Ensure helper *get_session_factory()* returns the test sessionmaker so any
+# late-resolving imports (e.g. GmailProvider) use the in-memory SQLite
+# connection rather than creating a brand new on-disk engine.
+
+_db_mod.get_session_factory = lambda: TestingSessionLocal  # type: ignore[assignment]
+# Ensure *EmailTriggerService* uses the same in-memory session factory
+try:
+    from zerg.services.email_trigger_service import email_trigger_service as _ets  # noqa: WPS433 – test-time import
+
+    _ets._session_factory = TestingSessionLocal  # type: ignore[attr-defined]
+except ImportError:
+    # In some collector runs the service may not be imported yet; tests that
+    # need it will import later and patch manually via the fixture.
+    pass
 
 # Mock the OpenAI module before importing main app
 mock_openai = MagicMock()
