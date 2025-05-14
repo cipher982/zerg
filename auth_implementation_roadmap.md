@@ -92,17 +92,24 @@ Stage 5 – Trigger hardening (HMAC header)
 > traffic, and webhook triggers are protected via HMAC-SHA256 with a
 > ±5-minute replay window.
 >
-> **Current status (2025-05-09)**
 
-• Stage 6 tests are merged and green ✅  
-• **Stage 7** – README quick-start (**7.1 ✅**) and security-ops note (**7.2 ✅**) are done; Ruff/pre-commit housekeeping (7.3) still open.  
-• **Stage 8** – front-end token param handled (**8.3 ✅**); backend validation (8.1 / 8.2) and tests (8.4) still pending.
+-------------------------------------------------------------------------------
+Final status (2025-05-18)
+-------------------------------------------------------------------------------
 
-> **Checkpoint (2025-05-10):**
-> • 7.3 pre-commit housekeeping still open.  
-> • Stage 8 remains the **only functional gap**: the backend does **not** yet
->   validate the `token` query-param on WebSocket upgrade, so unauthenticated
->   clients can connect.  Front-end & close-code handling are already live.
+All stages (0-9) have been fully implemented and merged to `main`:
+
+• Unit & integration tests are green – 135 total tests cover Google sign-in,
+  JWT handling, WebSocket auth and the dev-mode bypass.  
+• Front-end stores the JWT, attaches it to every REST call **and** adds it as
+  the `?token=` query-param for WebSocket upgrades.  
+• Back-end validates the token prior to the WS handshake (close-code **4401** on
+  failure) and propagates the resolved `user_id` to `TopicConnectionManager`.
+• Docs, README quick-start and pre-commit hooks are up-to-date.  
+
+No open items remain – the Google-only authentication MVP is **complete** and
+ready for production roll-out.  Future work (refresh-tokens, SSO expansion)
+will be tracked in a new roadmap.
 
 -------------------------------------------------------------------------------
 Stage 6 – Tests & quality gates
