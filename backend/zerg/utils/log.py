@@ -35,29 +35,24 @@ try:
     # Keep the logger global so every import shares the same base instance.
     log = structlog.get_logger("zerg")  # type: ignore[invalid-name]
 
-    # Attach default processor chain only if structlog has not been
-    # configured by the application already.
     if not structlog.is_configured():
         structlog.configure(processors=[structlog.processors.JSONRenderer()])
 
-    # Defensive: some minimal structlog builds may fall back to stdlib logger
-    # which lacks ``bind``.  Wrap in adapter if needed so callers can rely on
-    # the method.
     if not hasattr(log, "bind"):
 
-        class _StructAdapter:  # noqa: D401 – simple shim
+        class _StructAdapter:
             def __init__(self, base):
                 self._base = base
 
-            def bind(self, **_kw):  # noqa: D401
+            def bind(self, **_kw):
                 return self
 
-            def __getattr__(self, name):  # proxy other attrs
+            def __getattr__(self, name):
                 return getattr(self._base, name)
 
         log = _StructAdapter(log)  # type: ignore[assignment, invalid-name]
 
-except ModuleNotFoundError:  # pragma: no cover – dev env without extra dep
+except ModuleNotFoundError:
 
     class _StdLoggerAdapter:
         """Thin adapter so code can call ``.bind()`` like with structlog."""
@@ -106,10 +101,9 @@ except ModuleNotFoundError:  # pragma: no cover – dev env without extra dep
 def get_logger(**bindings: Any):  # noqa: D401 – factory helper
     """Return a child/bound logger with optional key/value bindings."""
 
-    try:
-        # For structlog the global *log* is a BoundLogger; just call .bind()
-        import structlog  # type: ignore
+    import importlib.util
 
+    if importlib.util.find_spec("structlog") is not None:
         return log.bind(**bindings)  # type: ignore[attr-defined]
-    except ModuleNotFoundError:  # pragma: no cover – fallback path
+    else:
         return log
