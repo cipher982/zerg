@@ -11,6 +11,28 @@ The service follows the same start/stop interface as ``SchedulerService`` so
 from __future__ import annotations
 
 import asyncio
+import time as _time_mod
+import warnings
+from contextlib import suppress
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
+from typing import Optional
+
+from sqlalchemy.orm import Session
+from sqlalchemy.orm import sessionmaker
+
+from zerg.database import get_session_factory
+from zerg.email.providers import get_provider
+from zerg.events.event_bus import EventType
+from zerg.events.event_bus import event_bus
+from zerg.metrics import gmail_api_error_total
+from zerg.metrics import gmail_watch_renew_total
+from zerg.models.models import Trigger
+from zerg.models.models import User
+from zerg.services import email_filtering
+from zerg.services import gmail_api
+from zerg.services.scheduler_service import scheduler_service
 
 # HTTP helpers
 # Structured logger wrapper
@@ -23,26 +45,6 @@ from zerg.utils.log import log
 # Legacy *std logging* style adapter for compatibility with existing format
 # Legacy alias – point to *log* so existing formatted strings keep working
 logger = log  # type: ignore
-
-from contextlib import suppress
-from typing import TYPE_CHECKING
-
-# Typing helpers
-from typing import Optional
-
-# Import for type annotations only to avoid an unconditional runtime dependency
-if TYPE_CHECKING:  # pragma: no cover – import is for static type checkers / linters
-    from sqlalchemy.orm import sessionmaker
-
-from sqlalchemy.orm import Session
-
-# Database helpers
-from zerg.database import get_session_factory
-
-# Metrics
-from zerg.metrics import gmail_api_error_total
-from zerg.metrics import gmail_watch_renew_total
-from zerg.models.models import Trigger
 
 
 class EmailTriggerService:
@@ -131,8 +133,6 @@ class EmailTriggerService:
         # Fetch *full* trigger rows so we can mutate their config JSON later
         def _db_query() -> list["Trigger"]:
             with self._session_factory() as session:
-                from zerg.models.models import Trigger
-
                 return session.query(Trigger).filter(Trigger.type == "email").all()
 
         triggers = await asyncio.to_thread(_db_query)
@@ -146,9 +146,6 @@ class EmailTriggerService:
             # ------------------------------------------------------------------
             # Delegate provider-specific handling
             # ------------------------------------------------------------------
-
-            # Lazy import to avoid top-level dependency when tests patch this
-            from zerg.email.providers import get_provider  # noqa: WPS433 – local import
 
             provider_impl = get_provider(str(provider_name))
 
@@ -203,8 +200,6 @@ class EmailTriggerService:
         # DEPRECATED – logic moved into GmailProvider -------------------
         # ------------------------------------------------------------------
 
-        import warnings  # local import to avoid top-level dependency
-
         warnings.warn(
             "EmailTriggerService._handle_gmail_trigger() is deprecated and no longer used. "
             "The handling logic has been migrated to zerg.email.providers.GmailProvider.",
@@ -215,14 +210,7 @@ class EmailTriggerService:
         log.debug("email-trigger", event="deprecated-gmail-helper", trigger_id=trigger_id)
         return None  # short-circuit – legacy method retained for back-compat
 
-        # Lazy import to avoid circulars
-        from zerg.events import EventType  # noqa: WPS433 – avoid top level
-        from zerg.events import event_bus  # noqa: WPS433
-        from zerg.models.models import Trigger  # noqa: WPS433
-        from zerg.models.models import User  # noqa: WPS433
-        from zerg.services import email_filtering  # noqa: WPS433 – match helper
-        from zerg.services import gmail_api  # noqa: WPS433 local import to avoid cycles
-        from zerg.services.scheduler_service import scheduler_service  # noqa: WPS433
+        # Deleted unreachable legacy imports for circular/type-check purposes.
 
         # Re-load trigger inside a fresh session so it is attached => we can
         # mutate ``config`` and commit at the end.
@@ -252,8 +240,6 @@ class EmailTriggerService:
             # minimal in-memory cache keyed by refresh-token string
             token_cache: dict[str, tuple[str, float]] = getattr(self, "_token_cache", {})
             self._token_cache = token_cache  # store back on instance
-
-            import time as _time_mod
 
             now = _time_mod.time()
             cached = token_cache.get(refresh_token)
@@ -399,9 +385,6 @@ class EmailTriggerService:
         returns new history / expiry values.
         """
 
-        from datetime import datetime
-        from datetime import timezone
-
         cfg = trigger.config or {}
         expiry_ts = cfg.get("watch_expiry")  # milliseconds since epoch
 
@@ -448,10 +431,6 @@ class EmailTriggerService:
     def _renew_gmail_watch_stub():
         """Return new watch meta – identical to *start* stub."""
 
-        from datetime import datetime
-        from datetime import timedelta
-        from datetime import timezone
-
         now = datetime.now(tz=timezone.utc)
         return {
             "history_id": int(now.timestamp()),
@@ -484,8 +463,6 @@ class EmailTriggerService:
         *watch* endpoint and will store the returned ``historyId`` &
         ``expiration``.
         """
-
-        from zerg.models.models import User  # noqa: WPS433 local import to avoid cycle
 
         if (trigger.config or {}).get("history_id") is not None:
             logger.debug("Trigger %s already has Gmail watch metadata – skip init", trigger.id)
@@ -541,10 +518,6 @@ class EmailTriggerService:
         The real implementation will contact the Gmail API – this stub keeps
         unit-tests self-contained and allows monkey-patching.
         """
-
-        from datetime import datetime
-        from datetime import timedelta
-        from datetime import timezone
 
         now = datetime.now(tz=timezone.utc)
         return {
