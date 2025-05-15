@@ -58,7 +58,7 @@ operational robustness.
 
 | Issue | Detail |
 |-------|--------|
-| **Tool calls claimed “parallel”** | In `zerg_react_agent.py` the code builds `tool_futures = […]` then immediately `.result()`s – still serial. Replace with `await asyncio.gather(...)` or just drop the parallel comment. |
+| **Tool calls claimed “parallel”** | ✅ **Fixed (May 2025)** – `zerg_react_agent.py` now awaits `asyncio.gather(...)` inside the loop and wraps each blocking tool call in `asyncio.to_thread`. |
 | **Graph recompilation** | The LangGraph runnable is rebuilt every time an `AgentRunner` instance is created.  A `@lru_cache` keyed by `(agent_id, model_name, stream_flag)` would shave ~100 ms/run. |
 | **Env flag re-parsing** | `os.getenv("LLM_TOKEN_STREAM")` appears in several hot paths.  Cache once in `zerg.constants`. |
 
@@ -105,7 +105,7 @@ operational robustness.
 2. Make `EventBus.publish` concurrent via `asyncio.gather`.
 3. Protect shared maps in `TopicConnectionManager` with a lock.
 4. Cache compiled LangGraph runnables with `@lru_cache`.
-5. Replace serial tool loop with `asyncio.gather`.
+5. ~~Replace serial tool loop with `asyncio.gather`.~~  **Done in PR #??? – May 2025**
 
 Everything above is covered by unit tests, so each change can land in an
 independent PR with high confidence.
