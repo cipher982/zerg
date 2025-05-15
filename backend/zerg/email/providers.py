@@ -22,9 +22,15 @@ is sufficient.
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import Protocol
 from typing import runtime_checkable
+
+from zerg.utils.log import log
+
+# Structured logger (module-level) so helper methods can log without having
+# to re-bind for every call.
+
+logger = log.bind(component="gmail-provider")
 
 # ---------------------------------------------------------------------------
 # Public interface
@@ -127,12 +133,12 @@ class GmailProvider:  # noqa: D101 – obvious from context
         if expiry_ts - now_ms > 24 * 60 * 60 * 1000:
             return
 
-        logger.info("Renewing Gmail watch for trigger %s", trg.id)
+        logger.info("renew-watch", trigger_id=trg.id)
 
         try:
             new_meta = await asyncio.to_thread(self._renew_watch_stub)
         except Exception as exc:  # pragma: no cover – unexpected stub failure
-            logger.error("Failed to renew Gmail watch stub: %s", exc)
+            logger.error("renew-watch-failed", trigger_id=trg.id, error=str(exc))
             gmail_api_error_total.inc()
             return
 
@@ -177,8 +183,6 @@ class GmailProvider:  # noqa: D101 – obvious from context
         # Local imports to avoid import cycles (tests patch some internals)
         # ------------------------------------------------------------------
 
-        import logging
-
         from zerg.database import get_session_factory  # local import
         from zerg.events import EventType  # noqa: WPS433 – runtime import
         from zerg.events import event_bus  # noqa: WPS433
@@ -189,20 +193,18 @@ class GmailProvider:  # noqa: D101 – obvious from context
         from zerg.services import gmail_api  # noqa: WPS433
         from zerg.services.scheduler_service import scheduler_service  # noqa: WPS433
 
-        logger = logging.getLogger(__name__)
-
         # Re-load the trigger inside a fresh session so we can mutate JSON and
         # commit safely.
         with get_session_factory()() as session:
             trg: Trigger | None = session.query(Trigger).filter(Trigger.id == trigger_id).first()
 
             if trg is None:
-                logger.warning("Trigger %s disappeared during poll", trigger_id)
+                logger.warning("trigger-missing", trigger_id=trigger_id)
                 return
 
             if (trg.config or {}).get("provider") != "gmail":
                 # Mis-configuration – guard against accidental calls.
-                logger.debug("Trigger %s provider mismatch – skip", trigger_id)
+                logger.debug("provider-mismatch", trigger_id=trigger_id)
                 return
 
             # --------------------------------------------------------------
@@ -218,7 +220,7 @@ class GmailProvider:  # noqa: D101 – obvious from context
             user: User | None = session.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
 
             if user is None:
-                logger.warning("No Gmail-connected user found – cannot poll trigger %s", trg.id)
+                logger.warning("no-gmail-user", trigger_id=trg.id)
                 return
 
             refresh_token: str = user.gmail_refresh_token  # type: ignore[assignment]
@@ -231,7 +233,7 @@ class GmailProvider:  # noqa: D101 – obvious from context
                 try:
                     access_token = await gmail_api.async_exchange_refresh_token(refresh_token)
                 except Exception as exc:  # pragma: no cover – network error
-                    logger.error("Failed to exchange refresh_token: %s", exc)
+                    logger.error("refresh-token-exchange-failed", trigger_id=trg.id, error=str(exc))
                     gmail_api_error_total.inc()
                     return
 
@@ -247,7 +249,7 @@ class GmailProvider:  # noqa: D101 – obvious from context
             history_records = await gmail_api.async_list_history(access_token, start_hid)
 
             if not history_records:
-                logger.debug("Trigger %s – no new history records", trg.id)
+                logger.debug("history-empty", trigger_id=trg.id)
                 return  # nothing new
 
             # Flatten message IDs + track max historyId encountered
@@ -267,7 +269,7 @@ class GmailProvider:  # noqa: D101 – obvious from context
                         message_ids.append(str(mid))
 
             if not message_ids:
-                logger.debug("Trigger %s – history records contained no messages", trg.id)
+                logger.debug("history-no-messages", trigger_id=trg.id)
                 # Still advance history id to avoid re-processing same empty diff
                 if max_hid > start_hid:
                     (trg.config or {}).update({"history_id": max_hid})
@@ -331,10 +333,10 @@ class GmailProvider:  # noqa: D101 – obvious from context
                 session.commit()
 
             logger.info(
-                "Gmail trigger %s processed %s messages (fired=%s)",
-                trg.id,
-                len(message_ids),
-                fired_any,
+                "trigger-processed",
+                trigger_id=trg.id,
+                message_count=len(message_ids),
+                fired=fired_any,
             )
 
         # ------------------------------------------------------------------
@@ -389,4 +391,5 @@ def list_supported() -> list[str]:  # noqa: D401 – tiny helper
     return list(_REGISTRY)
 
 
-logger = logging.getLogger(__name__)
+# Keep a conventional *logging.Logger* around for third-party modules that
+# expect the classic logging interface.
