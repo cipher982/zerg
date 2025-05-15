@@ -118,9 +118,9 @@ remaining tasks are now laser-focused:
    • Fernet-at-rest for refresh tokens.
 
 4. **Remaining tech-debt**  
-   • Replace the **remaining** `default_session_factory()` usages (4 in prod code, 2 in tests) with DI sessions and remove the helper.  
-   • Convert the few residual `logger.*` calls in EmailTriggerService & GmailProvider to structured `log.*`.  
-   • Optional: add unit-test coverage for the new Prometheus *histogram* helpers once implemented.
+   • ✅ All runtime uses of `default_session_factory()` replaced (2025-05-18). Deletion of the helper itself is pending once tests migrate fully.  
+   • 🔄 Convert residual `logger.*` calls in `EmailTriggerService` & `GmailProvider` to structured `log.*`.  
+   • 🔄 Add Prometheus *histogram* helpers and corresponding unit tests.
 
 > **Status 2025-05-11:** `Trigger.config_obj` unit-test added (`test_trigger_config.py`).
 
