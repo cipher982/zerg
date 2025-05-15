@@ -119,7 +119,7 @@ remaining tasks are now laser-focused:
 
 4. **Remaining tech-debt**  
    • ✅ All runtime uses of `default_session_factory()` replaced (2025-05-18). Deletion of the helper itself is pending once tests migrate fully.  
-   • 🔄 Convert residual `logger.*` calls in `EmailTriggerService` & `GmailProvider` to structured `log.*`.  
+   • ✅ Unified logging – `zerg.utils.log.log` is now the single entry-point; legacy `logger.*` call-sites adapted (2025-05-18).  
    • 🔄 Add Prometheus *histogram* helpers and corresponding unit tests.
 
 > **Status 2025-05-11:** `Trigger.config_obj` unit-test added (`test_trigger_config.py`).
