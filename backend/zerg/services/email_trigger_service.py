@@ -13,7 +13,17 @@ from __future__ import annotations
 import asyncio
 
 # HTTP helpers
-import logging
+# Structured logger wrapper
+from zerg.utils.log import log
+
+# Structured wrapper `log` is used directly but several legacy helper
+# blocks still reference a module-level ``logger`` variable.  Provide an
+# alias so we retain backward-compatibility without rewriting all calls.
+
+# Legacy *std logging* style adapter for compatibility with existing format
+# Legacy alias – point to *log* so existing formatted strings keep working
+logger = log  # type: ignore
+
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
@@ -33,8 +43,6 @@ from zerg.database import get_session_factory
 from zerg.metrics import gmail_api_error_total
 from zerg.metrics import gmail_watch_renew_total
 from zerg.models.models import Trigger
-
-logger = logging.getLogger(__name__)
 
 
 class EmailTriggerService:
@@ -67,12 +75,12 @@ class EmailTriggerService:
 
     async def start(self):
         if self._task is not None:
-            logger.debug("EmailTriggerService already running, start() call ignored")
+            log.debug("email-trigger", event="already-running")
             return
 
         self._shutdown_event.clear()
         self._task = asyncio.create_task(self._run_loop())
-        logger.info("EmailTriggerService started (stub mode)")
+        log.info("email-trigger", event="started", mode="stub")
 
     async def stop(self):
         if self._task is None:
@@ -84,7 +92,7 @@ class EmailTriggerService:
         with suppress(asyncio.CancelledError):
             await self._task
         self._task = None
-        logger.info("EmailTriggerService stopped")
+        log.info("email-trigger", event="stopped")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -102,7 +110,7 @@ class EmailTriggerService:
             try:
                 await self._check_email_triggers()
             except Exception as exc:  # pragma: no cover – don't crash service
-                logger.exception("EmailTriggerService loop error: %s", exc)
+                log.exception("email-trigger", event="loop-error", error=str(exc))
 
             # Wait for either shutdown event or next poll interval
             try:
@@ -145,7 +153,7 @@ class EmailTriggerService:
             provider_impl = get_provider(str(provider_name))
 
             if provider_impl is None:
-                logger.warning("Unsupported email provider '%s' for trigger %s – skip", provider_name, trg.id)
+                log.warning("email-trigger", event="unsupported-provider", provider=provider_name, trigger_id=trg.id)
                 continue
 
             # Gmail logic now lives **entirely** in ``GmailProvider``.  The
@@ -167,9 +175,15 @@ class EmailTriggerService:
             try:
                 await provider_impl.process_trigger(trg.id)
             except NotImplementedError:
-                logger.info("Provider '%s' not yet implemented – trigger %s skipped", provider_name, trg.id)
+                log.info("email-trigger", event="provider-not-implemented", provider=provider_name, trigger_id=trg.id)
             except Exception as exc:  # pragma: no cover – safety net
-                logger.exception("Error in provider '%s' handler for trigger %s: %s", provider_name, trg.id, exc)
+                log.exception(
+                    "email-trigger",
+                    event="provider-error",
+                    provider=provider_name,
+                    trigger_id=trg.id,
+                    error=str(exc),
+                )
 
     # ------------------------------------------------------------------
     # Gmail helpers
@@ -198,7 +212,7 @@ class EmailTriggerService:
             stacklevel=2,
         )
 
-        logger.debug("_handle_gmail_trigger deprecated stub called for id %%s – no-op", trigger_id)
+        log.debug("email-trigger", event="deprecated-gmail-helper", trigger_id=trigger_id)
         return None  # short-circuit – legacy method retained for back-compat
 
         # Lazy import to avoid circulars
@@ -215,7 +229,7 @@ class EmailTriggerService:
         with self._session_factory() as session:
             trg: Trigger | None = session.query(Trigger).filter(Trigger.id == trigger_id).first()
             if trg is None:
-                logger.warning("Trigger %s disappeared during poll", trigger_id)
+                log.warning("email-trigger", event="trigger-disappeared", trigger_id=trigger_id)
                 return
 
             if (trg.config or {}).get("provider") != "gmail":

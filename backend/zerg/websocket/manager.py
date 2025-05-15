@@ -4,6 +4,8 @@ Manages WebSocket connections with topic-based subscriptions and relays
 EventBus events to connected clients.
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Any
 from typing import Dict

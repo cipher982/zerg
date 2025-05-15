@@ -4,6 +4,8 @@ This module provides a FastAPI router for WebSocket connections
 using a topic-based subscription system.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import uuid
