@@ -12,10 +12,14 @@ from typing import Optional
 from fastapi import APIRouter
 from fastapi import WebSocket
 from fastapi import WebSocketDisconnect
+
+# ---------------------------------------------------------------------------
+# DB helpers
+# ---------------------------------------------------------------------------
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
-from zerg.database import default_session_factory
+from zerg.database import get_session_factory
 
 # Auth helper --------------------------------------------------------------
 from zerg.dependencies.auth import validate_ws_jwt
@@ -27,7 +31,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def get_websocket_session(session_factory: sessionmaker = None) -> Session:
+def get_websocket_session(session_factory: sessionmaker | None = None) -> Session:
     """Create a new database session for WebSocket handlers.
 
     Args:
@@ -36,7 +40,7 @@ def get_websocket_session(session_factory: sessionmaker = None) -> Session:
     Returns:
         A SQLAlchemy Session object that must be closed by the caller
     """
-    factory = session_factory or default_session_factory
+    factory = session_factory or get_session_factory()
     return factory()
 
 
