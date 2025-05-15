@@ -97,7 +97,8 @@ TestingSessionLocal = make_sessionmaker(test_engine)
 
 # Override default_session_factory to use test sessions for WebSocket
 _db_mod.default_session_factory = TestingSessionLocal
-_ws_router.default_session_factory = TestingSessionLocal
+# Ensure websocket router uses the in-memory DB
+_ws_router.get_session_factory = lambda: TestingSessionLocal  # type: ignore[attr-defined]
 _db_mod.default_engine = test_engine
 # Ensure helper *get_session_factory()* returns the test sessionmaker so any
 # late-resolving imports (e.g. GmailProvider) use the in-memory SQLite
