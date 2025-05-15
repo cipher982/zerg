@@ -94,14 +94,40 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
 
     # --- Define Tasks ---
     @task
-    def call_model(messages: List[BaseMessage]):
-        """Call model with a sequence of messages."""
-        response = llm_with_tools.invoke(messages)
-        return response
+    def _call_model_sync(messages: List[BaseMessage]):
+        """**Synchronous** model invocation helper.
+
+        Wrapped via :pyfunc:`asyncio.to_thread` in :pyfunc:`_call_model_async`
+        so that the heavy OpenAI HTTP request never blocks the event-loop.
+        """
+
+        return llm_with_tools.invoke(messages)
+
+    async def _call_model_async(messages: List[BaseMessage]):
+        """Run the blocking LLM call in a worker thread and await the result."""
+
+        import asyncio
+
+        return await asyncio.to_thread(lambda: _call_model_sync(messages).result())
+
+    #
+    # NOTE ON CONCURRENCY
+    # -------------------
+    # The previous implementation claimed to run tool calls in *parallel* but
+    # still resolved each future via ``future.result()`` **one-by-one** which
+    # effectively serialised the loop once the first blocking call was hit.
+    #
+    # We now expose *both* a classic **sync** task wrapper (kept for
+    # backwards-compatibility with the LangGraph Functional API runner) **and**
+    # a thin **async** helper that executes the synchronous wrapper via
+    # ``asyncio.to_thread`` so that callers can await *all* tool calls using
+    # ``asyncio.gather``.
+    #
 
     @task
-    def call_tool(tool_call: dict):
-        """Execute a single tool call."""
+    def _call_tool_sync(tool_call: dict):  # noqa: D401 – internal helper
+        """Execute a single tool call (synchronous version)."""
+
         tool_name = tool_call["name"]
         tool_to_call = tools_by_name.get(tool_name)
 
@@ -111,15 +137,29 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
         else:
             try:
                 observation = tool_to_call.invoke(tool_call["args"])
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 observation = f"<tool-error> {exc}"
                 logger.exception("Error executing tool %s", tool_name)
 
         return ToolMessage(content=str(observation), tool_call_id=tool_call["id"], name=tool_name)
 
+    async def _call_tool_async(tool_call: dict):  # noqa: D401 – coroutine helper
+        """Async wrapper around :pyfunc:`_call_tool_sync`.
+
+        The function is executed in a default thread-pool so that long-running
+        or blocking tool work (I/O, CPU) does **not** block the event-loop.
+        """
+
+        # ``_call_tool_sync`` returns a Future-like langgraph task object; the
+        # actual synchronous work kicks off when we call ``.result()``.  We
+        # therefore *wrap* that blocking call in ``asyncio.to_thread``.
+
+        import asyncio
+
+        return await asyncio.to_thread(lambda: _call_tool_sync(tool_call).result())
+
     # --- Define main entrypoint ---
-    @entrypoint(checkpointer=checkpointer)
-    def agent_executor(
+    async def _agent_executor_async(
         messages: List[BaseMessage], *, previous: Optional[List[BaseMessage]] = None
     ) -> List[BaseMessage]:
         """
@@ -132,19 +172,30 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
         current_messages = previous or messages
 
         # Start by calling the model with the current context
-        llm_response = call_model(current_messages).result()
+        llm_response = await _call_model_async(current_messages)
 
         # Until the model stops calling tools, continue the loop
+        import asyncio
+
         while isinstance(llm_response, AIMessage) and llm_response.tool_calls:
-            # Execute tools in parallel
-            tool_futures = [call_tool(tc) for tc in llm_response.tool_calls]
-            tool_results = [fut.result() for fut in tool_futures]
+            # --------------------------------------------------------------
+            # True *parallel* tool execution
+            # --------------------------------------------------------------
+            # Convert every tool call into an **awaitable** coroutine and run
+            # them concurrently via ``asyncio.gather``.  Errors inside an
+            # individual tool no longer block the whole batch – the
+            # *observation* string will contain the exception text which the
+            # LLM can reason about in the next turn.
+            # --------------------------------------------------------------
+
+            coro_list = [_call_tool_async(tc) for tc in llm_response.tool_calls]
+            tool_results = await asyncio.gather(*coro_list, return_exceptions=False)
 
             # Update message history with the model response and tool results
-            current_messages = add_messages(current_messages, [llm_response] + tool_results)
+            current_messages = add_messages(current_messages, [llm_response] + list(tool_results))
 
             # Call model again with updated messages
-            llm_response = call_model(current_messages).result()
+            llm_response = await _call_model_async(current_messages)
 
         # Add the final response to history
         final_messages = add_messages(current_messages, [llm_response])
@@ -152,7 +203,31 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
         # Return the full conversation history
         return final_messages
 
-    # Return the compiled entrypoint
+    # ------------------------------------------------------------------
+    # Synchronous wrapper for libraries/tests that call ``.invoke``
+    # ------------------------------------------------------------------
+
+    def _agent_executor_sync(messages: List[BaseMessage], *, previous: Optional[List[BaseMessage]] = None):
+        """Blocking wrapper that delegates to the async implementation."""
+
+        import asyncio
+
+        return asyncio.run(_agent_executor_async(messages, previous=previous))
+
+    # ------------------------------------------------------------------
+    # Expose BOTH sync & async entrypoints to LangGraph
+    # ------------------------------------------------------------------
+
+    @entrypoint(checkpointer=checkpointer)
+    def agent_executor(messages: List[BaseMessage], *, previous: Optional[List[BaseMessage]] = None):
+        return _agent_executor_sync(messages, previous=previous)
+
+    # Attach the *async* implementation manually – LangGraph picks this up so
+    # callers can use ``.ainvoke`` while tests and legacy code continue to use
+    # the blocking ``.invoke`` API.
+
+    agent_executor.afunc = _agent_executor_async  # type: ignore[attr-defined]
+
     return agent_executor
 
 
