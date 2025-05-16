@@ -393,7 +393,7 @@ impl AgentConfigModal {
             let container = document.create_element("div")?;
             container.set_id(&format!("{}-container", id));
             container.set_class_name("schedule-input-container");
-            container.set_attribute("style", "display: none;")?;
+            crate::dom_utils::hide(&container);
 
             let label = document.create_element("label")?;
             label.set_inner_html(label_text);
@@ -417,7 +417,7 @@ impl AgentConfigModal {
             let container = document.create_element("div")?;
             container.set_id(&format!("{}-container", id));
             container.set_class_name("schedule-input-container");
-            container.set_attribute("style", "display: none;")?;
+            crate::dom_utils::hide(&container);
 
             let label = document.create_element("label")?;
             label.set_inner_html(label_text);

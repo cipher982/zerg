@@ -315,18 +315,18 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     web_sys::console::log_1(&"create_tab_navigation called".into());
     // Create a tabs container
     let tabs_container = document.create_element("div")?;
-    tabs_container.set_id("tabs-container");
+    tabs_container.set_id("global-tabs-container");
     tabs_container.set_class_name("tabs-container");
     
     // Create dashboard tab
     let dashboard_tab = document.create_element("button")?;
-    dashboard_tab.set_id("dashboard-tab");
+    dashboard_tab.set_id("global-dashboard-tab");
     dashboard_tab.set_class_name("tab-button active");
     dashboard_tab.set_inner_html("Agent Dashboard");
     
     // Create canvas tab
     let canvas_tab = document.create_element("button")?;
-    canvas_tab.set_id("canvas-tab");
+    canvas_tab.set_id("global-canvas-tab");
     canvas_tab.set_class_name("tab-button");
     canvas_tab.set_inner_html("Canvas Editor");
     

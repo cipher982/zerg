@@ -37,7 +37,7 @@ pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {
     };
 
     // Ensure the dashboard is visible with proper styling
-    dashboard_container.set_attribute("style", "display: block;")?;
+    crate::dom_utils::show(&dashboard_container);
     
     // Verify the dashboard inner element exists
     if document.get_element_by_id("dashboard").is_none() {
@@ -48,11 +48,11 @@ pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {
     }
     
     // Update tab styling
-    if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
+    if let Some(dashboard_tab) = document.get_element_by_id("global-dashboard-tab") {
         dashboard_tab.set_class_name("tab-button active");
     }
     
-    if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
+    if let Some(canvas_tab) = document.get_element_by_id("global-canvas-tab") {
         canvas_tab.set_class_name("tab-button");
     }
     

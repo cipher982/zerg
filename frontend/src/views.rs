@@ -19,13 +19,8 @@ fn hide_by_id(document: &web_sys::Document, id: &str) {
 /// Helper: show a DOM element (`display:block`) if it exists.
 fn show_block_by_id(document: &web_sys::Document, id: &str) {
     if let Some(elem) = document.get_element_by_id(id) {
-        // First remove any `hidden` attribute that may have been set via
-        // `dom_utils::hide()` so the element becomes eligible for layout.
-        let _ = elem.remove_attribute("hidden");
-
-        // Now make sure it is rendered as a block-level element (this keeps
-        // the original intent of the helper).
-        let _ = elem.set_attribute("style", "display: block;");
+        // Use unified helper for visibility; rely on CSS for layout.
+        crate::dom_utils::show(&elem);
     }
 }
 
@@ -59,7 +54,7 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
     hide_by_id(document, "dashboard-container");
     hide_by_id(document, "canvas-container");
     hide_by_id(document, "main-content-area");
-    hide_by_id(document, "input-panel");
+    hide_by_id(document, "canvas-input-panel");
     hide_by_id(document, "agent-shelf");
     hide_by_id(document, "profile-container");
     hide_by_id(document, "chat-view-container");
@@ -85,7 +80,7 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
             }
             show_block_by_id(document, "canvas-container");
             show_block_by_id(document, "main-content-area");
-            show_block_by_id(document, "input-panel");
+            show_block_by_id(document, "canvas-input-panel");
             
             show_block_by_id(document, "agent-shelf");
 
@@ -129,23 +124,23 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
 // Helper function to update tab styling based on active view
 fn update_tab_styling(view_type: &ActiveView, document: &Document) -> Result<(), JsValue> {
     // Reset all tabs to inactive state first
-    if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
+    if let Some(dashboard_tab) = document.get_element_by_id("global-dashboard-tab") {
         dashboard_tab.set_class_name("tab-button");
     }
     
-    if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
+    if let Some(canvas_tab) = document.get_element_by_id("global-canvas-tab") {
         canvas_tab.set_class_name("tab-button");
     }
     
     // Now set the active tab based on the current view
     match view_type {
         ActiveView::Dashboard => {
-            if let Some(dashboard_tab) = document.get_element_by_id("dashboard-tab") {
+            if let Some(dashboard_tab) = document.get_element_by_id("global-dashboard-tab") {
                 dashboard_tab.set_class_name("tab-button active");
             }
         },
         ActiveView::Canvas => {
-            if let Some(canvas_tab) = document.get_element_by_id("canvas-tab") {
+            if let Some(canvas_tab) = document.get_element_by_id("global-canvas-tab") {
                 canvas_tab.set_class_name("tab-button active");
             }
         },

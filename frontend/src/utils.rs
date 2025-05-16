@@ -115,7 +115,7 @@ pub fn logout() -> Result<(), JsValue> {
     if let Some(window) = web_sys::window() {
         if let Some(document) = window.document() {
             // If overlay not present create it.
-            if document.get_element_by_id("login-overlay").is_none() {
+            if document.get_element_by_id("global-login-overlay").is_none() {
                 let client_id: String = crate::state::APP_STATE.with(|st| {
                     st.borrow()
                         .google_client_id
@@ -124,7 +124,7 @@ pub fn logout() -> Result<(), JsValue> {
                 });
                 crate::components::auth::mount_login_overlay(&document, &client_id);
             } else {
-                if let Some(el) = document.get_element_by_id("login-overlay") {
+                if let Some(el) = document.get_element_by_id("global-login-overlay") {
                     el.set_class_name("login-overlay");
                 }
             }
@@ -252,7 +252,7 @@ mod tests {
         js_sys::Reflect::set(&window, &"GOOGLE_CLIENT_ID".into(), &"dummy_client_id".into()).unwrap();
 
         // Ensure no overlay initially
-        if let Some(el) = document.get_element_by_id("login-overlay") {
+        if let Some(el) = document.get_element_by_id("global-login-overlay") {
             el.parent_node().unwrap().remove_child(&el).unwrap();
         }
 

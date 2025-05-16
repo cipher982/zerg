@@ -50,7 +50,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     
     // Create input panel (toolbar) if needed
     web_sys::console::log_1(&"CANVAS: Creating/finding input panel".into());
-    let input_panel = if let Some(panel) = document.get_element_by_id("input-panel") {
+    let input_panel = if let Some(panel) = document.get_element_by_id("canvas-input-panel") {
         panel
     } else {
         crate::ui::main::create_input_panel(document)?
@@ -64,7 +64,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     }
     
     // Make sure input panel is visible
-    input_panel.set_attribute("style", "display: block;")?;
+    crate::dom_utils::show(&input_panel);
     
     // Create canvas container if needed
     web_sys::console::log_1(&"CANVAS: Creating/finding canvas container".into());
@@ -90,7 +90,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     };
     
     // Ensure canvas container is visible
-    canvas_container.set_attribute("style", "display: block;")?;
+    crate::dom_utils::show(&canvas_container);
     
     web_sys::console::log_1(&"CANVAS: Setup canvas drawing (no state borrowed)".into());
 
@@ -122,7 +122,7 @@ pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
     web_sys::console::log_1(&"CANVAS: Starting unmount".into());
     
     // Remove input panel
-    if let Some(panel) = document.get_element_by_id("input-panel") {
+    if let Some(panel) = document.get_element_by_id("canvas-input-panel") {
         web_sys::console::log_1(&"CANVAS: Removing input panel".into());
         if let Some(parent) = panel.parent_node() {
             parent.remove_child(&panel)?;

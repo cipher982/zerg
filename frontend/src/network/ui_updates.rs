@@ -10,7 +10,7 @@ thread_local! {
 pub fn update_connection_status(status: &str, color: &str) {
     if let Some(window) = web_sys::window() {
         if let Some(document) = window.document() {
-            if let Some(status_element) = document.get_element_by_id("status") {
+            if let Some(status_element) = document.get_element_by_id("global-status") {
                 status_element.set_class_name(color);
                 status_element.set_inner_html(&format!("Status: {}", status));
             }
@@ -21,7 +21,7 @@ pub fn update_connection_status(status: &str, color: &str) {
 pub fn flash_activity() {
     if let Some(window) = web_sys::window() {
         if let Some(document) = window.document() {
-            if let Some(status_element) = document.get_element_by_id("api-status") {
+            if let Some(status_element) = document.get_element_by_id("global-api-status") {
                 // Update packet counter
                 PACKET_COUNTER.with(|counter| {
                     let count = *counter.borrow();
@@ -57,7 +57,7 @@ pub fn flash_activity() {
 pub fn update_layout_status(msg: &str, color: &str) {
     if let Some(window) = web_sys::window() {
         if let Some(document) = window.document() {
-            if let Some(el) = document.get_element_by_id("layout-status") {
+            if let Some(el) = document.get_element_by_id("global-layout-status") {
                 // Remove any previously set colour classes before adding the
                 // new one to avoid class-name accumulation or stale styles.
                 let class_list = el.class_list();

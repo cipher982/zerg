@@ -150,7 +150,7 @@ pub fn mount_profile(document: &Document) -> Result<(), JsValue> {
     container.append_child(&form)?;
 
     // Ensure container is visible
-    container.set_attribute("style", "display: block;")?;
+    crate::dom_utils::show(&container);
 
     Ok(())
 }
