@@ -185,10 +185,10 @@ frontend/e2e/*                      (Playwright config + spec)
 
 ### 7.4 Remaining items  *(auto-updated)*
 
-1. **Refactor Agent Config modal listener wiring** – `attach_listeners()` is
-   still tied to hard-coded `agent-*` tab IDs.  Migrate to the enum-aware
-   `TabBar` helper so those IDs can be removed and tab events are attached
-   directly after creation.
+✔ **Refactor Agent Config modal listener wiring** – Tab buttons are now wired
+   up immediately after `build_tab_bar()` via direct closures that dispatch
+   `Message::SetAgentTab(…)`.  The legacy `SwitchTo*Tab` message variants were
+   removed and no new code relies on DOM IDs for tab events.
 
 3. **Extract `<TabBar>`** – DONE.  `components::tab_bar` landed and both
    Agent Config **and** Agent Debug modals consume it (commit 7.9).  A small
