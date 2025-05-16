@@ -8,12 +8,12 @@ The document distills the debugging session around the “Triggers tab remains v
 
 ✔  Add `dom_utils.rs` helper (show / hide / activate)
 ✔  Store the *active tab* as an enum in `AppState`
-✔  Enforce ID-prefix rule (`agent-`, `workflow-`, …) via pre-commit grep
+◻  Enforce ID-prefix rule (`agent-`, `workflow-`, …) via pre-commit grep (hook drafted but **still commented out**)
 ✔  Write a 20-line Playwright smoke test that asserts only one
    `.tab-content` pane is visible inside a modal
 ✔  Document the “golden path” in CONTRIBUTING / this guide
 
-These steps catch 80% of “element never hidden” or “duplicate-ID” regressions without adopting a new framework or rewriting existing modals.
+Together, these steps catch ~80 % of “element never hidden” or “duplicate-ID” regressions without adopting a new framework or rewriting existing modals – once the ID-prefix hook is actually active.
 
 1. Background – Why the Bug Happened
     •   The modal’s tab buttons call different Message variants in update.rs.
@@ -185,36 +185,46 @@ frontend/e2e/*                      (Playwright config + spec)
 
 ### 7.4 Remaining items  *(auto-updated)*
 
-1. **Full codebase ID audit** – Agent Config Modal + Chat view done; dashboard
-   & canvas pages still carry raw IDs.  Once renamed we can rely exclusively
-   on the new pre-commit hook for enforcement.
-2. **Extract `<TabBar>`** – DONE.  `components::tab_bar` landed and both
+1. **Enable and enforce DOM-ID prefix linter** – The grep-based hook is still
+   commented out in `.pre-commit-config.yaml` and several views (Dashboard,
+   Canvas, Profile) use un-namespaced IDs.  Before closure we must:
+   • Uncomment the hook.
+   • Rename leftover IDs or drop them entirely where event wiring moved to
+     enum-based approaches.
+
+2. **Purge remaining `display:none / block` inline writes** – ~25 occurrences
+   remain in `views.rs`, schedule-input containers, profile & canvas pages.
+   These should be swapped for `dom_utils::hide()` / `show()` *or* CSS class
+   toggling so all visibility logic goes through the helper layer.
+
+3. **Refactor Agent Config modal listener wiring** – `attach_listeners()` is
+   still tied to hard-coded `agent-*` tab IDs.  Either migrate to the new
+   enum-aware `TabBar` builder or attach listeners at creation time so the
+   IDs can be dropped.
+
+4. **Extract `<TabBar>`** – DONE.  `components::tab_bar` landed and both
    Agent Config **and** Agent Debug modals consume it (commit 7.9).  A small
    attach helper still wires click-handlers, but the visual markup is now
    shared.
-3. Framework spike (Yew / Leptos) + Storybook-style preview pages.
 
-### 7.6 Visibility helpers – **rollout finished** (2025-05-10 evening)
+5. Framework spike (Yew / Leptos) + Storybook-style preview pages (optional).
 
-All remaining `display:none` / `display:block` inline toggles have been
-replaced with `dom_utils::hide()` / `dom_utils::show()` or converted to CSS
-classes.  This completes item **3** of the TODO list.
+### 7.6 Visibility helpers – **rollout still in progress** (2025-05-10 → 2025-05-19)
 
-Key touches
-• agent_config_modal.rs – biggest lift (Gmail-connect row, Add-Trigger form,
-  scheduling inputs, dynamic empty-state).  Introduced helper-based toggles
-  and kept existing padding/border styling intact.
-• agent_debug_modal.rs & views.rs – migrated close/hide paths.
+The first migration wave swapped ~70 inline `style` writes for
+`dom_utils::hide()` / `show()`, but a follow-up audit on **2025-05-19** found
+~25 remaining `display:none` / `display:block` mutations in:
+• `views.rs::show_block_by_id`
+• Profile & Canvas page mount helpers
+• Schedule-input containers inside `agent_config_modal.rs`
 
-grep verification → **0** occurrences of `display:none` or `display:block`
-writes remain in `frontend/src`.
+These spots will be refactored next so *all* visibility changes funnel through
+the helper layer.  Until then the “zero inline style toggle” milestone is **not
+yet achieved**.
 
 Next up
-1. Flip the DOM-ID prefix pre-commit grep hook from commented to **active**.  
-   (Done – see .pre-commit-config.yaml update)  
-2. Start extracting `<Modal>` and `<TabBar>` components.
-
-We are officially style-toggle-free!  🎉
+1. Replace the remaining style writes with helper or CSS class toggles.
+2. Re-run the grep audit to confirm **0** dynamic `display` writes.
 
 ### 7.7 Shared `<Modal>` helper introduced (2025-05-11)
 
@@ -317,3 +327,19 @@ You renamed the DOM ID without updating the Rust helper. Keep them in sync.
 We’re currently using wasm-bindgen for minimal bloat, but these frameworks align with the enum/component pattern and can be adopted later.
 
 Happy hacking – and may no tab ever overstay its welcome again!
+
+--------------------------------------------------------------------------------
+### 7.10 Reality-check update (2025-05-19)
+
+Triggered by a repository review on 2025-05-19 the following corrections were
+added to keep this document in sync with real code:
+
+• The DOM-ID prefix pre-commit hook is *still commented out* – enabling it is
+  now the first open item in the *Remaining tasks* list.
+• About two dozen inline `display:none / block` style toggles remain; “style-
+  toggle-free” status was premature.  Section 7.6 was amended accordingly.
+• Added explicit call-outs for the Agent Config modal listener refactor and
+  final Playwright / grep audits.
+
+Once these items are complete the **UI Robustness** milestone can finally be
+closed.
