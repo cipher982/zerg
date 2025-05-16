@@ -27,7 +27,7 @@ pub async fn google_credential_received(id_token: String) {
     // spinner (see styles.css) is visible.
     let overlay_el_opt = web_sys::window()
         .and_then(|w| w.document())
-        .and_then(|doc| doc.get_element_by_id("login-overlay"));
+        .and_then(|doc| doc.get_element_by_id("global-login-overlay"));
 
     if let Some(ref el) = overlay_el_opt {
         let mut cls = el.class_name();
@@ -69,7 +69,7 @@ pub async fn google_credential_received(id_token: String) {
     // Hide login overlay if present.
     if let Some(window) = web_sys::window() {
         if let Some(document) = window.document() {
-            if let Some(el) = document.get_element_by_id("login-overlay") {
+            if let Some(el) = document.get_element_by_id("global-login-overlay") {
                 el.set_class_name("hidden");
             }
         }
@@ -89,7 +89,7 @@ pub async fn google_credential_received(id_token: String) {
 /// in.
 pub fn mount_login_overlay(document: &Document, client_id: &str) {
     // Prevent duplicate overlays (shouldn’t really happen but stay safe).
-    if document.get_element_by_id("login-overlay").is_some() {
+    if document.get_element_by_id("global-login-overlay").is_some() {
         return;
     }
 
@@ -101,7 +101,7 @@ pub fn mount_login_overlay(document: &Document, client_id: &str) {
         .expect("create overlay div")
         .dyn_into::<HtmlElement>()
         .unwrap();
-    overlay.set_id("login-overlay");
+    overlay.set_id("global-login-overlay");
     overlay.set_class_name("login-overlay");
 
     // Container for Google button ------------------------------------------

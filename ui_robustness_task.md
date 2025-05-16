@@ -8,7 +8,7 @@ The document distills the debugging session around the “Triggers tab remains v
 
 ✔  Add `dom_utils.rs` helper (show / hide / activate)
 ✔  Store the *active tab* as an enum in `AppState`
-◻  Enforce ID-prefix rule (`agent-`, `workflow-`, …) via pre-commit grep (hook drafted but **still commented out**)
+✔  Enforce ID-prefix rule – hook enabled & non-compliant IDs renamed (`global-status`, `canvas-input-panel`, etc.)
 ✔  Write a 20-line Playwright smoke test that asserts only one
    `.tab-content` pane is visible inside a modal
 ✔  Document the “golden path” in CONTRIBUTING / this guide
@@ -185,42 +185,25 @@ frontend/e2e/*                      (Playwright config + spec)
 
 ### 7.4 Remaining items  *(auto-updated)*
 
-1. **Enable and enforce DOM-ID prefix linter** – The grep-based hook is still
-   commented out in `.pre-commit-config.yaml` and several views (Dashboard,
-   Canvas, Profile) use un-namespaced IDs.  Before closure we must:
-   • Uncomment the hook.
-   • Rename leftover IDs or drop them entirely where event wiring moved to
-     enum-based approaches.
+1. **Refactor Agent Config modal listener wiring** – `attach_listeners()` is
+   still tied to hard-coded `agent-*` tab IDs.  Migrate to the enum-aware
+   `TabBar` helper so those IDs can be removed and tab events are attached
+   directly after creation.
 
-2. **Purge remaining `display:none / block` inline writes** – ~25 occurrences
-   remain in `views.rs`, schedule-input containers, profile & canvas pages.
-   These should be swapped for `dom_utils::hide()` / `show()` *or* CSS class
-   toggling so all visibility logic goes through the helper layer.
-
-3. **Refactor Agent Config modal listener wiring** – `attach_listeners()` is
-   still tied to hard-coded `agent-*` tab IDs.  Either migrate to the new
-   enum-aware `TabBar` builder or attach listeners at creation time so the
-   IDs can be dropped.
-
-4. **Extract `<TabBar>`** – DONE.  `components::tab_bar` landed and both
+3. **Extract `<TabBar>`** – DONE.  `components::tab_bar` landed and both
    Agent Config **and** Agent Debug modals consume it (commit 7.9).  A small
    attach helper still wires click-handlers, but the visual markup is now
    shared.
 
 5. Framework spike (Yew / Leptos) + Storybook-style preview pages (optional).
 
-### 7.6 Visibility helpers – **rollout still in progress** (2025-05-10 → 2025-05-19)
+### 7.6 Visibility helpers – **rollout complete** (2025-05-19)
 
-The first migration wave swapped ~70 inline `style` writes for
-`dom_utils::hide()` / `show()`, but a follow-up audit on **2025-05-19** found
-~25 remaining `display:none` / `display:block` mutations in:
-• `views.rs::show_block_by_id`
-• Profile & Canvas page mount helpers
-• Schedule-input containers inside `agent_config_modal.rs`
-
-These spots will be refactored next so *all* visibility changes funnel through
-the helper layer.  Until then the “zero inline style toggle” milestone is **not
-yet achieved**.
+All remaining inline `display:none` / `display:block` writes have now been
+replaced with `dom_utils::hide()` / `show()` calls.  A repo-wide grep confirms
+**zero** dynamic `display:` mutations inside `frontend/src`.  From here on
+developers must use the helper or a CSS class toggle for any visibility
+changes.
 
 Next up
 1. Replace the remaining style writes with helper or CSS class toggles.

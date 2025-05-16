@@ -28,11 +28,18 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
     status_bar.set_class_name("status-bar");
 
     let status = document.create_element("div")?;
-    status.set_id("status");
+    status.set_id("global-status");
     status.set_class_name("yellow"); // initial colour
     status.set_inner_html("Status: Connecting");
 
     status_bar.append_child(&status)?;
+
+    // API packet counter (hidden LED / counter that flashes on WS packets).
+    let api_status = document.create_element("div")?;
+    api_status.set_id("global-api-status");
+    api_status.set_class_name("");
+    api_status.set_inner_html("");
+    status_bar.append_child(&api_status)?;
 
     // Add an (initially empty) layout status span that will be aligned to the
     // right by the flex layout (`justify-content: space-between`).  We *do
@@ -40,7 +47,7 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
     // until an error/warning is displayed.
 
     let layout_status = document.create_element("div")?;
-    layout_status.set_id("layout-status");
+    layout_status.set_id("global-layout-status");
     layout_status.set_class_name("");
     layout_status.set_inner_html("");
 

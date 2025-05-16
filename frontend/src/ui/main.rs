@@ -49,7 +49,7 @@ pub fn create_input_panel(document: &Document) -> Result<web_sys::Element, JsVal
     
     // Create input panel
     let input_panel = document.create_element("div")?;
-    input_panel.set_id("input-panel");
+    input_panel.set_id("canvas-input-panel");
     input_panel.append_child(&auto_fit_container)?;
     input_panel.append_child(&center_button)?;
     input_panel.append_child(&clear_button)?;
