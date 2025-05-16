@@ -145,16 +145,8 @@ pub enum Message {
     // Task operations
     SendTaskToAgent,
     
-    // Tab switching in modal
-    SwitchToMainTab,
-    SwitchToHistoryTab,
-    /// Switch to the *Triggers* tab in the agent modal
-    SwitchToTriggersTab,
-
-    /// Unified variant – switch to the given tab.  Prefer this over the
-    /// legacy `SwitchTo*Tab` helpers.  The update handler keeps
-    /// backwards-compatibility by mapping the old variants to this one so we
-    /// can migrate call-sites incrementally.
+    // Tab switching in modal – use the unified variant below.
+    /// Unified variant – switch to the given tab.
     SetAgentTab(crate::state::AgentConfigTab),
     
     // Auto-save operations

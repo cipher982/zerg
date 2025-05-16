@@ -580,31 +580,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
         },
        
-        // Legacy variants – forward to unified handler by converting the
-        // incoming message into `SetAgentTab` and **re-matching**.  This keeps
-        // external call-sites working while we migrate.
-        Message::SwitchToMainTab => {
-            // Simply treat as unified variant.
-            let tab = crate::state::AgentConfigTab::Main;
-            // Reuse the logic by executing the code path directly (copy of
-            // SetAgentTab handler but without the triggers-specific bits for
-            // performance).  We call a small helper.
-            handle_agent_tab_switch(state, &mut commands, tab);
-        },
-
-        Message::SwitchToHistoryTab => {
-            let tab = crate::state::AgentConfigTab::History;
-            handle_agent_tab_switch(state, &mut commands, tab);
-        },
-
-        Message::SwitchToTriggersTab => {
-            let tab = crate::state::AgentConfigTab::Triggers;
-            handle_agent_tab_switch(state, &mut commands, tab);
-        },
-
-        // -----------------------------------------------------------
         // Unified tab switching variant.
-        // -----------------------------------------------------------
         Message::SetAgentTab(tab) => {
             handle_agent_tab_switch(state, &mut commands, tab);
         },

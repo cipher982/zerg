@@ -211,13 +211,35 @@ impl AgentConfigModal {
         // Tabs: Main / Triggers – built via shared helper ------------------
         let tab_container = tab_bar::build_tab_bar(document, &[("Main", true), ("Triggers", false)])?;
 
-        // Assign stable IDs so legacy code (attach_listeners) can still look
-        // them up.  Child order matches slice order.
-        if let Some(first_btn) = tab_container.first_element_child() {
-            first_btn.set_id("agent-main-tab");
-        }
-        if let Some(second_btn) = tab_container.last_element_child() {
-            second_btn.set_id("agent-triggers-tab");
+        // -----------------------------------------------------------------
+        // Attach tab-switch click handlers *immediately* so we do not rely on
+        // querying by id later.  The helper guarantees the child order matches
+        // the slice passed above.
+        // -----------------------------------------------------------------
+        {
+            use wasm_bindgen::closure::Closure;
+            use web_sys::Event;
+
+            let dispatch = |tab| crate::state::dispatch_global_message(crate::messages::Message::SetAgentTab(tab));
+
+            if let Some(first_btn) = tab_container.first_element_child() {
+                // Retain stable id for update.rs active-state toggling.
+                first_btn.set_id("agent-main-tab");
+                let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                    dispatch(crate::state::AgentConfigTab::Main);
+                }));
+                first_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+                cb.forget();
+            }
+
+            if let Some(second_btn) = tab_container.last_element_child() {
+                second_btn.set_id("agent-triggers-tab");
+                let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                    dispatch(crate::state::AgentConfigTab::Triggers);
+                }));
+                second_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+                cb.forget();
+            }
         }
 
         // Main content
@@ -591,30 +613,8 @@ impl AgentConfigModal {
             cb.forget();
         }
 
-        // Tab switching – simple class toggle (Main, History, Triggers)
-        if let Some(main_tab) = document.get_element_by_id("agent-main-tab") {
-            let cb_main = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
-                dispatch(crate::messages::Message::SwitchToMainTab);
-            }));
-            main_tab.add_event_listener_with_callback("click", cb_main.as_ref().unchecked_ref())?;
-            cb_main.forget();
-        }
-
-        if let Some(history_tab) = document.get_element_by_id("agent-history-tab") {
-            let cb_hist = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
-                dispatch(crate::messages::Message::SwitchToHistoryTab);
-            }));
-            history_tab.add_event_listener_with_callback("click", cb_hist.as_ref().unchecked_ref())?;
-            cb_hist.forget();
-        }
-
-        if let Some(triggers_tab) = document.get_element_by_id("agent-triggers-tab") {
-            let cb_trg = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
-                dispatch(crate::messages::Message::SwitchToTriggersTab);
-            }));
-            triggers_tab.add_event_listener_with_callback("click", cb_trg.as_ref().unchecked_ref())?;
-            cb_trg.forget();
-        }
+        // Tab switching click handlers are now attached immediately after
+        // `build_tab_bar()` so we no longer wire them up here.
 
         // -------- Add Trigger flow UI ----------
         // Show form
