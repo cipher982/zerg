@@ -188,8 +188,8 @@ macro_rules! debug_log {
             let msg = format!($($t)*);
             web_sys::console::log_1(&msg.clone().into());
 
-            use crate::state::APP_STATE;
-            use crate::utils::debug::RING_CAP;
+            use $crate::state::APP_STATE;
+            use $crate::utils::debug::RING_CAP;
             APP_STATE.with(|cell| {
                 let mut st = cell.borrow_mut();
                 if st.debug_ring.len() >= RING_CAP {
