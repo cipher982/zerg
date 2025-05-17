@@ -421,12 +421,30 @@ def test_session_factory(db_session):
     return get_test_session
 
 
+# ---------------------------------------------------------------------------
+# Fixtures – generic user + agent helpers
+# ---------------------------------------------------------------------------
+
+
 @pytest.fixture
-def sample_agent(db_session):
+def _dev_user(db_session):
+    """Return the deterministic *dev@local* user used when AUTH is disabled."""
+
+    from zerg.crud import crud as _crud
+
+    user = _crud.get_user_by_email(db_session, "dev@local")
+    if user is None:
+        user = _crud.create_user(db_session, email="dev@local", provider=None, role="ADMIN")
+    return user
+
+
+@pytest.fixture
+def sample_agent(db_session, _dev_user):
     """
     Create a sample agent in the database
     """
     agent = Agent(
+        owner_id=_dev_user.id,
         name="Test Agent",
         system_instructions="System instructions for test agent",
         task_instructions="This is a test agent",

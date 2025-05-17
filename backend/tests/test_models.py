@@ -2,6 +2,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from zerg.crud import crud as _crud
 from zerg.models.models import Agent
 from zerg.models.models import AgentMessage
 from zerg.schemas.schemas import AgentCreate
@@ -11,7 +12,12 @@ from zerg.schemas.schemas import MessageCreate
 
 def test_agent_model(db_session: Session):
     """Test creating an Agent model instance"""
+    owner = _crud.get_user_by_email(db_session, "dev@local") or _crud.create_user(
+        db_session, email="dev@local", provider=None, role="ADMIN"
+    )
+
     agent = Agent(
+        owner_id=owner.id,
         name="Test Agent",
         system_instructions="This is a test system instruction",
         task_instructions="This is a test task instruction",

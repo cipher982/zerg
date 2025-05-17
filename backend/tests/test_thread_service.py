@@ -5,12 +5,18 @@ from langchain_core.messages import HumanMessage
 from langchain_core.messages import SystemMessage
 from langchain_core.messages import ToolMessage
 
+from zerg.crud import crud as _crud
 from zerg.models.models import Agent
 from zerg.services.thread_service import ThreadService
 
 
 def _create_test_agent(db_session):
+    owner = _crud.get_user_by_email(db_session, "dev@local") or _crud.create_user(
+        db_session, email="dev@local", provider=None, role="ADMIN"
+    )
+
     return Agent(
+        owner_id=owner.id,
         name="TestAgent",
         system_instructions="You are helpful.",
         task_instructions="",

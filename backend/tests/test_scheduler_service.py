@@ -57,9 +57,16 @@ async def test_schedule_agent(service):
 @pytest.mark.asyncio
 async def test_load_scheduled_agents(service, db_session):
     # Insert two agents: one with a cron schedule, one without
+    # Reuse the dev user as owner
+    from zerg.crud import crud as _crud
     from zerg.models.models import Agent
 
+    owner = _crud.get_user_by_email(db_session, "dev@local") or _crud.create_user(
+        db_session, email="dev@local", provider=None, role="ADMIN"
+    )
+
     a1 = Agent(
+        owner_id=owner.id,
         name="A1",
         system_instructions="si",
         task_instructions="ti",
@@ -68,6 +75,7 @@ async def test_load_scheduled_agents(service, db_session):
         schedule="*/5 * * * *",
     )
     a2 = Agent(
+        owner_id=owner.id,
         name="A2",
         system_instructions="si",
         task_instructions="ti",

@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from zerg.crud.crud import create_agent
 from zerg.crud.crud import create_agent_message
+from zerg.crud.crud import create_user
 from zerg.crud.crud import delete_agent
 from zerg.crud.crud import get_agent
 from zerg.crud.crud import get_agent_messages
@@ -9,12 +10,18 @@ from zerg.crud.crud import get_agents
 from zerg.crud.crud import update_agent
 from zerg.models.models import Agent
 
+# Ensure we have at least one user – the sample_agent already uses _dev_user.
+
 
 def test_get_agents(db_session: Session, sample_agent: Agent):
     """Test getting all agents"""
+    # Reuse the owner of sample_agent for additional agents
+    owner_id: int = sample_agent.owner_id  # type: ignore[attr-defined]
+
     # Create a few more agents
     for i in range(3):
         agent = Agent(
+            owner_id=owner_id,
             name=f"Test Agent {i}",
             system_instructions=f"System instructions for agent {i}",
             task_instructions=f"Instructions for agent {i}",
@@ -49,10 +56,21 @@ def test_get_agent(db_session: Session, sample_agent: Agent):
     assert non_existent_agent is None
 
 
+# We need a user row because ``owner_id`` is mandatory.
+
+
+def _ensure_user(db_session: Session):
+    user = create_user(db_session, email="crud@test", provider=None, role="USER")  # type: ignore[arg-type]
+    return user
+
+
 def test_create_agent(db_session: Session):
     """Test creating a new agent"""
+    owner = _ensure_user(db_session)
+
     agent = create_agent(
-        db_session,
+        db=db_session,
+        owner_id=owner.id,
         name="New CRUD Agent",
         system_instructions="System instructions for testing",
         task_instructions="Testing CRUD operations",
