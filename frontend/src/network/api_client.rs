@@ -239,7 +239,11 @@ impl ApiClient {
 
         let url = format!("{}/api/system/info", Self::api_base_url());
 
-        let mut opts = RequestInit::new();
+        let opts = RequestInit::new();
+        // `web_sys::RequestInit` exposes interior-mutable setters, therefore
+        // the instance itself does **not** have to be declared `mut`.
+        // Removing the `mut` keyword eliminates an `unused_mut` compiler
+        // warning without changing behaviour.
         opts.set_method("GET");
         opts.set_mode(RequestMode::Cors);
 
@@ -302,7 +306,9 @@ impl ApiClient {
     pub async fn fetch_json(url: &str, method: &str, body: Option<&str>) -> Result<String, JsValue> {
         use web_sys::{Request, RequestInit, RequestMode, Response, Headers};
 
-        let mut opts = RequestInit::new();
+        let opts = RequestInit::new();
+        // As above, `RequestInit` methods mutate internal JS fields via
+        // interior mutability, so a `mut` binding is unnecessary.
         opts.set_method(method);
         opts.set_mode(RequestMode::Cors);
 
