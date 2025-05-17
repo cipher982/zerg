@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Query
 from fastapi import Response
 from fastapi import status
 from openai import OpenAI
@@ -72,25 +73,49 @@ client = OpenAI(
 
 @router.get("/", response_model=List[Agent])
 @router.get("", response_model=List[Agent])
-def read_agents(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all agents"""
-    agents = crud.get_agents(db, skip=skip, limit=limit)
-    # Return empty list instead of exception for no agents
-    if not agents:
-        return []
+def read_agents(
+    *,
+    scope: str = Query("my", pattern="^(my|all)$"),
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Return a paginated list of agents.
+
+    The optional ``scope`` query parameter controls visibility:
+
+    • ``my``  – (default) return only agents owned by the authenticated user.
+    • ``all`` – admin-only shorthand for the previous behaviour (all rows).
+    """
+
+    if scope == "my":
+        agents = crud.get_agents(db, skip=skip, limit=limit, owner_id=current_user.id)
+    else:
+        # Non-admin users are not allowed to fetch *all* agents.
+        if getattr(current_user, "role", "USER") != "ADMIN":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required for scope=all")
+
+        agents = crud.get_agents(db, skip=skip, limit=limit)
+
     return agents
 
 
 @router.post("/", response_model=Agent, status_code=status.HTTP_201_CREATED)
 @router.post("", response_model=Agent, status_code=status.HTTP_201_CREATED)
 @publish_event(EventType.AGENT_CREATED)
-async def create_agent(agent: AgentCreate, db: Session = Depends(get_db)):
+async def create_agent(
+    agent: AgentCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """Create a new agent"""
     # Validate model against backend registry
     _validate_model_or_400(agent.model)
 
     return crud.create_agent(
         db=db,
+        owner_id=current_user.id,
         name=agent.name,
         system_instructions=agent.system_instructions,
         task_instructions=agent.task_instructions,

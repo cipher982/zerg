@@ -149,6 +149,8 @@ class Thread(ThreadBase):
 
 class Agent(AgentBase):
     id: int
+    owner_id: int
+    owner: Optional[UserOut] = None
     status: str
     created_at: datetime
     updated_at: datetime

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from zerg.crud import crud
+from zerg.crud import crud as _crud
 
 # Import the SQLAlchemy Agent model, not the Pydantic schema
 from zerg.models.models import Agent
@@ -25,7 +26,12 @@ def test_api_db_isolation(client: TestClient, db_session: Session):
     early binding of SQLAlchemy metadata.
     """
     # Create an agent directly using the test session and SQLAlchemy model
+    owner = _crud.get_user_by_email(db_session, "dev@local") or _crud.create_user(
+        db_session, email="dev@local", provider=None, role="ADMIN"
+    )
+
     direct_agent = Agent(
+        owner_id=owner.id,
         name="DB Isolation Test Agent",
         system_instructions="System instructions for isolation test",
         task_instructions="Task instructions for isolation test",

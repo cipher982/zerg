@@ -167,6 +167,12 @@ pub struct ApiAgent {
     /// `None` or empty string means the agent is healthy.
     #[serde(default)]
     pub last_error: Option<String>,
+
+    // ---------------------------------------------------------------------
+    // Ownership (User Personalisation feature)
+    // ---------------------------------------------------------------------
+    #[serde(default)]
+    pub owner_id: Option<u32>,
 }
 
 // -----------------------------------------------------------------------------

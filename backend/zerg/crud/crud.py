@@ -29,9 +29,24 @@ from zerg.schemas.schemas import RunTrigger
 
 
 # Agent CRUD operations
-def get_agents(db: Session, skip: int = 0, limit: int = 100):
-    """Get all agents with pagination"""
-    return db.query(Agent).offset(skip).limit(limit).all()
+def get_agents(
+    db: Session,
+    *,
+    skip: int = 0,
+    limit: int = 100,
+    owner_id: Optional[int] = None,
+):
+    """Return a list of agents.
+
+    If *owner_id* is provided the result is limited to agents owned by that
+    user.  Otherwise all agents are returned (paginated).
+    """
+
+    query = db.query(Agent)
+    if owner_id is not None:
+        query = query.filter(Agent.owner_id == owner_id)
+
+    return query.offset(skip).limit(limit).all()
 
 
 def get_agent(db: Session, agent_id: int):
@@ -41,6 +56,8 @@ def get_agent(db: Session, agent_id: int):
 
 def create_agent(
     db: Session,
+    *,
+    owner_id: int,
     name: str,
     system_instructions: str,
     task_instructions: str,
@@ -48,8 +65,13 @@ def create_agent(
     schedule: Optional[str] = None,
     config: Optional[Dict[str, Any]] = None,
 ):
-    """Create a new agent"""
+    """Create a new agent row and persist it.
+
+    ``owner_id`` is **required** – every agent belongs to exactly one user.
+    """
+
     db_agent = Agent(
+        owner_id=owner_id,
         name=name,
         system_instructions=system_instructions,
         task_instructions=task_instructions,

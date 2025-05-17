@@ -92,6 +92,15 @@ class Agent(Base):
     schedule = Column(String, nullable=True)  # CRON expression or interval
     model = Column(String, nullable=False)  # Model to use (no default)
     config = Column(JSON, nullable=True)  # Additional configuration as JSON
+
+    # -------------------------------------------------------------------
+    # Ownership – every agent belongs to *one* user (creator / owner).
+    # -------------------------------------------------------------------
+
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    # Bidirectional relationship so ``agent.owner`` returns the User row and
+    # ``user.agents`` lists all agents owned by the user.
+    owner = relationship("User", backref="agents")
     # Scheduling metadata
     # Next time this agent is currently expected to run.  Updated by the
     # SchedulerService whenever a cron job is (re)scheduled.

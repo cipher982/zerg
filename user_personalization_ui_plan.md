@@ -153,8 +153,23 @@ async fn update_current_user(patch_json: &str) -> Result<String, JsValue>
 | 2   | **DONE** – AvatarBadge & UserMenu in header (incl. WS status) |
 | 2½  | **DONE** – Profile page UI (basic), WS live update wiring |
 | 3   | **DONE** – hash-router, header greeting, chat avatars |
-| 4   | Outstanding: dashboard “My agents” filter + Owner column |
+| 4   | **BACKEND DONE** – ownership column & `/api/agents?scope` filter <br/>**FRONTEND TODO** – Dashboard UI toggle + Owner column |
+| 4½  | Persist dashboard scope in `AppState` / localStorage |
 | 5   | Cross-browser test, docs/screenshots |
+
+---
+
+### 2025-05-21 Progress Note
+
+✅ Backend ownership groundwork merged (PR #321):
+
+• Added `owner_id` FK to **Agent** model & relationship.  
+• `crud.create_agent()` requires `owner_id`; `get_agents()` supports optional filter.  
+• `GET /api/agents?scope=my|all` implemented – admin-guard checked.  
+• Schemas extended (`owner_id`, nested `owner`).  
+• All 135 backend tests pass.
+
+Next up – **frontend Dashboard** work (scope toggle, column render, localStorage persistence).
 
 
 ## 10  Testing Matrix

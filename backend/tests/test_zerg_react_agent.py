@@ -10,9 +10,16 @@ import pytest
 def agent_row(db_session):
     """Insert a minimal Agent row in the test DB and return it."""
 
+    # Ensure we have a user row for ownership
+    from zerg.crud import crud as _crud  # noqa: WPS433
     from zerg.models.models import Agent as AgentModel
 
+    owner = _crud.get_user_by_email(db_session, "dev@local") or _crud.create_user(
+        db_session, email="dev@local", provider=None, role="ADMIN"
+    )
+
     row = AgentModel(
+        owner_id=owner.id,
         name="unit-bot",
         system_instructions="sys",
         task_instructions="task",

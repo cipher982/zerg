@@ -9,14 +9,25 @@ import pytest
 async def test_config_obj_accessor_and_mutator(db_session):
     """Reading & writing via the typed helper should round-trip correctly."""
 
+    # ------------------------------------------------------------------
+    # Create an agent row – minimal required columns only
+    # ------------------------------------------------------------------
+    from zerg.crud import crud as _crud  # noqa: WPS433 – local import
     from zerg.models.models import Agent  # noqa: WPS433 – local import inside test
     from zerg.models.models import Trigger  # noqa: WPS433
     from zerg.models.trigger_config import TriggerConfig  # noqa: WPS433
 
-    # ------------------------------------------------------------------
-    # Create an agent row – minimal required columns only
-    # ------------------------------------------------------------------
-    agent = Agent(name="Cfg Test", system_instructions="sys", task_instructions="task", model="gpt-mock")
+    owner = _crud.get_user_by_email(db_session, "dev@local") or _crud.create_user(
+        db_session, email="dev@local", provider=None, role="ADMIN"
+    )
+
+    agent = Agent(
+        owner_id=owner.id,
+        name="Cfg Test",
+        system_instructions="sys",
+        task_instructions="task",
+        model="gpt-mock",
+    )
     db_session.add(agent)
     db_session.commit()
 
