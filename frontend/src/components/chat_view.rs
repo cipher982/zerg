@@ -353,9 +353,12 @@ pub fn update_thread_list_ui(
 }
 
 // Update the conversation area with messages
+use crate::models::CurrentUser;
+
 pub fn update_conversation_ui(
     document: &Document,
-    messages: &[ApiThreadMessage]
+    messages: &[ApiThreadMessage],
+    current_user: Option<&CurrentUser>,
 ) -> Result<(), JsValue> {
     if let Some(messages_container) = document.query_selector(".messages-container").ok().flatten() {
         // Clear existing messages
@@ -416,8 +419,8 @@ pub fn update_conversation_ui(
 
             // Avatar + name for *own* user messages
             if message.role == "user" {
-                if let Some(curr_user) = APP_STATE.with(|s| s.borrow().current_user.clone()) {
-                    let avatar = crate::components::avatar_badge::render(document, &curr_user)?;
+                if let Some(curr_user) = current_user {
+                    let avatar = crate::components::avatar_badge::render(document, curr_user)?;
                     avatar.set_class_name("avatar-badge small");
                     row_container.append_child(&avatar)?;
                 }
