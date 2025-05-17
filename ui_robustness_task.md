@@ -148,7 +148,7 @@ was written so new contributors can follow the paper-trail.
 
 ✔ Pre-commit config extended
   • `rust-clippy` hook (frontend) – blocks warnings in CI
-  • DOM-ID prefix grep hook stubbed (commented until full repo migration)
+  • DOM-ID prefix grep hook **enabled** – blocks non-namespaced IDs in CI
 
 ✔ Playwright smoke test `frontend/e2e/modal_tab_visibility.spec.ts`
   ensures only **one** `.tab-content` is visible in the agent modal.
@@ -183,31 +183,37 @@ frontend/e2e/*                      (Playwright config + spec)
 • Keep legacy message variants while external call-sites migrate – helps avoid
   giant PRs and eases git-bisect.
 
-### 7.4 Remaining items  *(auto-updated)*
+### 7.4 Current status & open items *(updated 2025-06-01)*
 
-✔ **Refactor Agent Config modal listener wiring** – Tab buttons are now wired
-   up immediately after `build_tab_bar()` via direct closures that dispatch
-   `Message::SetAgentTab(…)`.  The legacy `SwitchTo*Tab` message variants were
-   removed and no new code relies on DOM IDs for tab events.
+✔ **Refactor Agent Config modal listener wiring** – Tab buttons are wired
+   directly after `build_tab_bar()` with `Message::SetAgentTab(…)`; the legacy
+   `SwitchTo*Tab` variants are gone.
 
-3. **Extract `<TabBar>`** – DONE.  `components::tab_bar` landed and both
-   Agent Config **and** Agent Debug modals consume it (commit 7.9).  A small
-   attach helper still wires click-handlers, but the visual markup is now
-   shared.
+✔ **Extract `<TabBar>`** – Landed.  Both Agent Config *and* Agent Debug modals
+   consume the shared helper.
 
-5. Framework spike (Yew / Leptos) + Storybook-style preview pages (optional).
+✔ **DOM-ID namespacing hook** – The `dom-id-prefix-check` pre-commit hook is
+   now active (no longer commented out) and blocks non-prefixed IDs.
+
+✔ **Visibility helper rollout** – All dynamic `display:none / block` writes
+   are replaced by `dom_utils::{show,hide}`; a repo-wide grep returns zero
+   matches.
+
+⚠ **Strict Clippy in CI** – The `rust-clippy` pre-commit hook runs, but CI
+   currently allows warnings.  Switch to `cargo clippy -- -D warnings` so new
+   code can’t sneak in warnings.
+
+🚧 **Framework / Storybook spike (optional)** – Evaluate Yew / Leptos and a
+   Storybook-style preview page to improve UI iteration.  Not yet scheduled.
 
 ### 7.6 Visibility helpers – **rollout complete** (2025-05-19)
 
-All remaining inline `display:none` / `display:block` writes have now been
-replaced with `dom_utils::hide()` / `show()` calls.  A repo-wide grep confirms
-**zero** dynamic `display:` mutations inside `frontend/src`.  From here on
-developers must use the helper or a CSS class toggle for any visibility
-changes.
+All dynamic visibility toggles now flow through `dom_utils::{show,hide}`.  A
+repo-wide audit on 2025-06-01 confirms **zero** remaining `display:none` or
+`display:block` mutations inside `frontend/src`.
 
-Next up
-1. Replace the remaining style writes with helper or CSS class toggles.
-2. Re-run the grep audit to confirm **0** dynamic `display` writes.
+Developers **must** use the helper (or a CSS class toggle) for any future
+visibility changes.
 
 ### 7.7 Shared `<Modal>` helper introduced (2025-05-11)
 
@@ -312,17 +318,14 @@ We’re currently using wasm-bindgen for minimal bloat, but these frameworks ali
 Happy hacking – and may no tab ever overstay its welcome again!
 
 --------------------------------------------------------------------------------
-### 7.10 Reality-check update (2025-05-19)
+### 7.10 Reality-check update (2025-06-01)
 
-Triggered by a repository review on 2025-05-19 the following corrections were
-added to keep this document in sync with real code:
+The 2025-05-19 concerns have been fully addressed:
 
-• The DOM-ID prefix pre-commit hook is *still commented out* – enabling it is
-  now the first open item in the *Remaining tasks* list.
-• About two dozen inline `display:none / block` style toggles remain; “style-
-  toggle-free” status was premature.  Section 7.6 was amended accordingly.
-• Added explicit call-outs for the Agent Config modal listener refactor and
-  final Playwright / grep audits.
+• **DOM-ID prefix hook** – active and enforced in `.pre-commit-config.yaml`.
+• **Visibility audit** – dynamic `display:` writes are gone; helper rollout is
+  verified.
 
-Once these items are complete the **UI Robustness** milestone can finally be
-closed.
+With these fixes merged, the original **UI Robustness** milestone is now
+considered **closed**.  Future work (strict clippy, framework spike) is
+tracked separately.
