@@ -13,7 +13,7 @@ use crate::{
 use web_sys::Document;
 use wasm_bindgen::JsValue;
 use std::collections::HashMap;
-use crate::components::chat_view::{update_thread_list_ui, update_conversation_ui};
+use crate::components::chat_view::update_thread_list_ui;
 use serde_json;
 use rand;
 use chrono;
@@ -123,22 +123,21 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // call.
             state.gmail_connected = user.gmail_connected;
 
+            let user_for_ui = user.clone();
             // Mount / refresh user menu asynchronously after borrow ends.
-            commands.push(Command::UpdateUI(Box::new(|| {
+            commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
                     if let Some(doc) = win.document() {
                         let _ = crate::components::user_menu::mount_user_menu(&doc);
 
                         // ------- Update header greeting ------------------
-                        if let Some(user) = crate::state::APP_STATE.with(|s| s.borrow().current_user.clone()) {
-                            if let Some(title_el) = doc.get_element_by_id("header-title") {
-                                let greeting = if let Some(name) = user.display_name.as_ref().filter(|s| !s.is_empty()) {
-                                    format!("Welcome, {}!", name)
-                                } else {
-                                    format!("Welcome, {}!", user.email)
-                                };
-                                title_el.set_inner_html(&greeting);
-                            }
+                        if let Some(title_el) = doc.get_element_by_id("header-title") {
+                            let greeting = if let Some(name) = user_for_ui.display_name.as_ref().filter(|s| !s.is_empty()) {
+                                format!("Welcome, {}!", name)
+                            } else {
+                                format!("Welcome, {}!", user_for_ui.email)
+                            };
+                            title_el.set_inner_html(&greeting);
                         }
                     }
                 }
@@ -1180,7 +1179,8 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 commands.push(Command::UpdateUI(Box::new(move || {
                     if let Some(document) = web_sys::window().and_then(|w| w.document()) {
                         // Update the conversation UI with server data
-                        let _ = update_conversation_ui(&document, &messages_clone);
+                        let current_user_opt = crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
+                        let _ = crate::components::chat_view::update_conversation_ui(&document, &messages_clone, current_user_opt.as_ref());
                     }
                 })));
             }
@@ -1489,7 +1489,8 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             let messages_clone = messages.clone();
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(document) = web_sys::window().unwrap().document() {
-                    let _ = update_conversation_ui(&document, &messages_clone);
+                    let current_user_opt = crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
+                    let _ = crate::components::chat_view::update_conversation_ui(&document, &messages_clone, current_user_opt.as_ref());
                 }
             })));
         },
@@ -2294,7 +2295,8 @@ pub fn update_conversation(document: &Document) -> Result<(), JsValue> {
         let state = state.borrow();
         if let Some(thread_id) = state.current_thread_id {
             if let Some(messages) = state.thread_messages.get(&thread_id) {
-                return update_conversation_ui(document, messages);
+                let current_user_opt = crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
+                return crate::components::chat_view::update_conversation_ui(document, messages, current_user_opt.as_ref());
             }
         }
         Ok(())
