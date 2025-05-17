@@ -116,16 +116,15 @@ async fn update_current_user(patch_json: &str) -> Result<String, JsValue>
 * **UserMenu** – implemented & mounted automatically – shows Avatar, dropdown (Profile / Logout) and updates on WS events.
 * **ProfilePage** – two-column form; messages: `ProfileFieldChanged`, `SaveProfile`.
 
-### 6.4 Routing  ⚠️ *partial*
-Hash-based deep-linking (`#/profile`) is **not yet wired**.  The Profile page
-opens via the Avatar dropdown (`ToggleView(Profile)` message) but changing
-`location.hash` directly does nothing.  Add a small `window.onhashchange`
-listener that dispatches the correct message.
+### 6.4 Routing  ✅ *complete*
+`window.onhashchange` listener implemented.  Navigating to `#/profile`,
+`#/dashboard`, `#/canvas` and `#/chat` now dispatches the correct
+`ToggleView` message on page load and during hash changes.
 
-### 6.5 Sprinkle personalisation  🚧 *TODO*
-* Replace “Agent Platform” splash header with **Welcome, {display_name || email}**.
-* Dashboard table default scope = **My agents** (owned_by == current_user.id) and show **Owner** column.
-* Show tiny avatar + display_name on own chat messages.
+### 6.5 Sprinkle personalisation
+* **DONE** – Header greeting replaces static text with *Welcome, {display_name ∥ email}*.
+* **IN PROGRESS** – Dashboard table default scope = **My agents** + Owner column.
+* **DONE** – Chat bubbles now show miniature avatar + display_name for user messages.
 
 
 ## 7  Non-Code Work
@@ -153,8 +152,8 @@ listener that dispatches the correct message.
 | 1½  | **DONE** – WS `user:{id}` subscription & live updates |
 | 2   | **DONE** – AvatarBadge & UserMenu in header (incl. WS status) |
 | 2½  | **DONE** – Profile page UI (basic), WS live update wiring |
-| 3   | IN PROGRESS – hash-router, dashboard “My agents” filter, chat avatars |
-| 4   | Outstanding personalisation polish (header greeting, owner column) |
+| 3   | **DONE** – hash-router, header greeting, chat avatars |
+| 4   | Outstanding: dashboard “My agents” filter + Owner column |
 | 5   | Cross-browser test, docs/screenshots |
 
 
@@ -172,7 +171,7 @@ listener that dispatches the correct message.
 1. User sees their avatar & name after signing in.  
 2. Profile page persists changes immediately and broadcasts via WS.  
 3. Dashboard defaults to *My agents* and shows owner column.  **(OPEN)**
-4. Wasm-bindgen test exists for `CurrentUser` deserialization.  **(OPEN)**
+4. Wasm-bindgen test for `CurrentUser` deserialization.  **DONE**
 5. Unit + integration tests green on backend.  
 6. No regressions in existing CI suites.
 
@@ -199,11 +198,7 @@ Good luck — and ping @product if anything is unclear!  🚀
 
 The following tasks remain before we can close the feature flag:
 
-1. Front-end hash-based routing (`#/profile`).
-2. Header greeting – replace static “AI Agent Platform” text.
-3. Dashboard: default **My agents** filter + Owner column.
-4. Chat bubbles: show avatar + display_name for own messages.
-5. Add display_name & avatar_url to issued JWT (optional, nice-to-have).
-6. Add wasm-bindgen test that deserialises the `CurrentUser` JSON payload.
+1. Dashboard: default **My agents** filter + Owner column (frontend & API).
+2. Add display_name & avatar_url to issued JWT (optional, nice-to-have).
 
 Once these are merged we should re-run this document review.
