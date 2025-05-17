@@ -12,7 +12,9 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 struct TokenOut {
     access_token: String,
+    #[allow(dead_code)]
     expires_in: u32,
+    #[allow(dead_code)]
     token_type: String,
 }
 

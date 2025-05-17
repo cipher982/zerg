@@ -144,6 +144,7 @@ pub mod debug {
     use web_sys::CanvasRenderingContext2d;
 
     /// Maximum ring buffer capacity.
+    #[allow(dead_code)] // Referenced only when `debug_log!` is invoked in dev builds
     pub const RING_CAP: usize = 200;
 
     /// Draw the translucent overlay that shows the last few debug lines.

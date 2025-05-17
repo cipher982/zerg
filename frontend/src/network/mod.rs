@@ -39,6 +39,7 @@ pub fn init_api_config_js(api_base_url: &str) -> Result<(), JsValue> {
 }
 
 /// Get the API configuration
+#[allow(dead_code)]
 fn get_api_config() -> Result<std::sync::RwLockReadGuard<'static, Option<ApiConfig>>, &'static str> {
     Ok(API_CONFIG.read().unwrap())
 }

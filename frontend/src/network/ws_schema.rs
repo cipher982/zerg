@@ -96,6 +96,7 @@ pub struct WsRunUpdate {
     pub error: Option<String>,
 
     #[serde(flatten)]
+    #[allow(dead_code)] // forward-compat placeholder – backend may add more keys
     pub extra: Value, // Future-proofing for new keys
 }
 
@@ -116,6 +117,7 @@ pub struct WsAgentEvent {
     pub last_error: Option<String>,
 
     #[serde(flatten)]
+    #[allow(dead_code)]
     pub extra: Value,
 }
 
@@ -134,6 +136,7 @@ pub struct WsUserUpdate {
     pub avatar_url: Option<String>,
 
     #[serde(flatten)]
+    #[allow(dead_code)]
     pub extra: Value,
 }
 
@@ -144,9 +147,11 @@ pub struct WsThreadEvent {
     pub thread_id: u32,
 
     #[serde(default)]
+    #[allow(dead_code)]
     pub agent_id: Option<u32>,
 
     #[serde(flatten)]
+    #[allow(dead_code)]
     pub extra: Value,
 }
 
@@ -157,6 +162,7 @@ pub struct WsStreamStart {
     pub thread_id: u32,
 
     #[serde(flatten)]
+    #[allow(dead_code)]
     pub extra: Value,
 }
 
@@ -171,6 +177,7 @@ pub struct WsStreamChunk {
     pub content: Option<String>,
 
     #[serde(flatten)]
+    #[allow(dead_code)]
     pub extra: Value,
 }
 
@@ -179,6 +186,7 @@ pub struct WsStreamEnd {
     pub thread_id: u32,
 
     #[serde(flatten)]
+    #[allow(dead_code)]
     pub extra: Value,
 }
 
@@ -271,6 +279,7 @@ pub struct WsThreadMessage {
     pub message: ApiThreadMessage,
 
     #[serde(flatten)]
+    #[allow(dead_code)]
     pub extra: Value,
 }
 

@@ -118,6 +118,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
 
 /// Unmount the canvas view by removing it from the DOM
 /// This function is called when switching away from the canvas view
+#[allow(dead_code)]
 pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
     web_sys::console::log_1(&"CANVAS: Starting unmount".into());
     
@@ -164,6 +165,7 @@ pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
 }
 
 /// Get a reference to the canvas container element if it exists
+#[allow(dead_code)]
 pub fn get_canvas_container(document: &Document) -> Option<Element> {
     document.get_element_by_id("canvas-container")
 }

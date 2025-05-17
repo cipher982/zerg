@@ -156,6 +156,7 @@ pub fn mount_profile(document: &Document) -> Result<(), JsValue> {
 }
 
 /// Unmount / remove the profile page from DOM
+#[allow(dead_code)]
 pub fn unmount_profile(document: &Document) -> Result<(), JsValue> {
     if let Some(el) = document.get_element_by_id(CONTAINER_ID) {
         if let Some(parent) = el.parent_node() {

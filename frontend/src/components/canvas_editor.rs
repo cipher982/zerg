@@ -18,6 +18,7 @@ use serde_json::Value;
 pub enum AppStateRef<'a> {
     #[allow(dead_code)]
     Mutable(&'a mut AppState),
+    #[allow(dead_code)] // reserved for future readonly references when diff algorithm lands
     Immutable(&'a AppState),
     None
 }
