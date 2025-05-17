@@ -53,6 +53,11 @@ pub fn mount_user_menu(document: &Document) -> Result<(), JsValue> {
             // Clicking "Profile" toggles to the dedicated profile view via
             // the normal message/command flow so state & UI stay in sync.
             let _cb = Closure::wrap(Box::new(move |_evt: web_sys::MouseEvent| {
+                // Update route hash for deep-linking
+                if let Some(win) = web_sys::window() {
+                    let _ = win.location().set_hash("#/profile");
+                }
+
                 dispatch_global_message(Message::ToggleView(ActiveView::Profile));
             }) as Box<dyn FnMut(_)>);
             profile_item.add_event_listener_with_callback("click", _cb.as_ref().unchecked_ref())?;

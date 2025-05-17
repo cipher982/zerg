@@ -281,8 +281,24 @@ mod tests {
         assert!(!agent_empty.is_scheduled());
 
         // Case 3: Valid cron -> scheduled
-        let agent_cron = ApiAgent { schedule: Some("0 * * * *".to_string()), ..agent_none };
+        let agent_cron = ApiAgent { schedule: Some("0 * * * *".to_string()), ..agent_empty.clone() };
         assert!(agent_cron.is_scheduled());
+
+    }
+
+    #[wasm_bindgen_test]
+    fn test_current_user_deserialize() {
+        let json = r#"{
+            "id": 1,
+            "email": "alice@example.com",
+            "display_name": "Alice",
+            "avatar_url": null,
+            "prefs": null,
+            "gmail_connected": false
+        }"#;
+
+        let user: CurrentUser = serde_json::from_str(json).expect("CurrentUser JSON");
+        assert_eq!(user.email, "alice@example.com");
     }
 }
 

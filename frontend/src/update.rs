@@ -128,6 +128,18 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 if let Some(win) = web_sys::window() {
                     if let Some(doc) = win.document() {
                         let _ = crate::components::user_menu::mount_user_menu(&doc);
+
+                        // ------- Update header greeting ------------------
+                        if let Some(user) = crate::state::APP_STATE.with(|s| s.borrow().current_user.clone()) {
+                            if let Some(title_el) = doc.get_element_by_id("header-title") {
+                                let greeting = if let Some(name) = user.display_name.as_ref().filter(|s| !s.is_empty()) {
+                                    format!("Welcome, {}!", name)
+                                } else {
+                                    format!("Welcome, {}!", user.email)
+                                };
+                                title_el.set_inner_html(&greeting);
+                            }
+                        }
                     }
                 }
             })));
@@ -168,6 +180,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             commands.push(Command::UpdateUI(Box::new(move || {
                 // Get window and document without borrowing state
                 if let Some(window) = web_sys::window() {
+                    // Keep location.hash in sync for basic routing
+                    let _ = match view_clone {
+                        crate::storage::ActiveView::Profile => window.location().set_hash("#/profile"),
+                        crate::storage::ActiveView::Dashboard => window.location().set_hash("#/dashboard"),
+                        crate::storage::ActiveView::Canvas => window.location().set_hash("#/canvas"),
+                        crate::storage::ActiveView::ChatView => window.location().set_hash("#/chat"),
+                    };
+
                     if let Some(document) = window.document() {
                         // Directly call render_active_view_by_type without using refresh_ui_after_state_change
                         if let Err(e) = crate::views::render_active_view_by_type(&view_clone, &document) {
