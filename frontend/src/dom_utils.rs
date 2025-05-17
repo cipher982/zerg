@@ -34,6 +34,7 @@ pub fn set_inactive(btn: &Element) {
 ///
 /// Panics when the element is missing or is of a different type.  Intended
 /// for *fixed* DOM fragments that should always exist.
+#[allow(dead_code)] // helper for vanilla DOM experiments
 pub fn html_input(id: &str) -> HtmlInputElement {
     web_sys::window()
         .and_then(|w| w.document())

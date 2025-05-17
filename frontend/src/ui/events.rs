@@ -74,6 +74,7 @@ fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
 }
 
 /// "Create Agent" button – spawns a brand-new agent node.
+#[allow(dead_code)] // legacy UI button – kept for potential re-enablement
 fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsValue> {
     if let Some(btn) = document.get_element_by_id("create-agent-button") {
         let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: MouseEvent| {
@@ -93,6 +94,7 @@ fn setup_create_agent_button_handler(document: &Document) -> Result<(), JsValue>
 /// "Add Agent Node" button – lets the user quickly drop an existing agent onto
 /// the canvas.  Minimal UX for early experiments: prompts for an Agent ID and
 /// spawns a Node at a default location.
+#[allow(dead_code)] // legacy UI button – kept for potential re-enablement
 fn setup_add_agent_node_button_handler(document: &Document) -> Result<(), JsValue> {
     use crate::models::NodeType;
 

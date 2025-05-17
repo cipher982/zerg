@@ -8,6 +8,7 @@ use wasm_bindgen::JsCast;
 use crate::state::APP_STATE;
 
 /// Populate (or refresh) the dropdown with current agents.
+#[allow(dead_code)] // kept until the DOM integration lands
 pub fn update_agent_dropdown(document: &Document) -> Result<(), JsValue> {
     let Some(el) = document.get_element_by_id("agent-select") else {
         return Ok(()); // canvas not rendered yet

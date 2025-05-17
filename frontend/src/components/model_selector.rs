@@ -6,6 +6,7 @@ use crate::network::api_client::ApiClient;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
+#[allow(dead_code)] // experimental component – not wired into DOM yet
 pub fn update_model_dropdown(document: &Document) -> Result<(), JsValue> {
     if let Some(select_el) = document.get_element_by_id("model-select") {
         // Clear existing options
@@ -41,6 +42,7 @@ pub fn update_model_dropdown(document: &Document) -> Result<(), JsValue> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn fetch_models_from_backend(document: &Document) -> Result<(), JsValue> {
     let document_clone = document.clone();
     
@@ -71,6 +73,7 @@ pub fn fetch_models_from_backend(document: &Document) -> Result<(), JsValue> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn setup_model_selector_handlers(document: &Document) -> Result<(), JsValue> {
     let select_el = document.get_element_by_id("model-select")
         .ok_or_else(|| JsValue::from_str("Model select element not found"))?;

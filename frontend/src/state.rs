@@ -49,6 +49,7 @@ pub enum DebugTab {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentConfigTab {
     Main,
+    #[allow(dead_code)] // planned UI tab – keep placeholder
     History,
     Triggers,
 }
@@ -450,6 +451,7 @@ impl AppState {
 
     /// Remove a node from the canvas and clean up any reverse mapping if the
     /// node belonged to an agent.
+    #[allow(dead_code)]
     pub fn remove_node(&mut self, node_id: &str) {
         if let Some(node) = self.nodes.remove(node_id) {
             if let Some(agent_id) = node.agent_id {

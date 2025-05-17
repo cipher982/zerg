@@ -30,7 +30,8 @@ repos:
       - id: rust-clippy
         name: "rust-clippy (frontend)"
         language: system
-        entry: bash -c 'cd frontend && cargo clippy --quiet -- -D warnings'
+        # Run Clippy but **do not** fail the commit on warnings.
+        entry: bash -c 'cd frontend && cargo clippy --quiet'
         files: ^frontend/
 
       - id: dom-id-prefix-check

@@ -64,6 +64,7 @@ pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {
 
 /// Unmount the dashboard view by removing it from the DOM
 /// This function is called when switching away from the dashboard view
+#[allow(dead_code)]
 pub fn unmount_dashboard(document: &Document) -> Result<(), JsValue> {
     if let Some(container) = document.get_element_by_id("dashboard-container") {
         // Option 1: Remove container completely from DOM
@@ -76,6 +77,7 @@ pub fn unmount_dashboard(document: &Document) -> Result<(), JsValue> {
 }
 
 /// Get a reference to the dashboard container element if it exists
+#[allow(dead_code)]
 pub fn get_dashboard_container(document: &Document) -> Option<Element> {
     document.get_element_by_id("dashboard-container")
 }
