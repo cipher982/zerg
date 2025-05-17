@@ -199,9 +199,15 @@ frontend/e2e/*                      (Playwright config + spec)
    are replaced by `dom_utils::{show,hide}`; a repo-wide grep returns zero
    matches.
 
-⚠ **Strict Clippy in CI** – The `rust-clippy` pre-commit hook runs, but CI
-   currently allows warnings.  Switch to `cargo clippy -- -D warnings` so new
-   code can’t sneak in warnings.
+✔ **Frontend unit tests** – Updated fixtures (owner/owner_id fields) so the
+   wasm-bindgen test-suite compiles again.
+
+✔ **Code comments audit** – Removed the stale reference to legacy
+   `SwitchTo*Tab` messages inside `update.rs`.
+
+⚠ **Strict Clippy in CI** – The `rust-clippy` pre-commit hook now runs, still in
+   *warning* mode.  Final switch to `-D warnings` is tracked in a follow-up
+   ticket.
 
 🚧 **Framework / Storybook spike (optional)** – Evaluate Yew / Leptos and a
    Storybook-style preview page to improve UI iteration.  Not yet scheduled.
