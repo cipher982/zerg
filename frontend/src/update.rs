@@ -23,9 +23,8 @@ use crate::dom_utils::{hide, show, set_active, set_inactive};
 
 // ---------------------------------------------------------------------------
 // Internal helper – encapsulates all DOM + side-effects when the user switches
-// between tabs inside the Agent Configuration modal.  Called by both the
-// unified `SetAgentTab` message handler *and* the legacy `SwitchTo…Tab`
-// variants for backwards compatibility.
+// between tabs inside the Agent Configuration modal.  Used by the unified
+// `Message::SetAgentTab` handler.
 // ---------------------------------------------------------------------------
 
 fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>, tab: AgentConfigTab) {

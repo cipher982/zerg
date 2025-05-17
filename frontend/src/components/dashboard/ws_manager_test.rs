@@ -197,6 +197,8 @@ async fn test_dashboard_manager_subscribe() {
             next_run_at: None,
             last_run_at: None,
             last_error: None,
+            owner_id: None,
+            owner: None,
         });
     });
     
@@ -241,6 +243,8 @@ async fn test_dashboard_manager_cleanup() {
             next_run_at: None,
             last_run_at: None,
             last_error: None,
+            owner_id: None,
+            owner: None,
         });
     });
 
