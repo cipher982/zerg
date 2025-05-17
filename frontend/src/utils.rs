@@ -141,7 +141,6 @@ pub fn logout() -> Result<(), JsValue> {
 #[cfg(debug_assertions)]
 pub mod debug {
     use std::collections::VecDeque;
-    use wasm_bindgen::JsValue;
     use web_sys::CanvasRenderingContext2d;
 
     /// Maximum ring buffer capacity.
@@ -162,10 +161,12 @@ pub mod debug {
         let width = 400.0;
 
         ctx.save();
-        ctx.set_fill_style(&JsValue::from_str("rgba(0,0,0,0.6)"));
+        // `set_fill_style` is deprecated in `web_sys` 0.3.77.
+        // Use the string-specific setter instead to silence the warning.
+        ctx.set_fill_style_str("rgba(0,0,0,0.6)");
         ctx.fill_rect(0.0, 0.0, width, height);
         ctx.set_font("12px monospace");
-        ctx.set_fill_style(&JsValue::from_str("#8aff8a"));
+        ctx.set_fill_style_str("#8aff8a");
 
         for (idx, line) in lines.iter().enumerate() {
             let y = PADDING + LINE_HEIGHT * (idx as f64 + 1.0) - 3.0;
