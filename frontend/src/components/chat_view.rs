@@ -410,7 +410,20 @@ pub fn update_conversation_ui(
                 }
                 continue;
             }
-            // Create the container for user/assistant message bubble
+            // Root container (flex row when showing avatar)
+            let row_container = document.create_element("div")?;
+            row_container.set_class_name("chat-row");
+
+            // Avatar + name for *own* user messages
+            if message.role == "user" {
+                if let Some(curr_user) = APP_STATE.with(|s| s.borrow().current_user.clone()) {
+                    let avatar = crate::components::avatar_badge::render(document, &curr_user)?;
+                    avatar.set_class_name("avatar-badge small");
+                    row_container.append_child(&avatar)?;
+                }
+            }
+
+            // Create the container for message bubble
             let message_element = document.create_element("div")?;
             // Set class based on message role and type (user vs assistant)
             let class_name = if message.role == "user" {
@@ -431,8 +444,11 @@ pub fn update_conversation_ui(
             // Add content and timestamp to message element
             message_element.append_child(&content)?;
             message_element.append_child(&timestamp)?;
-            // Add message to container
-            messages_container.append_child(&message_element)?;
+            // Add bubble to row_container
+            row_container.append_child(&message_element)?;
+
+            // Add row to messages container
+            messages_container.append_child(&row_container)?;
 
             // If this is an assistant message, render any child tool messages
             if message.role == "assistant" {

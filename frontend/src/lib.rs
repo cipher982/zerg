@@ -60,6 +60,20 @@ mod utils;
 mod dom_utils;
 mod auth;
 
+/// Basic hash router for a handful of top-level pages.
+fn route_hash(hash: &str) {
+    use crate::storage::ActiveView;
+    use crate::messages::Message;
+    match hash {
+        "#/profile" => crate::state::dispatch_global_message(Message::ToggleView(ActiveView::Profile)),
+        "#/canvas" => crate::state::dispatch_global_message(Message::ToggleView(ActiveView::Canvas)),
+        "#/dashboard" | "" | "#/" => {
+            crate::state::dispatch_global_message(Message::ToggleView(ActiveView::Dashboard))
+        }
+        _ => {}
+    }
+}
+
 
 // Main entry point for the WASM application
 #[wasm_bindgen(start)]
@@ -206,6 +220,31 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
     
     // Create the tab navigation
     create_tab_navigation(&document)?;
+
+    // -------------------------------------------------------------------
+    // Simple hash-based routing for the Profile page (and a few others)
+    // -------------------------------------------------------------------
+
+    {
+        let hash_now = web_sys::window()
+            .and_then(|w| w.location().hash().ok())
+            .unwrap_or_default();
+
+        // Dispatch once for the current hash on load
+        route_hash(&hash_now);
+
+        // Install listener for subsequent changes
+        if let Some(win) = web_sys::window() {
+            let closure = wasm_bindgen::closure::Closure::wrap(Box::new(move |_e: web_sys::Event| {
+                if let Ok(hash) = web_sys::window().unwrap().location().hash() {
+                    route_hash(&hash);
+                }
+            }) as Box<dyn FnMut(_)>);
+
+            let _ = win.add_event_listener_with_callback("hashchange", closure.as_ref().unchecked_ref());
+            closure.forget();
+        }
+    }
     
     // Set up shared UI components
     ui::main::setup_ui(&document)?;
