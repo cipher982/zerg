@@ -62,8 +62,21 @@ def _verify_google_id_token(id_token_str: str) -> dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google token") from exc
 
 
-def _issue_access_token(user_id: int, email: str, expires_delta: timedelta = timedelta(minutes=30)) -> str:
-    """Return signed HS256 access token."""
+def _issue_access_token(
+    user_id: int,
+    email: str,
+    *,
+    display_name: str | None = None,
+    avatar_url: str | None = None,
+    expires_delta: timedelta = timedelta(minutes=30),
+) -> str:
+    """Return signed HS256 access token including *optional* profile fields.
+
+    The token now embeds ``display_name`` and ``avatar_url`` so that the
+    frontend can show basic user information immediately after login without
+    an additional round-trip to ``/api/users/me``.  These claims are **optional**
+    and omitted if the corresponding values are ``None``.
+    """
 
     from datetime import timezone
 
@@ -106,6 +119,12 @@ def _issue_access_token(user_id: int, email: str, expires_delta: timedelta = tim
         "email": email,
         "exp": int(expiry.timestamp()),
     }
+
+    if display_name is not None:
+        payload["display_name"] = display_name
+
+    if avatar_url is not None:
+        payload["avatar_url"] = avatar_url
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 
@@ -205,7 +224,12 @@ def google_sign_in(body: dict[str, str], db: Session = Depends(get_db)) -> Token
         user = crud.create_user(db, email=email, provider="google", provider_user_id=sub)
 
     # 3. Issue platform JWT
-    access_token = _issue_access_token(user.id, user.email)
+    access_token = _issue_access_token(
+        user.id,
+        user.email,
+        display_name=user.display_name,
+        avatar_url=user.avatar_url,
+    )
 
     # 4. Return response
     return TokenOut(access_token=access_token, expires_in=30 * 60)
