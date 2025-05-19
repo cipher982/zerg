@@ -46,10 +46,6 @@ pub async fn google_credential_received(id_token: String) {
         return;
     }
 
-    // Update global state so UI can re-render.
-    APP_STATE.with(|state_ref| {
-        state_ref.borrow_mut().logged_in = true;
-    });
 
     // ---------------------------------------------------------------------
     // Step 2: Fetch the user profile & update global state
