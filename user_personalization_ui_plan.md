@@ -233,7 +233,7 @@ Good luck — and ping @product if anything is unclear!  🚀
 
 The following tasks remain before we can close the feature flag:
 
-1. Add `display_name` & `avatar_url` to issued JWT (optional, nice-to-have – would remove one round-trip on page load).
-2. Playwright E2E tests: assert Owner column visibility + scope persistence across reload.
+1. Add `display_name` & `avatar_url` to issued JWT  **DONE** (backend `auth._issue_access_token`).
+2. Playwright E2E tests: assert Owner column visibility + scope persistence across reload.  **OPEN**
 
-Once these two items are done we can remove the *user-personalisation* feature flag.
+After E2E assertions land we can remove the *user-personalisation* feature flag.
