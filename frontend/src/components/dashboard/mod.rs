@@ -65,6 +65,17 @@ pub struct Agent {
 
     // Stores the most recent error message (if any) returned by the backend
     pub last_error: Option<String>,
+
+    // ---------------- Ownership (All agents scope) -------------------
+    /// Owner id – present only when the dashboard is in *All agents* scope
+    /// and the backend embeds the `owner` payload.
+    pub owner_id: Option<u32>,
+
+    /// Display name (or email if None) of the owner.
+    pub owner_label: Option<String>,
+
+    /// Optional avatar URL for the owner.
+    pub owner_avatar_url: Option<String>,
 }
 
 impl Agent {
@@ -81,6 +92,11 @@ impl Agent {
             last_run_success: None,
 
             last_error: None,
+
+            // Ownership – not set in this helper
+            owner_id: None,
+            owner_label: None,
+            owner_avatar_url: None,
         }
     }
 }
@@ -228,6 +244,66 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     
     search_container.append_child(&search_icon)?;
     search_container.append_child(&search_input)?;
+
+
+    // -------------------------------------------------------------------
+    // Scope selector (My agents / All agents)
+    // -------------------------------------------------------------------
+    use crate::state::DashboardScope;
+
+    let scope_select = document.create_element("select")?;
+    scope_select.set_class_name("scope-select");
+    scope_select.set_attribute("id", "dashboard-scope-select")?;
+
+    // Option: My agents
+    let opt_my = document.create_element("option")?;
+    opt_my.set_attribute("value", "my")?;
+    opt_my.set_inner_html("My agents");
+    scope_select.append_child(&opt_my)?;
+
+    // Option: All agents
+    let opt_all = document.create_element("option")?;
+    opt_all.set_attribute("value", "all")?;
+    opt_all.set_inner_html("All agents");
+    scope_select.append_child(&opt_all)?;
+
+    // Set initial selected value based on AppState
+    let initial_scope = APP_STATE.with(|st| st.borrow().dashboard_scope);
+    let selected_value = match initial_scope {
+        DashboardScope::MyAgents => "my",
+        DashboardScope::AllAgents => "all",
+    };
+    let select_html = scope_select
+        .dyn_ref::<web_sys::HtmlSelectElement>()
+        .ok_or(JsValue::from_str("Failed to cast select"))?;
+    select_html.set_value(selected_value);
+
+    // Change handler
+    let change_callback = Closure::wrap(Box::new(move |event: web_sys::Event| {
+        if let Some(target) = event.target() {
+            if let Ok(select_el) = target.dyn_into::<web_sys::HtmlSelectElement>() {
+                let value = select_el.value();
+                let scope = if value == "all" {
+                    DashboardScope::AllAgents
+                } else {
+                    DashboardScope::MyAgents
+                };
+                crate::state::dispatch_global_message(crate::messages::Message::ToggleDashboardScope(scope));
+            }
+        }
+    }) as Box<dyn FnMut(_)>);
+
+    select_html.add_event_listener_with_callback("change", change_callback.as_ref().unchecked_ref())?;
+    change_callback.forget();
+
+    // -------------------------------------------------------------------
+    // Finally, assemble header children
+    // -------------------------------------------------------------------
+
+    header.append_child(&search_container)?;
+    header.append_child(&scope_select)?;
+
+    // -------------------------------------------------------------------
     
     // Button container
     let button_container = document.create_element("div")?;
@@ -327,7 +403,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     button_container.append_child(&create_button)?;
     button_container.append_child(&reset_btn)?;
     
-    header.append_child(&search_container)?;
+    // Attach button container last so it aligns to the right via flexbox CSS.
     header.append_child(&button_container)?;
     
     Ok(header)
@@ -343,12 +419,23 @@ fn create_agents_table(document: &Document) -> Result<Element, JsValue> {
     let thead = document.create_element("thead")?;
     let header_row = document.create_element("tr")?;
     
-    // Define column headers
-    let columns = vec![
-        "Name", "Status", "Last Run", "Next Run", "Success Rate", "Actions"
-    ];
+    use crate::state::DashboardScope;
+    let include_owner = APP_STATE.with(|st| st.borrow().dashboard_scope == DashboardScope::AllAgents);
+
+    // Define column headers dynamically
+    let mut columns = vec!["Name".to_string()];
+    if include_owner {
+        columns.push("Owner".to_string());
+    }
+    columns.extend(vec![
+        "Status".to_string(),
+        "Last Run".to_string(),
+        "Next Run".to_string(),
+        "Success Rate".to_string(),
+        "Actions".to_string(),
+    ]);
     
-    for &column in columns.iter() {
+    for column in columns.iter() {
         let th = document.create_element("th")?;
         th.set_inner_html(column);
         
@@ -432,6 +519,12 @@ fn get_agents_from_app_state() -> Vec<Agent> {
                     run_count: 0,      // Placeholder – needs backend metric
                     last_run_success: None, // Placeholder
                     last_error: api_agent.last_error.clone(),
+
+                    owner_id: api_agent.owner_id,
+                    owner_label: api_agent.owner.as_ref().map(|o| {
+                        o.display_name.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| o.email.clone())
+                    }),
+                    owner_avatar_url: api_agent.owner.as_ref().and_then(|o| o.avatar_url.clone()),
                 }
                 })
             })
@@ -454,7 +547,9 @@ fn populate_agents_table(document: &Document) -> Result<(), JsValue> {
         // Display a "No agents found" message
         let empty_row = document.create_element("tr")?;
         let empty_cell = document.create_element("td")?;
-        empty_cell.set_attribute("colspan", "6")?;
+        let include_owner = APP_STATE.with(|st| st.borrow().dashboard_scope == crate::state::DashboardScope::AllAgents);
+        let colspan = if include_owner { 7 } else { 6 };
+        empty_cell.set_attribute("colspan", &colspan.to_string())?;
         empty_cell.set_inner_html("No agents found. Click '+ Create New Agent' to get started.");
         empty_cell.set_attribute("style", "text-align: center; padding: 30px; color: #888;")?;
         
@@ -498,6 +593,44 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let name_cell = document.create_element("td")?;
     name_cell.set_inner_html(&agent.name);
     row.append_child(&name_cell)?;
+
+    // Owner cell (only in AllAgents scope)
+    use crate::state::DashboardScope;
+    let include_owner = APP_STATE.with(|st| st.borrow().dashboard_scope == DashboardScope::AllAgents);
+
+    if include_owner {
+        let owner_cell = document.create_element("td")?;
+
+        if let Some(label) = &agent.owner_label {
+            // Try to render avatar badge if we have at least email/id.
+            if let Some(owner_id) = agent.owner_id {
+                use crate::models::CurrentUser;
+                let owner_profile = CurrentUser {
+                    id: owner_id,
+                    email: label.clone(),
+                    display_name: Some(label.clone()),
+                    avatar_url: agent.owner_avatar_url.clone(),
+                    prefs: None,
+                    gmail_connected: false,
+                };
+
+                if let Ok(avatar_el) = crate::components::avatar_badge::render(document, &owner_profile) {
+                    owner_cell.append_child(&avatar_el)?;
+                }
+                // Add name/email next to avatar
+                let name_span = document.create_element("span")?;
+                name_span.set_class_name("owner-label");
+                name_span.set_inner_html(&label);
+                owner_cell.append_child(&name_span)?;
+            } else {
+                owner_cell.set_inner_html(&label);
+            }
+        } else {
+            owner_cell.set_inner_html("-");
+        }
+
+        row.append_child(&owner_cell)?;
+    }
     
     // Status cell
     let status_cell = document.create_element("td")?;

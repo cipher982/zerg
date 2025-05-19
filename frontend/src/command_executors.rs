@@ -49,9 +49,16 @@ pub fn execute_fetch_command(cmd: Command) {
             });
         },
         Command::FetchAgents => {
-            web_sys::console::log_1(&"Executing FetchAgents command".into());
+            // Determine current dashboard scope before starting the async
+            // task so we don’t hold a RefCell borrow across await points.
+            let scope_str = crate::state::APP_STATE.with(|state_ref| {
+                let state = state_ref.borrow();
+                state.dashboard_scope.as_str().to_string()
+            });
+
+            web_sys::console::log_1(&format!("Executing FetchAgents command (scope={})", scope_str).into());
             wasm_bindgen_futures::spawn_local(async move {
-                match ApiClient::get_agents().await {
+                match ApiClient::get_agents_scoped(&scope_str).await {
                     Ok(agents_json) => {
                         match serde_json::from_str::<Vec<ApiAgent>>(&agents_json) {
                             Ok(agents) => {

@@ -159,7 +159,27 @@ async fn update_current_user(patch_json: &str) -> Result<String, JsValue>
 
 ---
 
-### 2025-05-21 Progress Note
+# 2025-05-21 Frontend Dashboard Scope – Progress Note (evening)
+
+✅ **Dashboard scope selector implemented** (Rust/WASM):
+
+• New `DashboardScope` enum + `dashboard_scope` field in `AppState` (persisted in `localStorage`).  
+• `<select>` dropdown added to dashboard header – toggles *My agents* ⇄ *All agents*.  
+• Message `ToggleDashboardScope` wired through `update.rs` reducer – triggers `FetchAgents` command.  
+• `ApiClient::get_agents_scoped(?scope=…)` helper + executor update.  
+• Table header & rows dynamically add **Owner** column when `scope = all`.  Uses existing `AvatarBadge` component for a small circle + owner label.  
+• Empty-state colspan adjusts automatically.  
+• Scope preference is remembered across sessions.
+
+Additional work:
+• `ApiAgent` struct now carries `owner_id` + nested `owner`; unit-test added (`test_api_agent_with_owner`).  
+• Dashboard row struct extended, search/col-builder refactor.
+
+Outstanding bits:
+• Re-style header flex-layout (scope selector is currently left-aligned).  
+• Playwright E2E scripts need actual assertions on owner column & persistence.
+
+Backend untouched – existing `/api/agents?scope` endpoint already covers the UI.
 
 ✅ Backend ownership groundwork merged (PR #321):
 
