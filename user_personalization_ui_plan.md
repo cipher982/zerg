@@ -153,9 +153,9 @@ async fn update_current_user(patch_json: &str) -> Result<String, JsValue>
 | 2   | **DONE** – AvatarBadge & UserMenu in header (incl. WS status) |
 | 2½  | **DONE** – Profile page UI (basic), WS live update wiring |
 | 3   | **DONE** – hash-router, header greeting, chat avatars |
-| 4   | **BACKEND DONE** – ownership column & `/api/agents?scope` filter <br/>**FRONTEND TODO** – Dashboard UI toggle + Owner column |
-| 4½  | Persist dashboard scope in `AppState` / localStorage |
-| 5   | Cross-browser test, docs/screenshots |
+| 4   | **DONE** – ownership column, `/api/agents?scope` filter, Dashboard UI toggle & Owner column |
+| 4½  | **DONE** – Persist dashboard scope in `AppState` / localStorage |
+| 5   | **DONE** – Playwright cross-browser test (scope persistence), docs/screenshots |
 
 ---
 
@@ -176,8 +176,7 @@ Additional work:
 • Dashboard row struct extended, search/col-builder refactor.
 
 Outstanding bits:
-• Re-style header flex-layout (scope selector is currently left-aligned).  
-• Playwright E2E scripts need actual assertions on owner column & persistence.
+• Re-style header flex-layout (scope selector is currently left-aligned).
 
 Backend untouched – existing `/api/agents?scope` endpoint already covers the UI.
 
@@ -234,6 +233,6 @@ Good luck — and ping @product if anything is unclear!  🚀
 The following tasks remain before we can close the feature flag:
 
 1. Add `display_name` & `avatar_url` to issued JWT  **DONE** (backend `auth._issue_access_token`).
-2. Playwright E2E tests: assert Owner column visibility + scope persistence across reload.  **OPEN**
+2. Playwright E2E tests: assert Owner column visibility + scope persistence across reload.  **DONE** ✅  (see `prerender/tests/` specs)
 
-After E2E assertions land we can remove the *user-personalisation* feature flag.
+With E2E coverage in place we can now remove the *user-personalisation* feature flag once UI polish (header alignment) is addressed.
