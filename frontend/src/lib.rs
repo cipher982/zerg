@@ -277,14 +277,8 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
     // By default, start with dashboard view
     web_sys::console::log_1(&"Setting initial view to Dashboard".into());
     
-    // Set active view in app state first
-    state::APP_STATE.with(|state_ref| {
-        let mut state = state_ref.borrow_mut();
-        state.active_view = storage::ActiveView::Dashboard;
-    });
-    
-    // Then render the dashboard view
-    views::render_active_view_by_type(&storage::ActiveView::Dashboard, document)?;
+    // Set initial view to Dashboard via message dispatch (uses update+commands)
+    dispatch_global_message(crate::messages::Message::ToggleView(storage::ActiveView::Dashboard));
 
     Ok(())
 }
