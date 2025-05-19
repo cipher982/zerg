@@ -314,7 +314,13 @@ pub fn load_state_from_api(app_state: &mut AppState) {
     // Spawn an async task to load agents from API
     spawn_local(async move {
         // Try to fetch all agents from the API
-        match ApiClient::get_agents().await {
+        // Determine current dashboard scope from global state (default "my")
+        let scope_str = crate::state::APP_STATE.with(|state_ref| {
+            let state = state_ref.borrow();
+            state.dashboard_scope.as_str().to_string()
+        });
+
+        match ApiClient::get_agents_scoped(&scope_str).await {
             Ok(agents_json) => {
                 match from_str::<Vec<ApiAgent>>(&agents_json) {
                     Ok(agents) => {

@@ -236,6 +236,11 @@ pub enum Message {
 
     /// Toggle between compact (first 5) and full run list for an agent row
     ToggleRunHistory { agent_id: u32 },
+
+    // -------------------------------------------------------------------
+    // Dashboard filtering (My vs All agents)
+    // -------------------------------------------------------------------
+    ToggleDashboardScope(crate::state::DashboardScope),
     ReceiveStreamStart(u32),          // Start of streaming response for thread_id
     ReceiveStreamChunk {               // Chunk of streaming response
         thread_id: u32,

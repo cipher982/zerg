@@ -173,6 +173,29 @@ pub struct ApiAgent {
     // ---------------------------------------------------------------------
     #[serde(default)]
     pub owner_id: Option<u32>,
+
+    // Nested owner payload – present when the backend embeds `owner` in the
+    // `Agent` schema (scope=all) so the dashboard can render the avatar +
+    // name column.  The struct mirrors the subset of `UserOut` actually used
+    // by the front-end; additional fields are ignored by `serde`.
+    #[serde(default)]
+    pub owner: Option<ApiUserPublic>,
+}
+
+// -----------------------------------------------------------------------------
+//  Lightweight user representation for embedded `owner` objects
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ApiUserPublic {
+    pub id: u32,
+    pub email: String,
+
+    #[serde(default)]
+    pub display_name: Option<String>,
+
+    #[serde(default)]
+    pub avatar_url: Option<String>,
 }
 
 // -----------------------------------------------------------------------------
@@ -279,6 +302,9 @@ mod tests {
             next_run_at: None,
             last_run_at: None,
             last_error: None,
+
+            owner_id: None,
+            owner: None,
         };
         assert!(!agent_none.is_scheduled());
 
@@ -290,6 +316,31 @@ mod tests {
         let agent_cron = ApiAgent { schedule: Some("0 * * * *".to_string()), ..agent_empty.clone() };
         assert!(agent_cron.is_scheduled());
 
+    }
+
+    // ---------------------------------------------------------------------
+    // New test – ApiAgent deserialisation with `owner_id` and nested owner
+    // ---------------------------------------------------------------------
+    #[wasm_bindgen_test]
+    fn test_api_agent_with_owner() {
+        let json = r#"{
+            "id": 42,
+            "name": "Test agent",
+            "status": "idle",
+            "owner_id": 7,
+            "owner": {
+                "id": 7,
+                "email": "bob@example.com",
+                "display_name": "Bob",
+                "avatar_url": null
+            }
+        }"#;
+
+        let agent: ApiAgent = serde_json::from_str(json).expect("ApiAgent with owner json");
+        assert_eq!(agent.owner_id, Some(7));
+        assert!(agent.owner.is_some());
+        let owner = agent.owner.unwrap();
+        assert_eq!(owner.display_name.unwrap(), "Bob");
     }
 
     #[wasm_bindgen_test]

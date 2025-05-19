@@ -2244,6 +2244,34 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 }
             })));
         },
+
+        // -------------------------------------------------------------------
+        // Dashboard scope toggle (My ⇄ All)
+        // -------------------------------------------------------------------
+        Message::ToggleDashboardScope(new_scope) => {
+            if state.dashboard_scope != new_scope {
+                state.dashboard_scope = new_scope;
+
+                // Persist to localStorage
+                if let Some(window) = web_sys::window() {
+                    if let Ok(Some(storage)) = window.local_storage() {
+                        let _ = storage.set_item("dashboard_scope", new_scope.as_str());
+                    }
+                }
+
+                // Trigger agent list reload
+                commands.push(Command::FetchAgents);
+
+                // Force dashboard re-render
+                commands.push(Command::UpdateUI(Box::new(|| {
+                    if let Some(window) = web_sys::window() {
+                        if let Some(document) = window.document() {
+                            let _ = crate::components::dashboard::refresh_dashboard(&document);
+                        }
+                    }
+                })));
+            }
+        },
     }
 
     // -------------------------------------------------------------------
@@ -2299,6 +2327,9 @@ pub fn update_conversation(document: &Document) -> Result<(), JsValue> {
                 return crate::components::chat_view::update_conversation_ui(document, messages, current_user_opt.as_ref());
             }
         }
+
+        // (Removed misplaced match arm – correct implementation lives inside
+        // the main `update()` reducer near other dashboard-related logic.)
         Ok(())
     })
 }

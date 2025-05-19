@@ -54,6 +54,32 @@ pub enum AgentConfigTab {
     Triggers,
 }
 
+// ---------------------------------------------------------------------------
+// Dashboard filter scope – either *my* (default) or *all* (admin)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DashboardScope {
+    MyAgents,
+    AllAgents,
+}
+
+impl DashboardScope {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DashboardScope::MyAgents => "my",
+            DashboardScope::AllAgents => "all",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "all" => DashboardScope::AllAgents,
+            _ => DashboardScope::MyAgents,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct AgentDebugPane {
     pub agent_id: u32,
@@ -126,6 +152,9 @@ pub struct AppState {
     pub is_dragging_agent: bool,
     // Track the active view (Dashboard, Canvas, or ChatView)
     pub active_view: ActiveView,
+
+    /// Current filter applied to the dashboard (persisted in localStorage).
+    pub dashboard_scope: DashboardScope,
     // Pending network call data to avoid nested borrows
     pub pending_network_call: Option<(String, String)>,
     // Loading state flags
@@ -287,6 +316,24 @@ impl AppState {
             selected_node_id: None,
             is_dragging_agent: false,
             active_view: ActiveView::Dashboard,
+
+            dashboard_scope: {
+                // Read persisted dashboard scope from localStorage (if any)
+                let window = web_sys::window();
+                if let Some(w) = window {
+                    if let Ok(Some(storage)) = w.local_storage() {
+                        if let Ok(Some(scope_str)) = storage.get_item("dashboard_scope") {
+                            DashboardScope::from_str(&scope_str)
+                        } else {
+                            DashboardScope::MyAgents
+                        }
+                    } else {
+                        DashboardScope::MyAgents
+                    }
+                } else {
+                    DashboardScope::MyAgents
+                }
+            },
             pending_network_call: None,
             is_loading: true,
             data_loaded: false,

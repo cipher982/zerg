@@ -53,8 +53,8 @@ impl ApiClient {
     }
 
     // Get all agents
-    pub async fn get_agents() -> Result<String, JsValue> {
-        let url = format!("{}/api/agents", Self::api_base_url());
+    pub async fn get_agents_scoped(scope: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents?scope={}", Self::api_base_url(), scope);
         Self::fetch_json(&url, "GET", None).await
     }
 
