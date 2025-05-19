@@ -114,7 +114,7 @@ async fn update_current_user(patch_json: &str) -> Result<String, JsValue>
 ### 6.3 Components  ✅
 * **AvatarBadge** – implemented in `frontend/src/components/avatar_badge.rs`.
 * **UserMenu** – implemented & mounted automatically – shows Avatar, dropdown (Profile / Logout) and updates on WS events.
-* **ProfilePage** – two-column form; messages: `ProfileFieldChanged`, `SaveProfile`.
+* **ProfilePage** – two-column form; on *Save* the page issues a direct `PUT /users/me` call and then dispatches `Message::CurrentUserLoaded` with the updated profile so all UI surfaces refresh.
 
 ### 6.4 Routing  ✅ *complete*
 `window.onhashchange` listener implemented.  Navigating to `#/profile`,
@@ -123,7 +123,7 @@ async fn update_current_user(patch_json: &str) -> Result<String, JsValue>
 
 ### 6.5 Sprinkle personalisation
 * **DONE** – Header greeting replaces static text with *Welcome, {display_name ∥ email}*.
-* **IN PROGRESS** – Dashboard table default scope = **My agents** + Owner column.
+* **DONE** – Dashboard table defaults to **My agents**; when *All agents* is selected an **Owner** column is rendered (live).
 * **DONE** – Chat bubbles now show miniature avatar + display_name for user messages.
 
 
@@ -205,7 +205,7 @@ Next up – **frontend Dashboard** work (scope toggle, column render, localStora
 
 1. User sees their avatar & name after signing in.  
 2. Profile page persists changes immediately and broadcasts via WS.  
-3. Dashboard defaults to *My agents* and shows owner column.  **(OPEN)**
+3. Dashboard defaults to *My agents* and shows owner column.  **DONE**
 4. Wasm-bindgen test for `CurrentUser` deserialization.  **DONE**
 5. Unit + integration tests green on backend.  
 6. No regressions in existing CI suites.
@@ -233,7 +233,7 @@ Good luck — and ping @product if anything is unclear!  🚀
 
 The following tasks remain before we can close the feature flag:
 
-1. Dashboard: default **My agents** filter + Owner column (frontend & API).
-2. Add display_name & avatar_url to issued JWT (optional, nice-to-have).
+1. Add `display_name` & `avatar_url` to issued JWT (optional, nice-to-have – would remove one round-trip on page load).
+2. Playwright E2E tests: assert Owner column visibility + scope persistence across reload.
 
-Once these are merged we should re-run this document review.
+Once these two items are done we can remove the *user-personalisation* feature flag.
