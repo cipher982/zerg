@@ -181,9 +181,15 @@ async fn test_dashboard_manager_subscribe() {
     // Insert a dummy agent so the production code subscribes to exactly one
     // concrete topic ("agent:1") instead of zero, which is expected runtime
     // behaviour.
-    crate::state::APP_STATE.with(|st| {
+    {
         use crate::models::ApiAgent;
-        st.borrow_mut().agents.insert(1, ApiAgent {
+        use crate::messages::Message;
+
+        // Construct a *single* dummy agent and dispatch via the global message
+        // bus so state mutation happens inside `update()` – keeps tests aligned
+        // with the production Elm-style flow and avoids direct `APP_STATE`
+        // borrows.
+        let dummy_agent = ApiAgent {
             id: Some(1),
             name: "Dummy".to_string(),
             status: None,
@@ -199,8 +205,10 @@ async fn test_dashboard_manager_subscribe() {
             last_error: None,
             owner_id: None,
             owner: None,
-        });
-    });
+        };
+
+        crate::state::dispatch_global_message(Message::AgentsRefreshed(vec![dummy_agent]));
+    }
     
     // Pass the TRAIT OBJECT to the method under test
     let result = manager.subscribe_to_agent_events(trait_object_rc.clone());
@@ -227,9 +235,11 @@ async fn test_dashboard_manager_cleanup() {
     let (mut manager, concrete_mock_rc, trait_object_rc) = setup_test();
 
     // Insert dummy agent with id 1 as in subscribe test
-    crate::state::APP_STATE.with(|st| {
+    {
         use crate::models::ApiAgent;
-        st.borrow_mut().agents.insert(1, ApiAgent {
+        use crate::messages::Message;
+
+        let dummy_agent = ApiAgent {
             id: Some(1),
             name: "Dummy".to_string(),
             status: None,
@@ -245,8 +255,10 @@ async fn test_dashboard_manager_cleanup() {
             last_error: None,
             owner_id: None,
             owner: None,
-        });
-    });
+        };
+
+        crate::state::dispatch_global_message(Message::AgentsRefreshed(vec![dummy_agent]));
+    }
 
     // Setup: Subscribe first using the TRAIT OBJECT
     manager.subscribe_to_agent_events(trait_object_rc.clone()).expect("Subscribe failed during setup");
