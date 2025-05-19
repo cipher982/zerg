@@ -139,7 +139,7 @@ pub fn start() -> Result<(), JsValue> {
 
         if info.auth_disabled {
             // ─── Dev mode ───
-            state::APP_STATE.with(|st| st.borrow_mut().logged_in = true);
+            // State will be updated via CurrentUserLoaded message
 
             if let Err(e) = bootstrap_app_after_login(&doc_clone) {
                 web_sys::console::error_1(&e);
