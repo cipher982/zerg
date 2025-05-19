@@ -751,14 +751,25 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
        
         Message::AnimationTick => {
-            let mut duration_changed = false;
-
+            // If canvas is dirty, schedule a UI draw and clear the flag
+            if state.dirty {
+                state.dirty = false;
+                commands.push(Command::UpdateUI(Box::new(|| {
+                    crate::state::APP_STATE.with(|state_rc| {
+                        let mut st = state_rc.borrow_mut();
+                        st.draw_nodes();
+                        #[cfg(debug_assertions)] {
+                            if let Some(ctx) = st.context.as_ref() {
+                                crate::utils::debug::draw_overlay(ctx, &st.debug_ring);
+                            }
+                        }
+                    });
+                })));
+            }
             // Live duration ticker for running runs
+            let mut duration_changed = false;
             let now_ms = crate::utils::now_ms();
-
-            // We need to find the corresponding run objects and update duration_ms
             for run_id in state.running_runs.iter() {
-                // Find agent+run
                 if let Some((_agent_id, run_list)) = state
                     .agent_runs
                     .iter_mut()
@@ -768,7 +779,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         if let Some(start_iso) = &run.started_at {
                             if let Some(start_ms) = crate::utils::parse_iso_ms(start_iso) {
                                 let new_duration = now_ms.saturating_sub(start_ms as u64);
-                                // Update if changed by at least 1000 ms to limit refreshes
                                 if run
                                     .duration_ms
                                     .map(|old| new_duration / 1000 != old / 1000)
@@ -782,7 +792,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     }
                 }
             }
-
             // Node animations (existing behaviour)
             for (_id, node) in state.nodes.iter_mut() {
                 if let Some(agent_id) = node.agent_id {
@@ -795,28 +804,21 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     }
                 }
             }
-
             // Trigger dashboard repaint when durations changed
             if duration_changed && state.active_view == crate::storage::ActiveView::Dashboard {
                 commands.push(Command::UpdateUI(Box::new(|| {
-                    if let (Some(win), true) = (web_sys::window(), true) {
+                    if let Some(win) = web_sys::window() {
                         if let Some(doc) = win.document() {
                             let _ = crate::components::dashboard::refresh_dashboard(&doc);
                         }
                     }
                 })));
             }
-
-            // ----------------------------------------------------------------
             // Debounced state persistence
-            // ----------------------------------------------------------------
-            // Persist if modified and no change happened in the last ~400 ms.
             if state.state_modified {
                 let now = crate::utils::now_ms();
                 if now.saturating_sub(state.last_modified_ms) > 400 {
-                    // Push SaveState command (executed after borrow released)
                     commands.push(Command::SaveState);
-                    // Reset flag to avoid duplicate saves.
                     state.state_modified = false;
                 }
             }

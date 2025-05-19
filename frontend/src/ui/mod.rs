@@ -17,31 +17,13 @@ pub fn setup_animation_loop() {
     
     // Closure that will be called on each animation frame
     *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-        // 1. Paint if the model is flagged as dirty
-        APP_STATE.with(|state| {
-            let mut st = state.borrow_mut();
-            if st.dirty {
-                st.draw_nodes();
-
-                #[cfg(debug_assertions)]
-                {
-                    if let Some(ctx) = st.context.as_ref() {
-                        crate::utils::debug::draw_overlay(ctx, &st.debug_ring);
-                    }
-                }
-
-                st.dirty = false;
-            }
-        });
-
-        // 2. Dispatch animation tick message to update state and schedule commands
+        // Dispatch animation tick message to update state and schedule UI / side effects
         crate::state::dispatch_global_message(crate::messages::Message::AnimationTick);
 
-        // 3. Request the next animation frame
-        web_sys::window()
+        // Schedule the next frame
+        let _ = web_sys::window()
             .expect("no global window")
-            .request_animation_frame(f.borrow().as_ref().unwrap().as_ref().unchecked_ref())
-            .expect("request_animation_frame failed");
+            .request_animation_frame(f.borrow().as_ref().unwrap().as_ref().unchecked_ref());
     }) as Box<dyn FnMut()>));
     
     // Start the animation loop
