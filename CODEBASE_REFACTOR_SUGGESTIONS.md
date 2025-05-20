@@ -44,9 +44,11 @@ operational robustness.
 
 ## 3&nbsp;· Scheduler / long-running tasks
 
-* **Bad cron strings crash startup** – wrap
-  `CronTrigger.from_crontab()` in `try/except` inside `crud.update_agent` so the
-  API returns `400` instead of killing the process.
+* **Bad cron strings crash startup** – ⬤ **Partial** –
+  `SchedulerService.schedule_agent()` now wraps `CronTrigger.from_crontab()` in
+  `try/except`, preventing service-level crashes, **but** `crud.update_agent`
+  still lets invalid cron expressions reach the database.  Add the same
+  validation in the write-path and surface a `422` to the client.
 
 * **DB work in scheduler thread** – writes from the APScheduler thread share
   the same synchronous engine. When moving to Postgres use a separate async
@@ -60,7 +62,7 @@ operational robustness.
 |-------|--------|
 | **Tool calls claimed “parallel”** | ✅ **Fixed (May 2025)** – `zerg_react_agent.py` now awaits `asyncio.gather(...)` inside the loop and wraps each blocking tool call in `asyncio.to_thread`. |
 | **Graph recompilation** | The LangGraph runnable is rebuilt every time an `AgentRunner` instance is created.  A `@lru_cache` keyed by `(agent_id, model_name, stream_flag)` would shave ~100 ms/run. |
-| **Env flag re-parsing** | `os.getenv("LLM_TOKEN_STREAM")` appears in several hot paths.  Cache once in `zerg.constants`. |
+| **Env flag re-parsing** | ⬤ **Partial** – `AgentRunner` now caches the environment lookup once at init-time, but helpers like `_make_llm()` and several test utilities still call `os.getenv()` on every invocation.  Move the flag to `zerg.constants` and import it. |
 
 ---
 
@@ -109,6 +111,24 @@ operational robustness.
 
 Everything above is covered by unit tests, so each change can land in an
 independent PR with high confidence.
+
+---
+
+## 8 · New surface-area since the original review (May 2025)
+
+The code base has grown significantly over the last months.  The following
+features are **production-ready** but introduce fresh refactor opportunities
+that are *not* captured in the sections above:
+
+| Feature | Potential follow-ups |
+|---------|----------------------|
+| **Google Sign-In auth layer** | • Pass the JWT through the WebSocket handshake (today the WS is unauthenticated in prod).<br>• Restrict CORS *only* when `AUTH_DISABLED=0`; keep wildcard for local dev. |
+| **Run-history tables & API** | • Add DB indexes on `(agent_id, created_at DESC)` – large tenants already show slow list queries.<br>• Expose aggregate cost metrics in a separate endpoint instead of computing them in the dashboard. |
+| **HMAC-secured webhook triggers** | • Clamp request body size (≤128 KB) *before* HMAC validation.<br>• Rotate `TRIGGER_SIGNING_SECRET` via admin UI. |
+| **Token-level streaming** | • Unify the three chunk types (`assistant_token`, `tool_output`, `assistant_message`) in a small `Enum` on both client & server to avoid typo-bugs.<br>• Document the feature flag exhaustively in the README. |
+
+These items have not been prioritised yet; create tickets once the core
+backlog (sections 1-7) shrinks.
 
 ---
 
