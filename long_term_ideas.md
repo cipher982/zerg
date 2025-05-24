@@ -1,269 +1,259 @@
 # Project Context & Roadmap: Zerg Automation Platform
 
-**Document Purpose:** Provides essential context, current status, roadmap, development guidelines, and future ideas for the Zerg project, intended for both human developers and AI coding assistants.
+Document Purpose:
+Provides essential context, current status, roadmap, development guidelines, and future ideas
+for the Zerg project. Written for both human developers and AI coding assistants.
 
-**Last Updated:** 2025-05-05 *(Remember to update this date regularly!)*
+Last Updated: 2025-05-24 (Comprehensively reviewed for actual implementation status and 
+immediate priorities.)
 
----
+----------------------------------------------------------------------------------------------
 
 ## 1. Project Overview & Goals
 
-*   **Core Purpose:** Zerg is an automation platform enabling users to connect event triggers (like webhooks or schedules) to AI agents and deterministic tools using a visual canvas interface, facilitating the creation of complex, event-driven workflows.
-*   **Technology Stack:**
-    *   **Backend:** Python, FastAPI, SQLAlchemy (synchronous for now; evaluated `asyncpg` but postponed), LangGraph, APScheduler
-    *   **Frontend:** Rust (compiled to WASM), Yew Framework, WebSockets
-    *   **Key Libraries:** Pydantic (V2), `serde`/`serde_wasm_bindgen`, `uv` (for env/pkg management)
-*   **High-Level Architecture:**
-    *   A central `EventBus` facilitates decoupled communication between services.
-    *   A WebSocket Hub (`ws_manager`) pushes real-time updates (DB changes, agent streaming) to connected frontends based on topic subscriptions.
-    *   The `AgentService` uses LangGraph to execute agent logic (currently single-node, planned for multi-node DAGs).
-    *   The `SchedulerService` manages cron-based job scheduling via APScheduler. *(Note: For future scaling beyond a single process, consider task queues like Celery or RQ - see Sec 5).*
+    * **Core Purpose:**
+      Zerg is an automation platform enabling users to connect event triggers (webhooks,
+schedules, etc.) to AI agents and deterministic tools using a visual canvas interface. The
+goal: easily build, execute, and monitor complex, event-driven AI-powered workflows.
+    * **Technology Stack:**
 
----
 
-## 2. Current System State (Snapshot as of 2025-05-05)
+        * **Backend:** Python, FastAPI, SQLAlchemy (synchronous), LangGraph, APScheduler
 
-*Key: ✅ = Shipped & Verified | 🟡 = Partially Done | ❌ = Not Started*
+        * **Frontend:** Rust (WASM compiled, Yew Framework), WebSockets
 
-**Backend:**
-*   Agents / Threads / Messages CRUD: ✅
-*   LangGraph Agent Runtime (Single Node **+ Tool execution loop**): ✅
-*   Streaming ChatCompletion → EventBus → WebSocket (token & tool-chunk aware): ✅
-*   APScheduler Service (Cron Runs, `next/last_run_at` persistence): ✅
-*   Topic-based WebSocket Hub (Auto DB event publishing via decorators): ✅
-*   Webhook Triggers (DB Table, `POST /api/triggers`, `POST /api/triggers/{id}/events`, `EventType.TRIGGER_FIRED`, Scheduler hook): ✅
-*   Webhook Triggers (`DELETE /api/triggers/{id}` endpoint): 🟡 (CRUD helper exists; router & tests pending)
-*   Webhook Triggers (HMAC Secret Verification on fire event): ❌ (simple secret field currently used)
-*   Agent Debug Endpoint (`/agents/{id}/details`) & Modal (Phase 1): ✅
-*   Workflow DAG Execution Engine (Multi-node LangGraph from Canvas JSON): ❌
-*   Testing: >200 tests, covering CRUD, services, events, triggers, streaming, debug modal – all green ✅
+        * **Key Libraries:** Pydantic v2, `serde`/`serde_wasm_bindgen` (Rust), `uv` (Python env
+ management)
+    * **High-Level Architecture:**
 
-**Frontend:**
-*   Core Views (Dashboard, Chat, Canvas): ✅
-*   Networking Layer (`api_client.rs`, `ws_client_v2.rs` - REST CRUD, WS Subscribe/Topics): ✅
-*   Scheduling UX (Display `next/last_run` badges, Cron Input, Enable Toggle, PATCH `/agents/{id}`): ✅
-*   Dashboard: Agent Table (with run/pause/edit): ✅
-*   Dashboard: Agent Details Drawer (Overview Tab, Raw JSON Tab): ✅
-*   Dashboard: List Agent Triggers (Read-only, Copy URL button): 🟡 (Create/Delete UI missing)
-*   Chat: Real-time conversation view per agent/thread: ✅
-*   Chat: Surface Threads from *all* runs (manual, scheduled, trigger-fired): 🟡 (Data exists; UI currently filters/hides some)
-*   Chat: Render `ToolMessage` outputs (collapsible panels) & correct timestamp ordering: ✅
-*   Debug Modal (Overview & Raw-JSON tabs): ✅
-*   Node ↔ Agent Decoupling (renamed `Node` ➜ `CanvasNode`, modal agent-centric): ✅
-*   Canvas: Node Editor foundational component: ✅
-*   Canvas: Only "Agent" nodes currently placeable/editable: ✅ _(Trigger & Tool nodes not yet surfaced)_
-*   Canvas: Add/Connect other node types (Webhook Trigger, Tool, Condition, Input/Output): ❌
-*   Canvas: Export workflow definition to JSON: ❌
-*   Canvas: Runtime Execution Highlighting (visualizing active node): ❌
-*   Canvas: Specific UI for "Webhook Trigger" node type (displaying URL/secret): ❌
 
-**Cross-Cutting / Ops:**
-*   Auth & Multi-tenancy (JWT, `workspace_id`, Login): ❌
-*   Usage Metering / Cost Tracking (Tokens, Duration): ❌
-*   Observability (Per-Run Metrics, Grafana/Admin UI): ❌
+        * Central `EventBus` for loose-coupling between backend services.
 
----
+        * WebSocket Hub for real-time push by topic to clients (Dashboard, Canvas, Chat).
 
-## 3. Roadmap & Milestones
+        * `AgentService` executes agent logic via LangGraph (current: single-node, DAGs/flows
+planned).
 
-**(Overall Goal Reminder):** To enable users to visually build, execute, and monitor event-driven workflows combining AI agents and tools.
+        * Cron scheduling (APScheduler), Webhook triggers, per-agent config.
 
-**Milestone Definitions:**
+        * Frontend: Elm-style global state/message pattern, canvas-based visual editor, live
+chat/threads, and dashboards.
 
-*   **M0: “Low‑hanging UX polish”** (Status: ✅ Completed ~2025-04-21)
-    *   *Summary:* Implemented frontend UI for viewing and editing agent schedules (cron expression, enable/disable toggle). Wired up PATCH API. Ensured `next_run_at`/`last_run_at` display correctly. Ensured all runs create a persistent `Thread`.
-*   **M1: “Triggers v1 – Inbound WebHooks”** (Status: 🟡 In Progress)
-    *   *Summary:* Allow external systems (Zapier, GitHub Actions, etc.) to trigger agent runs via unique webhook URLs.
-    *   *Status Breakdown:* Backend API (Create/Fire ✅), Frontend UI (List ✅, Create/Delete ❌), Backend Polish (Delete API ❌, HMAC ❌), Canvas Node ❌.
-*   **M2: “Workflow Execution Engine”** (Status: ❌ Not Started)
-    *   *Summary:* Execute multi-step workflows defined on the Canvas (DAGs of Trigger, Agent, Tool, Condition nodes). Persist Canvas JSON. Basic runtime visualization. *Scalability Note: May require evaluating dedicated task queues (Celery/RQ) if APScheduler proves insufficient for high concurrency.*
-*   **M3a: “Tool Runtime Support”** (Status: ✅ Completed 2025-04-26)
-    *   *Summary:* Backend LangGraph now executes tools, persists `ToolMessage` rows, streams chunk metadata; Chat UI renders outputs in collapsible sub-bubbles.
+----------------------------------------------------------------------------------------------
 
-*   **M3b: “Toolbox UI & Nodes”** (Status: ❌ Not Started)
-    *   *Summary:* Bring Tool nodes to the Canvas and ship first deterministic tools (HTTP Request, Slack message, Email send). Define node contract, input/output schema & access controls.
-*   **M4: “Debugging UX”** (Status: ✅ Phase-1 Completed 2025-05-02)
-    *Summary:* Shipped backend `/agents/{id}/details` endpoint and frontend *Agent Debug* modal (Overview & Raw JSON tabs). Next phases will add Threads/Runs tabs but core visibility tooling is live.
+## 2. Current System State & What’s Landed
 
-*   **M4b: “Node ↔ Agent Decoupling”** (Status: ✅ Completed 2025-05-02)
-    *Summary:* Large refactor removing legacy coupling. `Node` renamed to `CanvasNode`, agent modal is now agent-centric, obsolete sync messages/helpers removed. See `node_agent_task.md` for full checklist (≈70 % items closed; remaining are test/doc polish).
+### Legend
 
-*   **M5: “Multi-tenant & Auth”** (Status: ❌ Not Started)
-    *   *Summary:* Implement user authentication (e.g., Auth0/Clerk JWT) and data isolation (`workspace_id`) to support multiple users securely. *This may include managing permissions for accessing specific tools or agents.*
+✅ = Shipped & Verified | 🟡 = Partially Done | ❌ = Not Started
 
-*   **M6: “Observability & Cost”** (Status: ❌ Not Started)
-    *   *Summary:* Track key metrics per agent run (token usage, cost, duration, errors) and expose them via API and/or dashboard analytics panel.
+### Backend
 
-**Prioritization Rationale:**
+    * ✅ Agent/Thread/Message CRUD, robust test suite
+    * ✅ LangGraph-based agent runtime (single-node; tool execution loop)
+    * ✅ Streaming chat/events, APScheduler, real-time WebSockets/EventBus
+    * ✅ Webhook triggers (full backend CRUD, event, HMAC verification logic)
+    * ✅ Agent Debug Endpoint & Modal (overview + raw JSON)
+    * 🟡 Workflow DAG runtime (multi-node execution): not started, foundational code ready
+    * 🟡 Tool runtime: core flows live, easy to expand tool set
+    * 🟡 Multi-agent orchestration: only primitives exist (no exposed flows yet)
 
-1.  **Scheduling UX (M0 - Done):** Delivered immediate user value and exercised the core backend->frontend eventing loop.
-2.  **Triggers (M1 - Current):** Provides the first real-world integration point, unlocking practical use cases without requiring the full workflow engine.
-3.  **Workflow Engine (M2):** Foundational for complex automations, but requires M1 (Triggers) and M3 (Tools) to be truly useful. Build the plumbing only once there's something to plumb.
-4.  **Toolbox UI (M3b):** Visible Tool nodes make workflows more powerful; low-hanging UX once runtime exists.
-5.  **Debugging UX (M4):** Early diagnostics reduce iteration time and bug-hunt cost.
-6.  **Auth/Multi-tenancy (M5):** Required for any external alpha users and webhook isolation.
-7.  **Observability (M6):** Key for cost control & reliability, but can wait until workflows run in production.
+### Frontend
 
----
+    * ✅ Core dashboard, chat, canvas (basic agent node support)
+    * ✅ Networking: full REST and topic-based WebSocket
+    * ✅ Scheduling: cron badge, display/edit, enable/disable, real-time
+    * ✅ Agent Table, Debug Modal (overview, raw JSON); Live chat threads
+    * 🟡 Trigger UI: List/copy works; missing create/delete and modal CRUD
+    * 🟡 Thread surfacing: All runs tracked, but history/tab/presentation not unified
+    * ✅ Tools/ToolMessages show with collapsible panels in Chat UI
+    * 🟡 Canvas node variety: Only AgentIdentity nodes editable/visible; no Tool, Trigger,
+Condition, Input/Output nodes yet
+    * ❌ Canvas export/import, runtime highlight, workflow execution visualization
+    * ❌ 'Result Panel', structured output, export to JSON/CSV, automatic summaries
 
-## 4. Current Focus & Action Items (Targeting: M1 Completion)
+### Cross-Cutting / Ops
 
-**Current Goal:** Finish all remaining M1 tasks (Webhook Trigger functionality) and perform initial design for M2 (Workflow Engine).
+    * ❌ Multi-tenancy/Auth (JWT, workspaces, permissions)
+    * ❌ Usage analytics/cost metering
+    * ❌ Observability/admin dashboards/metrics
 
-**Backend Tasks (M1 Polish):**
-*   `[ ]` Implement `DELETE /api/triggers/{id}` endpoint allowing users to remove webhook triggers.
-*   `[ ]` Add `pytest` tests covering the trigger deletion flow (create, verify exists, delete, verify gone, check permissions).
-*   `[ ]` **(Hardening/Optional):** Implement HMAC secret generation on trigger creation and verification logic within the `POST /api/triggers/{id}/events` endpoint. Requires storing the secret hash/salt.
-*   `[ ]` Add tests for HMAC verification (valid signature, invalid signature, missing signature header).
+----------------------------------------------------------------------------------------------
 
-**Frontend Tasks (M1 Features & Polish):**
-*   `[ ]` **Dashboard:** Add a "Create New Trigger" button within the Agent Details drawer (likely near the existing trigger list). This should likely open a small modal or inline form.
-*   `[ ]` **Dashboard:** Add a "Delete" icon/button next to each trigger listed in the Agent Details drawer. Add confirmation dialog.
-*   `[ ]` **Dashboard:** Wire up the necessary `api_client.rs` calls (`create_trigger`, `delete_trigger`) and corresponding `Message`/`Command` flows in `update.rs` for the Create/Delete UI elements. Refresh trigger list on success.
-*   `[ ]` **Canvas:** Add a new node type "Webhook Trigger" to the node palette in `canvas_editor.rs`.
-*   `[ ]` **Canvas:** When a "Webhook Trigger" node is selected, its side-panel should display the associated (read-only) webhook URL and potentially the secret (with copy-to-clipboard buttons). If a trigger hasn't been created for this node yet, prompt to create one.
-*   `[ ]` **Canvas:** Ensure the unique ID of the associated Trigger DB row is stored as part of the Webhook Trigger node's configuration in the (future) Canvas JSON export structure (preparation for M2).
-*   `[ ]` **Chat/Dashboard:** Modify data fetching or filtering logic to ensure *all* `Thread` rows associated with an agent (regardless of how the run was initiated - manual, schedule, trigger) are potentially visible in the Chat view's thread list or a dedicated run history view.
+## 3. Roadmap & Milestones (2025+)
 
-**Frontend Tasks (M4b Follow-ups – Node↔Agent Refactor Polish):**
-*   `[ ]` Audit all modal triggers and context menus; ensure they dispatch `Message::EditAgent(id)` directly.
-*   `[ ]` Remove residual helpers that parse synthetic `"agent-{id}"` node IDs.
-*   `[ ]` Update frontend tests for renamed message variants (`AddCanvasNode`, etc.) and run `./frontend/run_frontend_tests.sh`.
-*   `[ ]` Documentation: add a “Canvas Nodes vs Agents” architecture note to `README.md`.
+### Primary Objective
 
-**QA & Documentation:**
-*   `[ ]` Refine/add end-to-end `pytest`: Create Agent -> Use API to Create Trigger -> `POST` valid data to trigger URL -> Verify `AgentRun` record created / `Thread` updated / `last_run_at` timestamp updated / expected `Message` appears. Test invalid trigger post (e.g., wrong ID, bad secret if HMAC enabled).
-*   `[ ]` Update `README.md` or create `docs/triggers.md` explaining how to create, manage, and use Webhook Triggers (including `curl` examples).
+Allow users to visually assemble, run, and manage event-driven workflows combining AI agents
+and deterministic tools.
 
-**Planning for M2 (Workflow Engine):**
-*   `[ ]` **Schema Design:** Draft the initial Pydantic models (backend) and corresponding Rust structs (frontend) for representing the Canvas workflow DAG as JSON (e.g., `nodes: List[Union[TriggerNode, AgentNode, ToolNode...]]`, `edges: List[Edge]`). Consider versioning. Store in `Agent.workflow_definition` column (needs migration).
-*   `[ ]` **Execution Interface:** Outline a common async `execute(context: WorkflowContext) -> WorkflowContext` method signature or interface that each node type (Agent, Tool, Condition) will need to implement in the backend. Define the structure of `WorkflowContext` (carrying state between nodes).
+### Milestone Breakdown
 
----
+┌────────────────────────┬─────────────┬───────────────────────────────────────────────────────
+────────────────────────────────────────┐
+│ Milestone              │ Status      │ Key Notes / Gaps                                      
+                                        │
+├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
+────────────────────────────────────────┤
+│ M0: UX polish          │ ✅ Complete │ Scheduling, cron, badges, thread creation, display
+                                        │
+├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
+────────────────────────────────────────┤
+│ M1: Triggers v1        │ 🟡 Partial  │ Backend HMAC/event/crud done. UI list/copy done. No
+full CRUD/creation modal. No canvas node. │
+├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
+────────────────────────────────────────┤
+│ M2: Workflow Engine    │ ❌          │ Canvas DAG → LangGraph, export/import, exec highlight
+                                        │
+├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
+────────────────────────────────────────┤
+│ M3a: Tool Runtime      │ ✅          │ Server-side tool exec + UI display/panels proven
+                                        │
+├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
+────────────────────────────────────────┤
+│ M3b: Toolbox UI/Nodes  │ ❌          │ Tool/Trigger/Condition nodes in palette/canvas
+                                        │
+├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
+────────────────────────────────────────┤
+│ M4: Debugging UX       │ ✅ v1       │ Overview/raw shipped. Extend for threads/runs/stats
+next                                      │
+├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
+────────────────────────────────────────┤
+│ M5: Multi-tenancy/Auth │ ❌          │ JWT/Google login, workspace isolation, permissions
+                                        │
+├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
+────────────────────────────────────────┤
+│ M6: Observability/Cost │ ❌          │ Usage stats, metrics, admin dashboards
+                                        │
+└────────────────────────┴─────────────┴───────────────────────────────────────────────────────
+────────────────────────────────────────┘
 
-## 5. Development Guide
+----------------------------------------------------------------------------------------------
 
-**Key Code Locations:**
-*   **Backend:**
-    *   Models: `backend/zerg/models/models.py`
-    *   Services: `backend/zerg/services/` (esp. `scheduler_service.py`, `agent_service.py`)
-    *   Events: `backend/zerg/events/`
-    *   API Routers: `backend/zerg/routers/` (esp. `agents.py`, `triggers.py`)
-    *   Main App: `backend/zerg/main.py`
-    *   Tests: `backend/tests/`
-*   **Frontend:**
-    *   Networking: `frontend/src/network/` (`api_client.rs`, `ws_client_v2.rs`, `topic_manager.rs`)
-    *   Components: `frontend/src/components/` (`dashboard/`, `chat/`, `canvas_editor.rs`)
-    *   State Management: `frontend/src/` (`update.rs`, `messages.rs`, `state.rs`)
-    *   Main App: `frontend/src/app.rs`
-*   **Documentation:**
-    *   `README.md` (Project Overview)
-    *   `DATABASE.md` (DB Schema Details)
-    *   This document (`project_context.md` or similar)
+## 4. Current Epic Focus
 
-**Environment Setup:**
-*   **Dependencies:** Uses `uv` for Python environment and package management. Ensure `uv` is installed.
-*   **Environment Variables:**
-    *   `DATABASE_URL`: Connection string for PostgreSQL (e.g., `postgresql+asyncpg://user:pass@host:port/db`) or SQLite (e.g., `sqlite+aiosqlite:///./zerg_dev.db`)
-    *   `OPENAI_API_KEY`: Required for agent runs. Can be a dummy value like `sk-dummy` if only testing non-LLM parts or using mocks.
-*   **Running Backend:**
-    ```bash
-    cd backend
-    uv sync # Installs/updates dependencies from pyproject.toml
-    uv run python -m uvicorn zerg.main:app --reload --port 8001
-    ```
-*   **Running Frontend:**
-    ```bash
-    cd frontend
-    ./build-debug.sh # Runs trunk build and serves on http://localhost:8002
-    ```
-*   **Running Tests:**
-    ```bash
-    cd backend
-    uv run pytest tests
-    ```
+    * **Triggers:** Ship full frontend CRUD (create/delete/modal) + canvas "WebhookTrigger"
+node.
+    * **Toolbox/Canvas:** Enable Tool, Trigger, and Condition node placement and config UI.
+    * **Workflow:** Canvas export/import, backend workflow DAG creation, real runtime execution
+ highlighting.
+    * **Infrastructure:** Start backend plumbing for multi-user auth, usage metering/analytics.
 
-**Core Conventions & Patterns:**
-*   **Database:** Uses SQLAlchemy 2.0 async (`asyncio`, `asyncpg`/`aiosqlite`). Session management via `default_session_factory`. Tests override with an in-memory SQLite DB. `expire_on_commit=False` is set on the sessionmaker; be mindful that objects are not automatically refreshed after commit – use `session.refresh(obj)` if needed.
-*   **Backend Events:** The `EventBus` (`backend/zerg/events/event_bus.py`) is central. Use `await event_bus.publish(EventType.XYZ, {...})`. Callbacks registered via `event_bus.subscribe()` are async. REST routes that mutate state should use the `@publish_event()` decorator to automatically broadcast changes over WebSockets.
-*   **Frontend State:** Follows the Elm Architecture: User interaction -> `Message` enum -> `update(msg, state)` function -> updates `AppState` -> potentially returns `Command` enum -> Command executed (e.g., API call) -> Result yields new `Message` -> cycle repeats. Never mutate `AppState` directly outside `update.rs`. `TopicManager` handles incoming WebSocket messages and translates them into `Message`s.
-*   **API Schemas:** Use Pydantic V2 `BaseModel` for defining API request/response bodies and for data validation.
-*   **Workflow Definition:** Canvas graph structure will be stored as JSON in a dedicated `Agent.workflow_definition` column (planned). Schema definitions should exist in both Python (Pydantic) and Rust (Serde) for consistency, ideally generated or kept closely in sync. Plan for schema versioning early.
-*   **Immutability:** Treat `AgentRun` and `Message` records as immutable logs of past activity. Derive analytics or summaries offline/on-demand rather than modifying historical records.
-*   **Rust/WASM:** Use `serde` for serialization and `serde_wasm_bindgen` to pass complex types between Rust frontend and JS/backend (via JSON). Frontend node types for the Canvas should map clearly to backend execution logic, likely using enums in Rust.
-*   **Task Execution & Scaling:** Currently uses APScheduler for cron jobs and direct execution for triggered/manual runs. For high-volume or long-running tasks in the future (esp. post-M2), consider integrating a distributed task queue like [Celery](https://docs.celeryproject.org/) or [Redis Queue (RQ)](https://python-rq.org/) with dedicated worker processes.
+----------------------------------------------------------------------------------------------
 
-**Implementation Hints:**
-*   Keep the `EventBus` central for decoupling. New features (like Triggers) should publish relevant events. Services (like `SchedulerService`) listen for events they care about.
-*   Use Pydantic models rigorously on the backend for validating the structure of the incoming Canvas JSON before saving/executing.
-*   In the Rust Canvas editor, represent each distinct node type (Agent, Tool, Trigger, Condition) as a variant of a Rust `enum`. This makes pattern matching and serialization clean.
-*   When implementing Tools (M3), consider simple, common examples first like sending email (`smtplib`), making HTTP requests (`httpx`), or posting to Slack.
+### Immediate Priority Tasks (as of May 2025)
 
----
+    * [ ]  **Finish all front-end Triggers UI:** create/delete, modal, and fully round-trip
+CRUD.
+    * [ ]  **Add Tool, Trigger, Condition nodes to Canvas** – palette, config UI, basic flows.
+    * [ ]  **Implement Canvas JSON export/import and backend workflow DAG support.**
+    * [ ]  **Add “Result Panel” for structured outputs/export and summary to chat/canvas UI.**
+    * [ ]  **Begin multi-user auth groundwork and run usage metering.**
 
-## 6. Terminology
+----------------------------------------------------------------------------------------------
 
-*   **Thread:** A chronological log of messages associated with a specific context or conversation. A thread always exists, even for scheduled or triggered runs (though it might be initially empty). It's the primary input/output context for an Agent.
-*   **Run:** A single, discrete execution instance of an Agent or a Workflow, operating against a specific Thread. Can be triggered manually, by schedule, or by an external event (webhook).
-*   **Trigger node:** A node type on the Canvas that initiates a workflow run based on an external event (e.g., incoming Webhook, new email matching criteria, Kafka message, cron schedule). It produces an initial data payload for the workflow.
-*   **Agent node:** A node type on the Canvas that typically consumes context from the associated Thread, interacts with a Language Model (LLM) based on its configuration and input, and produces new messages back to the Thread. Streaming output originates here.
-*   **Tool node:** A node type on the Canvas representing a deterministic function or API call (e.g., send a Slack message, create a Jira ticket, fetch data from a database, read an email via IMAP, simple HTTP GET/POST). Tools generally do not call LLMs directly, should execute quickly (<10s), and return structured data (usually JSON).
-*   **Condition node:** A node type on the Canvas that allows branching in the workflow based on evaluating data from the preceding node (e.g., using a simple JS/Python predicate: `input.value > 10`).
-*   **Edge:** A connection on the Canvas representing the flow of data and/or control between two nodes.
+## 5. Development Practices & Guidelines
 
----
+    * **Always run backend tests via `./backend/run_backend_tests.sh`** (never direct
+`pytest`).
+    * **Rust/wasm/Frontend:** Use message-passing and state reducer conventions. Never mutate
+global state except in the top-level reducer.
+    * **Backend event lifecycle:** Use `@publish_event()` decorators for API state changes;
+subscribe to and publish via EventBus for real-time/client sync.
+    * **Cron/scheduler:** Agents are considered scheduled if `schedule` is set. No separate
+boolean.
+    * **New features:** Mirror backend/REST representation closely in frontend models; follow
+Elm/message-update conventions.
 
-## 7. Future Considerations & Idea Backlog
+----------------------------------------------------------------------------------------------
 
-*(This section captures valuable ideas beyond the current M0-M5 roadmap for potential future implementation.)*
+## 6. Terminology & Concept Cheatsheet
 
-*   **Enhanced Output Presentation:**
-    *   **Structured Output Panels:** Allow nodes (Agents, Tools) to output structured data (e.g., JSON, potentially simple HTML) and render it appropriately in the UI (e.g., interactive tables, formatted lists, simple charts) instead of just raw text.
-    *   **"Result Panel" Concept:** Visually distinguish the final, summarized result of a workflow run from the detailed, step-by-step execution log (Thread Log) in the UI.
-*   **Data Handling & Usability:**
-    *   **Export Features:** Allow users to export Thread logs or final results (e.g., as JSON, CSV, plain text).
-    *   **Automatic Summaries:** Add an optional feature (perhaps a dedicated "Summarize" tool node or button) to generate a concise summary of a long thread using an LLM call.
-*   **Tooling & Orchestration:**
-    *   **Notifications:** Implement a dedicated "Notification" tool (or use Email/Slack tools) to alert users on workflow completion, failure, or specific events.
-    *   **Multi-Agent Orchestration:** Explore enabling one agent/workflow to trigger another, allowing for complex chaining (requires careful design regarding context passing, error handling, and cycle detection).
-*   **Advanced Configuration:**
-    *   **Fine-Tuning Support:** Allow users to specify custom fine-tuned model identifiers for Agent nodes (if using platforms like OpenAI that support this).
-*   **UI/UX Polish:**
-    *   Add tooltips for icons and controls.
-    *   Implement smoother animations or transitions in the Canvas editor.
-    *   Improve responsive design for different screen sizes.
+    * **Agent:** a configured LLM “worker” node; has system prompt, threads, persistent config.
+    * **Tool:** deterministic function/orchestratable workflow step.
+    * **Trigger:** event (schedule, webhook, manual) that launches workflow.
+    * **Thread:** execution history for agent, including every inbound/outbound message.
+    * **CanvasNode:** placeable element (Agent, Tool, Trigger, Condition, etc.) in the graph
+editor/canvas.
 
----
+----------------------------------------------------------------------------------------------
 
-## 8. Status History / Log
+## 7. Future Ideas & Long-Term Backlog
 
-*(Older status updates and detailed completion notes are archived here)*
+### Output & Results
 
----
+    * Structure agent/tool outputs (tables, JSON, HTML, charts) in UI (“Result Panel”).
+    * Export thread logs/results (CSV/JSON).
+    * Summarize long threads automatically (dedicated node or chat button).
 
-## 9. Risk Log (living document)
+### Tooling & Orchestration
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| APScheduler single-process bottleneck once concurrent trigger traffic exceeds ~50/min | Medium | High (missed schedules, latency) | Prototype simple Redis queue off-loading; evaluate Celery before GA |
-| Webhook secret only checked via body param (no replay protection) | High | High (unauthorized runs) | Implement HMAC header w/ timestamp & nonce (see M1 hardening) |
-| Lack of auth exposes all data if deployed publicly | High | Critical | Prioritize M5 multi-tenancy & JWT gate before any external pilot |
-| LangGraph API surface changes (still evolving) may break runtime | Medium | Medium | Lock version, write integration tests, keep adaption layer thin |
-| Token cost overrun from long tool output streaming | Low | Medium | Add per-run token + time budget (M6 Observability), abort when exceeded |
+    * UX/UI for Notification tools, and for chaining/running sub-workflows (multi-agent
+orchestration).
+    * Support for users specifying fine-tuned model IDs per agent/system.
 
-**2025-04-21 - M0 Completed / M1 Started**
-*   *(Details of work completed for M0 - Scheduling UX & Thread Persistence - remain the same as in the previous version)*
-    *   **Frontend Models:** `ApiAgent` structs updated...
-    *   **Frontend UI (Display):** Dashboard cards show next/last run...
-    *   **Frontend UI (Edit):** Agent modal / Canvas panel have cron input & toggle...
-    *   **Frontend State & Actions:** `Message`/`Command`/`update.rs` logic added...
-    *   **Frontend Real-time Updates:** `TopicManager` merges `AGENT_UPDATED` events...
-    *   **Backend:** `AgentService.run_agent_task` ensures Thread creation...
-    *   **Testing:** Relevant frontend/backend tests added/updated...
+### Canvas & Workflow
 
-**2025-05-02 - Status Review Snapshot**
-*   *(Content of original Section 7 "Status review – 02 May 2025" was integrated into Section 2 "Current System State" above)*
+    * Full node variety (Tool, Trigger, Condition, Input/Output, etc.).
+    * Drag-and-drop palette for placing canvas nodes.
+    * DAG export/import to backend (and vice versa).
+    * Visual highlight of currently active node during execution.
 
-**2025-05-02 - Debug Modal & Node/Agent Refactor**
-*   **Debug Modal (Phase-1)** shipped – backend `/agents/{id}/details` route, frontend `agent_debug_modal.rs` with Overview + Raw JSON tabs.
-*   **Node ↔ Agent Refactor** landed – `Node` struct renamed to `CanvasNode`; agent edit flows are now agent-centric.  Removed legacy sync messages and helpers.  Majority of checklist in `node_agent_task.md` completed; remaining tasks tracked in Section 4.
+### Analytics/Auth
+
+    * Multi-tenancy, JWT/Google auth, workspace-permission enforcement.
+    * Detailed cost and usage metering; per-run stats and error reporting.
+    * Admin/observability dashboards.
+
+----------------------------------------------------------------------------------------------
+
+## 8. Status History & Changelog
+
+    * **2025-04:** Cron/scheduling UI complete. Thread persistence unified.
+    * **2025-05:**
+        * Webhook event backend + HMAC shipped. Frontend trigger list/copy live.
+
+        * Debug modal, decoupled node/agent logic completed.
+
+        * Workflow engine & advanced canvas DAG plumbing not started.
+
+        * Remaining critical: canvas node variety, CRUD for triggers, workflow
+persistence/export/import, groundwork for authentication and analytics.
+
+----------------------------------------------------------------------------------------------
+
+## 9. Risks & Considerations
+
+┌───────────────────────────────────────────────────────┬────────────┬──────────┬──────────────
+──────────────────────────────────────────┐
+│ Risk                                                  │ Likelihood │ Impact   │ Mitigation   
+                                          │
+├───────────────────────────────────────────────────────┼────────────┼──────────┼──────────────
+──────────────────────────────────────────┤
+│ APScheduler single-process bottleneck                 │ Medium     │ High     │ Prototype
+Celery or redis offload in future            │
+├───────────────────────────────────────────────────────┼────────────┼──────────┼──────────────
+──────────────────────────────────────────┤
+│ Webhook secret previously only checked via body param │ High       │ High     │ Now HMAC
+header, but add UI for secret visibility      │
+├───────────────────────────────────────────────────────┼────────────┼──────────┼──────────────
+──────────────────────────────────────────┤
+│ Lack of auth on public deployments                    │ High       │ Critical │ Ship
+multi-tenancy/JWT before any external pilot       │
+├───────────────────────────────────────────────────────┼────────────┼──────────┼──────────────
+──────────────────────────────────────────┤
+│ LangGraph API surface changes (still very new)        │ Medium     │ Medium   │ Lock
+versions, integration tests, thin adaption layers │
+├───────────────────────────────────────────────────────┼────────────┼──────────┼──────────────
+──────────────────────────────────────────┤
+│ Token/cost overrun from tool streaming                │ Low        │ Medium   │ Add per-run
+token/time budgets                         │
+└───────────────────────────────────────────────────────┴────────────┴──────────┴──────────────
+──────────────────────────────────────────┘
+
+----------------------------------------------------------------------------------------------
+
+### End of Document
+
+(Any contributor should review [sections 2–4] before updating priorities, and always re-confirm
+ “real” status via repo/tests before marking tasks complete.)
