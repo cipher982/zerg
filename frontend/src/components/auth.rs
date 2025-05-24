@@ -15,7 +15,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::network::api_client::ApiClient;
-use crate::state::{APP_STATE};
 use crate::messages::Message;
 use crate::state::dispatch_global_message;
 

@@ -4,8 +4,6 @@ pub mod main;
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use crate::messages::Message;
-use crate::state::APP_STATE;
 use std::rc::Rc;
 use std::cell::RefCell;
 
