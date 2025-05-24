@@ -16,10 +16,10 @@ test('Agent modal – only one tab-content is visible', async ({ page }) => {
   await page.waitForSelector('.edit-btn', { timeout: 3000 });
 
   // 4) Now click the Edit button (✎) to open the modal
-  await page.click('.edit-btn');
+  await page.click('[data-testid="edit-agent-1"]');
 
   // 5) Wait for the modal to become visible using Playwright's visibility check
-  await page.waitForSelector('#agent-modal', { state: 'visible', timeout: 3000 });
+  await page.waitForSelector('[data-testid="agent-modal"]', { state: 'visible', timeout: 3000 });
 
   // 6) Navigate to Triggers, then back to Main.
   await page.click('#agent-triggers-tab');

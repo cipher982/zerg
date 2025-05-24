@@ -39,6 +39,9 @@ pub fn render_agent_debug_modal(state: &AppState, document: &Document) -> Result
     // ------------------------------------------------------------------
     let (backdrop, content) = shared_modal::ensure_modal(document, "agent-debug-modal")?;
 
+    // Add data-testid for E2E testing
+    let _ = backdrop.set_attribute("data-testid", "agent-debug-modal");
+
     // Give the content wrapper a stable ID so external helpers can target it.
     if content.id().is_empty() {
         content.set_id("agent-debug-content");
