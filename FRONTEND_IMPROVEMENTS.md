@@ -25,10 +25,17 @@ The frontend is built with:
 ## ✅ Quick Wins (< 30 minutes each)
 
 ### Button Type Safety
-- [ ] Add `set_attribute("type", "button")` to all non-submit buttons
-- [ ] Search for: `create_element("button")` without subsequent type setting
-- [ ] **Files to check**: All component files in `frontend/src/components/`
-- [ ] **Why**: Prevents accidental form submissions when buttons are inside forms
+- [x] Add `set_attribute("type", "button")` to all non-submit buttons
+- [x] Search for: `create_element("button")` without subsequent type setting
+- [x] **Files to check**: All component files in `frontend/src/components/`
+- [x] **Why**: Prevents accidental form submissions when buttons are inside forms
+- **Completed**: Added `type="button"` to 23 button instances across 6 files:
+  - `frontend/src/pages/profile.rs` (1 button)
+  - `frontend/src/components/tab_bar.rs` (1 button in loop)
+  - `frontend/src/lib.rs` (2 buttons)
+  - `frontend/src/components/agent_config_modal.rs` (10 buttons)
+  - `frontend/src/components/dashboard/mod.rs` (7 buttons)
+  - `frontend/src/ui/main.rs` (2 buttons)
 
 ### Magic String Constants
 - [ ] Create `constants.rs` module for repeated strings
