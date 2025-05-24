@@ -4,14 +4,10 @@
   "description": "Pre-rendering tool for ZERG WebAssembly site",
   "main": "prerender.js",
   "scripts": {
-    "prerender": "node prerender.js",
-    "test:e2e": "playwright test"
+    "prerender": "node prerender.js"
   },
   "dependencies": {
     "playwright-chromium": "^1.40.0",
     "express": "^4.18.2"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.40.0"
   }
-} 
+}
