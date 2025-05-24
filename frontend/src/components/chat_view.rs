@@ -260,6 +260,7 @@ pub fn update_thread_list_ui(
                 let edit_button = document.create_element("div")?;
                 edit_button.set_class_name("thread-edit-button");
                 edit_button.set_text_content(Some("✎"));
+                edit_button.set_attribute("aria-label", "Edit thread title")?;
                 
                 // Add preview of last message if available
                 let preview = document.create_element("div")?;

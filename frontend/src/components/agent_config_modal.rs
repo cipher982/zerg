@@ -213,6 +213,7 @@ impl AgentConfigModal {
         close_button.set_inner_html("&times;");
         close_button.set_id("modal-close");
         close_button.set_attribute(ATTR_DATA_TESTID, "agent-modal-close")?;
+        close_button.set_attribute("aria-label", "Close modal")?;
 
         modal_header.append_child(&modal_title)?;
         modal_header.append_child(&close_button)?;
