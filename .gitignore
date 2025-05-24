@@ -181,3 +181,6 @@ backend/data
 .cursorrules
 .cursor/
 app.db
+e2e/node_modules
+e2e/test-results
+.clinerules
