@@ -9,15 +9,14 @@ use web_sys::{Element, HtmlInputElement};
 
 /// Remove the `hidden` attribute so the element becomes visible.
 pub fn show(el: &Element) {
-    let _ = el.remove_attribute("hidden");
+    let _ = el.class_list().remove_1("hidden");
+    let _ = el.class_list().add_1("visible");
 }
 
-/// Add `hidden="true"` so the element is not rendered.
+/// Hide the element by toggling CSS classes.
 pub fn hide(el: &Element) {
-    // Browsers treat the *presence* of the attribute as the boolean so the
-    // value does not matter, but we still write "true" for readability in
-    // dev-tools.
-    let _ = el.set_attribute("hidden", "true");
+    let _ = el.class_list().remove_1("visible");
+    let _ = el.class_list().add_1("hidden");
 }
 
 /// Mark a tab button as the active one (adds "tab-button active" class).

@@ -564,6 +564,12 @@ button {
 /* Modal Dialog */
 .modal {
     display: none;
+}
+.modal.visible {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     position: fixed;
     z-index: 100;
     left: 0;

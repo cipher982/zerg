@@ -18,14 +18,14 @@ test('Agent modal – only one tab-content is visible', async ({ page }) => {
   // 4) Now click the Edit button (✎) to open the modal
   await page.click('.edit-btn');
 
-  // The modal DOM is injected lazily – wait until present.
-  await page.waitForSelector('#agent-modal', { state: 'visible' });
+  // 5) Wait for the modal to become visible using Playwright's visibility check
+  await page.waitForSelector('#agent-modal', { state: 'visible', timeout: 3000 });
 
-  // 5) Navigate to Triggers, then back to Main.
+  // 6) Navigate to Triggers, then back to Main.
   await page.click('#agent-triggers-tab');
   await page.click('#agent-main-tab');
 
-  // 6) Assert exactly one visible .tab-content inside the modal.
+  // 7) Assert exactly one visible .tab-content inside the modal.
   const visibleSections = await page.$$('#agent-modal .tab-content:not([hidden])');
   expect(visibleSections).toHaveLength(1);
 });
