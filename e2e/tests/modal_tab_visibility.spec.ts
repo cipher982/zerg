@@ -12,21 +12,20 @@ test('Agent modal – only one tab-content is visible', async ({ page }) => {
   // 2) First create an agent so we have something to edit
   await page.click('text="Create Agent"');
   
-  // Wait a moment for the agent to be created
-  await page.waitForTimeout(1000);
+  // 3) Wait for the agent to appear in the table - should be fast
+  await page.waitForSelector('.edit-btn', { timeout: 3000 });
 
-  // 3) Now click the Edit button (✎) to open the modal
-  // The edit button should be in the actions cell of the first agent row
+  // 4) Now click the Edit button (✎) to open the modal
   await page.click('.edit-btn');
 
   // The modal DOM is injected lazily – wait until present.
   await page.waitForSelector('#agent-modal', { state: 'visible' });
 
-  // 4) Navigate to Triggers, then back to Main.
+  // 5) Navigate to Triggers, then back to Main.
   await page.click('#agent-triggers-tab');
   await page.click('#agent-main-tab');
 
-  // 5) Assert exactly one visible .tab-content inside the modal.
+  // 6) Assert exactly one visible .tab-content inside the modal.
   const visibleSections = await page.$$('#agent-modal .tab-content:not([hidden])');
   expect(visibleSections).toHaveLength(1);
 });
