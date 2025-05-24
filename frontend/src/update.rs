@@ -755,7 +755,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 state.dirty = false;
                 commands.push(Command::UpdateUI(Box::new(|| {
                     crate::state::APP_STATE.with(|state_rc| {
-                        let mut st = state_rc.borrow_mut();
+                        let st = state_rc.borrow_mut();
                         st.draw_nodes();
                         #[cfg(debug_assertions)] {
                             if let Some(ctx) = st.context.as_ref() {
