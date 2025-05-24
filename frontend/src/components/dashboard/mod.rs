@@ -12,6 +12,7 @@ use crate::constants::{
     DEFAULT_AGENT_NAME, 
     DEFAULT_SYSTEM_INSTRUCTIONS, 
     DEFAULT_TASK_INSTRUCTIONS,
+    ATTR_DATA_TESTID,
     // DEFAULT_THREAD_TITLE (unused)
 };
 use wasm_bindgen::closure::Closure;
@@ -241,6 +242,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
         .ok_or(JsValue::from_str("Could not cast to HtmlInputElement"))?;
     search_input_element.set_placeholder("Search agents...");
     search_input_element.set_attribute("id", "agent-search")?;
+    search_input_element.set_attribute(ATTR_DATA_TESTID, "agent-search-input")?;
     
     search_container.append_child(&search_icon)?;
     search_container.append_child(&search_input)?;
@@ -254,6 +256,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     let scope_select = document.create_element("select")?;
     scope_select.set_class_name("scope-select");
     scope_select.set_attribute("id", "dashboard-scope-select")?;
+    scope_select.set_attribute(ATTR_DATA_TESTID, "dashboard-scope-select")?;
 
     // Option: My agents
     let opt_my = document.create_element("option")?;
@@ -315,6 +318,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     create_button.set_class_name("create-agent-button");
     create_button.set_inner_html("Create Agent");
     create_button.set_attribute("id", "create-agent-button")?;
+    create_button.set_attribute(ATTR_DATA_TESTID, "create-agent-btn")?;
     
     // Add click event handler for Create Agent button
     let create_callback = Closure::wrap(Box::new(move || {
@@ -342,6 +346,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     reset_btn.set_class_name("reset-db-btn");
     reset_btn.set_inner_html("🗑️ Reset DB");
     reset_btn.set_attribute("id", "reset-db-btn")?;
+    reset_btn.set_attribute(ATTR_DATA_TESTID, "reset-db-btn")?;
     
     // Reset button click handler
     let reset_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
@@ -711,6 +716,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     run_btn.set_class_name("action-btn run-btn");
     run_btn.set_inner_html("▶");
     run_btn.set_attribute("title", "Run Agent")?;
+    run_btn.set_attribute(ATTR_DATA_TESTID, &format!("run-agent-{}", agent.id))?;
     
     // Run button click handler
     let agent_id = agent.id;
@@ -761,6 +767,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     edit_btn.set_class_name("action-btn edit-btn");
     edit_btn.set_inner_html("✎");
     edit_btn.set_attribute("title", "Edit Agent")?;
+    edit_btn.set_attribute(ATTR_DATA_TESTID, &format!("edit-agent-{}", agent.id))?;
     
     // Edit button click handler
     let agent_id = agent.id;
@@ -784,6 +791,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     chat_btn.set_class_name("action-btn chat-btn");
     chat_btn.set_inner_html("💬");
     chat_btn.set_attribute("title", "Chat with Agent")?;
+    chat_btn.set_attribute(ATTR_DATA_TESTID, &format!("chat-agent-{}", agent.id))?;
     
     // Chat button click handler
     let agent_id = agent.id;
@@ -811,6 +819,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     debug_btn.set_class_name("action-btn debug-btn");
     debug_btn.set_inner_html("🐞");
     debug_btn.set_attribute("title", "Debug / Info")?;
+    debug_btn.set_attribute(ATTR_DATA_TESTID, &format!("debug-agent-{}", agent.id))?;
 
     let agent_id = agent.id;
     let debug_cb = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
@@ -830,6 +839,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     delete_btn.set_class_name("action-btn delete-btn");
     delete_btn.set_inner_html("🗑️");
     delete_btn.set_attribute("title", "Delete Agent")?;
+    delete_btn.set_attribute(ATTR_DATA_TESTID, &format!("delete-agent-{}", agent.id))?;
 
     // Delete button click handler
     let agent_id = agent.id;

@@ -57,12 +57,18 @@ The frontend is built with:
 - **Completed**: Fixed critical XSS vulnerability in `chat_view.rs` where user message content was being inserted with `set_inner_html`. Replaced with `set_text_content` and CSS `white-space: pre-wrap` for line breaks. Found 118 total uses of `set_inner_html` - main user content vulnerability addressed. Remaining uses are mostly for trusted content (icons, formatting, static HTML).
 
 ### Test Selectors
-- [ ] Add `data-testid` attributes to key interactive elements:
-  - [ ] Buttons: `data-testid="create-agent-btn"`
+- [x] Add `data-testid` attributes to key interactive elements:
+  - [x] Dashboard buttons: `data-testid="create-agent-btn"`, `run-agent-{id}`, etc.
   - [ ] Modals: `data-testid="agent-modal"`
-  - [ ] Inputs: `data-testid="agent-name-input"`
+  - [ ] Form inputs: `data-testid="agent-name-input"`
 - [ ] Update E2E tests to use data-testid instead of class/text selectors
 - [ ] **Why**: Tests won't break when UI text or styling changes
+- **Progress**: Added data-testid attributes to all dashboard interactive elements:
+  - Search input: `agent-search-input`
+  - Scope selector: `dashboard-scope-select`
+  - Create button: `create-agent-btn`
+  - Reset DB button: `reset-db-btn`
+  - Agent action buttons: `run-agent-{id}`, `edit-agent-{id}`, `chat-agent-{id}`, `debug-agent-{id}`, `delete-agent-{id}`
 
 ---
 

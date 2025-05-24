@@ -19,7 +19,7 @@ use crate::components::tab_bar;
 
 
 use crate::state::APP_STATE;
-use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS};
+use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS, ATTR_DATA_TESTID};
 use crate::state::dispatch_global_message;
 use crate::models::Trigger;
 use wasm_bindgen::closure::Closure;
@@ -209,6 +209,7 @@ impl AgentConfigModal {
         close_button.set_class_name("close");
         close_button.set_inner_html("&times;");
         close_button.set_id("modal-close");
+        close_button.set_attribute(ATTR_DATA_TESTID, "agent-modal-close")?;
 
         modal_header.append_child(&modal_title)?;
         modal_header.append_child(&close_button)?;
@@ -361,6 +362,7 @@ impl AgentConfigModal {
         name_input.set_id("agent-name");
         name_input.set_attribute("type", "text")?;
         name_input.set_attribute("placeholder", "Enter agent name...")?;
+        name_input.set_attribute(ATTR_DATA_TESTID, "agent-name-input")?;
 
         // --- System instructions ---
         let system_label = document.create_element("label")?;
@@ -371,6 +373,7 @@ impl AgentConfigModal {
         system_textarea.set_id("system-instructions");
         system_textarea.set_attribute("rows", "6")?;
         system_textarea.set_attribute("placeholder", "Enter system-level instructions for this agent...")?;
+        system_textarea.set_attribute(ATTR_DATA_TESTID, "system-instructions-textarea")?;
 
         // --- Task instructions ---
         let default_task_label = document.create_element("label")?;
@@ -381,6 +384,7 @@ impl AgentConfigModal {
         default_task_textarea.set_id("default-task-instructions");
         default_task_textarea.set_attribute("rows", "4")?;
         default_task_textarea.set_attribute("placeholder", "Optional task instructions that will be used when running this agent. If empty, a default 'begin' prompt will be used.")?;
+        default_task_textarea.set_attribute(ATTR_DATA_TESTID, "task-instructions-textarea")?;
 
         // Append to main_content
         main_content.append_child(&name_label)?;
