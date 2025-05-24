@@ -311,6 +311,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     
     // Create Agent button
     let create_button = document.create_element("button")?;
+    create_button.set_attribute("type", "button")?;
     create_button.set_class_name("create-agent-button");
     create_button.set_inner_html("Create Agent");
     create_button.set_attribute("id", "create-agent-button")?;
@@ -337,6 +338,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     
     // Create reset database button (development only)
     let reset_btn = document.create_element("button")?;
+    reset_btn.set_attribute("type", "button")?;
     reset_btn.set_class_name("reset-db-btn");
     reset_btn.set_inner_html("🗑️ Reset DB");
     reset_btn.set_attribute("id", "reset-db-btn")?;
@@ -705,6 +707,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Run button
     let run_btn = document.create_element("button")?;
+    run_btn.set_attribute("type", "button")?;
     run_btn.set_class_name("action-btn run-btn");
     run_btn.set_inner_html("▶");
     run_btn.set_attribute("title", "Run Agent")?;
@@ -754,6 +757,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Edit button
     let edit_btn = document.create_element("button")?;
+    edit_btn.set_attribute("type", "button")?;
     edit_btn.set_class_name("action-btn edit-btn");
     edit_btn.set_inner_html("✎");
     edit_btn.set_attribute("title", "Edit Agent")?;
@@ -776,6 +780,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Chat button
     let chat_btn = document.create_element("button")?;
+    chat_btn.set_attribute("type", "button")?;
     chat_btn.set_class_name("action-btn chat-btn");
     chat_btn.set_inner_html("💬");
     chat_btn.set_attribute("title", "Chat with Agent")?;
@@ -802,6 +807,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Debug (info) button – new 🐞 icon
     let debug_btn = document.create_element("button")?;
+    debug_btn.set_attribute("type", "button")?;
     debug_btn.set_class_name("action-btn debug-btn");
     debug_btn.set_inner_html("🐞");
     debug_btn.set_attribute("title", "Debug / Info")?;
@@ -820,6 +826,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Delete agent button
     let delete_btn = document.create_element("button")?;
+    delete_btn.set_attribute("type", "button")?;
     delete_btn.set_class_name("action-btn delete-btn");
     delete_btn.set_inner_html("🗑️");
     delete_btn.set_attribute("title", "Delete Agent")?;

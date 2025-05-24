@@ -33,6 +33,7 @@ pub fn build_tab_bar(
 
     for (label, active) in tabs {
         let btn = document.create_element("button")?;
+        btn.set_attribute("type", "button")?;
         btn.set_inner_html(label);
         btn.set_class_name(if *active { "tab-button active" } else { "tab-button" });
         container.append_child(&btn)?;

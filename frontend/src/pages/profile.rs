@@ -92,6 +92,7 @@ pub fn mount_profile(document: &Document) -> Result<(), JsValue> {
     // Save button
     // ----------------------------------------------------------------
     let save_btn: HtmlElement = document.create_element("button")?.dyn_into()?;
+    save_btn.set_attribute("type", "button")?;
     save_btn.set_inner_html("Save");
     save_btn.set_class_name("btn-primary");
 

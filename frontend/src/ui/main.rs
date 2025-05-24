@@ -38,12 +38,14 @@ pub fn create_input_panel(document: &Document) -> Result<web_sys::Element, JsVal
     
     // Create center view button
     let center_button = document.create_element("button")?;
+    center_button.set_attribute("type", "button")?;
     center_button.set_inner_html("Center View");
     center_button.set_attribute("id", "center-button")?;
     center_button.set_class_name(""); // Remove any accidental class overrides
 
     // Create clear all button
     let clear_button = document.create_element("button")?;
+    clear_button.set_attribute("type", "button")?;
     clear_button.set_inner_html("Clear All");
     clear_button.set_attribute("id", "clear-button")?;
     
@@ -66,4 +68,4 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     crate::ui::events::setup_ui_event_handlers(document)?;
     
     Ok(())
-} 
+}

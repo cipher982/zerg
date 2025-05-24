@@ -1,0 +1,183 @@
+# Frontend Code Quality Improvements Task List
+
+This document outlines code quality and best practice improvements for the Zerg Agent Platform frontend (Rust/WASM). It's organized as a checklist for developers to track progress on modernizing and improving the codebase.
+
+## 🎯 Context for New Developers
+
+The frontend is built with:
+- **Rust + wasm-bindgen**: Compiles to WebAssembly
+- **Elm-style architecture**: Messages trigger state updates, which trigger UI updates
+- **No framework**: Direct DOM manipulation via web-sys
+- **CSS classes for styling**: Moving away from inline styles and HTML attributes
+
+### Key Principles
+1. **State-driven UI**: Don't manipulate DOM directly; update state and let the UI react
+2. **Accessibility first**: All interactive elements need proper ARIA attributes
+3. **Testability**: Use stable selectors (data-testid) for E2E tests
+4. **Type safety**: Leverage Rust's type system to prevent runtime errors
+
+### Recent Changes
+- Modal visibility now uses CSS classes (`.hidden`/`.visible`) instead of HTML `hidden` attribute
+- New helpers in `dom_utils.rs` for consistent show/hide patterns
+
+---
+
+## ✅ Quick Wins (< 30 minutes each)
+
+### Button Type Safety
+- [ ] Add `set_attribute("type", "button")` to all non-submit buttons
+- [ ] Search for: `create_element("button")` without subsequent type setting
+- [ ] **Files to check**: All component files in `frontend/src/components/`
+- [ ] **Why**: Prevents accidental form submissions when buttons are inside forms
+
+### Magic String Constants
+- [ ] Create `constants.rs` module for repeated strings
+- [ ] Define constants for:
+  - [ ] CSS class names: `"tab-button active"`, `"modal visible"`, `"hidden"`
+  - [ ] Element IDs: `"agent-modal"`, `"dashboard-container"`, etc.
+  - [ ] Role values: `"user"`, `"assistant"`, `"tool"`
+  - [ ] Status values: `"running"`, `"idle"`, `"error"`
+- [ ] Replace all hardcoded strings with constants
+- [ ] **Why**: Prevents typos, enables safe refactoring
+
+### XSS Prevention
+- [ ] Audit all uses of `set_inner_html`
+- [ ] Replace with `set_text_content` for user-generated content
+- [ ] Keep `set_inner_html` only for trusted HTML (icons, formatting)
+- [ ] **Files with user content**: `chat_view.rs`, `dashboard/mod.rs`
+- [ ] **Why**: Security vulnerability prevention
+
+### Test Selectors
+- [ ] Add `data-testid` attributes to key interactive elements:
+  - [ ] Buttons: `data-testid="create-agent-btn"`
+  - [ ] Modals: `data-testid="agent-modal"`
+  - [ ] Inputs: `data-testid="agent-name-input"`
+- [ ] Update E2E tests to use data-testid instead of class/text selectors
+- [ ] **Why**: Tests won't break when UI text or styling changes
+
+---
+
+## 🚀 Medium Priority (30-60 minutes each)
+
+### Focus Management
+- [ ] Implement focus trap for modals (focus stays within modal while open)
+- [ ] On modal open: Focus first interactive element
+- [ ] On modal close: Return focus to triggering element
+- [ ] Add to `modal.rs` show/hide functions
+- [ ] **Reference**: [MDN Dialog Best Practices](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog)
+
+### Consistent Visibility Pattern
+- [ ] Extend CSS class pattern to all show/hide logic
+- [ ] Replace remaining uses of:
+  - [ ] `set_attribute("hidden", "true")`
+  - [ ] `remove_attribute("hidden")`
+  - [ ] Direct style manipulation for visibility
+- [ ] Use `dom_utils::show()` and `dom_utils::hide()` everywhere
+- [ ] **Why**: Consistency, testability, potential for animations
+
+### ARIA Improvements
+- [ ] Add `role="dialog"` to all modals
+- [ ] Add `aria-label` to icon-only buttons (✎, 🗑️, etc.)
+- [ ] Add `aria-live="polite"` regions for status updates
+- [ ] Add `aria-expanded` to collapsible sections
+- [ ] **Files**: All component files with interactive elements
+
+### Keyboard Navigation
+- [ ] Implement Escape key to close modals
+- [ ] Add arrow key navigation for tab components
+- [ ] Ensure all interactive elements are keyboard accessible
+- [ ] Test tab order is logical
+- [ ] **Why**: Accessibility compliance, better UX
+
+---
+
+## 🎨 Style & Architecture (1-2 hours each)
+
+### Extract Inline Styles
+- [ ] Move all `set_attribute("style", ...)` to CSS classes
+- [ ] Create semantic class names for common patterns:
+  - [ ] `.error-message` instead of `style="color: red"`
+  - [ ] `.form-row` instead of `style="margin-top: 12px"`
+  - [ ] `.hidden-section` for conditional visibility
+- [ ] **Files with most inline styles**: `agent_config_modal.rs`, `dashboard/mod.rs`
+
+### Component Extraction
+- [ ] Extract repeated UI patterns into reusable functions:
+  - [ ] Button creation helper
+  - [ ] Form field helper (label + input)
+  - [ ] Modal header/footer patterns
+- [ ] Create `ui_components.rs` module for shared patterns
+- [ ] **Why**: DRY principle, consistency
+
+### Error Handling UI
+- [ ] Implement toast/notification system for errors
+- [ ] Replace `console.error` with user-visible messages
+- [ ] Add error boundaries for component failures
+- [ ] **Why**: Better user experience
+
+### Form Validation
+- [ ] Add client-side validation for:
+  - [ ] Required fields
+  - [ ] Email format
+  - [ ] URL format
+  - [ ] CRON syntax
+- [ ] Show inline validation messages
+- [ ] Disable submit until valid
+- [ ] **Why**: Better UX, reduce server load
+
+---
+
+## 📋 Testing & Documentation
+
+### E2E Test Improvements
+- [ ] Update all tests to use `data-testid` selectors
+- [ ] Add tests for keyboard navigation
+- [ ] Add tests for accessibility (aria attributes)
+- [ ] Test error states and edge cases
+
+### Documentation
+- [ ] Add doc comments to all public functions
+- [ ] Document the message/command pattern
+- [ ] Create component usage examples
+- [ ] Document CSS class naming conventions
+
+---
+
+## 🔍 How to Approach This Work
+
+1. **Start small**: Pick items from "Quick Wins" first
+2. **Test as you go**: Run E2E tests after each change
+3. **Commit frequently**: Small, focused commits are easier to review
+4. **Ask questions**: If unsure about a pattern, check existing code or ask
+
+### Useful Commands
+```bash
+# Build and test frontend
+cd frontend
+./build.sh
+./run_frontend_tests.sh
+
+# Run E2E tests
+cd e2e
+./run_e2e_tests.sh
+
+# Search for patterns
+grep -r "set_inner_html" frontend/src/
+grep -r "set_attribute.*style" frontend/src/
+```
+
+### Code Review Checklist
+- [ ] No new inline styles added
+- [ ] All buttons have explicit type
+- [ ] User content uses `set_text_content`
+- [ ] New interactive elements have `data-testid`
+- [ ] Accessibility attributes included
+
+---
+
+## 📈 Progress Tracking
+
+Mark items as complete with `[x]` and add notes about any challenges or decisions made. This document should evolve as the work progresses.
+
+**Last Updated**: January 24, 2025
+**Contributors**: (Add your name when you complete items)

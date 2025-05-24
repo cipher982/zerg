@@ -386,12 +386,14 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     
     // Create dashboard tab
     let dashboard_tab = document.create_element("button")?;
+    dashboard_tab.set_attribute("type", "button")?;
     dashboard_tab.set_id("global-dashboard-tab");
     dashboard_tab.set_class_name("tab-button active");
     dashboard_tab.set_inner_html("Agent Dashboard");
     
     // Create canvas tab
     let canvas_tab = document.create_element("button")?;
+    canvas_tab.set_attribute("type", "button")?;
     canvas_tab.set_id("global-canvas-tab");
     canvas_tab.set_class_name("tab-button");
     canvas_tab.set_inner_html("Canvas Editor");
@@ -456,4 +458,4 @@ fn setup_auto_save_timer(interval_ms: i32) -> Result<(), JsValue> {
     auto_save_callback.forget();
     
     Ok(())
-} 
+}

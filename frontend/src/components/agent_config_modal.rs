@@ -62,6 +62,7 @@ impl AgentConfigModal {
                 // Add button next to Main tab (after any History tab if present)
                 if let Some(tab_container) = document.query_selector("#agent-modal .tab-container").ok().flatten() {
                     let triggers_tab = document.create_element("button")?;
+                    triggers_tab.set_attribute("type", "button")?;
                     triggers_tab.set_class_name("tab-button");
                     triggers_tab.set_id("agent-triggers-tab");
                     triggers_tab.set_inner_html("Triggers");
@@ -90,6 +91,7 @@ impl AgentConfigModal {
             // Button placeholder – we toggle visibility later in
             // `render_gmail_connect_status`.
             let connect_btn = document.create_element("button")?;
+            connect_btn.set_attribute("type", "button")?;
             connect_btn.set_id("agent-connect-gmail-btn");
             connect_btn.set_class_name("btn-primary");
             connect_btn.set_inner_html("Connect Gmail");
@@ -105,6 +107,7 @@ impl AgentConfigModal {
 
             empty_div.append_child(&gmail_row)?;
                     let add_trigger_btn = document.create_element("button")?;
+                    add_trigger_btn.set_attribute("type", "button")?;
                     add_trigger_btn.set_id("agent-add-trigger-btn");
                     add_trigger_btn.set_class_name("btn-primary");
                     add_trigger_btn.set_inner_html("Add Trigger");
@@ -142,11 +145,13 @@ impl AgentConfigModal {
                     let act = document.create_element("div")?;
                     act.set_attribute("style", "margin-top:12px;display:flex;gap:8px;")?;
                     let cancel_btn = document.create_element("button")?;
+                    cancel_btn.set_attribute("type", "button")?;
                     cancel_btn.set_id("agent-cancel-add-trigger");
                     cancel_btn.set_class_name("btn");
                     cancel_btn.set_inner_html("Cancel");
                     act.append_child(&cancel_btn)?;
                     let create_btn = document.create_element("button")?;
+                    create_btn.set_attribute("type", "button")?;
                     create_btn.set_id("agent-create-trigger");
                     create_btn.set_class_name("btn-primary");
                     create_btn.set_inner_html("Create Trigger");
@@ -271,6 +276,7 @@ impl AgentConfigModal {
         empty_wrapper.append_child(&empty_p)?;
 
         let add_trigger_btn = document.create_element("button")?;
+        add_trigger_btn.set_attribute("type", "button")?;
         add_trigger_btn.set_id("agent-add-trigger-btn");
         add_trigger_btn.set_class_name("btn-primary");
         add_trigger_btn.set_inner_html("Add Trigger");
@@ -319,11 +325,13 @@ impl AgentConfigModal {
         actions_div.set_attribute("style", "margin-top:12px;display:flex;gap:8px;")?;
 
         let cancel_btn = document.create_element("button")?;
+        cancel_btn.set_attribute("type", "button")?;
         cancel_btn.set_id("agent-cancel-add-trigger");
         cancel_btn.set_class_name("btn");
         cancel_btn.set_inner_html("Cancel");
 
         let create_btn = document.create_element("button")?;
+        create_btn.set_attribute("type", "button")?;
         create_btn.set_id("agent-create-trigger");
         create_btn.set_class_name("btn-primary");
         create_btn.set_inner_html("Create Trigger");
@@ -547,6 +555,7 @@ impl AgentConfigModal {
         button_container.set_class_name("modal-buttons");
 
         let save_button = document.create_element("button")?;
+        save_button.set_attribute("type", "button")?;
         save_button.set_id("save-agent");
         save_button.set_inner_html("Save");
 
@@ -1443,6 +1452,7 @@ pub fn render_triggers_list(document: &Document, agent_id: u32) -> Result<(), Js
 
         // Delete (trash) button
         let del_btn = document.create_element("button")?;
+        del_btn.set_attribute("type", "button")?;
         del_btn.set_class_name("delete-trigger-btn");
         del_btn.set_inner_html("🗑");
 
