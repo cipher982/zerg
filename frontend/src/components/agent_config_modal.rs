@@ -196,6 +196,9 @@ impl AgentConfigModal {
         // conventions (`hidden` attribute for visibility, CSS classes, …)
         // -----------------------------------------------------------------
         let (modal, modal_content) = crate::components::modal::ensure_modal(document, "agent-modal")?;
+        
+        // Add data-testid for E2E testing
+        let _ = modal.set_attribute("data-testid", "agent-modal");
 
         // Header
         let modal_header = document.create_element("div")?;

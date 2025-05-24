@@ -6,6 +6,6 @@ test('Dashboard tab renders', async ({ page }) => {
   // Load root – webServer helper ensures the SPA is available.
   await page.goto('/');
 
-  // The top navigation tab should read “Agent Dashboard”.
-  await expect(page.locator('#global-dashboard-tab')).toHaveText('Agent Dashboard');
+  // The top navigation tab should read "Agent Dashboard".
+  await expect(page.locator('[data-testid="global-dashboard-tab"]')).toHaveText('Agent Dashboard');
 });
