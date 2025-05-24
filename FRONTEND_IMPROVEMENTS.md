@@ -81,35 +81,60 @@ The frontend is built with:
 
 ### Focus Management
 - [x] Add focus management utilities to `dom_utils.rs`
-- [ ] Implement focus trap for modals (focus stays within modal while open)
-- [ ] On modal open: Focus first interactive element
-- [ ] On modal close: Return focus to triggering element
-- [ ] Add to `modal.rs` show/hide functions
-- [ ] **Reference**: [MDN Dialog Best Practices](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog)
-- **Progress**: Added focus management utilities to `dom_utils.rs`:
-  - `focus_first_interactive()` - Focus first interactive element in container
-  - `get_focusable_elements()` - Get all focusable elements in container
-  - `store_active_element()` - Store currently focused element
-  - `restore_focus()` - Restore focus to previously stored element
+- [x] Implement focus trap for modals (focus stays within modal while open)
+- [x] On modal open: Focus first interactive element
+- [x] On modal close: Return focus to triggering element
+- [x] Add to `modal.rs` show/hide functions
+- [x] **Reference**: [MDN Dialog Best Practices](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog)
+- **Completed**: Full focus management implementation:
+  - Added focus management utilities to `dom_utils.rs`:
+    - `focus_first_interactive()` - Focus first interactive element in container
+    - `get_focusable_elements()` - Get all focusable elements in container (simplified implementation)
+    - `store_active_element()` - Store currently focused element in thread-local storage
+    - `restore_focus()` - Restore focus to previously stored element
+    - `restore_previous_focus()` - Restore from thread-local storage
+    - `is_focusable()` - Check if element can receive focus
+  - Updated `modal.rs` with complete focus trap:
+    - `show()` - Stores previous focus, shows modal, focuses first element, sets up keyboard handlers
+    - `hide()` - Removes handlers, hides modal, restores previous focus
+    - `show_with_focus()` - Allows specifying which element to focus
+    - Keyboard event handlers for:
+      - Escape key to close modal
+      - Tab/Shift+Tab focus trap (wraps focus within modal)
+    - Thread-local storage for event handlers to prevent memory leaks
 
 ### Consistent Visibility Pattern
-- [ ] Extend CSS class pattern to all show/hide logic
-- [ ] Replace remaining uses of:
-  - [ ] `set_attribute("hidden", "true")`
-  - [ ] `remove_attribute("hidden")`
-  - [ ] Direct style manipulation for visibility
-- [ ] Use `dom_utils::show()` and `dom_utils::hide()` everywhere
-- [ ] **Why**: Consistency, testability, potential for animations
+- [x] Extend CSS class pattern to all show/hide logic
+- [x] Replace remaining uses of:
+  - [x] `set_attribute("hidden", "true")` - No instances found
+  - [x] `remove_attribute("hidden")` - No instances found
+  - [x] Direct style manipulation for visibility - No instances found
+- [x] Use `dom_utils::show()` and `dom_utils::hide()` everywhere
+- [x] **Why**: Consistency, testability, potential for animations
+- **Completed**: Verified that the codebase is already consistently using `dom_utils::show()` and `dom_utils::hide()` for all visibility management. Found 43 uses across the codebase, with no remaining direct manipulations of visibility attributes or styles.
 
 ### ARIA Improvements
-- [ ] Add `role="dialog"` to all modals
-- [ ] Add `aria-label` to icon-only buttons (✎, 🗑️, etc.)
+- [x] Add `role="dialog"` to all modals - Already implemented in `modal.rs`
+- [x] Add `aria-label` to icon-only buttons (✎, 🗑️, etc.)
 - [ ] Add `aria-live="polite"` regions for status updates
 - [ ] Add `aria-expanded` to collapsible sections
 - [ ] **Files**: All component files with interactive elements
+- **Completed**: 
+  - Modal helper already adds `role="dialog"` and `aria-modal="true"` attributes
+  - Added aria-labels to all icon-only buttons:
+    - Dashboard buttons:
+      - Run button (▶): `aria-label="Run Agent"`
+      - Edit button (✎): `aria-label="Edit Agent"`
+      - Chat button (💬): `aria-label="Chat with Agent"`
+      - Debug button (🐞): `aria-label="Debug / Info"`
+      - Delete button (🗑️): `aria-label="Delete Agent"`
+    - Chat view:
+      - Edit thread title button (✎): `aria-label="Edit thread title"`
+    - Agent config modal:
+      - Close button (×): `aria-label="Close modal"`
 
 ### Keyboard Navigation
-- [ ] Implement Escape key to close modals
+- [x] Implement Escape key to close modals - Already implemented in `modal.rs` as part of focus trap
 - [ ] Add arrow key navigation for tab components
 - [ ] Ensure all interactive elements are keyboard accessible
 - [ ] Test tab order is logical

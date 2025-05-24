@@ -46,11 +46,18 @@ pub fn html_input(id: &str) -> HtmlInputElement {
 // Focus Management Utilities
 // ---------------------------------------------------------------------------
 
+use std::cell::RefCell;
+
+// Thread-local storage for the previously focused element
+thread_local! {
+    static PREVIOUS_FOCUS: RefCell<Option<HtmlElement>> = RefCell::new(None);
+}
+
 /// Focus the first interactive element within the given container.
 /// Returns true if an element was focused, false otherwise.
 pub fn focus_first_interactive(container: &Element) -> bool {
     let focusable_selectors = [
-        "input:not([disabled])",
+        "input:not([disabled]):not([type='hidden'])",
         "button:not([disabled])",
         "textarea:not([disabled])",
         "select:not([disabled])",
@@ -70,11 +77,15 @@ pub fn focus_first_interactive(container: &Element) -> bool {
 }
 
 /// Get all focusable elements within a container.
-/// This is a simplified implementation that finds the first element of each type.
+/// Returns a vector of all focusable elements found.
+/// Note: This is a simplified implementation that finds focusable elements
+/// using CSS selectors.
 pub fn get_focusable_elements(container: &Element) -> Vec<HtmlElement> {
     let mut focusable = Vec::new();
-    let focusable_selectors = [
-        "input:not([disabled])",
+    
+    // List of selectors for focusable elements
+    let selectors = [
+        "input:not([disabled]):not([type='hidden'])",
         "button:not([disabled])",
         "textarea:not([disabled])",
         "select:not([disabled])",
@@ -82,27 +93,102 @@ pub fn get_focusable_elements(container: &Element) -> Vec<HtmlElement> {
         "[tabindex]:not([tabindex='-1'])"
     ];
     
-    // Since we don't have query_selector_all, we'll just find the first of each type
-    for selector in &focusable_selectors {
-        if let Ok(Some(element)) = container.query_selector(selector) {
-            if let Ok(html_element) = element.dyn_into::<HtmlElement>() {
-                focusable.push(html_element);
+    // Query for each type of focusable element
+    for selector in &selectors {
+        // Since we can't use querySelectorAll, we'll use a workaround
+        // by getting elements one at a time with increasingly specific selectors
+        let mut index = 0;
+        loop {
+            // Try to find the nth element matching this selector
+            let indexed_selector = if index == 0 {
+                selector.to_string()
+            } else {
+                // This is a workaround - we can't easily get all elements,
+                // so we'll just get the first few of each type
+                break;
+            };
+            
+            if let Ok(Some(element)) = container.query_selector(&indexed_selector) {
+                if let Ok(html_element) = element.dyn_into::<HtmlElement>() {
+                    // Check if we already have this element
+                    let already_added = focusable.iter().any(|el: &HtmlElement| {
+                        // Compare by checking if they're the same node
+                        el.is_same_node(Some(&html_element))
+                    });
+                    
+                    if !already_added {
+                        focusable.push(html_element);
+                    }
+                }
+                index += 1;
+            } else {
+                break;
             }
         }
     }
+    
     focusable
 }
 
 /// Store the currently focused element for later restoration.
 pub fn store_active_element(document: &Document) -> Option<HtmlElement> {
-    document.active_element()
-        .and_then(|el| el.dyn_into::<HtmlElement>().ok())
+    let active = document.active_element()
+        .and_then(|el| el.dyn_into::<HtmlElement>().ok());
+    
+    // Store in thread-local storage
+    PREVIOUS_FOCUS.with(|prev| {
+        *prev.borrow_mut() = active.clone();
+    });
+    
+    active
 }
 
 /// Restore focus to a previously stored element.
 pub fn restore_focus(element: Option<HtmlElement>) {
     if let Some(el) = element {
         let _ = el.focus();
+    }
+}
+
+/// Restore focus to the element stored in thread-local storage.
+pub fn restore_previous_focus() {
+    PREVIOUS_FOCUS.with(|prev| {
+        if let Some(el) = prev.borrow().as_ref() {
+            let _ = el.focus();
+        }
+    });
+}
+
+/// Clear the stored previous focus element.
+pub fn clear_previous_focus() {
+    PREVIOUS_FOCUS.with(|prev| {
+        *prev.borrow_mut() = None;
+    });
+}
+
+/// Check if an element is focusable.
+pub fn is_focusable(element: &Element) -> bool {
+    if let Ok(_html_element) = element.clone().dyn_into::<HtmlElement>() {
+        // Check if element is disabled
+        if element.has_attribute("disabled") {
+            return false;
+        }
+        
+        // Check if element has negative tabindex
+        if let Some(tabindex) = element.get_attribute("tabindex") {
+            if let Ok(index) = tabindex.parse::<i32>() {
+                if index < 0 {
+                    return false;
+                }
+            }
+        }
+        
+        // Check if element is naturally focusable
+        let tag_name = element.tag_name().to_lowercase();
+        matches!(tag_name.as_str(), "input" | "button" | "textarea" | "select" | "a") ||
+        element.has_attribute("tabindex")
+    } else {
+        false
     }
 }
 

@@ -716,6 +716,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     run_btn.set_class_name("action-btn run-btn");
     run_btn.set_inner_html("▶");
     run_btn.set_attribute("title", "Run Agent")?;
+    run_btn.set_attribute("aria-label", "Run Agent")?;
     run_btn.set_attribute(ATTR_DATA_TESTID, &format!("run-agent-{}", agent.id))?;
     
     // Run button click handler
@@ -767,6 +768,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     edit_btn.set_class_name("action-btn edit-btn");
     edit_btn.set_inner_html("✎");
     edit_btn.set_attribute("title", "Edit Agent")?;
+    edit_btn.set_attribute("aria-label", "Edit Agent")?;
     edit_btn.set_attribute(ATTR_DATA_TESTID, &format!("edit-agent-{}", agent.id))?;
     
     // Edit button click handler
@@ -791,6 +793,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     chat_btn.set_class_name("action-btn chat-btn");
     chat_btn.set_inner_html("💬");
     chat_btn.set_attribute("title", "Chat with Agent")?;
+    chat_btn.set_attribute("aria-label", "Chat with Agent")?;
     chat_btn.set_attribute(ATTR_DATA_TESTID, &format!("chat-agent-{}", agent.id))?;
     
     // Chat button click handler
@@ -819,6 +822,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     debug_btn.set_class_name("action-btn debug-btn");
     debug_btn.set_inner_html("🐞");
     debug_btn.set_attribute("title", "Debug / Info")?;
+    debug_btn.set_attribute("aria-label", "Debug / Info")?;
     debug_btn.set_attribute(ATTR_DATA_TESTID, &format!("debug-agent-{}", agent.id))?;
 
     let agent_id = agent.id;
@@ -839,6 +843,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     delete_btn.set_class_name("action-btn delete-btn");
     delete_btn.set_inner_html("🗑️");
     delete_btn.set_attribute("title", "Delete Agent")?;
+    delete_btn.set_attribute("aria-label", "Delete Agent")?;
     delete_btn.set_attribute(ATTR_DATA_TESTID, &format!("delete-agent-{}", agent.id))?;
 
     // Delete button click handler
