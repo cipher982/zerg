@@ -78,12 +78,11 @@ pub fn focus_first_interactive(container: &Element) -> bool {
 
 /// Get all focusable elements within a container.
 /// Returns a vector of all focusable elements found.
-/// Note: This is a simplified implementation that finds focusable elements
-/// using CSS selectors.
+/// Note: This finds the first element of each type due to web-sys API limitations.
 pub fn get_focusable_elements(container: &Element) -> Vec<HtmlElement> {
     let mut focusable = Vec::new();
     
-    // List of selectors for focusable elements
+    // Since Element doesn't have query_selector_all, we'll iterate through each selector type
     let selectors = [
         "input:not([disabled]):not([type='hidden'])",
         "button:not([disabled])",
@@ -93,36 +92,10 @@ pub fn get_focusable_elements(container: &Element) -> Vec<HtmlElement> {
         "[tabindex]:not([tabindex='-1'])"
     ];
     
-    // Query for each type of focusable element
     for selector in &selectors {
-        // Since we can't use querySelectorAll, we'll use a workaround
-        // by getting elements one at a time with increasingly specific selectors
-        let mut index = 0;
-        loop {
-            // Try to find the nth element matching this selector
-            let indexed_selector = if index == 0 {
-                selector.to_string()
-            } else {
-                // This is a workaround - we can't easily get all elements,
-                // so we'll just get the first few of each type
-                break;
-            };
-            
-            if let Ok(Some(element)) = container.query_selector(&indexed_selector) {
-                if let Ok(html_element) = element.dyn_into::<HtmlElement>() {
-                    // Check if we already have this element
-                    let already_added = focusable.iter().any(|el: &HtmlElement| {
-                        // Compare by checking if they're the same node
-                        el.is_same_node(Some(&html_element))
-                    });
-                    
-                    if !already_added {
-                        focusable.push(html_element);
-                    }
-                }
-                index += 1;
-            } else {
-                break;
+        if let Ok(Some(element)) = container.query_selector(selector) {
+            if let Ok(html_element) = element.dyn_into::<HtmlElement>() {
+                focusable.push(html_element);
             }
         }
     }
