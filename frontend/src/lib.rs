@@ -38,6 +38,7 @@ use web_sys::{window, Document};
 use network::ui_updates;
 use crate::state::dispatch_global_message;
 use crate::components::auth as components_auth;
+use crate::constants::{CSS_TAB_BUTTON, CSS_TAB_BUTTON_ACTIVE, ID_GLOBAL_CANVAS_TAB, ID_GLOBAL_DASHBOARD_TAB, BUTTON_TYPE_BUTTON, ATTR_TYPE};
 
 // Import modules
 mod models;
@@ -386,16 +387,16 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     
     // Create dashboard tab
     let dashboard_tab = document.create_element("button")?;
-    dashboard_tab.set_attribute("type", "button")?;
-    dashboard_tab.set_id("global-dashboard-tab");
-    dashboard_tab.set_class_name("tab-button active");
+    dashboard_tab.set_attribute(ATTR_TYPE, BUTTON_TYPE_BUTTON)?;
+    dashboard_tab.set_id(ID_GLOBAL_DASHBOARD_TAB);
+    dashboard_tab.set_class_name(CSS_TAB_BUTTON_ACTIVE);
     dashboard_tab.set_inner_html("Agent Dashboard");
     
     // Create canvas tab
     let canvas_tab = document.create_element("button")?;
-    canvas_tab.set_attribute("type", "button")?;
-    canvas_tab.set_id("global-canvas-tab");
-    canvas_tab.set_class_name("tab-button");
+    canvas_tab.set_attribute(ATTR_TYPE, BUTTON_TYPE_BUTTON)?;
+    canvas_tab.set_id(ID_GLOBAL_CANVAS_TAB);
+    canvas_tab.set_class_name(CSS_TAB_BUTTON);
     canvas_tab.set_inner_html("Canvas Editor");
     
     // Add tabs to container

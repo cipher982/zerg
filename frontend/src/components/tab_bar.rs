@@ -14,6 +14,7 @@
 
 use wasm_bindgen::prelude::*;
 use web_sys::Document;
+use crate::constants::{CSS_TAB_BUTTON, CSS_TAB_BUTTON_ACTIVE, BUTTON_TYPE_BUTTON, ATTR_TYPE};
 
 /// Create a `<div class="tab-container">` with child `<button>`s – one per
 /// entry in `tabs`.
@@ -33,9 +34,9 @@ pub fn build_tab_bar(
 
     for (label, active) in tabs {
         let btn = document.create_element("button")?;
-        btn.set_attribute("type", "button")?;
+        btn.set_attribute(ATTR_TYPE, BUTTON_TYPE_BUTTON)?;
         btn.set_inner_html(label);
-        btn.set_class_name(if *active { "tab-button active" } else { "tab-button" });
+        btn.set_class_name(if *active { CSS_TAB_BUTTON_ACTIVE } else { CSS_TAB_BUTTON });
         container.append_child(&btn)?;
     }
 
