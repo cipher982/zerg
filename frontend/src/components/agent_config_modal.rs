@@ -410,6 +410,7 @@ impl AgentConfigModal {
 
         let freq_select = document.create_element("select")?;
         freq_select.set_id("sched-frequency");
+        freq_select.set_class_name("modal-select");
 
         let frequencies = [
             ("none", "Not scheduled"),

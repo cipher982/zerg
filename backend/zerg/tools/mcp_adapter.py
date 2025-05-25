@@ -2,6 +2,12 @@
 
 This module provides integration between MCP servers and our internal tool registry,
 allowing agents to use both built-in tools and MCP-provided tools seamlessly.
+
+WARNING: This is a PROOF OF CONCEPT implementation!
+The hardcoded PRESET_MCP_SERVERS should be removed. Instead:
+- Allow customers to add ANY MCP server URL dynamically
+- Presets should be stored in a configuration file or database
+- See docs/mcp_integration_requirements.md for the final design
 """
 
 import asyncio

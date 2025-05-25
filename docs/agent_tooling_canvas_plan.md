@@ -105,12 +105,14 @@ Double-clicking an Agent opens a side-panel (or nested canvas) streaming every L
 | B-2 | Emit Prometheus metrics per tool | [ ] |
 | B-3 | Persist per-tool timing & status in `runs` table | [ ] |
 
-### Phase C – Plugin system (target ≅ 2 weeks)
+### Phase C – MCP Integration (target ≅ 2 weeks)
 
 | ID | Task | Status |
 |----|-------|--------|
-| C-1 | Entry-point discovery (`zerg_tools = …`) | [ ] |
-| C-2 | Publish example plugin (`examples/email_tool`) | [ ] |
+| C-1 | MCP client adapter for tool registry | [ ] |
+| C-2 | Support for custom MCP server URLs | [ ] |
+| C-3 | Preset popular MCP servers (GitHub, Linear, Slack) | [ ] |
+| C-4 | OAuth token management for MCP servers | [ ] |
 
 ### Phase D – Frontend Canvas (runs in parallel)
 
@@ -123,13 +125,52 @@ Double-clicking an Agent opens a side-panel (or nested canvas) streaming every L
 
 ---
 
-## 8  Open Questions
+## 8  MCP Integration Strategy
 
-1. Do we expose editing of an Agent’s internal allow-list from the UI v1, or keep it API-only until permissions/multi-tenant story lands?  
+### How MCP Fits the Canvas Vision
+
+MCP (Model Context Protocol) provides a standardized way to connect to external tool providers, perfectly aligning with our plugin system needs:
+
+1. **Built-in Tools** (Phase A) ✅ - Fast, reliable, always available
+   - `get_current_time`, `math_eval`, `http_get`, etc.
+   - Directly integrated into our tool registry
+
+2. **MCP Tools** (Phase C) - Extensible ecosystem
+   - **Preset Servers**: One-click setup for GitHub, Linear, Slack, etc.
+   - **Custom Servers**: Customers can add ANY MCP server URL
+   - Tools from MCP servers appear in the same registry as built-in tools
+
+3. **Canvas Integration** (Phase D)
+   - Tool nodes can represent either built-in OR MCP tools
+   - Visual distinction shows tool source (built-in vs which MCP server)
+   - Connection health indicators for external dependencies
+
+### Customer Experience
+
+```
+Agent Configuration
+├── Built-in Tools (always available)
+│   ├── datetime tools
+│   ├── math tools
+│   └── http tools
+├── Quick Connect (MCP Presets)
+│   ├── [Connect GitHub]
+│   ├── [Connect Linear]
+│   └── [Connect Slack]
+└── Custom MCP Servers
+    └── [+ Add MCP Server URL]
+```
+
+---
+
+## 9  Open Questions
+
+1. Do we expose editing of an Agent's internal allow-list from the UI v1, or keep it API-only until permissions/multi-tenant story lands?  
 2. How to cancel a long-running Agent loop mid-flight from the canvas?  Signal handling & UI affordance TBD.
 
 ---
 
-## 9  Change-log
+## 10  Change-log
 
 *2025-05-25*  – Document created from design discussion (davidrose, GPT-4o-assistant).
+*2025-05-25*  – Updated Phase C to use MCP instead of custom plugin system. Added MCP integration strategy section.
