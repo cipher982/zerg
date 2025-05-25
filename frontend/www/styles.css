@@ -1058,16 +1058,23 @@ button {
 
 .actions-cell {
     white-space: nowrap;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: var(--spacing-xs);
+    text-align: right;
     position: sticky;
     right: 0;
     z-index: 2;
     background-color: #2a2a3a;
     box-shadow: -2px 0 5px rgba(0,0,0,0.2);
     min-width: var(--actions-column-width);
+    vertical-align: middle;
+}
+
+/* Inner container for action buttons to maintain flex layout */
+.actions-cell-inner {
+    display: inline-flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--spacing-xs);
+    height: 100%;
 }
 
 .action-btn {

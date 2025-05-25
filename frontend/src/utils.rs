@@ -123,10 +123,8 @@ pub fn logout() -> Result<(), JsValue> {
                         .unwrap_or_default()
                 });
                 crate::components::auth::mount_login_overlay(&document, &client_id);
-            } else {
-                if let Some(el) = document.get_element_by_id("global-login-overlay") {
-                    el.set_class_name("login-overlay");
-                }
+            } else if let Some(el) = document.get_element_by_id("global-login-overlay") {
+                el.set_class_name("login-overlay");
             }
         }
     }

@@ -60,6 +60,7 @@ mod scheduling;
 mod utils;
 mod dom_utils;
 mod auth;
+mod ui_components;
 
 /// Basic hash router for a handful of top-level pages.
 fn route_hash(hash: &str) {

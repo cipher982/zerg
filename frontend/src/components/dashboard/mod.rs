@@ -16,6 +16,7 @@ use crate::constants::{
     // DEFAULT_THREAD_TITLE (unused)
 };
 use wasm_bindgen::closure::Closure;
+use crate::ui_components::{ButtonConfig, create_button, create_danger_button};
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -314,13 +315,11 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     let button_container = document.create_element("div")?;
     button_container.set_class_name("button-container");
     
-    // Create Agent button
-    let create_button = document.create_element("button")?;
-    create_button.set_attribute("type", "button")?;
-    create_button.set_class_name("create-agent-button");
-    create_button.set_inner_html("Create Agent");
-    create_button.set_attribute("id", "create-agent-button")?;
-    create_button.set_attribute(ATTR_DATA_TESTID, "create-agent-btn")?;
+    // Create Agent button using ui_components helper
+    let create_button = create_button(document, ButtonConfig::new("Create Agent")
+        .with_id("create-agent-button")
+        .with_class("create-agent-button")
+        .with_testid("create-agent-btn"))?;
     
     // Add click event handler for Create Agent button
     let create_callback = Closure::wrap(Box::new(move || {
@@ -342,12 +341,8 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     create_btn.set_onclick(Some(create_callback.as_ref().unchecked_ref()));
     create_callback.forget();
     
-    // Create reset database button (development only)
-    let reset_btn = document.create_element("button")?;
-    reset_btn.set_attribute("type", "button")?;
-    reset_btn.set_class_name("reset-db-btn");
-    reset_btn.set_inner_html("🗑️ Reset DB");
-    reset_btn.set_attribute("id", "reset-db-btn")?;
+    // Create reset database button (development only) using ui_components helper
+    let reset_btn = create_danger_button(document, "🗑️ Reset DB", Some("reset-db-btn"))?;
     reset_btn.set_attribute(ATTR_DATA_TESTID, "reset-db-btn")?;
     
     // Reset button click handler
@@ -718,6 +713,10 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let actions_cell = document.create_element("td")?;
     actions_cell.set_class_name("actions-cell");
     
+    // Create inner container for buttons
+    let actions_inner = document.create_element("div")?;
+    actions_inner.set_class_name("actions-cell-inner");
+    
     // Run button
     let run_btn = document.create_element("button")?;
     run_btn.set_attribute("type", "button")?;
@@ -768,7 +767,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         .add_event_listener_with_callback("click", run_callback.as_ref().unchecked_ref())?;
     run_callback.forget();
     
-    actions_cell.append_child(&run_btn)?;
+    actions_inner.append_child(&run_btn)?;
     
     // Edit button
     let edit_btn = document.create_element("button")?;
@@ -794,6 +793,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         .unwrap()
         .add_event_listener_with_callback("click", edit_callback.as_ref().unchecked_ref())?;
     edit_callback.forget();
+    
+    actions_inner.append_child(&edit_btn)?;
     
     // Chat button
     let chat_btn = document.create_element("button")?;
@@ -822,8 +823,6 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         .add_event_listener_with_callback("click", chat_callback.as_ref().unchecked_ref())?;
     chat_callback.forget();
     
-    actions_cell.append_child(&edit_btn)?;
-    
     // Debug (info) button – new 🐞 icon
     let debug_btn = document.create_element("button")?;
     debug_btn.set_attribute("type", "button")?;
@@ -842,8 +841,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         .add_event_listener_with_callback("click", debug_cb.as_ref().unchecked_ref())?;
     debug_cb.forget();
     
-    actions_cell.append_child(&debug_btn)?;
-    actions_cell.append_child(&chat_btn)?;
+    actions_inner.append_child(&debug_btn)?;
+    actions_inner.append_child(&chat_btn)?;
     
     // Delete agent button
     let delete_btn = document.create_element("button")?;
@@ -869,8 +868,10 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         .add_event_listener_with_callback("click", delete_callback.as_ref().unchecked_ref())?;
     delete_callback.forget();
 
-    actions_cell.append_child(&delete_btn)?;
+    actions_inner.append_child(&delete_btn)?;
     
+    // Append the inner container to the cell
+    actions_cell.append_child(&actions_inner)?;
     row.append_child(&actions_cell)?;
 
     // ---------------- Toggle detail expansion on row click ----------------
@@ -909,7 +910,10 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
     tr.set_class_name("agent-detail-row");
 
     let td = document.create_element("td")?;
-    td.set_attribute("colspan", "6")?;
+    // Adjust colspan based on whether Owner column is shown
+    let include_owner = APP_STATE.with(|st| st.borrow().dashboard_scope == crate::state::DashboardScope::AllAgents);
+    let colspan = if include_owner { 7 } else { 6 };
+    td.set_attribute("colspan", &colspan.to_string())?;
 
     let container = document.create_element("div")?;
     container.set_class_name("agent-detail-container");
