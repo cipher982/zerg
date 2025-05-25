@@ -1,3 +1,32 @@
+/* Polished select box for modal-frequency selector (Agent Config Modal) */
+.modal-select {
+    width: 100%;
+    padding: 12px;
+    border-radius: 4px;
+    border: 1px solid #444;
+    background-color: #333;
+    color: white;
+    font-family: inherit;
+    margin-bottom: 15px;
+    box-sizing: border-box;
+    font-size: 15px;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23bdc3c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6,9 12,15 18,9'></polyline></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 18px;
+    padding-right: 36px;
+}
+.modal-select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 5px rgba(52, 152, 219, 0.5);
+}
+.modal-select option {
+    background: #252535;
+    color: #eee;
+    padding: 8px;
+}
 :root {
   /* Colors */
   --color-primary: #3498db;
