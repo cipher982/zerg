@@ -5,7 +5,6 @@ defining *how the agent thinks*.  Persistence and streaming will be handled by
 AgentRunner.
 """
 
-import datetime as _dt
 import logging
 import os
 from typing import List
@@ -14,7 +13,6 @@ from typing import Optional
 from langchain_core.messages import AIMessage
 from langchain_core.messages import BaseMessage
 from langchain_core.messages import ToolMessage
-from langchain_core.tools import tool
 
 # External dependencies
 from langchain_openai import ChatOpenAI
@@ -25,20 +23,9 @@ from langgraph.graph.message import add_messages
 
 # Local imports (late to avoid circulars)
 from zerg.callbacks.token_stream import WsTokenCallback
+from zerg.tools.registry import get_registry
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Tools
-# ---------------------------------------------------------------------------
-
-
-@tool
-def get_current_time() -> str:  # noqa: D401 – imperative description fits tool
-    """Return the current date/time as ISO-8601 string."""
-
-    return _dt.datetime.now().isoformat()
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +72,16 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
     for the given Agent ORM row.
     """
     # --- Define tools and model within scope ---
-    tools = [get_current_time]
+    # Import builtin tools to trigger registration
+
+    # Get tools from registry, filtered by agent's allowed_tools
+    registry = get_registry()
+    allowed_tools = getattr(agent_row, "allowed_tools", None)
+    tools = registry.filter_tools_by_allowlist(allowed_tools)
+
+    if not tools:
+        logger.warning(f"No tools available for agent {agent_row.id}")
+
     tools_by_name = {tool.name: tool for tool in tools}
     llm_with_tools = _make_llm(agent_row, tools)
 
@@ -247,18 +243,39 @@ def get_tool_messages(ai_msg: AIMessage):  # noqa: D401 – util function
     if not getattr(ai_msg, "tool_calls", None):
         return []
 
+    # Import builtin tools to ensure they're registered
+
+    # Get the tool registry
+    registry = get_registry()
+
     tool_messages: List[ToolMessage] = []
     for tc in ai_msg.tool_calls:
         name = tc.get("name")
         content = "<no-op>"
         try:
-            # Try to resolve tool by name in current module globals
-            tool_fn = globals().get(name)
-            if tool_fn is not None and hasattr(tool_fn, "invoke"):
-                content = tool_fn.invoke(tc.get("args", {}))
+            # Try to get tool from registry first
+            tool = registry.get_tool(name)
+            if tool is not None:
+                content = tool.invoke(tc.get("args", {}))
+            else:
+                # Fallback to module globals for backward compatibility
+                tool_fn = globals().get(name)
+                if tool_fn is not None and hasattr(tool_fn, "invoke"):
+                    content = tool_fn.invoke(tc.get("args", {}))
         except Exception as exc:  # noqa: BLE001
             content = f"<tool-error> {exc}"
 
         tool_messages.append(ToolMessage(content=str(content), tool_call_id=tc.get("id"), name=name))
 
     return tool_messages
+
+
+# ---------------------------------------------------------------------------
+# Backward compatibility - expose get_current_time at module level
+# ---------------------------------------------------------------------------
+# Import builtin tools to ensure registration
+import zerg.tools.builtin  # noqa: F401, E402
+
+# Get the tool from registry and expose it at module level for tests
+_registry = get_registry()
+get_current_time = _registry.get_tool("get_current_time")

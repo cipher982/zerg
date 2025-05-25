@@ -20,6 +20,7 @@ class AgentBase(BaseModel):
     schedule: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
     last_error: Optional[str] = None
+    allowed_tools: Optional[List[str]] = None
 
 
 class AgentCreate(AgentBase):
@@ -35,6 +36,7 @@ class AgentUpdate(BaseModel):
     schedule: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
     last_error: Optional[str] = None
+    allowed_tools: Optional[List[str]] = None
 
 
 class AgentMessage(BaseModel):
