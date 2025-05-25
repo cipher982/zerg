@@ -252,9 +252,115 @@ grep -r "set_attribute.*style" frontend/src/
 
 ---
 
+## 🌟 Dashboard Enhancements (Quality of Life)
+
+These improvements were identified while fixing table alignment issues and would significantly enhance the user experience.
+
+### High-Impact Features (30-60 minutes each)
+
+#### Search Functionality
+- [ ] Implement real-time filtering for the agent search input
+- [ ] Filter agents by name as user types
+- [ ] Show "No results" message when no matches
+- [ ] Clear search with ESC key
+- [ ] **Why**: Essential for users with many agents
+
+#### Table Sorting
+- [ ] Implement sorting for all columns:
+  - [ ] Agent name (alphabetical)
+  - [ ] Status (group by type)
+  - [ ] Last/Next run (chronological)
+  - [ ] Success rate (numerical)
+- [ ] Visual indicator for sort direction (▲/▼)
+- [ ] Remember sort preference in localStorage
+- [ ] **Why**: Column headers already have click handlers, just need implementation
+
+#### Loading States for Actions
+- [ ] Disable buttons during async operations
+- [ ] Show spinner inside button while loading
+- [ ] Prevent double-clicks
+- [ ] Success/error flash messages
+- [ ] **Why**: Better feedback, prevents race conditions
+
+#### Keyboard Shortcuts
+- [ ] `Ctrl/Cmd + K` - Focus search
+- [ ] `N` - New agent
+- [ ] `Arrow keys` - Navigate table rows
+- [ ] `Enter` - Expand/collapse row
+- [ ] `R` - Run selected agent
+- [ ] `?` - Show shortcuts help
+- [ ] **Why**: Power user efficiency
+
+### Visual Enhancements (15-30 minutes each)
+
+#### Status Improvements
+- [ ] Animated pulsing dot for "Running" status
+- [ ] Tooltips explaining each status
+- [ ] Time-based info ("Running for 2 minutes")
+- [ ] Progress indicator for scheduled agents
+- [ ] **Why**: Better visual feedback
+
+#### Empty State Design
+- [ ] Add illustration/icon for empty dashboard
+- [ ] Prominent "Create First Agent" button
+- [ ] Quick tips or tutorial link
+- [ ] **Why**: Better onboarding experience
+
+#### Row Animations
+- [ ] Smooth expand/collapse transitions
+- [ ] Fade in/out for status changes
+- [ ] Highlight flash on update
+- [ ] **Why**: Polished feel, easier to track changes
+
+### Advanced Features (1-2 hours each)
+
+#### Bulk Operations
+- [ ] Checkboxes for multi-select
+- [ ] Select all/none controls
+- [ ] Bulk actions toolbar:
+  - [ ] Run selected
+  - [ ] Delete selected
+  - [ ] Export selected
+- [ ] **Why**: Efficiency for managing many agents
+
+#### Enhanced Error Display
+- [ ] "View Details" modal for long errors
+- [ ] Copy error to clipboard
+- [ ] Error timestamp and duration
+- [ ] Retry button in error state
+- [ ] Stack trace toggle
+- [ ] **Why**: Better debugging experience
+
+#### Run History Enhancements
+- [ ] Clickable rows for full details
+- [ ] View logs in modal
+- [ ] Re-run from history
+- [ ] Compare runs side-by-side
+- [ ] Export to CSV
+- [ ] Filter by status/date
+- [ ] **Why**: Better analysis and debugging
+
+#### Responsive Design
+- [ ] Card layout for mobile (< 768px)
+- [ ] Priority columns on medium screens
+- [ ] Touch-friendly action buttons
+- [ ] Swipe gestures for actions
+- [ ] **Why**: Mobile accessibility
+
+### Table Alignment Fix (Completed)
+- [x] Fixed Actions column vertical alignment issue
+- [x] Removed `display: flex` from `.actions-cell`
+- [x] Added `.actions-cell-inner` container for button layout
+- [x] Maintained sticky positioning and responsive behavior
+- **Completed**: May 25, 2025 - Actions column now properly aligns with other table cells
+
+---
+
 ## 📈 Progress Tracking
 
 Mark items as complete with `[x]` and add notes about any challenges or decisions made. This document should evolve as the work progresses.
 
-**Last Updated**: January 24, 2025
-**Contributors**: Claude (AI Assistant) - Completed Quick Wins section (Button Type Safety, Magic String Constants, XSS Prevention, Test Selectors) and started Medium Priority (Focus Management utilities)
+**Last Updated**: May 25, 2025
+**Contributors**: 
+- Claude (AI Assistant) - Completed Quick Wins section (Button Type Safety, Magic String Constants, XSS Prevention, Test Selectors) and Medium Priority (Focus Management, ARIA improvements)
+- Claude (AI Assistant) - Added Dashboard Enhancements section with quality of life improvements discovered during table alignment fix
