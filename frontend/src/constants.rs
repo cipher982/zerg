@@ -12,6 +12,18 @@ pub const CSS_VISIBLE: &str = "visible";
 pub const CSS_MESSAGE_USER: &str = "message user-message";
 pub const CSS_MESSAGE_ASSISTANT: &str = "message assistant-message";
 
+// Utility CSS Classes (extracted from inline styles)
+pub const CSS_FORM_ROW: &str = "form-row";
+pub const CSS_FORM_ROW_SM: &str = "form-row-sm";
+pub const CSS_FORM_ROW_XS: &str = "form-row-xs";
+pub const CSS_CARD: &str = "card";
+pub const CSS_ACTIONS_ROW: &str = "actions-row";
+pub const CSS_SUCCESS_TEXT: &str = "success-text";
+pub const CSS_SCHEDULE_SUMMARY: &str = "schedule-summary";
+pub const CSS_TRIGGERS_LIST: &str = "triggers-list";
+pub const CSS_EMPTY_STATE: &str = "empty-state";
+pub const CSS_PRESERVE_WHITESPACE: &str = "preserve-whitespace";
+
 // Message Roles
 pub const ROLE_USER: &str = "user";
 pub const ROLE_ASSISTANT: &str = "assistant";
