@@ -94,6 +94,14 @@ class Agent(Base):
     config = Column(JSON, nullable=True)  # Additional configuration as JSON
 
     # -------------------------------------------------------------------
+    # Tool allowlist – controls which tools this agent can use
+    # -------------------------------------------------------------------
+    # Empty/NULL means all tools are allowed. Otherwise, it's a JSON array
+    # of tool names that the agent is allowed to use. Supports wildcards
+    # like "http_*" to allow all HTTP tools.
+    allowed_tools = Column(JSON, nullable=True)
+
+    # -------------------------------------------------------------------
     # Ownership – every agent belongs to *one* user (creator / owner).
     # -------------------------------------------------------------------
 

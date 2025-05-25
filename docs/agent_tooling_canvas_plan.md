@@ -92,10 +92,10 @@ Double-clicking an Agent opens a side-panel (or nested canvas) streaming every L
 
 | ID | Task | Status |
 |----|-------|--------|
-| A-1 | Implement `ToolRegistry` & migrate `get_current_time` | [ ] |
-| A-2 | Add built-in tools (`http_get`, `math_eval`, `uuid`, `datetime_diff`) | [ ] |
-| A-3 | Schema migration – `allowed_tools` column | [ ] |
-| A-4 | Update agent factory to honour allow-list | [ ] |
+| A-1 | Implement `ToolRegistry` & migrate `get_current_time` | [x] |
+| A-2 | Add built-in tools (`http_get`, `math_eval`, `uuid`, `datetime_diff`) | [x] |
+| A-3 | Schema migration – `allowed_tools` column | [x] |
+| A-4 | Update agent factory to honour allow-list | [x] |
 
 ### Phase B – Reliability & Metrics (target ≅ 2 weeks)
 
