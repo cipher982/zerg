@@ -1,11 +1,8 @@
-use wasm_bindgen_futures;
-use web_sys;
 use crate::messages::{Message, Command};
 use crate::models::{ApiThread, ApiAgent, ApiThreadMessage};
 use crate::models::ApiAgentDetails;
 use crate::state::{APP_STATE, dispatch_global_message};
 use crate::network::api_client::ApiClient;
-use serde_json;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -349,4 +346,4 @@ pub fn execute_websocket_command(cmd: Command) {
         },
         _ => web_sys::console::warn_1(&"Unexpected command type in execute_websocket_command".into())
     }
-} 
+}

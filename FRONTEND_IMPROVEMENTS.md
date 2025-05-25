@@ -141,10 +141,16 @@ The frontend is built with:
 
 ### Keyboard Navigation
 - [x] Implement Escape key to close modals - Already implemented in `modal.rs` as part of focus trap
-- [ ] Add arrow key navigation for tab components
+- [x] Add arrow key navigation for tab components
 - [ ] Ensure all interactive elements are keyboard accessible
 - [ ] Test tab order is logical
 - [ ] **Why**: Accessibility compliance, better UX
+- **Completed**: Added comprehensive keyboard navigation to `tab_bar.rs`:
+  - Arrow key navigation (Left/Right) between tabs with wrap-around
+  - Enter/Space to activate tabs
+  - Proper ARIA attributes (`role="tablist"`, `role="tab"`, `tabindex` management)
+  - Focus management with visual focus indicators
+  - Thread-local storage for event handler cleanup
 
 ---
 
@@ -163,12 +169,22 @@ The frontend is built with:
 - **Completed**: Added comprehensive utility CSS classes to `styles.css` and updated `constants.rs` with class name constants. Started replacing inline styles in `agent_config_modal.rs` with CSS classes. Remaining inline styles are mostly for complex styling that would benefit from more specific CSS classes.
 
 ### Component Extraction
-- [ ] Extract repeated UI patterns into reusable functions:
-  - [ ] Button creation helper
-  - [ ] Form field helper (label + input)
-  - [ ] Modal header/footer patterns
-- [ ] Create `ui_components.rs` module for shared patterns
-- [ ] **Why**: DRY principle, consistency
+- [x] Extract repeated UI patterns into reusable functions:
+  - [x] Button creation helper
+  - [x] Form field helper (label + input)
+  - [x] Modal header/footer patterns
+- [x] Create `ui_components.rs` module for shared patterns
+- [x] **Why**: DRY principle, consistency
+- **Completed**: Created comprehensive `ui_components.rs` module with:
+  - `ButtonConfig` struct for flexible button configuration
+  - `create_button()` - Generic button factory with consistent attributes
+  - `create_primary_button()`, `create_secondary_button()`, `create_danger_button()` - Styled button variants
+  - `create_icon_button()` - Icon buttons with proper accessibility
+  - `FormFieldConfig` struct for form field configuration
+  - `create_form_field()` - Label + input/textarea factory
+  - `create_modal_header()` - Modal header with title and close button
+  - `create_actions_row()`, `create_card()` - Layout helpers
+  - All components follow accessibility best practices and use constants for consistency
 
 ### Error Handling UI
 - [ ] Implement toast/notification system for errors

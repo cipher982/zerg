@@ -60,11 +60,12 @@ features = [
     "Storage",
     "EventTarget",
     "AddEventListenerOptions",
-    "Location"
+    "Location",
+    "HtmlCollection"
 ]
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.37"
 
 [package.metadata.wasm-pack.profile.dev]
-wasm-bindgen = { debug-js-glue = true, demangle-name-section = true } 
+wasm-bindgen = { debug-js-glue = true, demangle-name-section = true }

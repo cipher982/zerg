@@ -20,7 +20,7 @@ use crate::components::tab_bar;
 
 use crate::state::APP_STATE;
 use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS, ATTR_DATA_TESTID, 
-                       CSS_FORM_ROW_SM, CSS_SUCCESS_TEXT, CSS_ACTIONS_ROW, CSS_TRIGGERS_LIST, CSS_SCHEDULE_SUMMARY};
+                       CSS_FORM_ROW_SM, CSS_ACTIONS_ROW};
 use crate::state::dispatch_global_message;
 use crate::models::Trigger;
 use wasm_bindgen::closure::Closure;

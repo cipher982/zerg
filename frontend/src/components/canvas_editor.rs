@@ -375,7 +375,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 let commands = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::UpdateNodePosition {
-                        node_id: node_id,
+                        node_id,
                         x: world_x - drag_offset_x,
                         y: world_y - drag_offset_y,
                     })
