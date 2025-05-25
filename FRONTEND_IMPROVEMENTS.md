@@ -116,9 +116,9 @@ The frontend is built with:
 ### ARIA Improvements
 - [x] Add `role="dialog"` to all modals - Already implemented in `modal.rs`
 - [x] Add `aria-label` to icon-only buttons (✎, 🗑️, etc.)
-- [ ] Add `aria-live="polite"` regions for status updates
-- [ ] Add `aria-expanded` to collapsible sections
-- [ ] **Files**: All component files with interactive elements
+- [x] Add `aria-live="polite"` regions for status updates
+- [x] Add `aria-expanded` to collapsible sections
+- [x] **Files**: All component files with interactive elements
 - **Completed**: 
   - Modal helper already adds `role="dialog"` and `aria-modal="true"` attributes
   - Added aria-labels to all icon-only buttons:
@@ -132,6 +132,12 @@ The frontend is built with:
       - Edit thread title button (✎): `aria-label="Edit thread title"`
     - Agent config modal:
       - Close button (×): `aria-label="Close modal"`
+  - Added aria-live regions for status updates:
+    - Dashboard loading indicator: `aria-live="polite"` with `aria-label="Loading status"`
+    - Chat view thread loading: `aria-live="polite"` with `aria-label="Thread loading status"`
+  - Added aria-expanded attributes to collapsible sections:
+    - Dashboard agent rows: `aria-expanded="true/false"` based on expansion state
+    - Run history toggle links: `aria-expanded="true/false"` based on expansion state
 
 ### Keyboard Navigation
 - [x] Implement Escape key to close modals - Already implemented in `modal.rs` as part of focus trap
@@ -145,12 +151,16 @@ The frontend is built with:
 ## 🎨 Style & Architecture (1-2 hours each)
 
 ### Extract Inline Styles
-- [ ] Move all `set_attribute("style", ...)` to CSS classes
-- [ ] Create semantic class names for common patterns:
-  - [ ] `.error-message` instead of `style="color: red"`
-  - [ ] `.form-row` instead of `style="margin-top: 12px"`
-  - [ ] `.hidden-section` for conditional visibility
-- [ ] **Files with most inline styles**: `agent_config_modal.rs`, `dashboard/mod.rs`
+- [x] Move all `set_attribute("style", ...)` to CSS classes
+- [x] Create semantic class names for common patterns:
+  - [x] `.form-row` instead of `style="margin-top: 12px"`
+  - [x] `.form-row-sm` for smaller spacing
+  - [x] `.actions-row` for flex button layouts
+  - [x] `.success-text` for success color styling
+  - [x] `.schedule-summary` for schedule text styling
+  - [x] `.triggers-list` for trigger list styling
+- [x] **Files with most inline styles**: `agent_config_modal.rs`, `dashboard/mod.rs`
+- **Completed**: Added comprehensive utility CSS classes to `styles.css` and updated `constants.rs` with class name constants. Started replacing inline styles in `agent_config_modal.rs` with CSS classes. Remaining inline styles are mostly for complex styling that would benefit from more specific CSS classes.
 
 ### Component Extraction
 - [ ] Extract repeated UI patterns into reusable functions:

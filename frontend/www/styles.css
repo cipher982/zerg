@@ -1279,3 +1279,66 @@ button {
 .btn-primary:hover {
     background-color: #2380c4;
 }
+
+/* ------------------------------------------------------------------
+   Utility Classes for Common Patterns (extracted from inline styles)
+   ------------------------------------------------------------------ */
+
+/* Form and layout spacing */
+.form-row {
+    margin-top: 12px;
+}
+
+.form-row-sm {
+    margin-top: 8px;
+}
+
+.form-row-xs {
+    margin-top: 6px;
+}
+
+/* Card styling */
+.card {
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    margin-top: 12px;
+    border-radius: 4px;
+    background-color: var(--bg-dark);
+}
+
+/* Action rows with flex layout */
+.actions-row {
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+}
+
+/* Success/connected status styling */
+.success-text {
+    color: var(--success-color);
+    margin-left: 4px;
+}
+
+/* Schedule summary styling */
+.schedule-summary {
+    font-size: 0.9em;
+    color: #555;
+    margin-top: 6px;
+}
+
+/* List styling */
+.triggers-list {
+    margin-top: 12px;
+}
+
+/* Empty state styling */
+.empty-state {
+    text-align: center;
+    padding: 30px;
+    color: #888;
+}
+
+/* Text content with preserved whitespace */
+.preserve-whitespace {
+    white-space: pre-wrap;
+}

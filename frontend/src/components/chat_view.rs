@@ -753,6 +753,8 @@ pub fn update_loading_state(document: &Document, is_loading: bool) -> Result<(),
             thread_list.set_inner_html("");
             let loading_el = document.create_element("div")?;
             loading_el.set_class_name("thread-loading");
+            loading_el.set_attribute("aria-live", "polite")?;
+            loading_el.set_attribute("aria-label", "Thread loading status")?;
             loading_el.set_text_content(Some("Loading threads..."));
             thread_list.append_child(&loading_el)?;
         }

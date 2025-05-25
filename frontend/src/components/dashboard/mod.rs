@@ -117,9 +117,11 @@ pub fn render_dashboard(document: &Document) -> Result<(), JsValue> {
     });
     
     if is_loading {
-        // Show loading indicator
+        // Show loading indicator with aria-live region
         let loading_div = document.create_element("div")?;
         loading_div.set_class_name("loading-indicator");
+        loading_div.set_attribute("aria-live", "polite")?;
+        loading_div.set_attribute("aria-label", "Loading status")?;
         loading_div.set_inner_html("Loading agents...");
         dashboard.append_child(&loading_div)?;
         return Ok(());
@@ -589,6 +591,12 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let row = document.create_element("tr")?;
     row.set_attribute("data-agent-id", &agent.id.to_string())?;
 
+    // Check if this agent row is currently expanded for aria-expanded attribute
+    let is_expanded = APP_STATE.with(|s| {
+        s.borrow().expanded_agent_rows.contains(&agent.id)
+    });
+    row.set_attribute("aria-expanded", if is_expanded { "true" } else { "false" })?;
+
     // Highlight the entire row if the agent is currently in an error state so
     // users can spot it quickly.
     if agent.status == AgentStatus::Error {
@@ -1035,6 +1043,7 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
             let toggle_link = document.create_element("a")?;
             toggle_link.set_class_name("run-toggle-link");
             toggle_link.set_attribute("href", "#")?;
+            toggle_link.set_attribute("aria-expanded", if expanded { "true" } else { "false" })?;
             let link_text = if expanded {
                 "Show less".to_string()
             } else {

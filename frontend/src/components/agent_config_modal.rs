@@ -19,7 +19,8 @@ use crate::components::tab_bar;
 
 
 use crate::state::APP_STATE;
-use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS, ATTR_DATA_TESTID};
+use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS, ATTR_DATA_TESTID, 
+                       CSS_FORM_ROW_SM, CSS_SUCCESS_TEXT, CSS_ACTIONS_ROW, CSS_TRIGGERS_LIST, CSS_SCHEDULE_SUMMARY};
 use crate::state::dispatch_global_message;
 use crate::models::Trigger;
 use wasm_bindgen::closure::Closure;
@@ -86,7 +87,7 @@ impl AgentConfigModal {
             // Gmail connect row (only visible when not yet connected)
             let gmail_row = document.create_element("div")?;
             gmail_row.set_id("agent-gmail-connect-row");
-            gmail_row.set_attribute("style", "margin-top:8px;")?;
+            gmail_row.set_class_name(CSS_FORM_ROW_SM);
 
             // Button placeholder – we toggle visibility later in
             // `render_gmail_connect_status`.
@@ -143,7 +144,7 @@ impl AgentConfigModal {
                     form_card.append_child(&sel)?;
 
                     let act = document.create_element("div")?;
-                    act.set_attribute("style", "margin-top:12px;display:flex;gap:8px;")?;
+                    act.set_class_name(CSS_ACTIONS_ROW);
                     let cancel_btn = document.create_element("button")?;
                     cancel_btn.set_attribute("type", "button")?;
                     cancel_btn.set_id("agent-cancel-add-trigger");
