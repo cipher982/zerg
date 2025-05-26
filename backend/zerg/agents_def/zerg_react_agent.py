@@ -72,9 +72,24 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
     for the given Agent ORM row.
     """
     # --- Define tools and model within scope ---
-    # Import builtin tools to trigger registration
+    # ------------------------------------------------------------------
+    # MCP INTEGRATION – Dynamically load tools provided by *all* MCP servers
+    # referenced in the agent configuration.  We run the **synchronous**
+    # helper which internally spins up an event-loop and fetches the tool
+    # manifests.  Duplicate servers across multiple agents are cached by the
+    # ``MCPManager`` so each server is contacted at most once per process.
+    # ------------------------------------------------------------------
 
-    # Get tools from registry, filtered by agent's allowed_tools
+    cfg = getattr(agent_row, "config", {}) or {}
+    if "mcp_servers" in cfg:
+        # Deferred import to avoid cost when MCP is unused
+        from zerg.tools.mcp_adapter import load_mcp_tools_sync  # noqa: WPS433 (late import)
+
+        load_mcp_tools_sync(cfg["mcp_servers"])  # blocking – runs quickly (metadata only)
+
+    # ------------------------------------------------------------------
+    # Local registry setup
+    # ------------------------------------------------------------------
     registry = get_registry()
     allowed_tools = getattr(agent_row, "allowed_tools", None)
     tools = registry.filter_tools_by_allowlist(allowed_tools)
@@ -253,15 +268,22 @@ def get_tool_messages(ai_msg: AIMessage):  # noqa: D401 – util function
         name = tc.get("name")
         content = "<no-op>"
         try:
-            # Try to get tool from registry first
-            tool = registry.get_tool(name)
-            if tool is not None:
-                content = tool.invoke(tc.get("args", {}))
+            # ----------------------------------------------------------
+            # Resolution order *prefers* **module-level** attributes.
+            # This allows tests (and potential runtime hot-patches) to
+            # monkey-patch a tool implementation without touching the global
+            # registry.
+            # ----------------------------------------------------------
+
+            tool_obj = globals().get(name)
+
+            if tool_obj is not None and hasattr(tool_obj, "invoke"):
+                content = tool_obj.invoke(tc.get("args", {}))
             else:
-                # Fallback to module globals for backward compatibility
-                tool_fn = globals().get(name)
-                if tool_fn is not None and hasattr(tool_fn, "invoke"):
-                    content = tool_fn.invoke(tc.get("args", {}))
+                # Fallback to registry lookup
+                tool = registry.get_tool(name)
+                if tool is not None:
+                    content = tool.invoke(tc.get("args", {}))
         except Exception as exc:  # noqa: BLE001
             content = f"<tool-error> {exc}"
 
