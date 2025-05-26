@@ -246,25 +246,26 @@ Available Tools
 - No more non-exhaustive match errors.
 - UI structure and message wiring are in place for further MCP integration.
 
+#### 🟢 Progress as of 2025-05-27
+
+- **MCP UI message handling and backend integration is complete:**
+  - All MCP UI events (`SetMCPTab`, `ConnectMCPPreset`, `AddMCPServer`, `RemoveMCPServer`, `TestMCPConnection`) are now fully wired to backend API calls and state updates in `frontend/src/update.rs`.
+  - State synchronization is in place: MCP server and tool state is loaded and updated in the UI after add/remove/test actions.
+  - The codebase now uses only the canonical method name (`get_mcp_available_tools`) for MCP tool fetching—no legacy or compatibility code remains.
+
+---
+
 #### 🟡 Next Steps
 
-1. **Wire Up MCP UI Message Logic**
-   - Implement actual logic for `SetMCPTab`, `ConnectMCPPreset`, `AddMCPServer`, `RemoveMCPServer`, `TestMCPConnection` in `update.rs`
-   - Connect UI events to backend API calls and state updates
-
-2. **State Synchronization**
-   - Ensure MCP server and tool state is loaded and updated in the UI after add/remove/test actions
-   - Sync allowed tools and server status with backend
-
-3. **UI Polish & Error Handling**
+1. **UI Polish & Error Handling**
    - Display connection errors and tool status in the UI
    - Add loading indicators and feedback for async actions
 
-4. **Testing**
+2. **Testing**
    - Manual and automated tests for all MCP UI flows
    - Edge cases: duplicate server names, invalid URLs, token errors
 
-5. **Documentation**
+3. **Documentation**
    - Update user and developer docs for MCP UI usage and extension
 
 ---
@@ -275,7 +276,8 @@ Available Tools
   - ✅ MCP API client and UI components created and integrated
   - ✅ Agent configuration modal updated with Tools tab
   - ✅ Message system and update logic extended for MCP UI
-  - 🟡 Next: Implement full UI-to-backend wiring and polish
+  - ✅ Full UI-to-backend wiring and state sync for MCP servers and tools
+  - 🟡 Next: UI polish, error display, and comprehensive testing
 
 ---
 
