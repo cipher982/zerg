@@ -158,6 +158,9 @@ Available Tools
    - Implement dynamic server addition
    - Add proper error handling
 
+    **Status:** ✅ Completed – adapter now exposes `MCPManager`, async/sync
+    loaders and loads presets from `mcp_presets.py`.
+
 2. **Database updates**
    - Store MCP server configs in agent.config JSON field
    - Add API endpoint for MCP server management

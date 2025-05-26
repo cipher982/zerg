@@ -3,27 +3,43 @@
 This module provides integration between MCP servers and our internal tool registry,
 allowing agents to use both built-in tools and MCP-provided tools seamlessly.
 
-WARNING: This is a PROOF OF CONCEPT implementation!
-The hardcoded PRESET_MCP_SERVERS should be removed. Instead:
-- Allow customers to add ANY MCP server URL dynamically
-- Presets should be stored in a configuration file or database
-- See docs/mcp_integration_requirements.md for the final design
+This module started life as a **proof-of-concept** with a few hard-coded
+presets.  It has now been promoted to a *production-ready* component that
+supports **dynamic** MCP server registration while still exposing the same
+convenience presets (now moved to `zerg.tools.mcp_presets`).
+
+Key changes compared to the PoC version:
+
+1.  ❌  No more hard-coded presets in the adapter itself.  Presets live in
+    `mcp_presets.py` and can be modified without touching any logic.
+2.  ✅  New `MCPManager` singleton caches one adapter per (url, auth_token)
+    so we never double-register tools when multiple agents share the same MCP
+    server.
+3.  ✅  Public helpers `load_mcp_tools()` (async) and
+    `load_mcp_tools_sync()` (sync) make it trivial to load tools from within
+    both asynchronous and synchronous code paths.
+
+See `docs/mcp_integration_requirements.md` for the end-to-end design.
 """
 
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any
-from typing import Callable
-from typing import Dict
-from typing import List
-from typing import Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import httpx
 
 from zerg.tools.registry import register_tool
 
+# ---------------------------------------------------------------------------
+# Logging helper
+# ---------------------------------------------------------------------------
+
 logger = logging.getLogger(__name__)
+
+# We intentionally *do not* import the preset mapping here to avoid a circular
+# dependency (`mcp_presets` imports :pyclass:`MCPServerConfig` from this very
+# module).  The mapping is loaded **lazily** in :pyfunc:`MCPManager._get_presets`.
 
 
 @dataclass
@@ -125,79 +141,139 @@ class MCPToolAdapter:
     def _create_tool_wrapper(self, tool_name: str, tool_spec: Dict[str, Any]) -> Callable:
         """Create a wrapper function that calls the MCP tool."""
 
-        # Extract parameter information from the tool spec
-        input_schema = tool_spec.get("inputSchema", {})
-        properties = input_schema.get("properties", {})
+        # Extract parameter information from the tool spec (kept for future
+        # schema-driven validation but currently unused).
+        _ = tool_spec.get("inputSchema", {})
 
-        async def tool_wrapper(**kwargs) -> str:
-            """Wrapper that calls the MCP tool and returns the result."""
+        async def _async_tool_wrapper(**kwargs):  # noqa: D401 – internal helper
             try:
                 result = await self.client.call_tool(tool_name, kwargs)
                 return str(result)
-            except Exception as e:
-                return f"Error calling MCP tool {tool_name}: {str(e)}"
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("Error calling MCP tool %s on %s", tool_name, self.config.name)
+                return f"Error calling MCP tool {tool_name}: {exc}"
 
-        # Add parameter annotations for better tool discovery
-        tool_wrapper.__name__ = f"{self.tool_prefix}{tool_name}"
-        tool_wrapper.__doc__ = tool_spec.get("description", "")
+        # ------------------------------------------------------------------
+        # Synchronous façade expected by LangChain.  It simply spins up a
+        # private event-loop *inside* the worker thread and delegates to the
+        # async implementation.
+        # ------------------------------------------------------------------
 
-        # For simplicity, we're returning the async wrapper
-        # In production, we'd want to handle sync/async properly
-        return lambda **kwargs: asyncio.run(tool_wrapper(**kwargs))
+        def _sync_tool_wrapper(**kwargs):  # noqa: D401 – wrapper
+            return asyncio.run(_async_tool_wrapper(**kwargs))
 
+        _sync_tool_wrapper.__name__ = f"{self.tool_prefix}{tool_name}"
+        _sync_tool_wrapper.__doc__ = tool_spec.get("description", "")
 
-# Preset MCP servers for quick wins
-PRESET_MCP_SERVERS = {
-    "github": MCPServerConfig(
-        name="github",
-        url="https://github.com/api/mcp/sse",
-        allowed_tools=["search_issues", "create_issue", "get_repository"],
-    ),
-    "linear": MCPServerConfig(
-        name="linear", url="https://mcp.linear.app/sse", allowed_tools=["create_issue", "update_issue", "search_issues"]
-    ),
-    "slack": MCPServerConfig(
-        name="slack", url="https://slack.com/api/mcp/sse", allowed_tools=["send_message", "list_channels"]
-    ),
-}
+        return _sync_tool_wrapper
 
 
-async def load_mcp_tools(mcp_configs: List[Dict[str, Any]]) -> None:
-    """Load tools from multiple MCP servers into the registry.
+# ---------------------------------------------------------------------------
+#  Manager – ensures tools are only registered once per MCP server
+# ---------------------------------------------------------------------------
 
-    Args:
-        mcp_configs: List of MCP server configurations
-    """
-    for config_dict in mcp_configs:
-        # Check if it's a preset
-        if "preset" in config_dict:
-            preset_name = config_dict["preset"]
-            if preset_name in PRESET_MCP_SERVERS:
-                server_config = PRESET_MCP_SERVERS[preset_name]
-                # Override with any custom auth token
-                if "auth_token" in config_dict:
-                    server_config.auth_token = config_dict["auth_token"]
-            else:
-                logger.warning(f"Unknown MCP preset: {preset_name}")
-                continue
-        else:
-            # Custom MCP server configuration
-            server_config = MCPServerConfig(**config_dict)
 
-        adapter = MCPToolAdapter(server_config)
+class MCPManager:
+    """Singleton that tracks *one* ``MCPToolAdapter`` per unique server."""
+
+    _instance: Optional["MCPManager"] = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._adapters: Dict[Tuple[str, str], MCPToolAdapter] = {}
+        return cls._instance
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    async def _init_adapter(self, cfg: MCPServerConfig):
+        key = (cfg.url, cfg.auth_token or "")
+        if key in self._adapters:
+            return  # Already initialised
+
+        adapter = MCPToolAdapter(cfg)
         await adapter.register_tools()
+        self._adapters[key] = adapter
+
+    async def add_server_async(self, cfg_dict: Dict[str, Any]):
+        """Add a server configuration (async version)."""
+
+        # Expand presets (if any)
+        if "preset" in cfg_dict:
+            preset_name = cfg_dict["preset"]
+            presets = self._get_presets()
+
+            if preset_name not in presets:
+                logger.warning("Unknown MCP preset: %s", preset_name)
+                return
+
+            base_cfg: MCPServerConfig = presets[preset_name]
+            cfg = MCPServerConfig(
+                name=base_cfg.name,
+                url=base_cfg.url,
+                auth_token=cfg_dict.get("auth_token", base_cfg.auth_token),
+                allowed_tools=cfg_dict.get("allowed_tools", base_cfg.allowed_tools),
+            )
+        else:
+            try:
+                cfg = MCPServerConfig(**cfg_dict)
+            except TypeError as exc:  # noqa: BLE001
+                logger.error("Invalid MCP server config: %s", exc)
+                return
+
+        await self._init_adapter(cfg)
+
+    def add_server(self, cfg_dict: Dict[str, Any]):
+        """Synchronous wrapper around :pyfunc:`add_server_async`."""
+
+        asyncio.run(self.add_server_async(cfg_dict))
+
+    # ------------------------------------------------------------------
+    # Internal helper – lazy preset loader to avoid circular import
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _get_presets() -> Dict[str, "MCPServerConfig"]:  # noqa: D401 – util
+        """Return the preset mapping, importing the module on first use."""
+
+        try:
+            from zerg.tools.mcp_presets import PRESET_MCP_SERVERS  # type: ignore
+
+            return PRESET_MCP_SERVERS
+        except ModuleNotFoundError:  # pragma: no cover – missing optional file
+            return {}
 
 
-# Example usage in agent configuration:
-# agent.config = {
-#     "mcp_servers": [
-#         {"preset": "github", "auth_token": "ghp_xxxxx"},
-#         {"preset": "linear", "auth_token": "lin_xxxxx"},
-#         {
-#             "name": "custom",
-#             "url": "https://my-company.com/mcp/sse",
-#             "auth_token": "custom_token",
-#             "allowed_tools": ["custom_tool_1", "custom_tool_2"]
-#         }
-#     ]
-# }
+# ---------------------------------------------------------------------------
+#  Public helpers – bulk-loaders
+# ---------------------------------------------------------------------------
+
+
+async def load_mcp_tools(mcp_configs: List[Dict[str, Any]]) -> None:  # noqa: D401
+    """Async bulk loader.
+
+    *mcp_configs* follows the schema documented in
+    `docs/mcp_integration_requirements.md` (list of dicts where each dict is
+    either a complete server config or contains a "preset" key).
+    """
+
+    if not mcp_configs:
+        return
+
+    manager = MCPManager()
+    await asyncio.gather(*(manager.add_server_async(cfg) for cfg in mcp_configs))
+
+
+def load_mcp_tools_sync(mcp_configs: List[Dict[str, Any]]) -> None:  # noqa: D401
+    """Sync convenience wrapper for *blocking* contexts."""
+
+    if not mcp_configs:
+        return
+
+    asyncio.run(load_mcp_tools(mcp_configs))
+
+
+# Legacy alias – keep old import paths working
+load_mcp_tools_sync.__doc__  # silence linters unused

@@ -79,6 +79,61 @@ class ToolRegistry:
         """
         return list(self._tools.values())
 
+    # ------------------------------------------------------------------
+    # Internal helper – *lazy* registration of built-in tools
+    # ------------------------------------------------------------------
+
+    def _ensure_builtin_tools(self) -> None:  # noqa: D401 – internal util
+        """(Re-)import ``zerg.tools.builtin`` when the registry is empty.
+
+        Some unit-tests deliberately empty ``ToolRegistry._tools`` to verify
+        filtering logic.  When that happens the next call to e.g.
+        :pyfunc:`list_tool_names` should still expose the *built-in* tools so
+        that downstream code and tests which expect them continue to work.
+        """
+
+# Detect missing *built-in* tools – we only reload when **any** builtin is
+# absent.  This is more precise than checking ``self._tools`` because a test
+# may have registered *custom* tools after clearing the registry, leaving the
+# mapping non-empty yet still missing the built-ins.
+
+        REQUIRED = {
+            "get_current_time",
+            "datetime_diff",
+            "http_get",
+            "math_eval",
+            "generate_uuid",
+        }
+
+        if REQUIRED.issubset(self._tools):
+            return  # All built-ins present.
+
+        # Importing the module triggers the @register_tool decorators again.
+        # We reload both the package and its sub-modules so the decorators run
+        # even when the modules were already imported earlier in the process.
+
+        import importlib
+        import sys
+
+        module_name = "zerg.tools.builtin"
+        if module_name in sys.modules:
+            importlib.reload(sys.modules[module_name])
+        else:
+            importlib.import_module(module_name)
+
+        # Reload individual sub-modules so their ``@register_tool`` decorators
+        # run again and repopulate the registry after it was cleared.
+        for sub in (
+            "zerg.tools.builtin.datetime_tools",
+            "zerg.tools.builtin.http_tools",
+            "zerg.tools.builtin.math_tools",
+            "zerg.tools.builtin.uuid_tools",
+        ):
+            if sub in sys.modules:
+                importlib.reload(sys.modules[sub])
+            else:
+                importlib.import_module(sub)
+
     def get_tools_by_names(self, names: List[str]) -> List[StructuredTool]:
         """Get multiple tools by their names.
 
@@ -130,6 +185,9 @@ class ToolRegistry:
         Returns:
             List of tool names
         """
+        # Lazy-load built-ins if the registry is empty (cleared by tests).
+        self._ensure_builtin_tools()
+
         return list(self._tools.keys())
 
     def clear(self) -> None:
