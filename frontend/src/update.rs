@@ -108,6 +108,31 @@ fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>, ta
             })));
         }
     }
+
+    // When switching to Tools tab, load MCP servers
+    if tab == AgentConfigTab::ToolsIntegrations {
+        let agent_id_opt = document
+            .get_element_by_id("agent-modal")
+            .and_then(|m| m.get_attribute("data-agent-id"))
+            .and_then(|s| s.parse::<u32>().ok());
+
+        if let Some(agent_id) = agent_id_opt {
+            // Load MCP tools and servers for this agent
+            commands.push(Command::SendMessage(Message::LoadMcpTools(agent_id)));
+
+            // Render the MCP server manager UI
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        if let Some(container) = doc.get_element_by_id("agent-tools-content") {
+                            let mcp_manager = crate::components::mcp_server_manager::MCPServerManager::new(agent_id);
+                            let _ = mcp_manager.build_ui(&doc, &container);
+                        }
+                    }
+                }
+            })));
+        }
+    }
 }
 
 // Bring legacy helper trait into scope so its methods are usable on CanvasNode
@@ -2288,22 +2313,71 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // MCP Integration Messages
         // -------------------------------------------------------------------
         Message::LoadMcpTools(agent_id) => {
-            // TODO: Implement fetching MCP tools from backend
             web_sys::console::log_1(&format!("LoadMcpTools for agent {}", agent_id).into());
-            commands.push(Command::NetworkCall {
-                endpoint: format!("/api/agents/{}/mcp-servers/available-tools", agent_id),
-                method: "GET".to_string(),
-                body: None,
-                on_success: Box::new(Message::McpToolsLoaded {
-                    agent_id,
-                    builtin_tools: Vec::new(), // Placeholder
-                    mcp_tools: HashMap::new(), // Placeholder
-                }),
-                on_error: Box::new(Message::McpError {
-                    agent_id,
-                    error: "Failed to load MCP tools".to_string(),
-                }),
-            });
+            
+            // Fetch available tools from the backend
+            commands.push(Command::UpdateUI(Box::new(move || {
+                wasm_bindgen_futures::spawn_local(async move {
+                    match crate::network::api_client::ApiClient::get_mcp_available_tools(agent_id).await {
+                        Ok(response) => {
+                            // Parse the response to extract builtin and MCP tools
+                            match serde_json::from_str::<serde_json::Value>(&response) {
+                                Ok(json) => {
+                                    let builtin_tools = json["builtin"]
+                                        .as_array()
+                                        .unwrap_or(&Vec::new())
+                                        .iter()
+                                        .filter_map(|v| v.as_str().map(String::from))
+                                        .collect::<Vec<String>>();
+                                    
+                                    let mut mcp_tools: HashMap<String, Vec<crate::state::McpToolInfo>> = HashMap::new();
+                                    
+                                    if let Some(mcp_obj) = json["mcp"].as_object() {
+                                        for (server_name, tools_array) in mcp_obj {
+                                            let tools: Vec<crate::state::McpToolInfo> = tools_array
+                                                .as_array()
+                                                .unwrap_or(&Vec::new())
+                                                .iter()
+                                                .filter_map(|tool| {
+                                                    tool.as_str().map(|name| crate::state::McpToolInfo {
+                                                        name: name.to_string(),
+                                                        server_name: server_name.clone(),
+                                                        description: None,
+                                                    })
+                                                })
+                                                .collect();
+                                            
+                                            if !tools.is_empty() {
+                                                mcp_tools.insert(server_name.clone(), tools);
+                                            }
+                                        }
+                                    }
+                                    
+                                    dispatch_global_message(Message::McpToolsLoaded {
+                                        agent_id,
+                                        builtin_tools,
+                                        mcp_tools,
+                                    });
+                                },
+                                Err(e) => {
+                                    web_sys::console::error_1(&format!("Failed to parse MCP tools response: {:?}", e).into());
+                                    dispatch_global_message(Message::McpError {
+                                        agent_id,
+                                        error: format!("Failed to parse tools: {}", e),
+                                    });
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            web_sys::console::error_1(&format!("Failed to load MCP tools: {:?}", e).into());
+                            dispatch_global_message(Message::McpError {
+                                agent_id,
+                                error: format!("Failed to load tools: {:?}", e),
+                            });
+                        }
+                    }
+                });
+            })));
         },
         Message::McpToolsLoaded { agent_id, builtin_tools, mcp_tools } => {
             // Update state with loaded tools
@@ -2413,13 +2487,79 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // TODO: Display error to user in UI
         },
 
-        // --- MCP UI message stubs to satisfy exhaustive match ---
-        Message::SetMCPTab { .. }
-        | Message::ConnectMCPPreset { .. }
-        | Message::AddMCPServer { .. }
-        | Message::RemoveMCPServer { .. }
-        | Message::TestMCPConnection { .. } => {
-            // TODO: Implement MCP UI message handling
+        // --- MCP UI message handlers ---
+        Message::SetMCPTab { agent_id, tab } => {
+            // Update the active MCP tab in state
+            web_sys::console::log_1(&format!("SetMCPTab for agent {}: {:?}", agent_id, tab).into());
+            
+            // TODO: Store tab state if needed
+            // For now, just trigger a UI update to re-render with the new tab
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        // The MCP component will handle tab switching based on its internal state
+                        web_sys::console::log_1(&"MCP tab switch UI update".into());
+                    }
+                }
+            })));
+        },
+        
+        Message::ConnectMCPPreset { agent_id, preset_id } => {
+            web_sys::console::log_1(&format!("ConnectMCPPreset for agent {}: {}", agent_id, preset_id).into());
+            
+            // TODO: Show auth dialog for preset connection
+            // For now, just log and show a placeholder alert
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    let _ = win.alert_with_message(&format!("Connect to {} preset (auth flow to be implemented)", preset_id));
+                }
+            })));
+        },
+        
+        Message::AddMCPServer { agent_id, url, name, preset, auth_token } => {
+            web_sys::console::log_1(&format!("AddMCPServer for agent {}: {} ({})", agent_id, name, url.as_deref().unwrap_or("preset")).into());
+            
+            // Create the server config
+            let server_config = crate::state::McpServerConfig {
+                name: name.clone(),
+                url: url.clone(),
+                preset: preset.clone(),
+                auth_token: Some(auth_token.clone()),
+            };
+            
+            // Convert to the message format expected by the existing handler
+            commands.push(Command::SendMessage(Message::AddMcpServer {
+                agent_id,
+                server_config,
+            }));
+        },
+        
+        Message::RemoveMCPServer { agent_id, server_name } => {
+            web_sys::console::log_1(&format!("RemoveMCPServer for agent {}: {}", agent_id, server_name).into());
+            
+            // Convert to the message format expected by the existing handler
+            commands.push(Command::SendMessage(Message::RemoveMcpServer {
+                agent_id,
+                server_name,
+            }));
+        },
+        
+        Message::TestMCPConnection { agent_id, url, name, auth_token } => {
+            web_sys::console::log_1(&format!("TestMCPConnection for agent {}: {} at {}", agent_id, name, url).into());
+            
+            // Create the server config for testing
+            let server_config = crate::state::McpServerConfig {
+                name: name.clone(),
+                url: Some(url.clone()),
+                preset: None,
+                auth_token: Some(auth_token.clone()),
+            };
+            
+            // Convert to the message format expected by the existing handler
+            commands.push(Command::SendMessage(Message::TestMcpConnection {
+                agent_id,
+                server_config,
+            }));
         }
     }
 
