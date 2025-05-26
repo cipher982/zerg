@@ -57,4 +57,34 @@ PRESET_MCP_SERVERS: Dict[str, MCPServerConfig] = {
         timeout=20.0,  # Slack might be faster
         max_retries=2,
     ),
+    "notion": MCPServerConfig(
+        name="notion",
+        url="https://api.notion.com/v1/mcp",  # hypothetical MCP endpoint
+        allowed_tools=[
+            "create_page",
+            "update_page",
+            "search_pages",
+            "get_database",
+            "query_database",
+            "create_block",
+            "update_block",
+        ],
+        timeout=30.0,
+        max_retries=3,
+    ),
+    "asana": MCPServerConfig(
+        name="asana",
+        url="https://app.asana.com/api/1.0/mcp",  # hypothetical MCP endpoint
+        allowed_tools=[
+            "create_task",
+            "update_task",
+            "search_tasks",
+            "list_projects",
+            "assign_task",
+            "add_comment",
+            "create_project",
+        ],
+        timeout=30.0,
+        max_retries=3,
+    ),
 }

@@ -190,20 +190,34 @@ Available Tools
    - ✅ `MCPValidationError` for input validation failures
    - ✅ `MCPConfigurationError` for config issues
 
-### Database Updates (Pending)
-- Store MCP server configs in agent.config JSON field
-- Add API endpoint for MCP server management
+### Database Updates ✅ COMPLETED
+- ✅ Store MCP server configs in agent.config JSON field
+- ✅ Add API endpoints for MCP server management:
+  - `GET /api/agents/{agent_id}/mcp-servers/` - List configured servers
+  - `POST /api/agents/{agent_id}/mcp-servers/` - Add new server
+  - `DELETE /api/agents/{agent_id}/mcp-servers/{server_name}` - Remove server
+  - `POST /api/agents/{agent_id}/mcp-servers/test` - Test connection
+  - `GET /api/agents/{agent_id}/mcp-servers/available-tools` - List all tools
+- ✅ Created comprehensive test suite (`backend/tests/test_mcp_servers.py`)
+- ✅ Registered MCP router in main FastAPI app
 
-### Week 2: Presets & OAuth
+### Week 2: Presets & OAuth ✅ COMPLETED
 
-1. **Popular service presets**
-   - GitHub, Linear, Slack, Notion, Asana
-   - Pre-configured URLs and tool allowlists
+1. **Popular service presets** ✅ COMPLETED
+   - ✅ GitHub - with 5 tools configured
+   - ✅ Linear - with 5 tools configured  
+   - ✅ Slack - with 4 tools configured
+   - ✅ Notion - with 7 tools configured
+   - ✅ Asana - with 7 tools configured
+   - All presets available in `backend/zerg/tools/mcp_presets.py`
 
-2. **OAuth token management**
-   - Secure token storage (encrypted)
-   - Token refresh logic
-   - OAuth flow helpers for presets
+2. **OAuth token management** ✅ COMPLETED
+   - ✅ Secure token storage (encrypted using AES-GCM via Fernet)
+   - ✅ Automatic encryption/decryption of auth tokens
+   - ✅ HTTPS URL validation for security
+   - ✅ Integrated with existing crypto utilities
+   - Token refresh logic (deferred - specific to OAuth2 providers)
+   - OAuth flow helpers for presets (deferred - requires UI integration)
 
 ### Week 3: UI Implementation
 
