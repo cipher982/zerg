@@ -388,6 +388,42 @@ pub enum Message {
         agent_id: u32,
         error: String,
     },
+
+    // Additional MCP UI messages
+    /// Set active MCP tab for an agent
+    SetMCPTab {
+        agent_id: u32,
+        tab: crate::components::mcp_server_manager::MCPTab,
+    },
+
+    /// Connect to an MCP preset (GitHub, Linear, etc.)
+    ConnectMCPPreset {
+        agent_id: u32,
+        preset_id: String,
+    },
+
+    /// Add MCP server (for component interface)
+    AddMCPServer {
+        agent_id: u32,
+        url: Option<String>,
+        name: String,
+        preset: Option<String>,
+        auth_token: String,
+    },
+
+    /// Remove MCP server (for component interface)
+    RemoveMCPServer {
+        agent_id: u32,
+        server_name: String,
+    },
+
+    /// Test MCP connection (for component interface)
+    TestMCPConnection {
+        agent_id: u32,
+        url: String,
+        name: String,
+        auth_token: String,
+    },
 }
 
 /// Commands represent side effects that should be executed after state updates.

@@ -221,16 +221,65 @@ Available Tools
 
 ### Week 3: UI Implementation
 
-1. **Agent configuration UI**
-   - Two-tab approach (Quick Connect / Custom)
-   - Connection testing
-   - Health status indicators
+**Progress as of 2025-05-27:**
 
-2. **Tool selection UI**
-   - Clear separation of built-in vs MCP tools
-   - Show which MCP server provides each tool
+#### ✅ MCP UI Core Components Implemented
+
+- **MCP API Client**: Added all required async methods for MCP server management and tool discovery in `frontend/src/network/api_client.rs`.
+- **MCP Server Manager Component**: Created `frontend/src/components/mcp_server_manager.rs` with:
+  - Quick Connect tab for presets (GitHub, Linear, Slack, Notion)
+  - Custom Server tab for arbitrary MCP URLs
+  - Built-in tools section
+  - Connected servers list with status and removal
+  - Connection testing and error handling
+- **Agent Configuration Modal**: 
+  - Added a third "Tools" tab (now `ToolsIntegrations`) to the modal in `frontend/src/components/agent_config_modal.rs`
+  - Tab switching logic and content containers for all three tabs
+  - Tools tab renders the MCP Server Manager UI
+- **Message System**: 
+  - All MCP UI messages added to `frontend/src/messages.rs`
+  - Update logic in `frontend/src/update.rs` now handles all MCP UI messages (stubs for future logic, no more non-exhaustive match error)
+
+#### 🛠️ Build/Compile Status
+
+- All enum variants and message arms are now handled; the project compiles and runs.
+- No more non-exhaustive match errors.
+- UI structure and message wiring are in place for further MCP integration.
+
+#### 🟡 Next Steps
+
+1. **Wire Up MCP UI Message Logic**
+   - Implement actual logic for `SetMCPTab`, `ConnectMCPPreset`, `AddMCPServer`, `RemoveMCPServer`, `TestMCPConnection` in `update.rs`
+   - Connect UI events to backend API calls and state updates
+
+2. **State Synchronization**
+   - Ensure MCP server and tool state is loaded and updated in the UI after add/remove/test actions
+   - Sync allowed tools and server status with backend
+
+3. **UI Polish & Error Handling**
+   - Display connection errors and tool status in the UI
+   - Add loading indicators and feedback for async actions
+
+4. **Testing**
+   - Manual and automated tests for all MCP UI flows
+   - Edge cases: duplicate server names, invalid URLs, token errors
+
+5. **Documentation**
+   - Update user and developer docs for MCP UI usage and extension
 
 ---
+
+#### Updated Implementation Plan
+
+- **Week 3: UI Implementation**
+  - ✅ MCP API client and UI components created and integrated
+  - ✅ Agent configuration modal updated with Tools tab
+  - ✅ Message system and update logic extended for MCP UI
+  - 🟡 Next: Implement full UI-to-backend wiring and polish
+
+---
+
+*This section will be updated as further MCP UI logic and integration are completed.*
 
 ## Security Considerations
 

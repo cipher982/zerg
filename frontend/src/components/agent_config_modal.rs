@@ -219,8 +219,8 @@ impl AgentConfigModal {
         modal_header.append_child(&modal_title)?;
         modal_header.append_child(&close_button)?;
 
-        // Tabs: Main / Triggers – built via shared helper ------------------
-        let tab_container = tab_bar::build_tab_bar(document, &[("Main", true), ("Triggers", false)])?;
+        // Tabs: Main / Triggers / Tools – built via shared helper ------------------
+        let tab_container = tab_bar::build_tab_bar(document, &[("Main", true), ("Triggers", false), ("Tools", false)])?;
 
         // -----------------------------------------------------------------
         // Attach tab-switch click handlers *immediately* so we do not rely on
@@ -243,12 +243,23 @@ impl AgentConfigModal {
                 cb.forget();
             }
 
-            if let Some(second_btn) = tab_container.last_element_child() {
-                second_btn.set_id("agent-triggers-tab");
+            // Handle the second tab (Triggers)
+            if let Some(triggers_btn) = tab_container.first_element_child().and_then(|el| el.next_element_sibling()) {
+                triggers_btn.set_id("agent-triggers-tab");
                 let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                     dispatch(crate::state::AgentConfigTab::Triggers);
                 }));
-                second_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+                triggers_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+                cb.forget();
+            }
+
+            // Handle the third tab (Tools)
+            if let Some(tools_btn) = tab_container.last_element_child() {
+                tools_btn.set_id("agent-tools-tab");
+                let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                    dispatch(crate::state::AgentConfigTab::ToolsIntegrations);
+                }));
+                tools_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
                 cb.forget();
             }
         }
@@ -357,6 +368,21 @@ impl AgentConfigModal {
         list_el.set_class_name("triggers-list");
         list_el.set_attribute("style", "margin-top:12px;")?;
         triggers_content.append_child(&list_el)?;
+
+        // --------------------------------------------------------------
+        // Tools content wrapper (hidden by default)
+        // --------------------------------------------------------------
+
+        let tools_content = document.create_element("div")?;
+        tools_content.set_class_name("tab-content");
+        tools_content.set_id("agent-tools-content");
+        // Hidden until the user clicks the tab button.
+        dom_utils::hide(&tools_content);
+
+        // MCP Server Manager will be rendered here dynamically
+        let mcp_container = document.create_element("div")?;
+        mcp_container.set_id("agent-mcp-container");
+        tools_content.append_child(&mcp_container)?;
 
         // --- Agent name ---
         let name_label = document.create_element("label")?;
@@ -576,6 +602,7 @@ impl AgentConfigModal {
         modal_content.append_child(&tab_container)?;
         modal_content.append_child(&main_content)?;
         modal_content.append_child(&triggers_content)?;
+        modal_content.append_child(&tools_content)?;
         modal_content.append_child(&button_container)?;
 
         // ------------------------------------------------------------------

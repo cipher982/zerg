@@ -2412,6 +2412,15 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             web_sys::console::error_1(&format!("MCP Error for agent {}: {}", agent_id, error).into());
             // TODO: Display error to user in UI
         },
+
+        // --- MCP UI message stubs to satisfy exhaustive match ---
+        Message::SetMCPTab { .. }
+        | Message::ConnectMCPPreset { .. }
+        | Message::AddMCPServer { .. }
+        | Message::RemoveMCPServer { .. }
+        | Message::TestMCPConnection { .. } => {
+            // TODO: Implement MCP UI message handling
+        }
     }
 
     // -------------------------------------------------------------------
