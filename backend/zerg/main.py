@@ -26,6 +26,7 @@ from zerg.routers.agents import router as agents_router
 from zerg.routers.auth import router as auth_router
 from zerg.routers.email_webhooks import router as email_webhook_router
 from zerg.routers.graph_layout import router as graph_router
+from zerg.routers.mcp_servers import router as mcp_servers_router
 from zerg.routers.metrics import router as metrics_router
 from zerg.routers.models import router as models_router
 from zerg.routers.runs import router as runs_router
@@ -86,6 +87,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # Include our API routers with centralized prefixes
 app.include_router(agents_router, prefix=f"{API_PREFIX}{AGENTS_PREFIX}")
+app.include_router(mcp_servers_router, prefix=f"{API_PREFIX}")  # MCP servers nested under agents
 app.include_router(threads_router, prefix=f"{API_PREFIX}{THREADS_PREFIX}")
 app.include_router(models_router, prefix=f"{API_PREFIX}{MODELS_PREFIX}")
 app.include_router(websocket_router, prefix=API_PREFIX)

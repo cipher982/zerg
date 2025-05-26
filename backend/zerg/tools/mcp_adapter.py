@@ -351,6 +351,15 @@ class MCPManager:
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result()
 
+    def _is_encrypted_token(self, token: str) -> bool:
+        """Check if a token appears to be encrypted (Fernet format)."""
+        # Fernet tokens are URL-safe base64 encoded and start with 'gAAAAA'
+        # This is a simple heuristic check
+        try:
+            return token.startswith("gAAAAA") and len(token) > 50
+        except Exception:
+            return False
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -381,20 +390,45 @@ class MCPManager:
                 raise MCPConfigurationError(f"Unknown preset: {preset_name}")
 
             base_cfg: MCPServerConfig = presets[preset_name]
+
+            # Decrypt auth token if it looks encrypted (base64 with specific prefix)
+            auth_token = normalized_config.get("auth_token", base_cfg.auth_token)
+            if auth_token and self._is_encrypted_token(auth_token):
+                try:
+                    from zerg.utils import crypto
+
+                    auth_token = crypto.decrypt(auth_token)
+                except Exception as e:
+                    logger.error(f"Failed to decrypt auth token: {e}")
+                    raise MCPAuthenticationError(preset_name, "Failed to decrypt authentication token")
+
             cfg = MCPServerConfig(
                 name=base_cfg.name,
                 url=base_cfg.url,
-                auth_token=normalized_config.get("auth_token", base_cfg.auth_token),
+                auth_token=auth_token,
                 allowed_tools=normalized_config.get("allowed_tools", base_cfg.allowed_tools),
                 timeout=normalized_config.get("timeout", base_cfg.timeout),
                 max_retries=normalized_config.get("max_retries", base_cfg.max_retries),
             )
         else:  # type == "custom"
             try:
+                # Decrypt auth token if it looks encrypted
+                auth_token = normalized_config.get("auth_token")
+                if auth_token and self._is_encrypted_token(auth_token):
+                    try:
+                        from zerg.utils import crypto
+
+                        auth_token = crypto.decrypt(auth_token)
+                    except Exception as e:
+                        logger.error(f"Failed to decrypt auth token: {e}")
+                        raise MCPAuthenticationError(
+                            normalized_config["name"], "Failed to decrypt authentication token"
+                        )
+
                 cfg = MCPServerConfig(
                     name=normalized_config["name"],
                     url=normalized_config["url"],
-                    auth_token=normalized_config.get("auth_token"),
+                    auth_token=auth_token,
                     allowed_tools=normalized_config.get("allowed_tools"),
                     timeout=normalized_config.get("timeout", 30.0),
                     max_retries=normalized_config.get("max_retries", 3),
