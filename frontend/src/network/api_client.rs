@@ -359,6 +359,41 @@ impl ApiClient {
     }
 
     // -------------------------------------------------------------------
+    // MCP Server Management
+    // -------------------------------------------------------------------
+
+    /// List MCP servers configured for an agent
+    pub async fn list_mcp_servers(agent_id: u32) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents/{}/mcp-servers/", Self::api_base_url(), agent_id);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    /// Add a new MCP server to an agent
+    pub async fn add_mcp_server(agent_id: u32, server_config: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents/{}/mcp-servers/", Self::api_base_url(), agent_id);
+        Self::fetch_json(&url, "POST", Some(server_config)).await
+    }
+
+    /// Remove an MCP server from an agent
+    pub async fn remove_mcp_server(agent_id: u32, server_name: &str) -> Result<(), JsValue> {
+        let url = format!("{}/api/agents/{}/mcp-servers/{}", Self::api_base_url(), agent_id, server_name);
+        let _ = Self::fetch_json(&url, "DELETE", None).await?;
+        Ok(())
+    }
+
+    /// Test connection to an MCP server
+    pub async fn test_mcp_connection(agent_id: u32, test_config: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents/{}/mcp-servers/test", Self::api_base_url(), agent_id);
+        Self::fetch_json(&url, "POST", Some(test_config)).await
+    }
+
+    /// Get available tools from all MCP servers for an agent
+    pub async fn get_mcp_available_tools(agent_id: u32) -> Result<String, JsValue> {
+        let url = format!("{}/api/agents/{}/mcp-servers/available-tools", Self::api_base_url(), agent_id);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    // -------------------------------------------------------------------
     // Authentication – Google Sign-In
     // -------------------------------------------------------------------
 
@@ -608,4 +643,4 @@ fn create_nodes_for_agents(state: &mut crate::state::AppState) {
         
         web_sys::console::log_1(&format!("Created visual node with ID: {} for agent {}", node_id, agent_id).into());
     }
-} 
+}
