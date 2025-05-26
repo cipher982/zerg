@@ -151,26 +151,48 @@ Available Tools
 
 ## Implementation Plan
 
-### Week 1: Core MCP Support
+### Week 1: Core MCP Support ✅ COMPLETED
 
 1. **Update MCP adapter** (`backend/zerg/tools/mcp_adapter.py`)
-   - Remove hardcoded servers
-   - Implement dynamic server addition
-   - Add proper error handling
+   - ✅ Removed hardcoded servers - moved to `mcp_presets.py`
+   - ✅ Implemented dynamic server addition via `MCPManager`
+   - ✅ Added comprehensive error handling with custom exceptions
+   - ✅ Input validation using JSON schemas
+   - ✅ Connection pooling and retry logic with exponential backoff
+   - ✅ Health checks before tool registration
+   - ✅ Dedicated event loop for async operations
 
-    **Status:** ✅ Completed – adapter now exposes `MCPManager`, async/sync
-    loaders and loads presets from `mcp_presets.py`.
+2. **Registry improvements** (`backend/zerg/tools/registry.py`)
+   - ✅ Added override mechanism for testing (no more monkey patching!)
+   - ✅ Support for temporary tool overrides
+   - ✅ Proper handling of overrides in all registry methods
 
-2. **Database updates**
-   - Store MCP server configs in agent.config JSON field
-   - Add API endpoint for MCP server management
-
-3. **Integration with agent factory**
+3. **Integration with agent factory** 
+   - ✅ Implemented in `zerg_react_agent.py`
+   - ✅ Clean integration without monkey patching
    ```python
    # In get_runnable()
    if agent.config and 'mcp_servers' in agent.config:
-       await load_mcp_tools(agent.config['mcp_servers'])
+       load_mcp_tools_sync(agent.config['mcp_servers'])
    ```
+
+4. **Configuration schema** (`backend/zerg/tools/mcp_config_schema.py`)
+   - ✅ Clear type discrimination between preset and custom configs
+   - ✅ Validation and normalization functions
+   - ✅ TypedDict definitions for type safety
+   - ✅ Support for legacy configuration format
+
+5. **Error handling** (`backend/zerg/tools/mcp_exceptions.py`)
+   - ✅ Custom exception hierarchy for different failure modes
+   - ✅ `MCPConnectionError` for network issues
+   - ✅ `MCPAuthenticationError` for auth failures
+   - ✅ `MCPToolExecutionError` for tool runtime errors
+   - ✅ `MCPValidationError` for input validation failures
+   - ✅ `MCPConfigurationError` for config issues
+
+### Database Updates (Pending)
+- Store MCP server configs in agent.config JSON field
+- Add API endpoint for MCP server management
 
 ### Week 2: Presets & OAuth
 

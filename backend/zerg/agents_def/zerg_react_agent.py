@@ -268,22 +268,12 @@ def get_tool_messages(ai_msg: AIMessage):  # noqa: D401 – util function
         name = tc.get("name")
         content = "<no-op>"
         try:
-            # ----------------------------------------------------------
-            # Resolution order *prefers* **module-level** attributes.
-            # This allows tests (and potential runtime hot-patches) to
-            # monkey-patch a tool implementation without touching the global
-            # registry.
-            # ----------------------------------------------------------
-
-            tool_obj = globals().get(name)
-
-            if tool_obj is not None and hasattr(tool_obj, "invoke"):
-                content = tool_obj.invoke(tc.get("args", {}))
+            # Use registry to get tool (supports overrides for testing)
+            tool = registry.get_tool(name)
+            if tool is not None:
+                content = tool.invoke(tc.get("args", {}))
             else:
-                # Fallback to registry lookup
-                tool = registry.get_tool(name)
-                if tool is not None:
-                    content = tool.invoke(tc.get("args", {}))
+                content = f"<tool-error> Tool '{name}' not found in registry"
         except Exception as exc:  # noqa: BLE001
             content = f"<tool-error> {exc}"
 
