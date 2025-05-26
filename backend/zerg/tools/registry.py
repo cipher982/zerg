@@ -6,6 +6,7 @@ in the system. Tools can be registered using the @register_tool decorator.
 
 import logging
 from typing import Callable
+from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
@@ -23,6 +24,7 @@ class ToolRegistry:
     - Tool registration via decorator
     - Tool discovery by name or pattern
     - Filtering tools based on allow-lists
+    - Tool override support for testing
     """
 
     _instance: Optional["ToolRegistry"] = None
@@ -32,6 +34,7 @@ class ToolRegistry:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._tools = {}
+            cls._instance._overrides: Dict[str, StructuredTool] = {}
             cls._instance._initialized = False
         return cls._instance
 
@@ -40,6 +43,8 @@ class ToolRegistry:
         if not getattr(self, "_initialized", False):
             if not hasattr(self, "_tools"):
                 self._tools = {}
+            if not hasattr(self, "_overrides"):
+                self._overrides = {}
             self._initialized = True
             logger.info("ToolRegistry initialized")
 
@@ -60,6 +65,35 @@ class ToolRegistry:
         self._tools[tool.name] = tool
         logger.info(f"Registered tool: {tool.name}")
 
+    def override_tool(self, name: str, tool: StructuredTool) -> None:
+        """Override a tool temporarily (useful for testing).
+
+        Args:
+            name: The name of the tool to override
+            tool: The replacement tool
+
+        Note:
+            Overrides take precedence over registered tools.
+            Use restore_tool() to remove the override.
+        """
+        self._overrides[name] = tool
+        logger.debug(f"Tool '{name}' has been overridden")
+
+    def restore_tool(self, name: str) -> None:
+        """Remove a tool override.
+
+        Args:
+            name: The name of the tool to restore
+        """
+        if name in self._overrides:
+            del self._overrides[name]
+            logger.debug(f"Tool '{name}' override removed")
+
+    def clear_all_overrides(self) -> None:
+        """Remove all tool overrides."""
+        self._overrides.clear()
+        logger.debug("All tool overrides cleared")
+
     def get_tool(self, name: str) -> Optional[StructuredTool]:
         """Get a tool by name.
 
@@ -68,16 +102,25 @@ class ToolRegistry:
 
         Returns:
             The tool if found, None otherwise
+
+        Note:
+            Overrides take precedence over registered tools.
         """
+        # Check overrides first
+        if name in self._overrides:
+            return self._overrides[name]
+
         return self._tools.get(name)
 
     def get_all_tools(self) -> List[StructuredTool]:
         """Get all registered tools.
 
         Returns:
-            List of all registered tools
+            List of all registered tools (including overrides)
         """
-        return list(self._tools.values())
+        # Merge tools with overrides (overrides take precedence)
+        all_tools = {**self._tools, **self._overrides}
+        return list(all_tools.values())
 
     # ------------------------------------------------------------------
     # Internal helper – *lazy* registration of built-in tools
@@ -92,10 +135,10 @@ class ToolRegistry:
         that downstream code and tests which expect them continue to work.
         """
 
-# Detect missing *built-in* tools – we only reload when **any** builtin is
-# absent.  This is more precise than checking ``self._tools`` because a test
-# may have registered *custom* tools after clearing the registry, leaving the
-# mapping non-empty yet still missing the built-ins.
+        # Detect missing *built-in* tools – we only reload when **any** builtin is
+        # absent.  This is more precise than checking ``self._tools`` because a test
+        # may have registered *custom* tools after clearing the registry, leaving the
+        # mapping non-empty yet still missing the built-ins.
 
         REQUIRED = {
             "get_current_time",
@@ -171,7 +214,8 @@ class ToolRegistry:
             if pattern.endswith("*"):
                 prefix = pattern[:-1]
                 # Add all tools that start with the prefix
-                for tool_name in self._tools:
+                all_tools = {**self._tools, **self._overrides}
+                for tool_name in all_tools:
                     if tool_name.startswith(prefix):
                         allowed_set.add(tool_name)
             else:
@@ -183,12 +227,13 @@ class ToolRegistry:
         """Get a list of all registered tool names.
 
         Returns:
-            List of tool names
+            List of tool names (including overrides)
         """
         # Lazy-load built-ins if the registry is empty (cleared by tests).
         self._ensure_builtin_tools()
 
-        return list(self._tools.keys())
+        all_tools = {**self._tools, **self._overrides}
+        return list(all_tools.keys())
 
     def clear(self) -> None:
         """Clear all registered tools (mainly for testing)."""
