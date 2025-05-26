@@ -57,6 +57,16 @@ fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>, ta
     if let Some(btn) = &hist_t { set_inactive(btn); }
     if let Some(btn) = &trg_t  { set_inactive(btn); }
 
+    // Content sections
+    let tools_c = by_id("agent-tools-content");
+    
+    // Tab buttons
+    let tools_t = by_id("agent-tools-tab");
+    
+    // Reset all visibility / active state first
+    if let Some(el) = &tools_c { hide(el); }
+    if let Some(btn) = &tools_t { set_inactive(btn); }
+    
     // Activate selected tab
     match tab {
         AgentConfigTab::Main => {
@@ -70,6 +80,10 @@ fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>, ta
         AgentConfigTab::Triggers => {
             if let Some(el) = &trg_c { show(el); }
             if let Some(btn) = &trg_t { set_active(btn); }
+        }
+        AgentConfigTab::ToolsIntegrations => {
+            if let Some(el) = &tools_c { show(el); }
+            if let Some(btn) = &tools_t { set_active(btn); }
         }
     }
 
@@ -2269,6 +2283,134 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     }
                 })));
             }
+        },
+        // -------------------------------------------------------------------
+        // MCP Integration Messages
+        // -------------------------------------------------------------------
+        Message::LoadMcpTools(agent_id) => {
+            // TODO: Implement fetching MCP tools from backend
+            web_sys::console::log_1(&format!("LoadMcpTools for agent {}", agent_id).into());
+            commands.push(Command::NetworkCall {
+                endpoint: format!("/api/agents/{}/mcp-servers/available-tools", agent_id),
+                method: "GET".to_string(),
+                body: None,
+                on_success: Box::new(Message::McpToolsLoaded {
+                    agent_id,
+                    builtin_tools: Vec::new(), // Placeholder
+                    mcp_tools: HashMap::new(), // Placeholder
+                }),
+                on_error: Box::new(Message::McpError {
+                    agent_id,
+                    error: "Failed to load MCP tools".to_string(),
+                }),
+            });
+        },
+        Message::McpToolsLoaded { agent_id, builtin_tools, mcp_tools } => {
+            // Update state with loaded tools
+            state.available_mcp_tools.insert(agent_id, mcp_tools.values().flatten().cloned().collect());
+            // TODO: Handle builtin_tools separately if needed
+            web_sys::console::log_1(&format!("McpToolsLoaded for agent {}: {:?} built-in, {:?} mcp", agent_id, builtin_tools, mcp_tools).into());
+            // Trigger UI update for the tools tab
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        // TODO: Render MCP tools UI
+                        web_sys::console::log_1(&"Render MCP tools UI after loading".into());
+                    }
+                }
+            })));
+        },
+        Message::AddMcpServer { agent_id, server_config } => {
+            web_sys::console::log_1(&format!("AddMcpServer for agent {}: {:?}", agent_id, server_config).into());
+            let payload = serde_json::to_string(&server_config).unwrap_or_else(|_| "{}".to_string());
+            commands.push(Command::NetworkCall {
+                endpoint: format!("/api/agents/{}/mcp-servers", agent_id),
+                method: "POST".to_string(),
+                body: Some(payload),
+                on_success: Box::new(Message::McpServerAdded {
+                    agent_id,
+                    server_name: server_config.name.clone(),
+                }),
+                on_error: Box::new(Message::McpError {
+                    agent_id,
+                    error: format!("Failed to add server: {}", server_config.name),
+                }),
+            });
+        },
+        Message::RemoveMcpServer { agent_id, server_name } => {
+            web_sys::console::log_1(&format!("RemoveMcpServer for agent {}: {}", agent_id, server_name).into());
+            commands.push(Command::NetworkCall {
+                endpoint: format!("/api/agents/{}/mcp-servers/{}", agent_id, server_name),
+                method: "DELETE".to_string(),
+                body: None,
+                on_success: Box::new(Message::McpServerRemoved {
+                    agent_id,
+                    server_name: server_name.clone(),
+                }),
+                on_error: Box::new(Message::McpError {
+                    agent_id,
+                    error: format!("Failed to remove server: {}", server_name),
+                }),
+            });
+        },
+        Message::TestMcpConnection { agent_id, server_config } => {
+            web_sys::console::log_1(&format!("TestMcpConnection for agent {}: {:?}", agent_id, server_config).into());
+            let payload = serde_json::to_string(&server_config).unwrap_or_else(|_| "{}".to_string());
+            commands.push(Command::NetworkCall {
+                endpoint: format!("/api/agents/{}/mcp-servers/test", agent_id),
+                method: "POST".to_string(),
+                body: Some(payload),
+                on_success: Box::new(Message::McpConnectionTested {
+                    agent_id,
+                    server_name: server_config.name.clone(),
+                    status: crate::state::ConnectionStatus::Healthy, // Placeholder
+                }),
+                on_error: Box::new(Message::McpConnectionTested {
+                    agent_id,
+                    server_name: server_config.name.clone(),
+                    status: crate::state::ConnectionStatus::Failed("Connection failed".to_string()), // Placeholder
+                }),
+            });
+        },
+        Message::McpConnectionTested { agent_id, server_name, status } => {
+            let key = format!("{}:{}", agent_id, server_name);
+            state.mcp_connection_status.insert(key, status.clone());
+            web_sys::console::log_1(&format!("McpConnectionTested for agent {}: {} status {:?}", agent_id, server_name, status).into());
+            // Trigger UI update for the tools tab
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        // TODO: Render MCP tools UI to show updated status
+                        web_sys::console::log_1(&"Render MCP tools UI after connection test".into());
+                    }
+                }
+            })));
+        },
+        Message::UpdateAllowedTools { agent_id, allowed_tools } => {
+            if let Some(config) = state.agent_mcp_configs.get_mut(&agent_id) {
+                config.allowed_tools = allowed_tools;
+            } else {
+                state.agent_mcp_configs.insert(agent_id, crate::state::AgentMcpConfig {
+                    servers: Vec::new(),
+                    allowed_tools,
+                });
+            }
+            web_sys::console::log_1(&format!("UpdateAllowedTools for agent {}: {:?}", agent_id, state.agent_mcp_configs.get(&agent_id).map(|c| &c.allowed_tools)).into());
+            // TODO: Persist this change to the backend (update agent config)
+        },
+        Message::McpServerAdded { agent_id, server_name } => {
+            // Refresh MCP configs for the agent
+            commands.push(Command::SendMessage(Message::LoadMcpTools(agent_id)));
+            web_sys::console::log_1(&format!("McpServerAdded for agent {}: {}", agent_id, server_name).into());
+        },
+        Message::McpServerRemoved { agent_id, server_name } => {
+            // Refresh MCP configs for the agent
+            commands.push(Command::SendMessage(Message::LoadMcpTools(agent_id)));
+            web_sys::console::log_1(&format!("McpServerRemoved for agent {}: {}", agent_id, server_name).into());
+        },
+        Message::McpError { agent_id, error } => {
+            web_sys::console::error_1(&format!("MCP Error for agent {}: {}", agent_id, error).into());
+            // TODO: Display error to user in UI
         },
     }
 

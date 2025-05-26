@@ -52,6 +52,7 @@ pub enum AgentConfigTab {
     #[allow(dead_code)] // planned UI tab – keep placeholder
     History,
     Triggers,
+    ToolsIntegrations,
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +96,58 @@ pub struct ToolUiState {
     pub expanded: bool,
     /// Whether the full tool output is shown (vs truncated)
     pub show_full: bool,
+}
+
+// ---------------------------------------------------------------------------
+// MCP Integration State Structures
+// ---------------------------------------------------------------------------
+
+/// Configuration for MCP servers connected to an agent
+#[derive(Debug, Clone)]
+pub struct AgentMcpConfig {
+    /// List of MCP servers configured for this agent
+    pub servers: Vec<McpServerConfig>,
+    /// Set of tool names that the agent is allowed to use
+    pub allowed_tools: HashSet<String>,
+}
+
+use serde::Serialize;
+
+/// Individual MCP server configuration
+#[derive(Debug, Clone, Serialize)]
+pub struct McpServerConfig {
+    /// Display name for the server
+    pub name: String,
+    /// URL for custom MCP servers (None for presets)
+    pub url: Option<String>,
+    /// Preset name (e.g., "github", "linear") if using a preset
+    pub preset: Option<String>,
+    /// Authentication token (encrypted on backend)
+    pub auth_token: Option<String>,
+}
+
+/// Information about a tool provided by an MCP server
+#[derive(Debug, Clone)]
+pub struct McpToolInfo {
+    /// Tool name (e.g., "create_issue")
+    pub name: String,
+    /// Server that provides this tool
+    pub server_name: String,
+    /// Human-readable description
+    pub description: Option<String>,
+}
+
+/// Connection status for an MCP server
+#[derive(Debug, Clone)]
+pub enum ConnectionStatus {
+    /// Server is healthy and responding
+    Healthy,
+    /// Server is responding but slowly (with response time in ms)
+    Slow(u64),
+    /// Server connection failed with error message
+    Failed(String),
+    /// Currently checking connection status
+    Checking,
 }
 
 // Store global application state
@@ -272,6 +325,18 @@ pub struct AppState {
     /// Authenticated user profile loaded from `/api/users/me`.  `None` until
     /// the profile fetch succeeds (or the session is unauthenticated).
     pub current_user: Option<crate::models::CurrentUser>,
+
+    // -------------------------------------------------------------------
+    // MCP Integration State
+    // -------------------------------------------------------------------
+    /// MCP server configurations per agent
+    pub agent_mcp_configs: HashMap<u32, AgentMcpConfig>,
+    
+    /// Available MCP tools per agent (populated when tools are fetched)
+    pub available_mcp_tools: HashMap<u32, Vec<McpToolInfo>>,
+    
+    /// Connection status for each MCP server (key: "agent_id:server_name")
+    pub mcp_connection_status: HashMap<String, ConnectionStatus>,
 }
 
 impl AppState {
@@ -401,6 +466,11 @@ impl AppState {
             current_user: None,
 
             google_client_id: None,
+            
+            // MCP Integration state
+            agent_mcp_configs: HashMap::new(),
+            available_mcp_tools: HashMap::new(),
+            mcp_connection_status: HashMap::new(),
         }
     }
 
@@ -1278,4 +1348,4 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             web_sys::console::warn_1(&format!("Unhandled pending network call: {}", message_id).into());
         }
     }
-} 
+}

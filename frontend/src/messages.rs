@@ -5,7 +5,7 @@
 use crate::storage::ActiveView;
 use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent, ApiAgentDetails};
 use crate::network::messages::AgentEventData;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Suppress warnings about unused variants
@@ -326,6 +326,68 @@ pub enum Message {
     // Dashboard-specific actions for error rows
     RetryAgentTask { agent_id: u32 },
     DismissAgentError { agent_id: u32 },
+
+    // -------------------------------------------------------------------
+    // MCP Integration Messages
+    // -------------------------------------------------------------------
+    /// Load available MCP tools for an agent
+    LoadMcpTools(u32), // agent_id
+    
+    /// Received available MCP tools
+    McpToolsLoaded {
+        agent_id: u32,
+        builtin_tools: Vec<String>,
+        mcp_tools: HashMap<String, Vec<crate::state::McpToolInfo>>,
+    },
+    
+    /// Add an MCP server to an agent
+    AddMcpServer {
+        agent_id: u32,
+        server_config: crate::state::McpServerConfig,
+    },
+    
+    /// Remove an MCP server from an agent
+    RemoveMcpServer {
+        agent_id: u32,
+        server_name: String,
+    },
+    
+    /// Test MCP server connection
+    TestMcpConnection {
+        agent_id: u32,
+        server_config: crate::state::McpServerConfig,
+    },
+    
+    /// MCP connection test result
+    McpConnectionTested {
+        agent_id: u32,
+        server_name: String,
+        status: crate::state::ConnectionStatus,
+    },
+    
+    /// Update allowed tools for an agent
+    UpdateAllowedTools {
+        agent_id: u32,
+        allowed_tools: HashSet<String>,
+    },
+    
+    /// MCP server was successfully added
+    McpServerAdded {
+        agent_id: u32,
+        server_name: String,
+    },
+    
+    /// MCP server was successfully removed
+    McpServerRemoved {
+        agent_id: u32,
+        server_name: String,
+    },
+    
+    /// Error occurred with MCP operation
+    McpError {
+        agent_id: u32,
+        error: String,
+    },
 }
 
 /// Commands represent side effects that should be executed after state updates.
@@ -462,4 +524,4 @@ impl Command {
             on_error: Box::new(on_error),
         }
     }
-} 
+}
