@@ -355,261 +355,25 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
        
         // Thread-related messages
-        Message::LoadThreads(agent_id) => {
-            state.is_chat_loading = true;
-           
-            // Instead of spawning an async task directly, return a command
-            commands.push(Command::FetchThreads(agent_id));
-        },
-       
-        Message::ThreadsLoaded(threads) => {
-            // Only process if we're in ChatView
-            if state.active_view == crate::storage::ActiveView::ChatView {
-                web_sys::console::log_1(&format!("Update: Handling ThreadsLoaded with {} threads", threads.len()).into());
-                
-
-                // ------------------------------------------------------------------
-                // 1. Merge thread metadata into state.threads
-                // ------------------------------------------------------------------
-                state.threads = threads
-                    .iter()
-                    .filter_map(|t| t.id.map(|id| (id, t.clone())))
-                    .collect();
-
-                // ------------------------------------------------------------------
-                // 2. Seed `state.thread_messages` with the **preloaded** messages that
-                //    came bundled inside each `Thread` payload.  This allows the sidebar
-                //    previews to render immediately without waiting for an explicit
-                //    LoadThreadMessages call (bug-fix #142).
-                // ------------------------------------------------------------------
-                for t in &threads {
-                    if let Some(tid) = t.id {
-                        if !t.messages.is_empty() {
-                            // Clone to decouple lifetimes
-                            state.thread_messages.insert(tid, t.messages.clone());
-                        }
-                    }
-                }
-                state.is_chat_loading = false;
-                
-                // If no thread selected, select first thread
-                let selected_thread_id = if state.current_thread_id.is_none() {
-                    threads.first().and_then(|t| t.id)
-                } else {
-                    None
-                };
-                
-                // Instead of scheduling side effects directly, return commands
-                if let Some(thread_id) = selected_thread_id {
-                    commands.push(Command::SendMessage(Message::SelectThread(thread_id)));
-                }
-
-                // After state is fully populated, refresh the sidebar so that
-                // message previews become visible even before a thread is
-                // actively selected.
-                let threads_data: Vec<ApiThread> = state.threads.values().cloned().collect();
-                let current_thread_id = state.current_thread_id;
-                let thread_messages = state.thread_messages.clone();
-
-                commands.push(Command::UpdateUI(Box::new(move || {
-                    dispatch_global_message(Message::UpdateThreadList(
-                        threads_data,
-                        current_thread_id,
-                        thread_messages,
-                    ));
-                })));
-            } else {
-                web_sys::console::warn_1(&"Received ThreadsLoaded outside of ChatView".into());
-            }
-        },
        
        
-        // This variant should no longer be dispatched by the UI.  We keep the
-        // arm to satisfy the exhaustive match requirement and to surface a
-        // helpful warning in case some legacy code still emits it.
-        Message::SendThreadMessage(_, _) => {
-            web_sys::console::warn_1(&"Received legacy SendThreadMessage; ignoring to avoid duplicate network call".into());
-        },
        
-        Message::ThreadMessageSent(_response, _client_id) => {
-            // This handler is deprecated as we no longer use optimistic UI
-            // Just log a warning and do nothing
-            web_sys::console::warn_1(&"ThreadMessageSent is deprecated, use ThreadMessagesLoaded instead".into());
-        },
-       
-        Message::ThreadMessageFailed(_thread_id, _client_id) => {
-            // This handler is deprecated as we no longer use optimistic UI
-            // Just log a warning and do nothing
-            web_sys::console::warn_1(&"ThreadMessageFailed is deprecated".into());
-            
-            // Show error notification
-            commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(_document) = web_sys::window().and_then(|w| w.document()) {
-                    // Show error message in UI
-                    web_sys::window()
-                        .and_then(|w| w.alert_with_message("Message failed to send. Please try again.").ok());
-                }
-            })));
-        },
        
        
        
        
         // Navigation messages
-        Message::NavigateToChatView(agent_id) => {
-            // 1. Pure state updates first
-            state.active_view = crate::storage::ActiveView::ChatView;
-            state.is_chat_loading = true;
-            state.current_agent_id = Some(agent_id);
-            
-            // 2. Collect data needed for side effects
-            let agent_id_for_effects = agent_id;
-            
-            // 3. Schedule side effects to run after state mutation is complete
-            state.pending_ui_updates = Some(Box::new(move || {
-                // UI updates
-                if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-                    let _ = crate::components::chat_view::setup_chat_view(&document);
-                    let _ = crate::components::chat_view::show_chat_view(&document, agent_id_for_effects);
-                }
-                
-                // Data fetching - use API directly instead of dispatching
-                wasm_bindgen_futures::spawn_local(async move {
-                    // Pass agent_id as Some(agent_id) to match the API expectation
-                    match crate::network::api_client::ApiClient::get_threads(Some(agent_id_for_effects)).await {
-                        Ok(response) => {
-                            match serde_json::from_str::<Vec<ApiThread>>(&response) {
-                                Ok(threads) => {
-                                    // Single dispatch after data is ready
-                                    dispatch_global_message(Message::ThreadsLoaded(threads));
-                                },
-                                Err(e) => {
-                                    web_sys::console::error_1(&format!("Failed to parse threads: {:?}", e).into());
-                                    dispatch_global_message(Message::UpdateLoadingState(false));
-                                }
-                            }
-                        },
-                        Err(e) => {
-                            web_sys::console::error_1(&format!("Failed to load threads: {:?}", e).into());
-                            dispatch_global_message(Message::UpdateLoadingState(false));
-                        }
-                    }
-                });
-            }));
-        },
        
-        Message::NavigateToThreadView(thread_id) => {
-            // Set the current thread and navigate to chat view
-            state.current_thread_id = Some(thread_id);
-            
-            // Get the agent ID from the thread
-            if let Some(thread) = state.threads.get(&thread_id) {
-                let agent_id = thread.agent_id;
-                crate::state::dispatch_global_message(Message::NavigateToChatView(agent_id));
-            }
-        },
        
 
 
 
-        Message::RequestNewThread => {
-            // Try to get agent ID from current thread, else from current_agent_id
-            let agent_id_opt = state.current_thread_id
-                .and_then(|thread_id| state.threads.get(&thread_id))
-                .map(|thread| thread.agent_id)
-                .or(state.current_agent_id);
-            
-            // Log for debugging
-            web_sys::console::log_1(&format!("RequestNewThread - agent_id: {:?}", agent_id_opt).into());
-           
-            // If we have an agent ID, return a command to create a thread
-            if let Some(agent_id) = agent_id_opt {
-                let title = DEFAULT_THREAD_TITLE.to_string();
-                web_sys::console::log_1(&format!("Creating new thread for agent: {}", agent_id).into());
-                commands.push(Command::SendMessage(Message::CreateThread(agent_id, title)));
-            } else {
-                web_sys::console::error_1(&"Cannot create thread: No agent selected".into());
-            }
-        },
 
-        Message::RequestSendMessage(content) => {
-            // We expect to be inside an active thread when the user presses
-            // Enter in the chat input.  Guard just in case.
-            if let Some(thread_id) = state.current_thread_id {
-                // Delegate all optimistic‑UI + network responsibilities to the
-                // dedicated helper so we have a single source of truth.
-                let ui_callback = crate::thread_handlers::handle_send_thread_message(
-                    thread_id,
-                    content,
-                    &mut state.thread_messages,
-                    &state.threads,
-                    state.current_thread_id,
-                );
 
-                // Schedule the callback to run after this update finishes so we
-                // avoid active mutable borrows of `state`.
-                commands.push(Command::UpdateUI(ui_callback));
-            } else {
-                web_sys::console::error_1(&"RequestSendMessage but no current_thread_id".into());
-            }
-        },
 
-        Message::RequestUpdateThreadTitle(title) => {
-            // Store thread_id locally before ending the borrow
-            let thread_id_opt = state.current_thread_id;
-            
-            // Instead of using pending_ui_updates, return a command
-            if let Some(thread_id) = thread_id_opt {
-                let title_clone = title.clone();
-                commands.push(Command::SendMessage(Message::UpdateThreadTitle(thread_id, title_clone)));
-            }
-        },
 
-        Message::UpdateThreadList(threads, current_thread_id, thread_messages) => {
-            // Update the UI with the provided thread data
-            if let Some(document) = web_sys::window().expect("no global window exists").document() {
-                // Use update_thread_list_ui directly since we already have the data
-                let _ = update_thread_list_ui(&document, &threads, current_thread_id, &thread_messages);
-            }
-        },
-
-        Message::UpdateConversation(messages) => {
-            // Schedule UI update for the provided conversation messages after state updates
-            let messages_clone = messages.clone();
-            commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(document) = web_sys::window().unwrap().document() {
-                    let current_user_opt = crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
-                    let _ = crate::components::chat_view::update_conversation_ui(&document, &messages_clone, current_user_opt.as_ref());
-                }
-            })));
-        },
         
-        Message::UpdateThreadTitleUI(title) => {
-            // Update the UI with the provided thread title using a command
-            let title_clone = title.clone();
-            commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(document) = web_sys::window().expect("no global window exists").document() {
-                    let _ = crate::components::chat_view::update_thread_title_with_data(&document, &title_clone);
-                }
-            })));
-        },
 
-        Message::RequestThreadListUpdate(agent_id) => {
-            // Filter threads for the given agent_id
-            let threads: Vec<ApiThread> = state.threads.values()
-                .filter(|t| t.agent_id == agent_id)
-                .cloned()
-                .collect();
-            let current_thread_id = state.current_thread_id;
-            let thread_messages = state.thread_messages.clone();
-            commands.push(Command::UpdateUI(Box::new(move || {
-                dispatch_global_message(Message::UpdateThreadList(
-                    threads,
-                    current_thread_id,
-                    thread_messages,
-                ));
-            })));
-        },
 
         // Force re-render of Dashboard when active
         Message::RefreshDashboard => {
@@ -640,93 +404,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
        
 
         // --- NEW WebSocket Received Messages ---
-        Message::ReceiveNewMessage(message) => {
-            // Get thread_id directly (it's guaranteed to be u32 based on model)
-            let thread_id = message.thread_id;
 
-            // Get existing messages or create new vec
-            let messages = state.thread_messages.entry(thread_id).or_default();
-            messages.push(message);
 
-            // If this is the current thread, update the conversation UI
-            if state.current_thread_id == Some(thread_id) {
-                let messages_clone = messages.clone();
-                state.pending_ui_updates = Some(Box::new(move || {
-                    dispatch_global_message(Message::UpdateConversation(messages_clone));
-                }));
-            }
 
-            // Regardless of whether this is the active thread we want the
-            // sidebar preview to reflect the new message.
-            let threads_data: Vec<ApiThread> = state.threads.values().cloned().collect();
-            let thread_messages_map = state.thread_messages.clone();
-            let current_thread_id = state.current_thread_id;
-
-            commands.push(Command::UpdateUI(Box::new(move || {
-                dispatch_global_message(Message::UpdateThreadList(
-                    threads_data,
-                    current_thread_id,
-                    thread_messages_map,
-                ));
-            })));
-        },
-
-        Message::ReceiveThreadUpdate { thread_id, title } => {
-            // Update thread title if we have this thread
-            if let Some(thread) = state.threads.get_mut(&thread_id) {
-                if let Some(new_title) = title {
-                    thread.title = new_title;
-                }
-
-                // If this is the current thread, update the UI
-                if state.current_thread_id == Some(thread_id) {
-                    let title_clone = thread.title.clone();
-                    state.pending_ui_updates = Some(Box::new(move || {
-                        dispatch_global_message(Message::UpdateThreadTitleUI(title_clone));
-                    }));
-                }
-            }
-        },
-
-        Message::ReceiveStreamStart(thread_id) => {
-            // Mark thread as streaming in local state
-            state.streaming_threads.insert(thread_id);
-
-            // Reset current assistant-message tracker for this thread so that
-            // the first chunk starts a new bubble.
-            state.active_streams.insert(thread_id, None);
-
-            web_sys::console::log_1(&format!("Stream started for thread {}.", thread_id).into());
-        },
-
-        Message::ReceiveStreamEnd(thread_id) => {
-            // Mark thread as no longer streaming in local state
-            state.streaming_threads.remove(&thread_id);
-
-            // Reset token-mode flag so a subsequent run can re-detect the mode
-            state.token_mode_threads.remove(&thread_id);
-
-            // Find the last user message and update its status (e.g., mark as completed)
-            // We assume the stream ending means the corresponding user message is processed.
-            if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
-                if let Some(last_user_message) = messages.iter_mut().filter(|msg| msg.role == "user").last() {
-                    // Mark completion by setting the temporary ID back to None
-                    // This will stop the UI from showing "Sending..." or "pending" styles
-                    last_user_message.id = None;
-                    web_sys::console::log_1(&format!("Stream ended: Set last user message ID to None for thread {}.", thread_id).into());
-                }
-
-                // Trigger UI update for the conversation to reflect the change
-                if state.current_thread_id == Some(thread_id) {
-                    let messages_clone = messages.clone();
-                    state.pending_ui_updates = Some(Box::new(move || {
-                        dispatch_global_message(Message::UpdateConversation(messages_clone));
-                    }));
-                }
-            }
-
-            web_sys::console::log_1(&format!("Stream ended for thread {}.", thread_id).into());
-        },
 
         // -----------------------------------------------------------------
         // AssistantId – arrives once per *token-mode* stream right after the
@@ -736,50 +416,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // operations have the correct PK.
         // -----------------------------------------------------------------
 
-        Message::ReceiveAssistantId { thread_id, message_id } => {
-            web_sys::console::log_1(&format!("Received AssistantId {} for thread {}", message_id, thread_id).into());
-
-            state.active_streams.insert(thread_id, Some(message_id));
-
-            // Update the most recent assistant bubble id if it was None.
-            if let Some(messages) = state.thread_messages.get_mut(&thread_id) {
-                if let Some(last) = messages.iter_mut().rev().find(|m| m.role == "assistant" && m.id.is_none()) {
-                    last.id = Some(message_id);
-                }
-            }
-        },
         
         // Toggle collapse/expand state for a tool call indicator
-        Message::ToggleToolExpansion { tool_call_id } => {
-            let entry = state.tool_ui_states.entry(tool_call_id.clone())
-                .or_insert(ToolUiState { expanded: false, show_full: false });
-            entry.expanded = !entry.expanded;
-            // Trigger UI update for the conversation
-            if let Some(thread_id) = state.current_thread_id {
-                if let Some(messages) = state.thread_messages.get(&thread_id) {
-                    let messages_clone = messages.clone();
-                    state.pending_ui_updates = Some(Box::new(move || {
-                        dispatch_global_message(Message::UpdateConversation(messages_clone));
-                    }));
-                }
-            }
-        },
         
         // Toggle full vs truncated tool output view for a tool call
-        Message::ToggleToolShowMore { tool_call_id } => {
-            let entry = state.tool_ui_states.entry(tool_call_id.clone())
-                .or_insert(ToolUiState { expanded: false, show_full: false });
-            entry.show_full = !entry.show_full;
-            // Trigger UI update for the conversation
-            if let Some(thread_id) = state.current_thread_id {
-                if let Some(messages) = state.thread_messages.get(&thread_id) {
-                    let messages_clone = messages.clone();
-                    state.pending_ui_updates = Some(Box::new(move || {
-                        dispatch_global_message(Message::UpdateConversation(messages_clone));
-                    }));
-                }
-            }
-        },
 
         // --- NEW WebSocket Event Handlers ---
         Message::ReceiveAgentUpdate(agent_data) => {
