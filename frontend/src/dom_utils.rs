@@ -11,12 +11,14 @@ use web_sys::{Element, HtmlInputElement, HtmlElement, Document};
 pub fn show(el: &Element) {
     let _ = el.class_list().remove_1("hidden");
     let _ = el.class_list().add_1("visible");
+    let _ = el.remove_attribute("hidden");
 }
 
-/// Hide the element by toggling CSS classes.
+/// Hide the element by toggling CSS classes and setting [hidden] attr for test/a11y.
 pub fn hide(el: &Element) {
     let _ = el.class_list().remove_1("visible");
     let _ = el.class_list().add_1("hidden");
+    let _ = el.set_attribute("hidden", "");
 }
 
 /// Mark a tab button as the active one (adds "tab-button active" class).
