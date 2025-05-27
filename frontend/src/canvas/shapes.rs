@@ -120,25 +120,42 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
 }
 
 pub fn draw_node_text(context: &CanvasRenderingContext2d, node: &Node) {
+    use crate::models::NodeType;
+    
     let text = &node.text;
     
     context.save();
     
+    // Different text positioning based on node type
+    let (x, y, max_width) = match node.node_type {
+        NodeType::AgentIdentity => {
+            // For agent nodes, position text below the header area to avoid overlap
+            let x = node.x + 15.0;
+            let y = node.y + 65.0; // Start below the icon/name area
+            let max_width = node.width - 30.0;
+            (x, y, max_width)
+        },
+        _ => {
+            // Default positioning for other node types
+            let x = node.x + 10.0;
+            let y = node.y + 10.0;
+            let max_width = node.width - 20.0;
+            (x, y, max_width)
+        }
+    };
+    
     // Text configuration
-    context.set_font("14px Arial");
+    context.set_font("13px system-ui, -apple-system, sans-serif");
     context.set_fill_style_str(NODE_TEXT_COLOR);
     context.set_text_align("left");
     context.set_text_baseline("top");
     
-    // Basic word wrap
-    let max_width = node.width - 20.0; // Padding on both sides
-    let x = node.x + 10.0; // Left padding
-    let mut y = node.y + 10.0; // Top padding
-    let line_height = 18.0;
+    let line_height = 16.0;
     
     // Split by words
     let words = text.split_whitespace().collect::<Vec<&str>>();
     let mut current_line = String::new();
+    let mut current_y = y;
     
     for word in words {
         let test_line = if current_line.is_empty() {
@@ -152,9 +169,9 @@ pub fn draw_node_text(context: &CanvasRenderingContext2d, node: &Node) {
         
         if test_width > max_width && !current_line.is_empty() {
             // Draw the current line and start a new one
-            context.fill_text(&current_line, x, y).unwrap();
+            context.fill_text(&current_line, x, current_y).unwrap();
             current_line = word.to_string();
-            y += line_height;
+            current_y += line_height;
         } else {
             current_line = test_line;
         }
@@ -162,7 +179,7 @@ pub fn draw_node_text(context: &CanvasRenderingContext2d, node: &Node) {
     
     // Draw the last line
     if !current_line.is_empty() {
-        context.fill_text(&current_line, x, y).unwrap();
+        context.fill_text(&current_line, x, current_y).unwrap();
     }
     
     context.restore();

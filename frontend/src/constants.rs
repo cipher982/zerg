@@ -91,9 +91,31 @@ pub const NODE_BORDER_AGENT_SCHEDULED: &str = "#9b59b6";
 pub const NODE_BORDER_AGENT_PAUSED: &str = "#f39c12";
 
 // Node fill colors
-pub const NODE_FILL_AGENT_IDENTITY: &str = "rgba(255, 255, 255, 0.95)";
+pub const NODE_FILL_AGENT_IDENTITY: &str = "rgba(255, 255, 255, 0.98)";
 pub const NODE_FILL_USER_INPUT: &str = "rgba(52, 152, 219, 0.1)";
 pub const NODE_FILL_RESPONSE: &str = "rgba(46, 204, 113, 0.1)";
+
+// Modern gradient colors for agent nodes
+pub const AGENT_GRADIENT_START: &str = "#ffffff";
+pub const AGENT_GRADIENT_END: &str = "#f8fafc";
+pub const AGENT_ACCENT_COLOR: &str = "#6366f1";
+pub const AGENT_TEXT_PRIMARY: &str = "#1f2937";
+pub const AGENT_TEXT_SECONDARY: &str = "#6b7280";
+pub const AGENT_BORDER_SUBTLE: &str = "#e5e7eb";
+
+// Status specific colors with better contrast
+pub const STATUS_IDLE_COLOR: &str = "#10b981";
+pub const STATUS_PROCESSING_COLOR: &str = "#3b82f6";
+pub const STATUS_ERROR_COLOR: &str = "#ef4444";
+pub const STATUS_SCHEDULED_COLOR: &str = "#8b5cf6";
+pub const STATUS_PAUSED_COLOR: &str = "#f59e0b";
+
+// Status background colors (lighter versions)
+pub const STATUS_IDLE_BG: &str = "rgba(16, 185, 129, 0.1)";
+pub const STATUS_PROCESSING_BG: &str = "rgba(59, 130, 246, 0.1)";
+pub const STATUS_ERROR_BG: &str = "rgba(239, 68, 68, 0.1)";
+pub const STATUS_SCHEDULED_BG: &str = "rgba(139, 92, 246, 0.1)";
+pub const STATUS_PAUSED_BG: &str = "rgba(245, 158, 11, 0.1)";
 
 // Button Types
 pub const BUTTON_TYPE_BUTTON: &str = "button";
