@@ -222,6 +222,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
         Message::ToggleView(view) => {
             let view_clone = view.clone();
+            let view_clone_for_shelf = view.clone();
             state.active_view = view;
             state.state_modified = true;
             
@@ -246,6 +247,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     }
                 }
             })));
+            
+            // If switching to Canvas, always fetch agents (will trigger shelf update when loaded)
+            if view_clone_for_shelf == crate::storage::ActiveView::Canvas {
+                commands.push(Command::FetchAgents);
+            }
         },
        
        

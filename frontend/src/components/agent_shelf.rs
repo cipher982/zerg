@@ -55,10 +55,26 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
     // Borrow state to iterate agents.
     APP_STATE.with(|state| {
         let state = state.borrow();
-        web_sys::console::log_1(&format!("Populating agent shelf. Number of agents in state: {}", state.agents.len()).into());
+        
+        // If agents haven't been loaded yet, show a loading state
+        if !state.agents_loaded {
+            let loading_msg = document.create_element("div").unwrap();
+            loading_msg.set_class_name("agent-shelf-loading");
+            loading_msg.set_inner_html("Loading agents...");
+            shelf_el.append_child(&loading_msg).unwrap();
+            return;
+        }
+        
+        // If no agents, show appropriate message
+        if state.agents.is_empty() {
+            let empty_msg = document.create_element("div").unwrap();
+            empty_msg.set_class_name("agent-shelf-empty");
+            empty_msg.set_inner_html("No agents available");
+            shelf_el.append_child(&empty_msg).unwrap();
+            return;
+        }
         for agent in state.agents.values() {
             if let Some(agent_id) = agent.id {
-                web_sys::console::log_1(&format!("Processing agent for shelf: ID={}, Name={}", agent_id, agent.name).into());
                 // Create a simple pill element.
                 let pill: HtmlElement = document.create_element("div").unwrap().dyn_into().unwrap();
                 pill.set_class_name("agent-pill");

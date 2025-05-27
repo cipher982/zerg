@@ -1,4 +1,4 @@
-use web_sys::CanvasRenderingContext2d;
+use web_sys::{CanvasRenderingContext2d};
 use crate::models::{Node, NodeType, ApiAgent};
 use crate::state::AppState;
 use crate::constants::*;
@@ -6,16 +6,15 @@ use super::shapes;
 use js_sys::Date;
 use std::collections::HashMap;
 
-use web_sys::HtmlCanvasElement;
+// Removed redundant import of HtmlCanvasElement, it's already imported on line 1
 
 #[allow(dead_code)]
 pub fn draw_nodes(state: &AppState) {
     if let (Some(canvas_el), Some(context)) = (&state.canvas, &state.context) {
         // Ensure canvas element itself has the background color set via style attribute
         // This is a fallback/override if CSS isn't applying as expected.
-        if let Ok(canvas_html_el) = canvas_el.dyn_into::<HtmlCanvasElement>() {
-            let _ = canvas_html_el.style().set_property("background-color", CANVAS_BACKGROUND_COLOR);
-        }
+        // canvas_el is already &HtmlCanvasElement from the outer if let
+        let _ = canvas_el.style().set_property("background-color", CANVAS_BACKGROUND_COLOR);
 
         // Fill canvas rendering context with background color first
         context.save();

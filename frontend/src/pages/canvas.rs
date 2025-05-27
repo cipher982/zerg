@@ -23,6 +23,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     
     // First create/ensure agent shelf exists (sidebar)
     web_sys::console::log_1(&"CANVAS: Creating/refreshing agent shelf".into());
+    
     crate::components::agent_shelf::refresh_agent_shelf(document)?;
     
     // Ensure agent shelf is a direct child of app_container
@@ -173,4 +174,4 @@ pub fn get_canvas_container(document: &Document) -> Option<Element> {
 /// Check if the canvas is currently mounted
 pub fn is_canvas_mounted(document: &Document) -> bool {
     document.get_element_by_id("canvas-container").is_some()
-} 
+}

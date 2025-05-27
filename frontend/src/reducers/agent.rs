@@ -1,7 +1,7 @@
 //! Agent domain reducer: handles all agent CRUD, config, modal, error, run history, debug modal, and MCP integration logic.
 
 use crate::messages::{Message, Command};
-use crate::state::AppState;
+use crate::state::{AppState};
 
 /// Handles agent-related messages. Returns true if the message was handled.
 pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) -> bool {
@@ -308,6 +308,9 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                     new_agent_ids.insert(id);
                 }
             }
+            
+            // Mark that agents have been loaded
+            state.agents_loaded = true;
 
             // Check for newly created agent
             let just_created_agent_ids: Vec<u32> = new_agent_ids.difference(&old_agent_ids).cloned().collect();
@@ -320,16 +323,31 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                 web_sys::console::warn_1(&"Detected multiple new agents after refresh, cannot auto-create default thread.".into());
             }
 
-            // Schedule a UI refresh after state is updated
+            // Update state.agents (already done above this snippet)
+
+            // If Canvas is currently active, refresh its shelf immediately
+            // This handles the case where agents load *while* Canvas is already the active view.
+            if state.active_view == crate::storage::ActiveView::Canvas {
+                commands.push(Command::UpdateUI(Box::new(|| {
+                     if let Some(doc_ref) = web_sys::window().and_then(|w| w.document()){
+                        let _ = crate::components::agent_shelf::refresh_agent_shelf(&doc_ref);
+                     }
+                })));
+            }
+
+            // Schedule a general UI refresh for other views or broader updates
             state.pending_ui_updates = Some(Box::new(|| {
                 if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::error_1(&format!("Failed to refresh UI after AgentsRefreshed: {:?}", e).into());
+                    web_sys::console::error_1(&format!("Failed to refresh UI after AgentsRefreshed (pending_ui_updates): {:?}", e).into());
                 }
 
                 // Ensure Dashboard WS manager is subscribed to all current agents.
                 if let Err(e) = crate::components::dashboard::ws_manager::init_dashboard_ws() {
-                    web_sys::console::error_1(&format!("Failed to re-init dashboard WS subscriptions: {:?}", e).into());
+                    web_sys::console::error_1(&format!("Failed to re-init dashboard WS subscriptions (pending_ui_updates): {:?}", e).into());
                 }
+                
+                // The explicit refresh for canvas if it became active *during* this pending_ui_updates execution
+                // is already handled by refresh_ui_after_state_change.
             }));
 
             // After updating the agent list trigger a label refresh so all

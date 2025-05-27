@@ -426,6 +426,23 @@ body {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+/* Agent shelf loading and empty states */
+.agent-shelf-loading {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-style: italic;
+}
+
+.agent-shelf-empty {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    opacity: 0.7;
+}
+
 /* Drag and drop styles */
 .agent-pill.dragging {
     opacity: 0.9;

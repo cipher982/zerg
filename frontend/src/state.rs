@@ -328,6 +328,9 @@ pub struct AppState {
     /// the profile fetch succeeds (or the session is unauthenticated).
     pub current_user: Option<crate::models::CurrentUser>,
 
+    /// Track whether agents have been loaded from the API at least once
+    pub agents_loaded: bool,
+
     // -------------------------------------------------------------------
     // MCP Integration State
     // -------------------------------------------------------------------
@@ -469,6 +472,9 @@ impl AppState {
             current_user: None,
 
             google_client_id: None,
+            
+            // Start with agents not loaded
+            agents_loaded: false,
             
             // MCP Integration state
             agent_mcp_configs: HashMap::new(),
