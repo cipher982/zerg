@@ -206,7 +206,7 @@ async def _subscribe_user(client_id: str, user_id: int, message_id: str, db: Ses
         # Send initial user state – we re-use the *user_update* payload shape
         # already handled by the frontend rather than introducing a new
         # message type.
-        user_payload = UserOut.model_validate(user).model_dump()
+        user_payload = jsonable_encoder(UserOut.model_validate(user))
 
         await send_to_client(
             client_id,

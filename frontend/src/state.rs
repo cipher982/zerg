@@ -192,6 +192,8 @@ pub struct AppState {
     pub selected_model: String,
     // Available AI models
     pub available_models: Vec<(String, String)>,
+    // Default AI model ID
+    pub default_model_id: String,
     // Whether state has been modified since last save
     pub state_modified: bool,
 
@@ -375,6 +377,7 @@ impl AppState {
             message_id_to_node_id: HashMap::new(),
             selected_model: String::new(),
             available_models: Vec::new(), // Start with empty models, will fetch from API
+            default_model_id: String::new(),
             state_modified: false,
 
             last_modified_ms: 0,

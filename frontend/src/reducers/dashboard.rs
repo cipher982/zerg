@@ -97,6 +97,29 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             })));
             true
         }
+        Message::RequestCreateAgent { name, system_instructions, task_instructions } => {
+            web_sys::console::log_1(&format!("Dashboard: Creating agent with name: {}", name).into());
+            
+            // Use the default model from state - no fallbacks, backend should always provide this
+            let model = &state.default_model_id;
+            
+            // Create the agent via API using NetworkCall command
+            let payload = serde_json::json!({
+                "name": name,
+                "system_instructions": system_instructions,
+                "task_instructions": task_instructions,
+                "model": model
+            }).to_string();
+            
+            commands.push(Command::NetworkCall {
+                endpoint: "/api/agents".to_string(),
+                method: "POST".to_string(),
+                body: Some(payload),
+                on_success: Box::new(Message::RefreshAgentsFromAPI),
+                on_error: Box::new(Message::RefreshAgentsFromAPI),
+            });
+            true
+        }
         _ => false,
     }
 }
