@@ -154,6 +154,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     if crate::reducers::canvas::update(state, &msg, &mut commands) {
         return commands;
     }
+    if crate::reducers::agent::update(state, &msg, &mut commands) {
+        return commands;
+    }
 
     match msg {
         // Catch-all for any unhandled messages (to fix non-exhaustive match error)
@@ -246,170 +249,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             })));
         },
        
-        Message::CreateAgent(name) => {
-            // Create a new agent node at a default position
-            let _ = state.add_node(name, 100.0, 100.0, NodeType::AgentIdentity);
-            state.state_modified = true;
-        },
-       
-        Message::CreateAgentWithDetails { name, agent_id, system_instructions: _system_instructions, task_instructions: _task_instructions } => {
-            // Calculate center position for the new agent
-            let viewport_width = if state.canvas_width > 0.0 { state.canvas_width } else { 800.0 };
-            let viewport_height = if state.canvas_height > 0.0 { state.canvas_height } else { 600.0 };
-           
-            let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - DEFAULT_NODE_WIDTH / 2.0;
-            let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - DEFAULT_NODE_HEIGHT / 2.0;
-           
-            // Create and add the node via the new helper that keeps the
-            // agent<->node mapping up-to-date.
-            let node_id = state.add_agent_node(agent_id, name, x, y);
-
-            // Log the new node ID - make it clear this is a visual node representing an agent
-            web_sys::console::log_1(&format!("Created visual node with ID: {} for agent {}", node_id, agent_id).into());
-           
-            // Draw the nodes on canvas
-            state.mark_dirty();
-           
-            // After creating the agent, immediately create a default thread
-            commands.push(Command::SendMessage(Message::CreateThread(agent_id, DEFAULT_THREAD_TITLE.to_string())));
-           
-            // IMPORTANT: We intentionally don't set state_modified = true here
-            // This prevents the auto-save mechanism from making redundant API calls
-            
-            // Note: A default thread will be created by our Message::AgentsRefreshed handler
-            // when the agent list is refreshed from the API.
-        },
-       
-        Message::EditAgent(agent_id) => {
-            web_sys::console::log_1(&format!("Update: Handling EditAgent for agent_id: {}", agent_id).into());
-            // Quick O(1) lookup via the explicit map
-            let node_id_to_select = state.agent_id_to_node_id.get(&agent_id).cloned();
-
-            if let Some(node_id) = node_id_to_select {
-                // Happy‑path: we already have a visual node for this agent
-                web_sys::console::log_1(&format!("Found node_id {} for agent_id {}, selecting it.", node_id, agent_id).into());
-                let node_id_cloned = node_id.clone();
-                state.selected_node_id = Some(node_id);
-                state.state_modified = true;
-
-                // Defer opening of the modal until *after* we return from
-                // `update()`.  Doing this via a `Command::UpdateUI` ensures we
-                // don't attempt to borrow `APP_STATE` while we are still
-                // holding an active mutable borrow (which would panic at
-                // runtime).  The closure is executed by the dispatcher once
-                // the state borrow has been released, following the same
-                // pattern we use for `ToggleView` above.
-
-                commands.push(Command::UpdateUI(Box::new({
-                    let _node_id = node_id_cloned;
-                    move || {
-                        if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
-                            if let Err(e) = crate::views::show_agent_modal(agent_id, &document) {
-                                web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
-                            }
-                        }
-                    }
-                })));
-            } else {
-                // Fallback: no canvas node yet (e.g., user came from Dashboard)
-                // We simply open the modal without selecting a node.
-
-                commands.push(Command::UpdateUI(Box::new(move || {
-                    if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
-                        if let Err(e) = crate::views::show_agent_modal(agent_id, &document) {
-                            web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
-                        }
-                    }
-                })));
-
-                // No canvas refresh necessary
-                needs_refresh = false;
-            }
-        },
-       
-       
-        Message::SaveAgentDetails { name, system_instructions, task_instructions, model, schedule } => {
-            // Get the current AGENT ID from the modal's data attribute
-            let agent_id = if let Some(window) = web_sys::window() {
-                if let Some(document) = window.document() {
-                    if let Some(modal) = document.get_element_by_id("agent-modal") {
-                        // Read "data-agent-id" instead of "data-node-id"
-                        modal.get_attribute("data-agent-id")
-                             .and_then(|id_str| id_str.parse::<u32>().ok()) // Parse directly to u32
-                    } else {
-                        web_sys::console::warn_1(&"Modal element not found!".into());
-                        None
-                    }
-                } else { None }
-            } else { None };
-
-            // Process the save operation (NO node lookup needed)
-            if let Some(id) = agent_id { // Use the agent_id directly
-                if let Some(agent) = state.agents.get_mut(&id) {
-                    // Update agent properties
-                    agent.name = name;
-                    agent.system_instructions = Some(system_instructions.clone());
-                    agent.task_instructions = Some(task_instructions.clone());
-                    agent.model = Some(model.clone());
-                    agent.schedule = schedule.clone();
-                    
-                    // Build update struct
-                    use crate::models::ApiAgentUpdate;
-                    let api_update = ApiAgentUpdate {
-                        name: Some(agent.name.clone()),
-                        status: None,
-                        system_instructions: Some(agent.system_instructions.clone().unwrap_or_default()),
-                        task_instructions: Some(task_instructions.clone()),
-                        model: Some(model.clone()),
-                        schedule: schedule.clone(),
-                        config: None,
-                        last_error: None,
-                    };
-
-                    // Serialize to JSON
-                    let update_payload = serde_json::to_string(&api_update).unwrap_or_else(|_| "{}".to_string());
-
-                    // Return a command to update the agent via API
-                    commands.push(Command::UpdateAgent {
-                        agent_id: id,
-                        payload: update_payload,
-                        on_success: Box::new(Message::RefreshAgentsFromAPI),
-                        on_error: Box::new(Message::RefreshAgentsFromAPI),
-                    });
-                } else {
-                    web_sys::console::warn_1(&format!("Agent {} not found in state!", id).into());
-                }
-            } else {
-                web_sys::console::warn_1(&"No agent_id found in modal data attribute!".into());
-            }
-            
-            // Mark state as modified
-            state.state_modified = true;
-            
-            // Save state to API
-            let _ = state.save_if_modified();
-            
-            // Close the modal after saving
-            if let Some(window) = web_sys::window() {
-                if let Some(document) = window.document() {
-                    if let Err(e) = crate::components::agent_config_modal::AgentConfigModal::close(&document) {
-                        web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
-                    }
-                }
-            }
-        },
-       
-        Message::CloseAgentModal => {
-            // Get the document to close the modal
-            if let Some(window) = web_sys::window() {
-                if let Some(document) = window.document() {
-                    // Close the modal using the modal helper function
-                    if let Err(e) = crate::components::agent_config_modal::AgentConfigModal::close(&document) {
-                        web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
-                    }
-                }
-            }
-        },
        
         Message::SendTaskToAgent => {
             if let Some(agent_id) = &state.selected_node_id {
@@ -494,45 +333,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
         },
        
-        // Unified tab switching variant.
-        Message::SetAgentTab(tab) => {
-            handle_agent_tab_switch(state, &mut commands, tab);
-        },
-       
-        Message::UpdateSystemInstructions(instructions) => {
-            // Update the currently-selected agent’s system instructions directly.
-            if let Some(node_id) = &state.selected_node_id {
-                // Try to resolve the underlying agent_id.
-                let agent_id_opt = state.nodes.get(node_id).and_then(|n| n.agent_id);
-
-                if let Some(agent_id) = agent_id_opt {
-                    if let Some(agent) = state.agents.get_mut(&agent_id) {
-                        agent.system_instructions = Some(instructions);
-                        state.state_modified = true;
-                    }
-                }
-            }
-        },
-       
-        Message::UpdateAgentName(name) => {
-            if let Some(id) = &state.selected_node_id {
-                let id_clone = id.clone();
-                if let Some(node) = state.nodes.get_mut(&id_clone) {
-                    // Only update if name is not empty
-                    if !name.trim().is_empty() {
-                        node.text = name;
-                        state.state_modified = true;
-                       
-                        // Update modal title for consistency
-                        let window = web_sys::window().expect("no global window exists");
-                        let document = window.document().expect("should have a document");
-                        if let Some(modal_title) = document.get_element_by_id("modal-title") {
-                            modal_title.set_inner_html(&format!("Agent: {}", node.text));
-                        }
-                    }
-                }
-            }
-        },
        
         Message::ResetDatabase => {
             // The actual database reset happens via API call (already done in dashboard.rs)
@@ -800,43 +600,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }));
         },
 
-        Message::LoadAgentInfo(agent_id) => {
-            // Start an async task to load agent info
-            wasm_bindgen_futures::spawn_local(async move {
-                let result = crate::network::api_client::ApiClient::get_agent(agent_id)
-                    .await
-                    .and_then(|response| {
-                        serde_json::from_str::<ApiAgent>(&response)
-                            .map(Box::new)
-                            .map_err(|e| e.to_string().into())
-                    });
 
-                match result {
-                    Ok(boxed_agent) => {
-                        crate::state::dispatch_global_message(Message::AgentInfoLoaded(boxed_agent));
-                    },
-                    Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to load/parse agent info: {:?}", e).into());
-                    }
-                }
-            });
-        },
-
-        Message::AgentInfoLoaded(agent_box) => {
-            // Data is already Box<ApiAgent>
-            let agent = *agent_box; // Deref the box
-            web_sys::console::log_1(&format!("Update: Handling AgentInfoLoaded: {:?}", agent).into()); // Use {:?}
-            if state.active_view == crate::storage::ActiveView::ChatView {
-                if let Some(agent_id) = agent.id {
-                    state.agents.insert(agent_id, agent.clone());
-                    // Trigger UI update for agent info display implicitly via state change
-                } else {
-                    web_sys::console::error_1(&"AgentInfoLoaded message missing agent ID".into());
-                }
-            } else {
-                web_sys::console::warn_1(&"Received AgentInfoLoaded outside of ChatView".into());
-            }
-        },
 
         Message::RequestNewThread => {
             // Try to get agent ID from current thread, else from current_agent_id
@@ -961,43 +725,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             needs_refresh = false;
         },
 
-        Message::RetryAgentTask { agent_id } => {
-            // Optimistically update the agent status in the state
-            if let Some(agent) = state.agents.get_mut(&agent_id) {
-                agent.status = Some("running".to_string());
-            }
-            
-            // Create command to call the API
-            commands.push(Command::NetworkCall {
-                endpoint: format!("/api/agents/{}/task", agent_id),
-                method: "POST".to_string(),
-                body: None,
-                on_success: Box::new(Message::RefreshAgentsFromAPI),
-                on_error: Box::new(Message::RefreshAgentsFromAPI),
-            });
-            
-            needs_refresh = true;
-        },
         
-        Message::DismissAgentError { agent_id } => {
-            // Optimistically clear the error in the state
-            if let Some(agent) = state.agents.get_mut(&agent_id) {
-                agent.last_error = None;
-            }
-            
-            // Create payload for API update
-            let payload = serde_json::json!({"last_error": null}).to_string();
-            
-            // Create command to update the agent via API
-            commands.push(Command::UpdateAgent {
-                agent_id,
-                payload,
-                on_success: Box::new(Message::RefreshAgentsFromAPI),
-                on_error: Box::new(Message::RefreshAgentsFromAPI),
-            });
-            
-            needs_refresh = true;
-        },
 
        
 
