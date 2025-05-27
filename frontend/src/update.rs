@@ -1,20 +1,12 @@
 // frontend/src/update.rs
 //
 use crate::messages::{Message, Command};
-use crate::state::{AppState, APP_STATE, dispatch_global_message, ToolUiState};
-use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent};
-use crate::{
-    constants::{
-    DEFAULT_NODE_WIDTH,
-    DEFAULT_NODE_HEIGHT,
-    DEFAULT_THREAD_TITLE,
-    },
-};
+use crate::state::{AppState, APP_STATE, dispatch_global_message};
+use crate::models::{ApiThread, ApiThreadMessage};
 use web_sys::Document;
 use wasm_bindgen::JsValue;
 use std::collections::HashMap;
 use crate::components::chat_view::update_thread_list_ui;
-use std::collections::HashSet;
 use crate::state::AgentConfigTab;
 use crate::dom_utils::{hide, show, set_active, set_inactive};
 
@@ -24,7 +16,7 @@ use crate::dom_utils::{hide, show, set_active, set_inactive};
 // `Message::SetAgentTab` handler.
 // ---------------------------------------------------------------------------
 
-fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>, tab: AgentConfigTab) {
+pub fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>, tab: AgentConfigTab) {
     state.agent_modal_tab = tab;
 
     let window = match web_sys::window() {
@@ -168,8 +160,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     }
 
     match msg {
-        // Catch-all for any unhandled messages (to fix non-exhaustive match error)
-        _ => {}
         // ---------------------------------------------------------------
         // Auth / profile handling
         // ---------------------------------------------------------------
@@ -259,88 +249,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
        
        
-        Message::SendTaskToAgent => {
-            if let Some(agent_id) = &state.selected_node_id {
-                let agent_id_clone = agent_id.clone();
-               
-                // Fetch task instructions – abort if missing.
-                let task_text = match state.get_task_instructions(&agent_id_clone) {
-                    Ok(txt) => txt,
-                    Err(e) => {
-                        web_sys::console::error_1(&format!("Cannot send task: {}", e).into());
-                        // We bail out early; nothing to do.
-                        return commands;
-                    }
-                };
-               
-                // Create a message ID
-                let message_id = state.generate_message_id();
-               
-                // Create a response node
-                if let Some(agent_node) = state.nodes.get_mut(&agent_id_clone) {
-                    // Create a new message for the history
-                    let user_message = crate::models::Message {
-                        role: "user".to_string(),
-                        content: task_text.clone(),
-                        timestamp: js_sys::Date::now() as u64,
-                    };
-                   
-                    // Instead of directly modifying history, use API calls
-                    // Save the message to agent history via API
-                    crate::storage::save_agent_messages_to_api(&agent_id_clone, &[user_message]);
-                   
-                    // Update agent status via API if it has an agent_id
-                    if let Some(agent_id) = agent_node.agent_id {
-                        // Update visual colour of the node to indicate processing
-                        agent_node.color = "#b3e5fc".to_string(); // light blue
-
-                        // Also update agent status in our cache
-                        if let Some(agent) = state.agents.get_mut(&agent_id) {
-                            agent.status = Some("processing".to_string());
-                        }
-                    }
-                }
-               
-                // Adjust viewport to fit all nodes if auto-fit is enabled
-                if state.auto_fit {
-                    state.fit_nodes_to_view();
-                }
-               
-                // Add a response node (this creates a visual node for the response)
-                let response_node_id = state.add_response_node(&agent_id_clone, "...".to_string());
-               
-                // Track the message ID to node ID mapping
-                state.track_message(message_id.clone(), response_node_id);
-               
-                // Store the necessary values for the network call
-                let task_text_clone = task_text.clone();
-                let message_id_clone = message_id.clone();
-
-                // Generate a u32 client ID for the send command
-                let client_id_u32 = u32::MAX - rand::random::<u32>() % 1000;
-
-                // Mark state as modified
-                state.state_modified = true;
-
-                // Close the modal after sending - this doesn't borrow APP_STATE
-                let window = web_sys::window().expect("no global window exists");
-                let document = window.document().expect("should have a document");
-                if let Err(e) = crate::views::hide_agent_modal(&document) {
-                    web_sys::console::error_1(&format!("Failed to hide modal: {:?}", e).into());
-                }
-
-                // After the update function returns and the AppState borrow is dropped,
-                // we'll send a command to handle the thread message
-                commands.push(Command::SendThreadMessage {
-                    thread_id: state.current_thread_id.unwrap_or(1),
-                    client_id: Some(client_id_u32),
-                    content: task_text_clone.clone(),
-                });
-
-                // For now, we'll use a simple approach: stash the data in state
-                state.pending_network_call = Some((task_text_clone, message_id_clone));
-            }
-        },
        
        
         Message::ResetDatabase => {
@@ -376,28 +284,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
 
         // Force re-render of Dashboard when active
-        Message::RefreshDashboard => {
-            // Schedule UI update outside the current mutable borrow scope
-            commands.push(Command::UpdateUI(Box::new(|| {
-                if let Some(window) = web_sys::window() {
-                    if let Some(document) = window.document() {
-                        // Step 1: read active view with an immutable borrow and drop it.
-                        let is_dashboard = crate::state::APP_STATE.with(|state_cell| {
-                            state_cell.borrow().active_view == crate::storage::ActiveView::Dashboard
-                        });
-
-                        if is_dashboard {
-                            // Refresh only the dashboard to avoid borrowing state mutably while inside refresh.
-                            if let Err(e) = crate::components::dashboard::refresh_dashboard(&document) {
-                                web_sys::console::error_1(&format!("Failed to refresh dashboard: {:?}", e).into());
-                            }
-                        }
-                    }
-                }
-            })));
-
-            needs_refresh = false;
-        },
 
         
 
@@ -492,113 +378,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
 
         // Agent Debug Modal
-        Message::ShowAgentDebugModal { agent_id } => {
-            state.agent_debug_pane = Some(crate::state::AgentDebugPane {
-                agent_id,
-                loading: true,
-                details: None,
-                active_tab: crate::state::DebugTab::Overview,
-            });
 
-            commands.push(Command::FetchAgentDetails(agent_id));
 
-            commands.push(Command::UpdateUI(Box::new(|| {
-                if let Some(window) = web_sys::window() {
-                    if let Some(doc) = window.document() {
-                        crate::state::APP_STATE.with(|s| {
-                            let app_state = s.borrow();
-                            let _ = crate::components::agent_debug_modal::render_agent_debug_modal(&app_state, &doc);
-                        });
-                    }
-                }
-            })));
-
-            needs_refresh = false;
-        },
-
-        Message::HideAgentDebugModal => {
-            state.agent_debug_pane = None;
-
-            commands.push(Command::UpdateUI(Box::new(|| {
-                if let Some(window) = web_sys::window() {
-                    if let Some(doc) = window.document() {
-                        let _ = crate::components::agent_debug_modal::hide_agent_debug_modal(&doc);
-                    }
-                }
-            })));
-
-            needs_refresh = false;
-        },
-
-        Message::ReceiveAgentDetails(details) => {
-            if let Some(pane) = state.agent_debug_pane.as_mut() {
-                pane.loading = false;
-                pane.details = Some(details);
-            }
-
-            commands.push(Command::UpdateUI(Box::new(|| {
-                if let Some(window) = web_sys::window() {
-                    if let Some(doc) = window.document() {
-                        crate::state::APP_STATE.with(|s| {
-                            let app_state = s.borrow();
-                            let _ = crate::components::agent_debug_modal::render_agent_debug_modal(&app_state, &doc);
-                        });
-                    }
-                }
-            })));
-
-            needs_refresh = false;
-        },
-
-        Message::SetAgentDebugTab(tab) => {
-            if let Some(pane) = state.agent_debug_pane.as_mut() {
-                // Only trigger UI update if the tab actually changed to avoid
-                // unnecessary re-renders.
-                if pane.active_tab != tab {
-                    pane.active_tab = tab.clone();
-
-                    commands.push(Command::UpdateUI(Box::new(|| {
-                        if let Some(window) = web_sys::window() {
-                            if let Some(doc) = window.document() {
-                                crate::state::APP_STATE.with(|s| {
-                                    let app_state = s.borrow();
-                                    let _ = crate::components::agent_debug_modal::render_agent_debug_modal(&app_state, &doc);
-                                });
-                            }
-                        }
-                    })));
-                }
-            }
-
-            needs_refresh = false;
-        },
 
         // Model management
-        Message::SetAvailableModels { models, default_model_id } => {
-            state.available_models = models;
-            state.selected_model = default_model_id;
-            state.state_modified = true;
-        },
-
-        Message::RequestCreateAgent { name, system_instructions, task_instructions } => {
-            // Use the selected model from state
-            let model = state.selected_model.clone();
-            let agent_payload = serde_json::json!({
-                "name": name,
-                "system_instructions": system_instructions,
-                "task_instructions": task_instructions,
-                "model": model
-            });
-            let agent_data = agent_payload.to_string();
-            commands.push(Command::NetworkCall {
-                endpoint: "/api/agents".to_string(),
-                method: "POST".to_string(),
-                body: Some(agent_data),
-                on_success: Box::new(Message::RefreshAgentsFromAPI),
-                on_error: Box::new(Message::RefreshAgentsFromAPI), // Could add error handling message
-            });
-            needs_refresh = false;
-        },
 
 
         // -----------------------------------------------------------------
@@ -616,220 +399,17 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
 
         // Toggle compact/full run history view
-        Message::ToggleRunHistory { agent_id } => {
-            if state.run_history_expanded.contains(&agent_id) {
-                state.run_history_expanded.remove(&agent_id);
-            } else {
-                state.run_history_expanded.insert(agent_id);
-            }
-
-            // Refresh dashboard UI
-            commands.push(Command::UpdateUI(Box::new(|| {
-                if let Some(window) = web_sys::window() {
-                    if let Some(document) = window.document() {
-                        let _ = crate::components::dashboard::refresh_dashboard(&document);
-                    }
-                }
-            })));
-        },
 
         // -------------------------------------------------------------------
         // Dashboard scope toggle (My ⇄ All)
         // -------------------------------------------------------------------
-        Message::ToggleDashboardScope(new_scope) => {
-            if state.dashboard_scope != new_scope {
-                state.dashboard_scope = new_scope;
-
-                // Persist to localStorage
-                if let Some(window) = web_sys::window() {
-                    if let Ok(Some(storage)) = window.local_storage() {
-                        let _ = storage.set_item("dashboard_scope", new_scope.as_str());
-                    }
-                }
-
-                // Trigger agent list reload
-                commands.push(Command::FetchAgents);
-
-                // Force dashboard re-render
-                commands.push(Command::UpdateUI(Box::new(|| {
-                    if let Some(window) = web_sys::window() {
-                        if let Some(document) = window.document() {
-                            let _ = crate::components::dashboard::refresh_dashboard(&document);
-                        }
-                    }
-                })));
-            }
-        },
         // -------------------------------------------------------------------
         // MCP Integration Messages
         // -------------------------------------------------------------------
-        Message::McpToolsLoaded { agent_id, builtin_tools, mcp_tools } => {
-            // Update state with loaded tools
-            state.available_mcp_tools.insert(agent_id, mcp_tools.values().flatten().cloned().collect());
-            // TODO: Handle builtin_tools separately if needed
-            web_sys::console::log_1(&format!("McpToolsLoaded for agent {}: {:?} built-in, {:?} mcp", agent_id, builtin_tools, mcp_tools).into());
-            // Trigger UI update for the tools tab
-            commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(win) = web_sys::window() {
-                    if let Some(doc) = win.document() {
-                        // TODO: Render MCP tools UI
-                        web_sys::console::log_1(&"Render MCP tools UI after loading".into());
-                    }
-                }
-            })));
-        },
-        Message::AddMcpServer { agent_id, server_config } => {
-            web_sys::console::log_1(&format!("AddMcpServer for agent {}: {:?}", agent_id, server_config).into());
-            let payload = serde_json::to_string(&server_config).unwrap_or_else(|_| "{}".to_string());
-            commands.push(Command::NetworkCall {
-                endpoint: format!("/api/agents/{}/mcp-servers", agent_id),
-                method: "POST".to_string(),
-                body: Some(payload),
-                on_success: Box::new(Message::McpServerAdded {
-                    agent_id,
-                    server_name: server_config.name.clone(),
-                }),
-                on_error: Box::new(Message::McpError {
-                    agent_id,
-                    error: format!("Failed to add server: {}", server_config.name),
-                }),
-            });
-        },
-        Message::RemoveMcpServer { agent_id, server_name } => {
-            web_sys::console::log_1(&format!("RemoveMcpServer for agent {}: {}", agent_id, server_name).into());
-            commands.push(Command::NetworkCall {
-                endpoint: format!("/api/agents/{}/mcp-servers/{}", agent_id, server_name),
-                method: "DELETE".to_string(),
-                body: None,
-                on_success: Box::new(Message::McpServerRemoved {
-                    agent_id,
-                    server_name: server_name.clone(),
-                }),
-                on_error: Box::new(Message::McpError {
-                    agent_id,
-                    error: format!("Failed to remove server: {}", server_name),
-                }),
-            });
-        },
-        Message::TestMcpConnection { agent_id, server_config } => {
-            web_sys::console::log_1(&format!("TestMcpConnection for agent {}: {:?}", agent_id, server_config).into());
-            let payload = serde_json::to_string(&server_config).unwrap_or_else(|_| "{}".to_string());
-            commands.push(Command::NetworkCall {
-                endpoint: format!("/api/agents/{}/mcp-servers/test", agent_id),
-                method: "POST".to_string(),
-                body: Some(payload),
-                on_success: Box::new(Message::McpConnectionTested {
-                    agent_id,
-                    server_name: server_config.name.clone(),
-                    status: crate::state::ConnectionStatus::Healthy, // Placeholder
-                }),
-                on_error: Box::new(Message::McpConnectionTested {
-                    agent_id,
-                    server_name: server_config.name.clone(),
-                    status: crate::state::ConnectionStatus::Failed("Connection failed".to_string()), // Placeholder
-                }),
-            });
-        },
-        Message::McpConnectionTested { agent_id, server_name, status } => {
-            let key = format!("{}:{}", agent_id, server_name);
-            state.mcp_connection_status.insert(key, status.clone());
-            web_sys::console::log_1(&format!("McpConnectionTested for agent {}: {} status {:?}", agent_id, server_name, status).into());
-            // Trigger UI update for the tools tab
-            commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(win) = web_sys::window() {
-                    if let Some(doc) = win.document() {
-                        // TODO: Render MCP tools UI to show updated status
-                        web_sys::console::log_1(&"Render MCP tools UI after connection test".into());
-                    }
-                }
-            })));
-        },
-        Message::UpdateAllowedTools { agent_id, allowed_tools } => {
-            if let Some(config) = state.agent_mcp_configs.get_mut(&agent_id) {
-                config.allowed_tools = allowed_tools;
-            } else {
-                state.agent_mcp_configs.insert(agent_id, crate::state::AgentMcpConfig {
-                    servers: Vec::new(),
-                    allowed_tools,
-                });
-            }
-            web_sys::console::log_1(&format!("UpdateAllowedTools for agent {}: {:?}", agent_id, state.agent_mcp_configs.get(&agent_id).map(|c| &c.allowed_tools)).into());
-            // TODO: Persist this change to the backend (update agent config)
-        },
-        Message::McpServerAdded { agent_id, server_name } => {
-            // Refresh MCP configs for the agent
-            commands.push(Command::SendMessage(Message::LoadMcpTools(agent_id)));
-            web_sys::console::log_1(&format!("McpServerAdded for agent {}: {}", agent_id, server_name).into());
-        },
-        Message::McpServerRemoved { agent_id, server_name } => {
-            // Refresh MCP configs for the agent
-            commands.push(Command::SendMessage(Message::LoadMcpTools(agent_id)));
-            web_sys::console::log_1(&format!("McpServerRemoved for agent {}: {}", agent_id, server_name).into());
-        },
-        Message::McpError { agent_id, error } => {
-            web_sys::console::error_1(&format!("MCP Error for agent {}: {}", agent_id, error).into());
-            // TODO: Display error to user in UI
-        },
 
         // --- MCP UI message handlers ---
         
-        Message::ConnectMCPPreset { agent_id, preset_id } => {
-            web_sys::console::log_1(&format!("ConnectMCPPreset for agent {}: {}", agent_id, preset_id).into());
-            
-            // TODO: Show auth dialog for preset connection
-            // For now, just log and show a placeholder alert
-            commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(win) = web_sys::window() {
-                    let _ = win.alert_with_message(&format!("Connect to {} preset (auth flow to be implemented)", preset_id));
-                }
-            })));
-        },
         
-        Message::AddMCPServer { agent_id, url, name, preset, auth_token } => {
-            web_sys::console::log_1(&format!("AddMCPServer for agent {}: {} ({})", agent_id, name, url.as_deref().unwrap_or("preset")).into());
-            
-            // Create the server config
-            let server_config = crate::state::McpServerConfig {
-                name: name.clone(),
-                url: url.clone(),
-                preset: preset.clone(),
-                auth_token: Some(auth_token.clone()),
-            };
-            
-            // Convert to the message format expected by the existing handler
-            commands.push(Command::SendMessage(Message::AddMcpServer {
-                agent_id,
-                server_config,
-            }));
-        },
-        
-        Message::RemoveMCPServer { agent_id, server_name } => {
-            web_sys::console::log_1(&format!("RemoveMCPServer for agent {}: {}", agent_id, server_name).into());
-            
-            // Convert to the message format expected by the existing handler
-            commands.push(Command::SendMessage(Message::RemoveMcpServer {
-                agent_id,
-                server_name,
-            }));
-        },
-        
-        Message::TestMCPConnection { agent_id, url, name, auth_token } => {
-            web_sys::console::log_1(&format!("TestMCPConnection for agent {}: {} at {}", agent_id, name, url).into());
-            
-            // Create the server config for testing
-            let server_config = crate::state::McpServerConfig {
-                name: name.clone(),
-                url: Some(url.clone()),
-                preset: None,
-                auth_token: Some(auth_token.clone()),
-            };
-            
-            // Convert to the message format expected by the existing handler
-            commands.push(Command::SendMessage(Message::TestMcpConnection {
-                agent_id,
-                server_config,
-            }));
-        }
         
         // Canvas-related messages are handled by the canvas reducer
         Message::UpdateNodePosition { .. } |
@@ -858,6 +438,12 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::GenerateCanvasFromAgents => {
             // These are handled by the canvas reducer which returns early
             unreachable!("Canvas messages should be handled by the canvas reducer")
+        }
+        
+        // Catch-all for any unhandled messages
+        _ => {
+            // No action needed for unhandled messages
+            needs_refresh = false;
         }
     }
 

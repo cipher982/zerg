@@ -4,7 +4,7 @@
 //! integrations (GitHub, Linear, etc.) and custom server URLs.
 
 use wasm_bindgen::prelude::*;
-use web_sys::{Document, Element, HtmlInputElement, HtmlSelectElement};
+use web_sys::{Document, Element, HtmlInputElement};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use serde::{Deserialize, Serialize};

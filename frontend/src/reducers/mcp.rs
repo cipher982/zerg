@@ -8,9 +8,10 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
     match msg {
         Message::LoadMcpTools(agent_id) => {
             web_sys::console::log_1(&format!("LoadMcpTools for agent {}", agent_id).into());
+            let agent_id_clone = *agent_id;
             commands.push(Command::UpdateUI(Box::new(move || {
                 wasm_bindgen_futures::spawn_local(async move {
-                    match crate::network::api_client::ApiClient::get_mcp_available_tools(*agent_id).await {
+                    match crate::network::api_client::ApiClient::get_mcp_available_tools(agent_id_clone).await {
                         Ok(response) => {
                             match serde_json::from_str::<serde_json::Value>(&response) {
                                 Ok(json) => {
@@ -45,7 +46,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                                     }
                                     
                                     crate::state::dispatch_global_message(Message::McpToolsLoaded {
-                                        agent_id: *agent_id,
+                                        agent_id: agent_id_clone,
                                         builtin_tools,
                                         mcp_tools,
                                     });
@@ -53,7 +54,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                                 Err(e) => {
                                     web_sys::console::error_1(&format!("Failed to parse MCP tools response: {:?}", e).into());
                                     crate::state::dispatch_global_message(Message::McpError {
-                                        agent_id: *agent_id,
+                                        agent_id: agent_id_clone,
                                         error: format!("Failed to parse tools: {}", e),
                                     });
                                 }
@@ -62,7 +63,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                         Err(e) => {
                             web_sys::console::error_1(&format!("Failed to load MCP tools: {:?}", e).into());
                             crate::state::dispatch_global_message(Message::McpError {
-                                agent_id: *agent_id,
+                                agent_id: agent_id_clone,
                                 error: format!("Failed to load tools: {:?}", e),
                             });
                         }
@@ -76,7 +77,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             web_sys::console::log_1(&format!("McpToolsLoaded for agent {}: {:?} built-in, {:?} mcp", agent_id, builtin_tools, mcp_tools).into());
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
-                    if let Some(doc) = win.document() {
+                    if let Some(_doc) = win.document() {
                         web_sys::console::log_1(&"Render MCP tools UI after loading".into());
                     }
                 }
@@ -144,7 +145,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             web_sys::console::log_1(&format!("McpConnectionTested for agent {}: {} status {:?}", agent_id, server_name, status).into());
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
-                    if let Some(doc) = win.document() {
+                    if let Some(_doc) = win.document() {
                         web_sys::console::log_1(&"Render MCP tools UI after connection test".into());
                     }
                 }
@@ -181,7 +182,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             web_sys::console::log_1(&format!("SetMCPTab for agent {}: {:?}", agent_id, tab).into());
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
-                    if let Some(doc) = win.document() {
+                    if let Some(_doc) = win.document() {
                         web_sys::console::log_1(&"MCP tab switch UI update".into());
                     }
                 }
@@ -190,9 +191,10 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
         }
         Message::ConnectMCPPreset { agent_id, preset_id } => {
             web_sys::console::log_1(&format!("ConnectMCPPreset for agent {}: {}", agent_id, preset_id).into());
+            let preset_id_cloned = preset_id.clone();
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
-                    let _ = win.alert_with_message(&format!("Connect to {} preset (auth flow to be implemented)", preset_id));
+                    let _ = win.alert_with_message(&format!("Connect to {} preset (auth flow to be implemented)", preset_id_cloned));
                 }
             })));
             true

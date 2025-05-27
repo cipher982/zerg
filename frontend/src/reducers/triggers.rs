@@ -13,12 +13,13 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
         Message::TriggersLoaded { agent_id, triggers } => {
             state.triggers.insert(*agent_id, triggers.clone());
             state.mark_dirty();
+            let agent_id_clone = *agent_id;
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
                     if let Some(doc) = win.document() {
                         if let Some(content) = doc.get_element_by_id("triggers-content") {
                             if content.get_attribute("style").map(|s| s.contains("display: block")).unwrap_or(false) {
-                                let _ = crate::components::agent_config_modal::render_triggers_list(&doc, *agent_id);
+                                let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id_clone);
                             }
                         }
                     }
@@ -29,10 +30,11 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
         Message::TriggerCreated { agent_id, trigger } => {
             state.triggers.entry(*agent_id).or_default().push(trigger.clone());
             state.mark_dirty();
+            let agent_id_clone = *agent_id;
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
                     if let Some(doc) = win.document() {
-                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, *agent_id);
+                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id_clone);
                     }
                 }
             })));
@@ -43,10 +45,11 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                 list.retain(|t| t.id != *trigger_id);
             }
             state.mark_dirty();
+            let agent_id_clone = *agent_id;
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
                     if let Some(doc) = win.document() {
-                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, *agent_id);
+                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id_clone);
                     }
                 }
             })));

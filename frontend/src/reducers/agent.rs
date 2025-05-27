@@ -8,7 +8,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
     match msg {
         Message::CreateAgent(name) => {
             // Create a new agent node at a default position
-            let _ = state.add_node(name, 100.0, 100.0, crate::models::NodeType::AgentIdentity);
+            let _ = state.add_node(name.to_string(), 100.0, 100.0, crate::models::NodeType::AgentIdentity);
             state.state_modified = true;
             true
         }
@@ -22,7 +22,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
 
             // Create and add the node via the new helper that keeps the
             // agent<->node mapping up-to-date.
-            let node_id = state.add_agent_node(*agent_id, name, x, y);
+            let node_id = state.add_agent_node(*agent_id, name.to_string(), x, y);
 
             // Log the new node ID - make it clear this is a visual node representing an agent
             web_sys::console::log_1(&format!("Created visual node with ID: {} for agent {}", node_id, agent_id).into());
@@ -107,7 +107,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             if let Some(id) = agent_id { // Use the agent_id directly
                 if let Some(agent) = state.agents.get_mut(&id) {
                     // Update agent properties
-                    agent.name = name;
+                    agent.name = name.to_string();
                     agent.system_instructions = Some(system_instructions.clone());
                     agent.task_instructions = Some(task_instructions.clone());
                     agent.model = Some(model.clone());
@@ -236,11 +236,11 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
         }
         Message::AgentInfoLoaded(agent_box) => {
             // Data is already Box<ApiAgent>
-            let agent = *agent_box; // Deref the box
+            let agent = agent_box.as_ref(); // Borrow the agent, do not move
             web_sys::console::log_1(&format!("Update: Handling AgentInfoLoaded: {:?}", agent).into()); // Use {:?}
             if state.active_view == crate::storage::ActiveView::ChatView {
                 if let Some(agent_id) = agent.id {
-                    state.agents.insert(agent_id, agent.clone());
+                    state.agents.insert(agent_id, (**agent_box).clone()); // Clone the agent to insert
                     // Trigger UI update for agent info display implicitly via state change
                 } else {
                     web_sys::console::error_1(&"AgentInfoLoaded message missing agent ID".into());
