@@ -344,6 +344,8 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     // Create reset database button (development only) using ui_components helper
     let reset_btn = create_danger_button(document, "🗑️ Reset DB", Some("reset-db-btn"))?;
     reset_btn.set_attribute(ATTR_DATA_TESTID, "reset-db-btn")?;
+    // Add the reset-db-btn class to get the red background styling
+    reset_btn.set_class_name("btn-danger reset-db-btn");
     
     // Reset button click handler
     let reset_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
@@ -610,6 +612,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
 
     if include_owner {
         let owner_cell = document.create_element("td")?;
+        owner_cell.set_class_name("owner-cell");
 
         if let Some(label) = &agent.owner_label {
             // Try to render avatar badge if we have at least email/id.
@@ -624,15 +627,21 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
                     gmail_connected: false,
                 };
 
+                // Create a wrapper div for inline display
+                let owner_wrapper = document.create_element("div")?;
+                owner_wrapper.set_class_name("owner-wrapper");
+
                 if let Ok(avatar_el) = crate::components::avatar_badge::render(document, &owner_profile) {
-                    owner_cell.append_child(&avatar_el)?;
+                    // Add the small class to make avatar smaller
+                    avatar_el.set_class_name("avatar-badge small");
+                    // Set title attribute to show full name on hover
+                    avatar_el.set_attribute("title", &label)?;
+                    owner_wrapper.append_child(&avatar_el)?;
                 }
-                // Add name/email next to avatar
-                let name_span = document.create_element("span")?;
-                name_span.set_class_name("owner-label");
-                name_span.set_inner_html(&label);
-                owner_cell.append_child(&name_span)?;
+                
+                owner_cell.append_child(&owner_wrapper)?;
             } else {
+                // If no owner_id, just show the text
                 owner_cell.set_inner_html(&label);
             }
         } else {
