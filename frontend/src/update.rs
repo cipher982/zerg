@@ -1202,21 +1202,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         },
 
         // --- MCP UI message handlers ---
-        Message::SetMCPTab { agent_id, tab } => {
-            // Update the active MCP tab in state
-            web_sys::console::log_1(&format!("SetMCPTab for agent {}: {:?}", agent_id, tab).into());
-            
-            // TODO: Store tab state if needed
-            // For now, just trigger a UI update to re-render with the new tab
-            commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(win) = web_sys::window() {
-                    if let Some(doc) = win.document() {
-                        // The MCP component will handle tab switching based on its internal state
-                        web_sys::console::log_1(&"MCP tab switch UI update".into());
-                    }
-                }
-            })));
-        },
         
         Message::ConnectMCPPreset { agent_id, preset_id } => {
             web_sys::console::log_1(&format!("ConnectMCPPreset for agent {}: {}", agent_id, preset_id).into());

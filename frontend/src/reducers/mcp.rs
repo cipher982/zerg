@@ -177,6 +177,62 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             web_sys::console::error_1(&format!("MCP Error for agent {}: {}", agent_id, error).into());
             true
         }
+        Message::SetMCPTab { agent_id, tab } => {
+            web_sys::console::log_1(&format!("SetMCPTab for agent {}: {:?}", agent_id, tab).into());
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        web_sys::console::log_1(&"MCP tab switch UI update".into());
+                    }
+                }
+            })));
+            true
+        }
+        Message::ConnectMCPPreset { agent_id, preset_id } => {
+            web_sys::console::log_1(&format!("ConnectMCPPreset for agent {}: {}", agent_id, preset_id).into());
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(win) = web_sys::window() {
+                    let _ = win.alert_with_message(&format!("Connect to {} preset (auth flow to be implemented)", preset_id));
+                }
+            })));
+            true
+        }
+        Message::AddMCPServer { agent_id, url, name, preset, auth_token } => {
+            web_sys::console::log_1(&format!("AddMCPServer for agent {}: {} ({})", agent_id, name, url.as_deref().unwrap_or("preset")).into());
+            let server_config = crate::state::McpServerConfig {
+                name: name.clone(),
+                url: url.clone(),
+                preset: preset.clone(),
+                auth_token: Some(auth_token.clone()),
+            };
+            commands.push(Command::SendMessage(Message::AddMcpServer {
+                agent_id: *agent_id,
+                server_config,
+            }));
+            true
+        }
+        Message::RemoveMCPServer { agent_id, server_name } => {
+            web_sys::console::log_1(&format!("RemoveMCPServer for agent {}: {}", agent_id, server_name).into());
+            commands.push(Command::SendMessage(Message::RemoveMcpServer {
+                agent_id: *agent_id,
+                server_name: server_name.clone(),
+            }));
+            true
+        }
+        Message::TestMCPConnection { agent_id, url, name, auth_token } => {
+            web_sys::console::log_1(&format!("TestMCPConnection for agent {}: {} at {}", agent_id, name, url).into());
+            let server_config = crate::state::McpServerConfig {
+                name: name.clone(),
+                url: Some(url.clone()),
+                preset: None,
+                auth_token: Some(auth_token.clone()),
+            };
+            commands.push(Command::SendMessage(Message::TestMcpConnection {
+                agent_id: *agent_id,
+                server_config,
+            }));
+            true
+        }
         _ => false,
     }
 }
