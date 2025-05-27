@@ -61,6 +61,7 @@ mod utils;
 mod dom_utils;
 mod auth;
 mod ui_components;
+pub mod reducers;
 
 /// Basic hash router for a handful of top-level pages.
 fn route_hash(hash: &str) {
