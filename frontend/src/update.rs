@@ -965,88 +965,15 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // Trigger management (Phase A minimal state sync)
         // -----------------------------------------------------------------
 
-        Message::LoadTriggers(agent_id) => {
-            // Fire network command – actual update comes via TriggersLoaded.
-            commands.push(Command::FetchTriggers(agent_id));
-        },
 
-        Message::TriggersLoaded { agent_id, triggers } => {
-            state.triggers.insert(agent_id, triggers);
 
-            // If modal is open on Triggers tab, refresh the list (TODO – will
-            // be implemented in Phase B).  For now we simply mark canvas
-            // dirty which is a no-op for modal but keeps behaviour
-            // consistent with other update paths.
-            state.mark_dirty();
 
-            // If triggers tab for this agent is currently visible, re-render.
-            commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(win) = web_sys::window() {
-                    if let Some(doc) = win.document() {
-                        // Check if triggers-content is visible (style display)
-                        if let Some(content) = doc.get_element_by_id("triggers-content") {
-                            if content.get_attribute("style").map(|s| s.contains("display: block")).unwrap_or(false) {
-                                let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
-                            }
-                        }
-                    }
-                }
-            })));
-        },
-
-        Message::TriggerCreated { agent_id, trigger } => {
-            state.triggers.entry(agent_id).or_default().push(trigger);
-            state.mark_dirty();
-
-            commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(win) = web_sys::window() {
-                    if let Some(doc) = win.document() {
-                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
-                    }
-                }
-            })));
-        },
-
-        Message::TriggerDeleted { agent_id, trigger_id } => {
-            if let Some(list) = state.triggers.get_mut(&agent_id) {
-                list.retain(|t| t.id != trigger_id);
-            }
-            state.mark_dirty();
-
-            commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(win) = web_sys::window() {
-                    if let Some(doc) = win.document() {
-                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
-                    }
-                }
-            })));
-        },
 
         // -----------------------------------------------------------
         // Gmail OAuth flow – Phase C (frontend-only stub)
         // -----------------------------------------------------------
 
-        Message::GmailConnected => {
-            state.gmail_connected = true;
 
-            // Re-render UI pieces that depend on the flag (Triggers tab).
-            commands.push(Command::UpdateUI(Box::new(|| {
-                if let Some(win) = web_sys::window() {
-                    if let Some(doc) = win.document() {
-                        let _ = crate::components::agent_config_modal::render_gmail_connect_status(&doc);
-                    }
-                }
-            })));
-        },
-
-        // UI requested new trigger creation – translate into network command.
-        Message::RequestCreateTrigger { payload_json } => {
-            commands.push(Command::CreateTrigger { payload_json });
-        },
-
-        Message::RequestDeleteTrigger { trigger_id } => {
-            commands.push(Command::DeleteTrigger(trigger_id));
-        },
 
         // Toggle compact/full run history view
         Message::ToggleRunHistory { agent_id } => {
