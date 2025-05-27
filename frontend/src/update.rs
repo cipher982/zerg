@@ -163,6 +163,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     if crate::reducers::mcp::update(state, &msg, &mut commands) {
         return commands;
     }
+    if crate::reducers::triggers::update(state, &msg, &mut commands) {
+        return commands;
+    }
 
     match msg {
         // Catch-all for any unhandled messages (to fix non-exhaustive match error)
