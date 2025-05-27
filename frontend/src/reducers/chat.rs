@@ -507,6 +507,39 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             })));
             true
         }
+        crate::messages::Message::LoadThreads(agent_id) => {
+            web_sys::console::log_1(&format!("Loading threads for agent: {}", agent_id).into());
+            cmds.push(crate::messages::Command::FetchThreads(*agent_id));
+            true
+        }
+        crate::messages::Message::ThreadsLoaded(threads) => {
+            web_sys::console::log_1(&format!("Threads loaded: {} threads", threads.len()).into());
+            
+            // Update state with loaded threads
+            for thread in threads {
+                if let Some(thread_id) = thread.id {
+                    state.threads.insert(thread_id, thread.clone());
+                }
+            }
+            
+            // Update UI with thread list
+            let threads_data: Vec<crate::models::ApiThread> = state.threads.values().cloned().collect();
+            let current_thread_id = state.current_thread_id;
+            let thread_messages = state.thread_messages.clone();
+            
+            cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
+                crate::state::dispatch_global_message(crate::messages::Message::UpdateThreadList(
+                    threads_data,
+                    current_thread_id,
+                    thread_messages,
+                ));
+            })));
+            
+            // Stop loading state
+            cmds.push(crate::messages::Command::SendMessage(crate::messages::Message::UpdateLoadingState(false)));
+            
+            true
+        }
         _ => false,
     }
 }
