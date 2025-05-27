@@ -107,21 +107,21 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             shapes::draw_thought_bubble(context, node);
         },
         NodeType::AgentIdentity => {
-            // For agent nodes, draw a special styled card
+            // Draw a modern, beautiful agent card
             context.save();
             
-            // Shadow for depth
-            context.set_shadow_color(SHADOW_COLOR);
-            context.set_shadow_blur(10.0);
+            // Enhanced shadow for depth and luxury feel
+            context.set_shadow_color("rgba(0, 0, 0, 0.15)");
+            context.set_shadow_blur(20.0);
             context.set_shadow_offset_x(0.0);
-            context.set_shadow_offset_y(3.0);
+            context.set_shadow_offset_y(8.0);
             
-            // Fill with white background first
+            // Fill with clean white background
             context.set_fill_style_str(NODE_FILL_AGENT_IDENTITY);
             shapes::draw_rounded_rect_path(context, node);
             context.fill();
             
-            // Remove shadow for border
+            // Remove shadow for other elements
             context.set_shadow_blur(0.0);
             context.set_shadow_offset_x(0.0);
             context.set_shadow_offset_y(0.0);
@@ -133,38 +133,52 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
                 })
             }).unwrap_or((None, "Unknown Agent".to_string()));
             
-            // Draw status indicator bar at top
-            let status_color = match status.as_deref() {
+            // Status-specific colors
+            let (status_color, status_bg, status_text) = match status.as_deref() {
                 Some("processing") | Some("running") => {
-                    // Animated processing state
                     let timestamp = Date::now() as f64;
-                    let pulse = (timestamp / 500.0).sin() * 0.5 + 0.5;
-                    format!("rgba({}, {})", NODE_BORDER_AGENT_PROCESSING_BASE, 0.7 + pulse * 0.3)
+                    let pulse = (timestamp / 1000.0).sin() * 0.3 + 0.7;
+                    (STATUS_PROCESSING_COLOR, STATUS_PROCESSING_BG, format!("rgba(59, 130, 246, {})", pulse))
                 },
-                Some("error") => NODE_BORDER_AGENT_ERROR.to_string(),
-                Some("scheduled") => NODE_BORDER_AGENT_SCHEDULED.to_string(),
-                Some("paused") => NODE_BORDER_AGENT_PAUSED.to_string(),
-                _ => NODE_BORDER_AGENT_IDLE.to_string(),
+                Some("error") => (STATUS_ERROR_COLOR, STATUS_ERROR_BG, STATUS_ERROR_COLOR.to_string()),
+                Some("scheduled") => (STATUS_SCHEDULED_COLOR, STATUS_SCHEDULED_BG, STATUS_SCHEDULED_COLOR.to_string()),
+                Some("paused") => (STATUS_PAUSED_COLOR, STATUS_PAUSED_BG, STATUS_PAUSED_COLOR.to_string()),
+                _ => (STATUS_IDLE_COLOR, STATUS_IDLE_BG, STATUS_IDLE_COLOR.to_string()),
             };
             
-            // Draw status bar at top
+            // Draw status indicator pill at top
+            let pill_height = 6.0;
+            let pill_margin = 12.0;
             context.begin_path();
-            context.move_to(node.x + 15.0, node.y);
-            context.line_to(node.x + node.width - 15.0, node.y);
-            context.line_to(node.x + node.width - 15.0, node.y + 4.0);
-            context.line_to(node.x + 15.0, node.y + 4.0);
+            context.move_to(node.x + pill_margin + 3.0, node.y + 8.0);
+            context.line_to(node.x + node.width - pill_margin - 3.0, node.y + 8.0);
+            context.quadratic_curve_to(node.x + node.width - pill_margin, node.y + 8.0, node.x + node.width - pill_margin, node.y + 8.0 + 3.0);
+            context.line_to(node.x + node.width - pill_margin, node.y + 8.0 + pill_height - 3.0);
+            context.quadratic_curve_to(node.x + node.width - pill_margin, node.y + 8.0 + pill_height, node.x + node.width - pill_margin - 3.0, node.y + 8.0 + pill_height);
+            context.line_to(node.x + pill_margin + 3.0, node.y + 8.0 + pill_height);
+            context.quadratic_curve_to(node.x + pill_margin, node.y + 8.0 + pill_height, node.x + pill_margin, node.y + 8.0 + pill_height - 3.0);
+            context.line_to(node.x + pill_margin, node.y + 8.0 + 3.0);
+            context.quadratic_curve_to(node.x + pill_margin, node.y + 8.0, node.x + pill_margin + 3.0, node.y + 8.0);
             context.close_path();
-            context.set_fill_style_str(&status_color);
+            context.set_fill_style_str(&status_text);
             context.fill();
             
-            // Draw border
-            context.set_line_width(1.5);
-            context.set_stroke_style_str(&status_color);
+            // Draw subtle border with status color
+            context.set_line_width(1.0);
+            context.set_stroke_style_str(AGENT_BORDER_SUBTLE);
             shapes::draw_rounded_rect_path(context, node);
             context.stroke();
             
-            // Add icon based on status
-            context.set_font("16px Arial");
+            // Add status accent on left side
+            context.begin_path();
+            context.move_to(node.x + 3.0, node.y + 20.0);
+            context.line_to(node.x + 3.0, node.y + node.height - 20.0);
+            context.set_stroke_style_str(status_color);
+            context.set_line_width(3.0);
+            context.stroke();
+            
+            // Draw modern status icon
+            context.set_font("18px system-ui, -apple-system, sans-serif");
             context.set_text_align("center");
             context.set_text_baseline("middle");
             
@@ -176,14 +190,36 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
                 _ => "🤖",
             };
             
-            context.set_fill_style_str(&status_color);
-            let _ = context.fill_text(icon, node.x + 20.0, node.y + 25.0);
+            // Icon background circle
+            context.begin_path();
+            context.arc(node.x + 28.0, node.y + 35.0, 14.0, 0.0, 2.0 * std::f64::consts::PI);
+            context.set_fill_style_str(status_bg);
+            context.fill();
             
-            // Draw agent name with better styling
-            context.set_font("bold 14px Arial");
-            context.set_fill_style_str(NODE_TEXT_COLOR);
+            // Icon
+            context.set_fill_style_str(status_color);
+            let _ = context.fill_text(icon, node.x + 28.0, node.y + 35.0);
+            
+            // Agent name with modern typography
+            context.set_font("600 16px system-ui, -apple-system, sans-serif");
+            context.set_fill_style_str(AGENT_TEXT_PRIMARY);
             context.set_text_align("left");
-            let _ = context.fill_text(&agent_name, node.x + 40.0, node.y + 25.0);
+            context.set_text_baseline("middle");
+            let _ = context.fill_text(&agent_name, node.x + 50.0, node.y + 30.0);
+            
+            // Status text
+            let status_text = status.as_deref().unwrap_or("idle");
+            context.set_font("400 12px system-ui, -apple-system, sans-serif");
+            context.set_fill_style_str(AGENT_TEXT_SECONDARY);
+            let _ = context.fill_text(&status_text.to_uppercase(), node.x + 50.0, node.y + 45.0);
+            
+            // Add subtle inner highlight
+            context.begin_path();
+            context.move_to(node.x + 15.0, node.y + 1.0);
+            context.line_to(node.x + node.width - 15.0, node.y + 1.0);
+            context.set_stroke_style_str("rgba(255, 255, 255, 0.8)");
+            context.set_line_width(1.0);
+            context.stroke();
             
             context.restore();
         },
