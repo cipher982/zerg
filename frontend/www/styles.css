@@ -1162,6 +1162,30 @@ button {
     border-bottom: 3px solid #3498db;
 }
 
+/* Owner cell styling in dashboard */
+.owner-cell {
+    text-align: center;
+    vertical-align: middle;
+}
+
+.owner-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.owner-cell .avatar-badge {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+}
+
+.owner-cell .avatar-badge.small {
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
+}
+
 /* Responsive table styles */
 @media (max-width: 992px) {
     /* Enable horizontal scrolling for the table */
