@@ -1,0 +1,102 @@
+//! Dashboard domain reducer: handles dashboard navigation, UI refresh, scope toggling, database reset, run history toggling.
+
+use crate::messages::{Message, Command};
+use crate::state::AppState;
+
+/// Handles dashboard-related messages. Returns true if the message was handled.
+pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) -> bool {
+    match msg {
+        Message::NavigateToDashboard => {
+            // Set the active view to Dashboard
+            state.active_view = crate::storage::ActiveView::Dashboard;
+
+            // Instead of directly rendering the view,
+            // which would cause a nested borrow, use pending_ui_updates
+            state.pending_ui_updates = Some(Box::new(move || {
+                if let Some(document) = web_sys::window().unwrap().document() {
+                    // First hide the chat view container
+                    if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
+                        crate::dom_utils::hide(&chat_container);
+                    }
+
+                    if let Err(e) = crate::views::render_active_view_by_type(&crate::storage::ActiveView::Dashboard, &document) {
+                        web_sys::console::error_1(&format!("Failed to render dashboard: {:?}", e).into());
+                    }
+                }
+            }));
+            true
+        }
+        Message::RefreshDashboard => {
+            // Schedule UI update outside the current mutable borrow scope
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        // Step 1: read active view with an immutable borrow and drop it.
+                        let is_dashboard = crate::state::APP_STATE.with(|state_cell| {
+                            state_cell.borrow().active_view == crate::storage::ActiveView::Dashboard
+                        });
+
+                        if is_dashboard {
+                            // Refresh only the dashboard to avoid borrowing state mutably while inside refresh.
+                            if let Err(e) = crate::components::dashboard::refresh_dashboard(&document) {
+                                web_sys::console::error_1(&format!("Failed to refresh dashboard: {:?}", e).into());
+                            }
+                        }
+                    }
+                }
+            })));
+            true
+        }
+        Message::ToggleDashboardScope(new_scope) => {
+            if state.dashboard_scope != *new_scope {
+                state.dashboard_scope = new_scope.clone();
+
+                // Persist to localStorage
+                if let Some(window) = web_sys::window() {
+                    if let Ok(Some(storage)) = window.local_storage() {
+                        let _ = storage.set_item("dashboard_scope", new_scope.as_str());
+                    }
+                }
+
+                // Trigger agent list reload
+                commands.push(Command::FetchAgents);
+
+                // Force dashboard re-render
+                commands.push(Command::UpdateUI(Box::new(|| {
+                    if let Some(window) = web_sys::window() {
+                        if let Some(document) = window.document() {
+                            let _ = crate::components::dashboard::refresh_dashboard(&document);
+                        }
+                    }
+                })));
+            }
+            true
+        }
+        Message::ResetDatabase => {
+            // The actual database reset happens via API call (already done in dashboard.rs)
+            // We don't need to do anything here because:
+            // 1. The page will be refreshed immediately after this (in dashboard.rs)
+            // 2. On refresh, it will automatically load the fresh state from the backend
+            web_sys::console::log_1(&"Reset database message received - state will refresh".into());
+            true
+        }
+        Message::ToggleRunHistory { agent_id } => {
+            if state.run_history_expanded.contains(agent_id) {
+                state.run_history_expanded.remove(agent_id);
+            } else {
+                state.run_history_expanded.insert(*agent_id);
+            }
+
+            // Refresh dashboard UI
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        let _ = crate::components::dashboard::refresh_dashboard(&document);
+                    }
+                }
+            })));
+            true
+        }
+        _ => false,
+    }
+}
