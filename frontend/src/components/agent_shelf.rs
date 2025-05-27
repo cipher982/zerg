@@ -45,12 +45,20 @@ fn create_root_element(document: &Document) -> Result<Element, JsValue> {
 fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), JsValue> {
     // Clear current children.
     shelf_el.set_inner_html("");
+    
+    // Add header
+    let header = document.create_element("div")?;
+    header.set_class_name("agent-shelf-header");
+    header.set_inner_html("Available Agents");
+    shelf_el.append_child(&header)?;
 
     // Borrow state to iterate agents.
     APP_STATE.with(|state| {
         let state = state.borrow();
+        web_sys::console::log_1(&format!("Populating agent shelf. Number of agents in state: {}", state.agents.len()).into());
         for agent in state.agents.values() {
             if let Some(agent_id) = agent.id {
+                web_sys::console::log_1(&format!("Processing agent for shelf: ID={}, Name={}", agent_id, agent.name).into());
                 // Create a simple pill element.
                 let pill: HtmlElement = document.create_element("div").unwrap().dyn_into().unwrap();
                 pill.set_class_name("agent-pill");

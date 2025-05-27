@@ -254,15 +254,26 @@ body {
 
 /* Agent shelf - left sidebar */
 #agent-shelf {
-    width: 240px;
+    width: 260px;
     flex-shrink: 0;
-    background: #252535;
+    background: linear-gradient(to bottom, #2a2a3a, #252535);
     border-right: 1px solid #3d3d5c;
-    padding: 8px;
+    padding: 16px;
     box-sizing: border-box;
     display: block;
     overflow-y: auto;
-    height: 100%; /* Ensure it fills the vertical space */
+    height: 100%;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Agent shelf header */
+.agent-shelf-header {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
 }
 
 /* Main content area */
@@ -281,11 +292,31 @@ body {
     min-height: 0; /* Important for flexbox child elements */
     display: flex;
     overflow: hidden; /* Prevent overflow issues */
+    background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+    position: relative;
+}
+
+/* Canvas grid pattern background */
+#canvas-container::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: 
+        linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+    background-size: 20px 20px;
+    pointer-events: none;
 }
 
 #node-canvas {
     width: 100%;
     height: 100%;
+    position: relative;
+    z-index: 1;
+    background-color: #33334a !important; /* Force a dark background for testing */
 }
 
 /* UI Panel - Now a toolbar, not floating */
@@ -344,39 +375,66 @@ body {
 /* Agent pills within the shelf */
 .agent-pill {
     cursor: grab;
-    margin-bottom: 8px;
-    padding: 10px 12px;
-    background-color: #2a2a3a;
+    margin-bottom: 10px;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #2e2e3e 0%, #2a2a3a 100%);
     border: 1px solid #3d3d5c;
-    border-radius: 4px;
+    border-radius: 8px;
     font-size: 14px;
     color: #e0e0e0;
-    transition: background-color 0.2s, transform 0.1s, opacity 0.2s;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.agent-pill::before {
+    content: "🤖";
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    opacity: 0.7;
+}
+
+.agent-pill {
+    padding-left: 40px; /* Make room for icon */
 }
 
 .agent-pill:hover {
-    background-color: #3d3d5c;
+    background: linear-gradient(135deg, #3a3a4a 0%, #363646 100%);
+    border-color: #4d4d6c;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .agent-pill.disabled {
     opacity: 0.5;
     cursor: not-allowed;
-    background-color: #1a1a2a;
+    background: linear-gradient(135deg, #1e1e2e 0%, #1a1a2a 100%);
     border-color: #2d2d3c;
 }
 
+.agent-pill.disabled::before {
+    content: "⏸️";
+}
+
 .agent-pill.disabled:hover {
-    background-color: #1a1a2a;
+    background: linear-gradient(135deg, #1e1e2e 0%, #1a1a2a 100%);
+    transform: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* Drag and drop styles */
 .agent-pill.dragging {
-    opacity: 0.7;
-    background-color: #4a5177;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-    transform: scale(1.05);
-    border: 1px dashed #7f8ec0;
+    opacity: 0.9;
+    background: linear-gradient(135deg, #4a5177 0%, #3e4466 100%);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    transform: scale(1.05) rotate(-2deg);
+    border: 2px dashed #7f8ec0;
     cursor: grabbing;
+    z-index: 1000;
 }
 
 #canvas-container.canvas-drop-target {
