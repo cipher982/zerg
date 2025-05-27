@@ -160,6 +160,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     if crate::reducers::dashboard::update(state, &msg, &mut commands) {
         return commands;
     }
+    if crate::reducers::mcp::update(state, &msg, &mut commands) {
+        return commands;
+    }
 
     match msg {
         // Catch-all for any unhandled messages (to fix non-exhaustive match error)
@@ -1090,73 +1093,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // -------------------------------------------------------------------
         // MCP Integration Messages
         // -------------------------------------------------------------------
-        Message::LoadMcpTools(agent_id) => {
-            web_sys::console::log_1(&format!("LoadMcpTools for agent {}", agent_id).into());
-            
-            // Fetch available tools from the backend
-            commands.push(Command::UpdateUI(Box::new(move || {
-                wasm_bindgen_futures::spawn_local(async move {
-                    match crate::network::api_client::ApiClient::get_mcp_available_tools(agent_id).await {
-                        Ok(response) => {
-                            // Parse the response to extract builtin and MCP tools
-                            match serde_json::from_str::<serde_json::Value>(&response) {
-                                Ok(json) => {
-                                    let builtin_tools = json["builtin"]
-                                        .as_array()
-                                        .unwrap_or(&Vec::new())
-                                        .iter()
-                                        .filter_map(|v| v.as_str().map(String::from))
-                                        .collect::<Vec<String>>();
-                                    
-                                    let mut mcp_tools: HashMap<String, Vec<crate::state::McpToolInfo>> = HashMap::new();
-                                    
-                                    if let Some(mcp_obj) = json["mcp"].as_object() {
-                                        for (server_name, tools_array) in mcp_obj {
-                                            let tools: Vec<crate::state::McpToolInfo> = tools_array
-                                                .as_array()
-                                                .unwrap_or(&Vec::new())
-                                                .iter()
-                                                .filter_map(|tool| {
-                                                    tool.as_str().map(|name| crate::state::McpToolInfo {
-                                                        name: name.to_string(),
-                                                        server_name: server_name.clone(),
-                                                        description: None,
-                                                    })
-                                                })
-                                                .collect();
-                                            
-                                            if !tools.is_empty() {
-                                                mcp_tools.insert(server_name.clone(), tools);
-                                            }
-                                        }
-                                    }
-                                    
-                                    dispatch_global_message(Message::McpToolsLoaded {
-                                        agent_id,
-                                        builtin_tools,
-                                        mcp_tools,
-                                    });
-                                },
-                                Err(e) => {
-                                    web_sys::console::error_1(&format!("Failed to parse MCP tools response: {:?}", e).into());
-                                    dispatch_global_message(Message::McpError {
-                                        agent_id,
-                                        error: format!("Failed to parse tools: {}", e),
-                                    });
-                                }
-                            }
-                        },
-                        Err(e) => {
-                            web_sys::console::error_1(&format!("Failed to load MCP tools: {:?}", e).into());
-                            dispatch_global_message(Message::McpError {
-                                agent_id,
-                                error: format!("Failed to load tools: {:?}", e),
-                            });
-                        }
-                    }
-                });
-            })));
-        },
         Message::McpToolsLoaded { agent_id, builtin_tools, mcp_tools } => {
             // Update state with loaded tools
             state.available_mcp_tools.insert(agent_id, mcp_tools.values().flatten().cloned().collect());
