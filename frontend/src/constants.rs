@@ -75,23 +75,25 @@ pub const COLOR_COMPLETE: &str = "#c8e6c9";   // Light green
 pub const COLOR_ERROR: &str = "#ffcdd2";      // Light red
 
 // Canvas colors
-pub const CANVAS_BACKGROUND_COLOR: &str = "#f5f5f5";
-pub const NODE_COLOR_GENERIC: &str = "#e0e0e0";
-pub const SHADOW_COLOR: &str = "rgba(0, 0, 0, 0.2)";
-pub const NODE_TEXT_COLOR: &str = "#333333";
-pub const CONNECTION_LINE_COLOR: &str = "#666666";
+pub const CANVAS_BACKGROUND_COLOR: &str = "#33334a";
+pub const NODE_COLOR_GENERIC: &str = "#ffffff";
+pub const SHADOW_COLOR: &str = "rgba(0, 0, 0, 0.15)";
+pub const NODE_TEXT_COLOR: &str = "#2c3e50";
+pub const CONNECTION_LINE_COLOR: &str = "#95a5a6";
 
 // Node border colors
-pub const NODE_BORDER_DEFAULT: &str = "#cccccc";
-pub const NODE_BORDER_SELECTED: &str = "#2196f3";
-pub const NODE_BORDER_AGENT_IDLE: &str = "#ffc107";
-pub const NODE_BORDER_AGENT_PROCESSING_BASE: &str = "#2196f3";
-pub const NODE_BORDER_AGENT_ERROR: &str = "#f44336";
-pub const NODE_BORDER_AGENT_SCHEDULED: &str = "#9c27b0";
-pub const NODE_BORDER_AGENT_PAUSED: &str = "#ff9800";
+pub const NODE_BORDER_DEFAULT: &str = "#e0e0e0";
+pub const NODE_BORDER_SELECTED: &str = "#3498db";
+pub const NODE_BORDER_AGENT_IDLE: &str = "#95a5a6";
+pub const NODE_BORDER_AGENT_PROCESSING_BASE: &str = "52, 152, 219"; // RGB values for animation
+pub const NODE_BORDER_AGENT_ERROR: &str = "#e74c3c";
+pub const NODE_BORDER_AGENT_SCHEDULED: &str = "#9b59b6";
+pub const NODE_BORDER_AGENT_PAUSED: &str = "#f39c12";
 
 // Node fill colors
-pub const NODE_FILL_AGENT_IDENTITY: &str = "#e3f2fd";
+pub const NODE_FILL_AGENT_IDENTITY: &str = "rgba(255, 255, 255, 0.95)";
+pub const NODE_FILL_USER_INPUT: &str = "rgba(52, 152, 219, 0.1)";
+pub const NODE_FILL_RESPONSE: &str = "rgba(46, 204, 113, 0.1)";
 
 // Button Types
 pub const BUTTON_TYPE_BUTTON: &str = "button";

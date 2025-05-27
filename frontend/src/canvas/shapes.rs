@@ -5,28 +5,36 @@ use crate::constants::*;
 pub fn draw_rounded_rect(context: &CanvasRenderingContext2d, node: &Node) {
     context.save();
     
-    // Shadow
+    // Shadow for depth
     context.set_shadow_color(SHADOW_COLOR);
-    context.set_shadow_blur(10.0);
-    context.set_shadow_offset_x(3.0);
-    context.set_shadow_offset_y(3.0);
+    context.set_shadow_blur(8.0);
+    context.set_shadow_offset_x(0.0);
+    context.set_shadow_offset_y(2.0);
     
-    // Background
+    // Background with gradient effect
     context.set_fill_style_str(&node.color);
     
     draw_rounded_rect_path(context, node);
     
     context.fill();
     
+    // Remove shadow for border
+    context.set_shadow_blur(0.0);
+    context.set_shadow_offset_x(0.0);
+    context.set_shadow_offset_y(0.0);
+    
     // Border
-    context.set_shadow_color("rgba(0, 0, 0, 0)"); // Remove shadow for border
-    context.set_line_width(1.0);
+    context.set_line_width(1.5);
     context.set_stroke_style_str(NODE_BORDER_DEFAULT);
     
     if node.is_selected {
-        // Add highlights for selected node
+        // Add highlights for selected node with glow effect
         context.set_stroke_style_str(NODE_BORDER_SELECTED);
-        context.set_line_width(2.0);
+        context.set_line_width(2.5);
+        
+        // Add outer glow for selected nodes
+        context.set_shadow_color(NODE_BORDER_SELECTED);
+        context.set_shadow_blur(4.0);
     }
     
     context.stroke();
@@ -180,4 +188,4 @@ pub fn draw_rounded_rect_path(context: &CanvasRenderingContext2d, node: &Node) {
     context.line_to(x, y + radius);
     context.quadratic_curve_to(x, y, x + radius, y);
     context.close_path();
-} 
+}
