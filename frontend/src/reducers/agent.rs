@@ -286,6 +286,191 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
 
             true
         }
+        Message::RefreshAgentsFromAPI => {
+            // Trigger an async operation to fetch agents from the API
+            web_sys::console::log_1(&"Requesting agent refresh from API".into());
+            // Return a command to fetch agents instead of doing it directly
+            commands.push(Command::FetchAgents);
+            true
+        }
+        Message::AgentsRefreshed(agents) => {
+            web_sys::console::log_1(&format!("Update: Handling AgentsRefreshed with {} agents", agents.len()).into());
+
+            // Get the current set of agent IDs BEFORE updating
+            let old_agent_ids: std::collections::HashSet<u32> = state.agents.keys().cloned().collect();
+
+            // Update state.agents with the new list
+            state.agents.clear();
+            let mut new_agent_ids = std::collections::HashSet::new();
+            for agent in agents {
+                if let Some(id) = agent.id {
+                    state.agents.insert(id, agent.clone());
+                    new_agent_ids.insert(id);
+                }
+            }
+
+            // Check for newly created agent
+            let just_created_agent_ids: Vec<u32> = new_agent_ids.difference(&old_agent_ids).cloned().collect();
+
+            if just_created_agent_ids.len() == 1 {
+                let new_agent_id = just_created_agent_ids[0];
+                web_sys::console::log_1(&format!("Detected newly created agent ID: {}. Creating default thread.", new_agent_id).into());
+                commands.push(Command::SendMessage(crate::messages::Message::CreateThread(new_agent_id, crate::constants::DEFAULT_THREAD_TITLE.to_string())));
+            } else if just_created_agent_ids.len() > 1 {
+                web_sys::console::warn_1(&"Detected multiple new agents after refresh, cannot auto-create default thread.".into());
+            }
+
+            // Schedule a UI refresh after state is updated
+            state.pending_ui_updates = Some(Box::new(|| {
+                if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                    web_sys::console::error_1(&format!("Failed to refresh UI after AgentsRefreshed: {:?}", e).into());
+                }
+
+                // Ensure Dashboard WS manager is subscribed to all current agents.
+                if let Err(e) = crate::components::dashboard::ws_manager::init_dashboard_ws() {
+                    web_sys::console::error_1(&format!("Failed to re-init dashboard WS subscriptions: {:?}", e).into());
+                }
+            }));
+
+            // After updating the agent list trigger a label refresh so all
+            // visual nodes show the latest agent names.
+            commands.push(Command::SendMessage(crate::messages::Message::RefreshCanvasLabels));
+
+            // Reconcile placeholder canvas nodes that were inserted while the
+            // agent list was still loading.  This upgrades them to proper
+            // AgentIdentity nodes with correct labels.
+            crate::storage::fix_stub_nodes();
+            true
+        }
+        Message::RefreshCanvasLabels => {
+            use std::collections::HashSet;
+
+            let mut updated_nodes: HashSet<String> = HashSet::new();
+
+            for (agent_id, node_id) in state.agent_id_to_node_id.iter() {
+                if let (Some(agent), Some(node)) = (
+                    state.agents.get(agent_id),
+                    state.nodes.get_mut(node_id),
+                ) {
+                    if node.text != agent.name {
+                        node.text = agent.name.clone();
+                        updated_nodes.insert(node_id.clone());
+                    }
+                }
+            }
+
+            if !updated_nodes.is_empty() {
+                state.mark_dirty();
+            }
+            true
+        }
+        Message::RequestAgentDeletion { agent_id } => {
+            commands.push(Command::DeleteAgentApi { agent_id: *agent_id });
+            true
+        }
+        Message::DeleteAgentApi { agent_id } => {
+            // Just delegate to the Command that handles the API call
+            commands.push(Command::DeleteAgentApi { agent_id: *agent_id });
+            true
+        }
+        Message::AgentDeletionSuccess { agent_id } => {
+            // Remove agent from agents map
+            state.agents.remove(agent_id);
+
+            // Remove any nodes associated with this agent
+            state.nodes.retain(|_, node| {
+                if let Some(node_agent_id) = node.agent_id {
+                    node_agent_id != *agent_id
+                } else {
+                    true
+                }
+            });
+
+            state.state_modified = true;
+
+            // Add a command to refresh the agents list after state is updated
+            commands.push(Command::SendMessage(crate::messages::Message::RefreshAgentsFromAPI));
+            true
+        }
+        Message::AgentDeletionFailure { agent_id, error } => {
+            web_sys::console::error_1(&format!("Update: Received AgentDeletionFailure for {}: {}", agent_id, error).into());
+            // Optionally, update UI to show error message
+            // For now, just log the error
+            true
+        }
+        Message::LoadAgentRuns(agent_id) => {
+            if !state.agent_runs.contains_key(agent_id) {
+                commands.push(Command::FetchAgentRuns(*agent_id));
+            }
+            true
+        }
+        Message::ReceiveAgentRuns { agent_id, runs } => {
+            state.agent_runs.insert(*agent_id, runs.clone());
+
+            // Update running_runs set to include any runs that are still in
+            // "running" status after the fetch.  Also remove stale IDs not
+            // present anymore.
+            let mut still_running_ids = std::collections::HashSet::new();
+            if let Some(list) = state.agent_runs.get(agent_id) {
+                for r in list.iter() {
+                    if r.status == "running" {
+                        still_running_ids.insert(r.id);
+                    }
+                }
+            }
+
+            // Remove runs for this agent that are no longer running
+            state
+                .running_runs
+                .retain(|rid| still_running_ids.contains(rid) || !state.agent_runs.values().any(|v| v.iter().any(|r| r.id == *rid && r.status != "running")) );
+
+            // Add new running ones
+            state.running_runs.extend(still_running_ids);
+
+            // Schedule dashboard refresh so the run history table replaces the spinner.
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        let _ = crate::components::dashboard::refresh_dashboard(&document);
+                    }
+                }
+            })));
+            true
+        }
+        Message::ReceiveRunUpdate { agent_id, run } => {
+            let runs_list = state.agent_runs.entry(*agent_id).or_default();
+            if let Some(pos) = runs_list.iter().position(|r| r.id == run.id) {
+                runs_list.remove(pos);
+            }
+            let run_clone = run.clone();
+            runs_list.insert(0, run_clone);
+            if runs_list.len() > 20 {
+                runs_list.truncate(20);
+            }
+
+            // Manage running_runs set
+            match run.status.as_str() {
+                "running" => {
+                    state.running_runs.insert(run.id);
+                }
+                "success" | "failed" | "queued" => {
+                    state.running_runs.remove(&run.id);
+                }
+                _ => {}
+            }
+
+            // If the dashboard is visible and row expanded, refresh UI to show new row.
+            if state.active_view == crate::storage::ActiveView::Dashboard {
+                commands.push(Command::UpdateUI(Box::new(|| {
+                    if let Some(window) = web_sys::window() {
+                        if let Some(document) = window.document() {
+                            let _ = crate::components::dashboard::refresh_dashboard(&document);
+                        }
+                    }
+                })));
+            }
+            true
+        }
         _ => false,
     }
 }
