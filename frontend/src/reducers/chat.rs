@@ -100,12 +100,13 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
 
                 cmds.push(crate::messages::Command::SendMessage(crate::messages::Message::UpdateThreadTitleUI(selected_thread_title)));
 
-                let topic_manager = state.topic_manager.clone();
-                cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
-                    if let Err(e) = crate::components::chat::init_chat_view_ws(*thread_id, topic_manager) {
-                        web_sys::console::error_1(&format!("Failed to initialize WebSocket for thread {}: {:?}", thread_id, e).into());
+            let topic_manager_clone = state.topic_manager.clone();
+            let thread_id_clone = *thread_id;
+            cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
+                if let Err(e) = crate::components::chat::init_chat_view_ws(thread_id_clone, topic_manager_clone) {
+                        web_sys::console::error_1(&format!("Failed to initialize WebSocket for thread {}: {:?}", thread_id_clone, e).into());
                     } else {
-                        web_sys::console::log_1(&format!("Initialized WebSocket subscription for thread {}", thread_id).into());
+                        web_sys::console::log_1(&format!("Initialized WebSocket subscription for thread {}", thread_id_clone).into());
                     }
                 })));
             }

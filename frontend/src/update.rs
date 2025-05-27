@@ -151,8 +151,13 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     if crate::reducers::chat::update(state, &msg, &mut commands) {
         return commands;
     }
+    if crate::reducers::canvas::update(state, &msg, &mut commands) {
+        return commands;
+    }
 
     match msg {
+        // Catch-all for any unhandled messages (to fix non-exhaustive match error)
+        _ => {}
         // ---------------------------------------------------------------
         // Auth / profile handling
         // ---------------------------------------------------------------
@@ -322,160 +327,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
         },
        
-        Message::UpdateNodePosition { node_id, x, y } => {
-            state.update_node_position(&node_id, x, y);
-            // Only mark state as modified if we're not actively dragging
-            // This prevents triggering state saves for every tiny move
-            if !state.is_dragging_agent {
-                state.state_modified = true;
-
-                // Repaint immediately so canvas follows the cursor in real-time.
-                // This mirrors the behaviour of node dragging where
-                // `update_node_position()` triggers a draw on every mousemove.
-                state.mark_dirty();
-            }
-        },
-       
-        Message::AddNode { text, x, y, node_type } => {
-            // Special case for agents created with default coordinates (0, 0)
-            // This indicates we should position at viewport center
-            if node_type == NodeType::AgentIdentity && x == 0.0 && y == 0.0 {
-                // Calculate center position for the new agent
-                let viewport_width = if state.canvas_width > 0.0 { state.canvas_width } else { 800.0 };
-                let viewport_height = if state.canvas_height > 0.0 { state.canvas_height } else { 600.0 };
-               
-                let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 75.0; // Center - half node width
-                let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0; // Center - half node height
-               
-                let node_id = state.add_node(text, x, y, node_type);
-                web_sys::console::log_1(&format!("Created visual node for agent: {}", node_id).into());
-            } else {
-                // Normal case with specific coordinates
-                let _ = state.add_node(text, x, y, node_type);
-            }
-            state.state_modified = true;
-        },
-       
-        Message::AddResponseNode { parent_id, response_text } => {
-            let _ = state.add_response_node(&parent_id, response_text);
-            state.state_modified = true;
-        },
-       
-        Message::ToggleAutoFit => {
-            state.toggle_auto_fit();
-            state.state_modified = true;
-        },
-       
-        Message::CenterView => {
-            state.center_view();
-            state.state_modified = true;
-        },
-       
-        Message::ClearCanvas => {
-            state.nodes.clear();
-            state.latest_user_input_id = None;
-            state.message_id_to_node_id.clear();
-            state.viewport_x = 0.0;
-            state.viewport_y = 0.0;
-            state.zoom_level = 1.0;
-            state.auto_fit = true;
-            state.state_modified = true;
-        },
-
-        // User clicked a canvas node (no drag) – if the node is linked to an
-        // agent forward to existing EditAgent flow so that the UI opens the
-        // configuration modal via the normal command pipeline.
-        Message::CanvasNodeClicked { node_id } => {
-            if let Some(agent_id) = state.nodes.get(&node_id).and_then(|n| n.agent_id) {
-                commands.push(Command::SendMessage(Message::EditAgent(agent_id)));
-            }
-        },
-       
-        Message::UpdateInputText(text) => {
-            state.input_text = text;
-        },
-
-        Message::MarkCanvasDirty => {
-            state.mark_dirty();
-        },
-       
-        Message::StartDragging { node_id, offset_x, offset_y, start_x, start_y, is_agent } => {
-            state.dragging = Some(node_id);
-            state.drag_offset_x = offset_x;
-            state.drag_offset_y = offset_y;
-            state.is_dragging_agent = is_agent;
-            state.drag_start_x = start_x;
-            state.drag_start_y = start_y;
-        },
-       
-        Message::StopDragging => {
-            state.dragging = None;
-            state.is_dragging_agent = false;
-            state.state_modified = true;
-
-            // Persist the final position immediately so a quick page refresh
-            // right after dropping a node does not lose the change.  We
-            // ignore any error here – the periodic *auto-save* timer will
-            // retry in case of intermittent failures.
-            let _ = state.save_if_modified();
-        },
-       
-        Message::StartCanvasDrag { start_x, start_y } => {
-            state.canvas_dragging = true;
-            state.drag_start_x = start_x;
-            state.drag_start_y = start_y;
-            state.drag_last_x = start_x;
-            state.drag_last_y = start_y;
-        },
-       
-        Message::UpdateCanvasDrag { current_x, current_y } => {
-            if state.canvas_dragging {
-                let dx = current_x - state.drag_last_x;
-                let dy = current_y - state.drag_last_y;
-               
-                // The drag delta is measured in screen-space pixels. Convert the
-                // movement into world coordinates by dividing by the current
-                // zoom level so panning speed remains constant regardless of
-                // zoom factor.
-                let zoom = state.zoom_level;
-
-                state.viewport_x -= dx / zoom;
-                state.viewport_y -= dy / zoom;
-               
-                state.drag_last_x = current_x;
-                state.drag_last_y = current_y;
-               
-                state.state_modified = true;
-
-                // Trigger an immediate repaint so the canvas visually follows
-                // the cursor in real-time.  This used to happen implicitly via
-                // `refresh_ui_after_state_change()` but that heavy DOM
-                // remount was removed in the previous cleanup.  Explicitly
-                // redrawing here restores the smooth panning behaviour without
-                // re-creating the entire canvas element.
-                state.mark_dirty();
-            }
-        },
-       
-        Message::StopCanvasDrag => {
-            state.canvas_dragging = false;
-            state.state_modified = true;
-
-            // Persist final viewport immediately so a quick tab close after a
-            // pan operation still records the new position.  Mirrors the
-            // behaviour of `StopDragging` for node moves.
-            let _ = state.save_if_modified();
-        },
-       
-        Message::ZoomCanvas { new_zoom, viewport_x, viewport_y } => {
-            state.zoom_level = new_zoom;
-            state.viewport_x = viewport_x;
-            state.viewport_y = viewport_y;
-            state.state_modified = true;
-           
-            // Redraw with the new zoom level
-            state.mark_dirty();
-        },
        
         Message::SaveAgentDetails { name, system_instructions, task_instructions, model, schedule } => {
             // Get the current AGENT ID from the modal's data attribute
@@ -680,298 +531,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         }
                     }
                 }
-            }
-        },
-       
-        Message::UpdateNodeText { node_id, text, is_first_chunk } => {
-            if let Some(node) = state.nodes.get_mut(&node_id) {
-                // If this is the first chunk, replace the text, otherwise append
-                if is_first_chunk {
-                    node.text = text;
-                } else {
-                    node.text.push_str(&text);
-                }
-               
-                // Update node size based on new content
-                state.resize_node_for_content(&node_id);
-                state.state_modified = true;
-            }
-        },
-       
-        Message::CompleteNodeResponse { node_id, final_text } => {
-            if let Some(node) = state.nodes.get_mut(&node_id) {
-                // Update the final text if needed
-                if !final_text.is_empty() && node.text != final_text {
-                    node.text = final_text;
-                }
-               
-                // Update visual colour of node to completed
-                node.color = "#c8e6c9".to_string(); // light green
-
-                if let Some(agent_id) = node.agent_id {
-                    if let Some(agent) = state.agents.get_mut(&agent_id) {
-                        agent.status = Some("complete".to_string());
-                    }
-                }
-               
-                // Store parent_id before ending the borrow or making other mutable borrows
-                let parent_id = node.parent_id.clone();
-               
-                // Mark state as modified
-                state.state_modified = true;
-               
-                // Update node size for final content
-                state.resize_node_for_content(&node_id);
-               
-                // If this node has a parent, update parent status too
-                if let Some(parent_id) = parent_id {
-                    if let Some(parent) = state.nodes.get_mut(&parent_id) {
-                        parent.color = "#ffecb3".to_string(); // back to idle colour
-
-                        if let Some(agent_id) = parent.agent_id {
-                            if let Some(agent) = state.agents.get_mut(&agent_id) {
-                                agent.status = Some("idle".to_string());
-                            }
-                        }
-                    }
-                }
-            }
-        },
-       
-        Message::UpdateNodeStatus { node_id, status } => {
-            if let Some(node) = state.nodes.get_mut(&node_id) {
-                // Update the node's visual properties based on status
-                match status.as_str() {
-                    "idle" => node.color = "#ffecb3".to_string(),      // Light amber
-                    "processing" => node.color = "#b3e5fc".to_string(), // Light blue
-                    "complete" => node.color = "#c8e6c9".to_string(),   // Light green
-                    "error" => node.color = "#ffcdd2".to_string(),      // Light red
-                    _ => node.color = "#ffecb3".to_string(),           // Default light amber
-                }
-               
-                // If this node is associated with an agent, update the agent's status
-                // but do it through an explicit sync mechanism
-                if let Some(agent_id) = node.agent_id {
-                    if let Some(agent) = state.agents.get_mut(&agent_id) {
-                        // Update agent status directly in our local model
-                        agent.status = Some(status.clone());
-                       
-                        // Create an update for the API
-                        let update = crate::models::ApiAgentUpdate {
-                            name: None,
-                            status: Some(status.clone()),
-                            system_instructions: None,
-                            task_instructions: None,
-                            model: None,
-                            schedule: None,
-                            
-                            config: None,
-                            last_error: None,
-                        };
-                       
-                        // Clone data for async use
-                        let agent_id_clone = agent_id;
-                        let update_clone = update.clone();
-                       
-                        // Update the agent via API
-                        wasm_bindgen_futures::spawn_local(async move {
-                            // Serialize the update struct to a JSON string
-                            match serde_json::to_string(&update_clone) {
-                                Ok(json_str) => {
-                                    if let Err(e) = crate::network::ApiClient::update_agent(agent_id_clone, &json_str).await {
-                                        web_sys::console::error_1(&format!("Failed to update agent: {:?}", e).into());
-                                    }
-                                },
-                                Err(e) => {
-                                    web_sys::console::error_1(&format!("Failed to serialize agent update: {}", e).into());
-                                }
-                            }
-                        });
-                    }
-                }
-               
-                state.state_modified = true;
-            }
-        },
-       
-        Message::AnimationTick => {
-            // If canvas is dirty, schedule a UI draw and clear the flag
-            if state.dirty {
-                state.dirty = false;
-                commands.push(Command::UpdateUI(Box::new(|| {
-                    crate::state::APP_STATE.with(|state_rc| {
-                        let st = state_rc.borrow_mut();
-                        st.draw_nodes();
-                        #[cfg(debug_assertions)] {
-                            if let Some(ctx) = st.context.as_ref() {
-                                crate::utils::debug::draw_overlay(ctx, &st.debug_ring);
-                            }
-                        }
-                    });
-                })));
-            }
-            // Live duration ticker for running runs
-            let mut duration_changed = false;
-            let now_ms = crate::utils::now_ms();
-            for run_id in state.running_runs.iter() {
-                if let Some((_agent_id, run_list)) = state
-                    .agent_runs
-                    .iter_mut()
-                    .find(|(_aid, list)| list.iter().any(|r| r.id == *run_id))
-                {
-                    if let Some(run) = run_list.iter_mut().find(|r| r.id == *run_id) {
-                        if let Some(start_iso) = &run.started_at {
-                            if let Some(start_ms) = crate::utils::parse_iso_ms(start_iso) {
-                                let new_duration = now_ms.saturating_sub(start_ms as u64);
-                                if run
-                                    .duration_ms
-                                    .map(|old| new_duration / 1000 != old / 1000)
-                                    .unwrap_or(true)
-                                {
-                                    run.duration_ms = Some(new_duration);
-                                    duration_changed = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // Node animations (existing behaviour)
-            for (_id, node) in state.nodes.iter_mut() {
-                if let Some(agent_id) = node.agent_id {
-                    if let Some(agent) = state.agents.get(&agent_id) {
-                        if let Some(status_str) = &agent.status {
-                            if status_str == "processing" {
-                                // Placeholder for future animation effect
-                            }
-                        }
-                    }
-                }
-            }
-            // Trigger dashboard repaint when durations changed
-            if duration_changed && state.active_view == crate::storage::ActiveView::Dashboard {
-                commands.push(Command::UpdateUI(Box::new(|| {
-                    if let Some(win) = web_sys::window() {
-                        if let Some(doc) = win.document() {
-                            let _ = crate::components::dashboard::refresh_dashboard(&doc);
-                        }
-                    }
-                })));
-            }
-            // Debounced state persistence
-            if state.state_modified {
-                let now = crate::utils::now_ms();
-                if now.saturating_sub(state.last_modified_ms) > 400 {
-                    commands.push(Command::SaveState);
-                    state.state_modified = false;
-                }
-            }
-        },
-       
-        // New Canvas Node message handlers
-        Message::AddCanvasNode { agent_id, x, y, node_type, text } => {
-            // This method creates a Node
-            let node_id = state.add_node_with_agent(agent_id, x, y, node_type, text);
-            web_sys::console::log_1(&format!("Created new node: {}", node_id).into());
-            state.state_modified = true;
-        },
-       
-        Message::DeleteNode { node_id } => {
-            // This method deletes a Node
-            state.nodes.remove(&node_id);
-           
-            // Also remove it from the current workflow if it exists
-            if let Some(workflow_id) = state.current_workflow_id {
-                if let Some(workflow) = state.workflows.get_mut(&workflow_id) {
-                    workflow.nodes.retain(|n| n.node_id != node_id);
-                   
-                    // Also remove any edges connected to this node
-                    workflow.edges.retain(|edge|
-                        edge.from_node_id != node_id && edge.to_node_id != node_id
-                    );
-                }
-            }
-           
-            state.state_modified = true;
-        },
-       
-        // Workflow management messages
-        Message::CreateWorkflow { name } => {
-            let workflow_id = state.create_workflow(name.clone());
-            web_sys::console::log_1(&format!("Created new workflow '{}' with ID: {}", name, workflow_id).into());
-           
-            state.state_modified = true;
-        },
-       
-        Message::SelectWorkflow { workflow_id } => {
-            state.current_workflow_id = Some(workflow_id);
-           
-            // Clear nodes and repopulate from the selected workflow
-            state.nodes.clear();
-           
-            if let Some(workflow) = state.workflows.get(&workflow_id) {
-                for node in &workflow.nodes {
-                    state.nodes.insert(node.node_id.clone(), node.clone());
-                }
-            }
-           
-            // Draw the nodes on canvas
-            state.mark_dirty();
-           
-            state.state_modified = true;
-        },
-       
-        Message::AddEdge { from_node_id, to_node_id, label } => {
-            let edge_id = state.add_edge(from_node_id, to_node_id, label);
-            web_sys::console::log_1(&format!("Created new edge with ID: {}", edge_id).into());
-           
-            // Draw the nodes and edges on canvas
-            state.mark_dirty();
-           
-            state.state_modified = true;
-        },
-       
-        // The explicit node↔agent sync messages have been removed as part of
-        // the nodes-vs-agents decoupling refactor (see node_agent_task.md).
-        // Canvas nodes are now *display only*; any future synchronisation
-        // should be implemented via a dedicated command (e.g.
-        // `RefreshCanvasLabels`) driven by agent updates – never the other
-        // way around.
-       
-        Message::GenerateCanvasFromAgents => {
-            // Loop through all agents in state.agents and create nodes for any that don't have one
-            let mut nodes_created = 0;
-           
-            // First, find all agents that need nodes
-            let agents_needing_nodes = state.agents.iter()
-                .filter(|(id, _)| {
-                    // Use the explicit mapping
-                    !state.agent_id_to_node_id.contains_key(id)
-                })
-                .map(|(id, agent)| (*id, agent.name.clone()))
-                .collect::<Vec<_>>();
-           
-            // Now create nodes for each agent
-            for (i, (agent_id, name)) in agents_needing_nodes.iter().enumerate() {
-                // Calculate grid position
-                let row = i / 3; // 3 nodes per row
-                let col = i % 3;
-               
-                let x = 100.0 + (col as f64 * 250.0); // 250px horizontal spacing
-                let y = 100.0 + (row as f64 * 150.0); // 150px vertical spacing
-               
-                // Create and add the node via helper
-                state.add_agent_node(*agent_id, name.clone(), x, y);
-                nodes_created += 1;
-            }
-           
-            web_sys::console::log_1(&format!("Created {} nodes for agents without visual representation", nodes_created).into());
-           
-            // Only mark as modified if we actually created nodes
-            if nodes_created > 0 {
-                state.state_modified = true;
-                // Draw the updated nodes on canvas
-                state.mark_dirty();
             }
         },
        
@@ -2261,6 +1820,35 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 agent_id,
                 server_config,
             }));
+        }
+        
+        // Canvas-related messages are handled by the canvas reducer
+        Message::UpdateNodePosition { .. } |
+        Message::AddNode { .. } |
+        Message::AddResponseNode { .. } |
+        Message::ToggleAutoFit |
+        Message::CenterView |
+        Message::ClearCanvas |
+        Message::CanvasNodeClicked { .. } |
+        Message::MarkCanvasDirty |
+        Message::StartDragging { .. } |
+        Message::StopDragging |
+        Message::StartCanvasDrag { .. } |
+        Message::UpdateCanvasDrag { .. } |
+        Message::StopCanvasDrag |
+        Message::ZoomCanvas { .. } |
+        Message::AddCanvasNode { .. } |
+        Message::DeleteNode { .. } |
+        Message::UpdateNodeText { .. } |
+        Message::CompleteNodeResponse { .. } |
+        Message::UpdateNodeStatus { .. } |
+        Message::AnimationTick |
+        Message::CreateWorkflow { .. } |
+        Message::SelectWorkflow { .. } |
+        Message::AddEdge { .. } |
+        Message::GenerateCanvasFromAgents => {
+            // These are handled by the canvas reducer which returns early
+            unreachable!("Canvas messages should be handled by the canvas reducer")
         }
     }
 
