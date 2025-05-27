@@ -382,7 +382,12 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
 
         // Model management
-
+        Message::SetAvailableModels { models, default_model_id } => {
+            state.available_models = models.clone();
+            state.default_model_id = default_model_id.clone();
+            state.state_modified = true;
+            needs_refresh = false; // No UI refresh needed for model updates
+        }
 
         // -----------------------------------------------------------------
         // Trigger management (Phase A minimal state sync)
@@ -442,7 +447,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         
         // Catch-all for any unhandled messages
         _ => {
-            // No action needed for unhandled messages
+            // Warn about unexpected messages so nothing silently fails
+            web_sys::console::warn_1(&format!(
+                "[update.rs] Unexpected or unhandled message: {:?}", msg
+            ).into());
             needs_refresh = false;
         }
     }
