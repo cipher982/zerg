@@ -29,7 +29,7 @@ const config = {
   // Automatically start backend + frontend unless they are already running.
   webServer: [
     {
-      command: 'cd ../backend && E2E_LOG_SUPPRESS=1 LOG_LEVEL=WARNING uv run python -m uvicorn zerg.main:app --port 8001 --log-level warning',
+      command: 'cd ../backend && TESTING=1 E2E_LOG_SUPPRESS=1 LOG_LEVEL=WARNING uv run python -m uvicorn zerg.main:app --port 8001 --log-level warning',
       port: 8001,
       reuseExistingServer: true,
       timeout: 120_000,

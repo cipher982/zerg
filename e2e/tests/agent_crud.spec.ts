@@ -19,13 +19,45 @@ test.describe('Agent CRUD – dashboard interactions', () => {
 
   test('Create agent with minimal configuration', async ({ page }) => {
     const before = await getAgentRowCount(page);
+    console.log('Agent rows before:', before);
+
+    // Intercept the /api/agents response after creation
+    let agentsResponseJson: any = null;
+    let interceptedAfterCreate = false;
+    page.on('response', async (response) => {
+      if (
+        response.url().includes('/api/agents') &&
+        response.request().method() === 'GET' &&
+        !interceptedAfterCreate
+      ) {
+        // Only capture the first GET after clicking create
+        interceptedAfterCreate = true;
+        try {
+          const json = await response.json();
+          agentsResponseJson = json;
+        } catch (e) {
+          // ignore
+        }
+      }
+    });
 
     // Click the plus-button in the header (data-testid="create-agent-btn")
     await page.locator('[data-testid="create-agent-btn"]').click();
 
+    // Wait a bit and print the row count after click
+    await page.waitForTimeout(1000);
+    const after = await getAgentRowCount(page);
+    console.log('Agent rows after 1s:', after);
+
     // The backend side-effect runs async via WebSocket – wait until a new <tr> appears.
     // Wait for the new row to appear using a more compatible approach
-    await expect(page.locator('tr[data-agent-id]')).toHaveCount(before + 1, { timeout: 15_000 });
+    try {
+      await expect(page.locator('tr[data-agent-id]')).toHaveCount(before + 1, { timeout: 15_000 });
+    } catch (e) {
+      // If the test fails, print the intercepted agent list for debugging
+      console.log('Intercepted /api/agents response after creation:', JSON.stringify(agentsResponseJson, null, 2));
+      throw e;
+    }
   });
 
   test('Verify agent appears in dashboard after creation', async ({ page }) => {
