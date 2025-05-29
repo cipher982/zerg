@@ -11,9 +11,9 @@ if ! command -v wasm-pack &> /dev/null; then
     exit 1
 fi
 
-# Build with debug profile
+# Build with debug profile and set API_BASE_URL for e2e tests
 echo "Building WASM module..."
-RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir www
+API_BASE_URL="http://localhost:8001" RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir www
 
 # Copy the generated JavaScript file to index.js for simplicity
 echo "Copying JS files..."

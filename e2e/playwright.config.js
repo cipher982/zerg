@@ -19,14 +19,12 @@ const config = {
   },
 
   // Test configuration
-  fullyParallel: true,
+  fullyParallel: false,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
 
-  // Override default worker count.  Playwright defaults to the number of
-  // CPU cores but we sometimes want to saturate logical cores / hyper-threads
-  // on beefy machines.  Adjust via PW_WORKERS env or fallback to 16.
-  workers: process.env.PW_WORKERS ? parseInt(process.env.PW_WORKERS, 10) : 16,
+  // Run tests sequentially to avoid database conflicts
+  workers: 1,
 
   // Automatically start backend + frontend unless they are already running.
   webServer: [
@@ -38,8 +36,8 @@ const config = {
       timeout: 120_000,
     },
     {
-      // Frontend on port 8002 (will kill existing server if needed)
-      command: 'cd ../frontend && ./build-only.sh && cd www && python3 -m http.server 8002',
+      // Frontend on port 8002 with WASM-aware server
+      command: 'cd ../frontend && ./build-only.sh && cd ../e2e && node wasm-server.js',
       port: 8002,
       reuseExistingServer: false,
       timeout: 180_000,
