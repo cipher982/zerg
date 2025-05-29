@@ -97,8 +97,9 @@ operational robustness.
   `get_current_time` now emits UTC ISO-8601 and CRUD helpers use
   `utc_now()` instead of naïve `datetime.now()`.  Models will be upgraded to
   `timezone=True` columns in a follow-up migration once deployed.
-* **CORS** – wildcard in dev is fine; honour `AUTH_DISABLED=0` by limiting
-  origins in production.
+* **CORS** – ✅ **Fixed (Jun 2025)** – When `AUTH_DISABLED=1` we keep
+  wildcard.  Otherwise allowed origins come from `ALLOWED_CORS_ORIGINS`
+  (comma-separated) with a safe fallback list, removing the security gap.
 * **Webhook hardening** – clamp body size (e.g. 128 KB) before HMAC validation.
 
 ---
