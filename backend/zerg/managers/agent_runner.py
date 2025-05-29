@@ -22,7 +22,10 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import Any
+from typing import Dict
 from typing import Sequence
+from typing import Tuple
 
 from sqlalchemy.orm import Session
 
@@ -37,6 +40,17 @@ from zerg.services.thread_service import ThreadService
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Local in-memory cache for compiled LangGraph runnables.
+# Keyed by (agent_id, agent_updated_at, stream_flag) so that any edit to the
+# agent definition automatically busts the cache.  The cache is deliberately
+# **process-local** – workers in a multi-process Gunicorn deployment will each
+# compile their own runnable once on first use which is acceptable given the
+# small cost (~100 ms).
+# ---------------------------------------------------------------------------
+
+_RUNNABLE_CACHE: Dict[Tuple[int, str, bool], Any] = {}
+
 
 class AgentRunner:  # noqa: D401 – naming follows project conventions
     """Run one agent turn (async)."""
@@ -44,9 +58,23 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
     def __init__(self, agent_row: AgentModel, *, thread_service: ThreadService | None = None):
         self.agent = agent_row
         self.thread_service = thread_service or ThreadService
-        # Lazily compile runnable so tests can monkey-patch implementation
-        # get_runnable now returns the compiled entrypoint function
-        self._runnable = zerg_react_agent.get_runnable(agent_row)
+        # ------------------------------------------------------------------
+        # Lazily compile (or fetch from cache) the LangGraph runnable.  Using
+        # a small in-process cache avoids the expensive graph compilation on
+        # every single run (~100 ms) while still picking up changes whenever
+        # the Agent row is modified (updated_at changes).
+        # ------------------------------------------------------------------
+
+        updated_at_str = agent_row.updated_at.isoformat() if getattr(agent_row, "updated_at", None) else "0"
+        cache_key = (agent_row.id, updated_at_str, self.enable_token_stream)
+
+        if cache_key in _RUNNABLE_CACHE:
+            self._runnable = _RUNNABLE_CACHE[cache_key]
+            logger.debug("AgentRunner: using cached runnable for agent %s", agent_row.id)
+        else:
+            self._runnable = zerg_react_agent.get_runnable(agent_row)
+            _RUNNABLE_CACHE[cache_key] = self._runnable
+            logger.debug("AgentRunner: compiled & cached runnable for agent %s", agent_row.id)
 
         # Whether this runner/LLM emits per-token chunks – treat env value
         # case-insensitively; anything truthy like "1", "true", "yes" enables

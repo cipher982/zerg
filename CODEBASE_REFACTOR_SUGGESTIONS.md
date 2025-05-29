@@ -16,25 +16,23 @@ operational robustness.
 
 | Area | Issue | Suggested Improvement |
 |------|-------|-----------------------|
-| **Hot commit loops** | `crud.create_thread_message`, `mark_message_processed`, `ThreadService.save_new_messages` each call **`commit()` for every row**. The quadratic sync-flush is a major test-suite slow-down. | Collect all new rows → `session.flush()` once → single `commit()`.  Provide `ThreadService.mark_messages_processed(ids)` that runs a **bulk UPDATE**. |
+| **Hot commit loops** | ✅ **Fixed (Jun 2025)** – `create_thread_message` now accepts `commit=False` so `ThreadService.save_new_messages` adds many rows then flushes & commits once.  New `crud.mark_messages_processed_bulk` updates rows in one statement; `ThreadService.mark_messages_processed` uses it. |
 | **Sync SQL inside async routes** | All FastAPI endpoints call the synchronous SA API which blocks the event-loop. | Either migrate to `sqlalchemy.ext.asyncio`, or wrap heavy CRUD in `anyio.to_thread`. |
-| **Session lifetime workaround** | `SchedulerService.load_scheduled_agents` keeps the session open to avoid `DetachedInstanceError`. | Close the session and return _tuples_ instead of ORM rows (e.g. `(id, cron_expr)`). |
+| **Session lifetime workaround** | ⬤ **Partial** – `load_scheduled_agents` now queries simple `(id, schedule)` tuples **but still keeps the Session open** to sidestep `DetachedInstanceError`. | Close the session after the query; returning tuples means the objects are no longer detached. |
 | **Magic strings** | Status (`"idle"`…), roles (`"assistant"`…), run triggers are free text. | Introduce small `Enum`s (Python + DB CHECK) to catch typos at commit-time. |
 
 ---
 
 ## 2&nbsp;· Event / WebSocket layer
 
-1. **Thread-safety** – `EventBus._subscribers` and every map in
-   `TopicConnectionManager` are mutated by multiple coroutines. Add an
-   `asyncio.Lock` or migrate to an actor model (`anyio` TaskGroup + channel).
+1. **Thread-safety** – ✅ **Fixed (Jun 2025)** – `TopicConnectionManager`
+   now guards all shared maps with a single `asyncio.Lock`.  Critical sections
+   are small so throughput impact is negligible; races between connect /
+   disconnect / broadcast are no longer possible.
 
-2. **Sequential fan-out** – `EventBus.publish()` awaits each subscriber in a
-   for-loop; one slow handler blocks all others. Change to
-
-   ```python
-   await asyncio.gather(*callbacks, return_exceptions=True)
-   ```
+2. **Sequential fan-out** – ✅ **Fixed (Jun 2025)** – `EventBus.publish()` now
+   uses `asyncio.gather(*callbacks, return_exceptions=True)` so one slow
+   subscriber no longer blocks the others.
 
 3. **Zombie sockets** – dead clients are only culled when the *next* broadcast
    to the same topic raises an exception. Consider a periodic
@@ -61,7 +59,7 @@ operational robustness.
 | Issue | Detail |
 |-------|--------|
 | **Tool calls claimed “parallel”** | ✅ **Fixed (May 2025)** – `zerg_react_agent.py` now awaits `asyncio.gather(...)` inside the loop and wraps each blocking tool call in `asyncio.to_thread`. |
-| **Graph recompilation** | The LangGraph runnable is rebuilt every time an `AgentRunner` instance is created.  A `@lru_cache` keyed by `(agent_id, model_name, stream_flag)` would shave ~100 ms/run. |
+| **Graph recompilation** | ✅ **Fixed (Jun 2025)** – `AgentRunner` now caches the compiled runnable in-process keyed by `(agent_id, updated_at, stream_flag)` so subsequent runs skip the expensive compilation. |
 | **Env flag re-parsing** | ⬤ **Partial** – `AgentRunner` now caches the environment lookup once at init-time, but helpers like `_make_llm()` and several test utilities still call `os.getenv()` on every invocation.  Move the flag to `zerg.constants` and import it. |
 
 ---
@@ -103,10 +101,10 @@ operational robustness.
 
 ## 🍬 Low-hanging fruit (pick-me-first)
 
-1. **Batch DB commits** in `ThreadService.save_new_messages` & friends.
-2. Make `EventBus.publish` concurrent via `asyncio.gather`.
-3. Protect shared maps in `TopicConnectionManager` with a lock.
-4. Cache compiled LangGraph runnables with `@lru_cache`.
+1. ~~Batch DB commits in `ThreadService.save_new_messages` & friends.~~ **Done – Jun 2025**
+2. ~~Make `EventBus.publish` concurrent via `asyncio.gather`.~~  **Done – Jun 2025**
+3. ~~Protect shared maps in `TopicConnectionManager` with a lock.~~ **Done – Jun 2025**
+4. ~~Cache compiled LangGraph runnables with `@lru_cache`.~~ **Done – Jun 2025**
 5. ~~Replace serial tool loop with `asyncio.gather`.~~  **Done in PR #??? – May 2025**
 
 Everything above is covered by unit tests, so each change can land in an

@@ -6,6 +6,7 @@ EventBus events to connected clients.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 from typing import Dict
@@ -25,14 +26,20 @@ class TopicConnectionManager:
 
     def __init__(self):
         """Initialize an empty topic-based connection manager."""
-        # Map of client_id to WebSocket connection
+        # Map of client_id to WebSocket connection (guarded by `_lock`)
         self.active_connections: Dict[str, WebSocket] = {}
-        # Map of topic to set of subscribed client_ids
+        # Map of topic to set of subscribed client_ids (guarded by `_lock`)
         self.topic_subscriptions: Dict[str, Set[str]] = {}
-        # Map of client_id to set of subscribed topics
+        # Map of client_id to set of subscribed topics (guarded by `_lock`)
         self.client_topics: Dict[str, Set[str]] = {}
-        # Map client_id -> authenticated user_id (optional)
+        # Map client_id -> authenticated user_id (optional, guarded by `_lock`)
         self.client_users: Dict[str, int | None] = {}
+
+        # Protect shared maps from concurrent mutation – a single lock is
+        # sufficient given the low contention and keeps the implementation
+        # straightforward.  The critical sections are small so the potential
+        # throughput impact is negligible compared to network I/O.
+        self._lock: asyncio.Lock = asyncio.Lock()
 
         # Register for relevant events
         self._setup_event_handlers()
@@ -63,9 +70,12 @@ class TopicConnectionManager:
             client_id: Unique identifier for the client
             websocket: The client's WebSocket connection
         """
-        self.active_connections[client_id] = websocket
-        self.client_topics[client_id] = set()
-        self.client_users[client_id] = user_id
+        # Mutate shared maps inside the lock to avoid races with concurrent
+        # disconnect or broadcast calls.
+        async with self._lock:
+            self.active_connections[client_id] = websocket
+            self.client_topics[client_id] = set()
+            self.client_users[client_id] = user_id
 
         # Auto-subscribe the socket to its personal topic so profile updates
         # propagate across tabs/devices without requiring an explicit
@@ -82,24 +92,25 @@ class TopicConnectionManager:
         Args:
             client_id: The client ID to remove
         """
-        if client_id in self.active_connections:
-            # Clean user mapping
-            self.client_users.pop(client_id, None)
-            # Remove from active connections
-            del self.active_connections[client_id]
+        async with self._lock:
+            if client_id in self.active_connections:
+                # Clean user mapping
+                self.client_users.pop(client_id, None)
+                # Remove from active connections
+                del self.active_connections[client_id]
 
-            # Remove from all topic subscriptions
-            if client_id in self.client_topics:
-                topics = self.client_topics[client_id]
-                for topic in topics:
-                    if topic in self.topic_subscriptions:
-                        self.topic_subscriptions[topic].discard(client_id)
-                        # Clean up empty topic subscriptions
-                        if not self.topic_subscriptions[topic]:
-                            del self.topic_subscriptions[topic]
-                del self.client_topics[client_id]
+                # Remove from all topic subscriptions
+                if client_id in self.client_topics:
+                    topics = self.client_topics[client_id]
+                    for topic in topics:
+                        if topic in self.topic_subscriptions:
+                            self.topic_subscriptions[topic].discard(client_id)
+                            # Clean up empty topic subscriptions
+                            if not self.topic_subscriptions[topic]:
+                                del self.topic_subscriptions[topic]
+                    del self.client_topics[client_id]
 
-            logger.info(f"Client {client_id} disconnected")
+                logger.info("Client %s disconnected", client_id)
 
     async def subscribe_to_topic(self, client_id: str, topic: str) -> None:
         """Subscribe a client to a topic.
@@ -108,12 +119,13 @@ class TopicConnectionManager:
             client_id: The client ID to subscribe
             topic: The topic to subscribe to (e.g., "agent:123", "thread:45")
         """
-        if topic not in self.topic_subscriptions:
-            self.topic_subscriptions[topic] = set()
+        async with self._lock:
+            if topic not in self.topic_subscriptions:
+                self.topic_subscriptions[topic] = set()
 
-        self.topic_subscriptions[topic].add(client_id)
-        self.client_topics[client_id].add(topic)
-        logger.info(f"Client {client_id} subscribed to topic {topic}")
+            self.topic_subscriptions[topic].add(client_id)
+            self.client_topics[client_id].add(topic)
+        logger.info("Client %s subscribed to topic %s", client_id, topic)
 
     async def unsubscribe_from_topic(self, client_id: str, topic: str) -> None:
         """Unsubscribe a client from a topic.
@@ -122,15 +134,16 @@ class TopicConnectionManager:
             client_id: The client ID to unsubscribe
             topic: The topic to unsubscribe from
         """
-        if topic in self.topic_subscriptions:
-            self.topic_subscriptions[topic].discard(client_id)
-            if not self.topic_subscriptions[topic]:
-                del self.topic_subscriptions[topic]
+        async with self._lock:
+            if topic in self.topic_subscriptions:
+                self.topic_subscriptions[topic].discard(client_id)
+                if not self.topic_subscriptions[topic]:
+                    del self.topic_subscriptions[topic]
 
-        if client_id in self.client_topics:
-            self.client_topics[client_id].discard(topic)
+            if client_id in self.client_topics:
+                self.client_topics[client_id].discard(topic)
 
-        logger.info(f"Client {client_id} unsubscribed from topic {topic}")
+        logger.info("Client %s unsubscribed from topic %s", client_id, topic)
 
     async def broadcast_to_topic(self, topic: str, message: Dict[str, Any]) -> None:
         """Broadcast a message to all clients subscribed to a topic.
@@ -142,15 +155,18 @@ class TopicConnectionManager:
         # If there are no active subscribers we silently skip to avoid log
         # spam – this situation is perfectly normal when scheduled agents or
         # background jobs emit updates while no browser is connected.
-        if topic not in self.topic_subscriptions:
-            logger.debug("broadcast_to_topic: no subscribers for topic %s", topic)
-            return
+        async with self._lock:
+            if topic not in self.topic_subscriptions:
+                logger.debug("broadcast_to_topic: no subscribers for topic %s", topic)
+                return
 
-        # Track disconnected clients so we can clean up afterwards
-        disconnected_clients = []
+            # Take a *snapshot* of client IDs to send to outside the lock so
+            # that slow network I/O does not block other state mutations.
+            client_ids = set(self.topic_subscriptions[topic])
 
-        for client_id in self.topic_subscriptions[topic]:
-            # Remove any subscription pointing to a now‑missing websocket
+        disconnected_clients: list[str] = []
+
+        for client_id in client_ids:
             if client_id not in self.active_connections:
                 disconnected_clients.append(client_id)
                 continue
@@ -158,19 +174,24 @@ class TopicConnectionManager:
             try:
                 await self.active_connections[client_id].send_json(message)
             except Exception:
-                # If sending fails, mark the connection as lost and forget the socket
                 disconnected_clients.append(client_id)
 
-        # Unsubscribe clients that are no longer connected
-        for client_id in disconnected_clients:
-            # Remove websocket reference if still present
-            self.active_connections.pop(client_id, None)
-            self.client_users.pop(client_id, None)
-            await self.unsubscribe_from_topic(client_id, topic)
+        # Clean up stale connections under the lock
+        async with self._lock:
+            for client_id in disconnected_clients:
+                self.active_connections.pop(client_id, None)
+                self.client_users.pop(client_id, None)
 
-            # Drop mapping entirely if no topics remain
-            if client_id in self.client_topics and not self.client_topics[client_id]:
-                del self.client_topics[client_id]
+                # Remove subscription mapping
+                if topic in self.topic_subscriptions:
+                    self.topic_subscriptions[topic].discard(client_id)
+                    if not self.topic_subscriptions[topic]:
+                        del self.topic_subscriptions[topic]
+
+                if client_id in self.client_topics:
+                    self.client_topics[client_id].discard(topic)
+                    if not self.client_topics[client_id]:
+                        del self.client_topics[client_id]
 
     async def _handle_agent_event(self, data: Dict[str, Any]) -> None:
         """Handle agent-related events from the event bus."""
