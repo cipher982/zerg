@@ -204,11 +204,8 @@ impl TopicManager {
     fn dispatch_to_topic_handlers(&self, topic: &str, payload: serde_json::Value) {
         if let Some(handlers) = self.topic_handlers.get(topic) {
             for handler_rc in handlers {
-                if let Ok(mut handler) = handler_rc.try_borrow_mut() {
-                    (*handler)(payload.clone());
-                } else {
-                    web_sys::console::error_1(&format!("Failed to borrow handler for topic {}", topic).into());
-                }
+                let mut handler = handler_rc.borrow_mut();
+                (*handler)(payload.clone());
             }
         } else {
             web_sys::console::debug_1(&format!("No handlers registered for determined topic: {}", topic).into());
