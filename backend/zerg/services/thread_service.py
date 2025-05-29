@@ -203,12 +203,21 @@ class ThreadService:
             if kwargs.get("role") == "tool":
                 kwargs["parent_id"] = current_parent_id
 
-            row = crud.create_thread_message(db=db, thread_id=thread_id, **kwargs)
+            row = crud.create_thread_message(db=db, thread_id=thread_id, commit=False, **kwargs)
+
+            # Ensure primary key is available when we need to reference it as
+            # *parent_id* for subsequent tool messages.
+            if row.id is None:
+                db.flush()
             created_rows.append(row)
 
             # Update parent tracker whenever we hit a new assistant row.
             if row.role == "assistant":
                 current_parent_id = row.id
+
+        # Flush once so SQL assigns primary keys for the inserted rows.
+        db.flush()
+        db.commit()
 
         return created_rows
 
@@ -216,8 +225,11 @@ class ThreadService:
     def mark_messages_processed(db: Session, message_ids: Iterable[int]):
         """Set processed=True for given DB rows."""
 
-        for mid in message_ids:
-            crud.mark_message_processed(db, mid)
+        mids = list(message_ids)
+        if not mids:
+            return
+
+        crud.mark_messages_processed_bulk(db, mids)
 
     @staticmethod
     def touch_thread_timestamp(db: Session, thread_id: int):

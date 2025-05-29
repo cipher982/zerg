@@ -430,6 +430,8 @@ def create_thread_message(
     name: Optional[str] = None,
     processed: bool = False,
     parent_id: Optional[int] = None,
+    *,
+    commit: bool = True,
 ):
     """Create a new message for a thread"""
     db_message = ThreadMessage(
@@ -443,8 +445,15 @@ def create_thread_message(
         parent_id=parent_id,
     )
     db.add(db_message)
-    db.commit()
-    db.refresh(db_message)
+
+    # For callers that batch-insert multiple messages we allow skipping the
+    # commit so they can flush/commit once at the end.  When *commit* is
+    # False we rely on the caller to perform a ``session.flush()`` so that
+    # primary keys are assigned (required for subsequent parent_id linking).
+
+    if commit:
+        db.commit()
+        db.refresh(db_message)
     return db_message
 
 
@@ -457,6 +466,27 @@ def mark_message_processed(db: Session, message_id: int):
         db.refresh(db_message)
         return db_message
     return None
+
+
+# ---------------------------------------------------------------------------
+# Bulk helpers – performance critical paths
+# ---------------------------------------------------------------------------
+
+
+def mark_messages_processed_bulk(db: Session, message_ids: List[int]):
+    """Set processed=True for the given message IDs in one UPDATE."""
+
+    if not message_ids:
+        return 0
+
+    updated = (
+        db.query(ThreadMessage)
+        .filter(ThreadMessage.id.in_(message_ids))
+        .update({ThreadMessage.processed: True}, synchronize_session=False)
+    )
+
+    db.commit()
+    return updated
 
 
 def get_unprocessed_messages(db: Session, thread_id: int):

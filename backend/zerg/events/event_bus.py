@@ -57,13 +57,27 @@ class EventBus:
         if event_type not in self._subscribers:
             return
 
-        logger.debug(f"Publishing event {event_type} with data: {data}")
+        logger.debug("Publishing event %s with data: %s", event_type, data)
 
-        for callback in self._subscribers[event_type]:
-            try:
-                await callback(data)
-            except Exception as e:
-                logger.error(f"Error in event handler for {event_type}: {str(e)}")
+        # ------------------------------------------------------------------
+        # Fan-out **concurrently** so that a slow subscriber can no longer
+        # block the entire publish call.  We keep return_exceptions=True so
+        # every callback runs – any raised error is logged individually.
+        # ------------------------------------------------------------------
+
+        import asyncio
+
+        tasks = [callback(data) for callback in self._subscribers[event_type]]
+
+        if not tasks:
+            return
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Log any exceptions that were captured by gather()
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error("Error in event handler for %s: %s", event_type, result)
 
     def subscribe(self, event_type: EventType, callback: Callable[[Dict[str, Any]], Awaitable[None]]) -> None:
         """Subscribe to an event type.
