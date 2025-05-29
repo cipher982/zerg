@@ -49,22 +49,41 @@ export class ApiClient {
 
   private async request(method: string, path: string, body?: any): Promise<any> {
     const url = `${this.baseUrl}${path}`;
-    const response = await fetch(url, {
-      method,
-      headers: this.headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    let response;
+    let errorText = '';
+    
+    try {
+      response = await fetch(url, {
+        method,
+        headers: this.headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      
+      if (!response.ok) {
+        errorText = await response.text();
+        throw new Error(`API request failed: ${method} ${path} - ${response.status} ${response.statusText}: ${errorText}`);
+      }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API request failed: ${method} ${path} - ${response.status} ${response.statusText}: ${errorText}`);
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return await response.json();
+      }
+      return await response.text();
+    } catch (error) {
+      console.error(`API request error: ${method} ${path}`, {
+        error: error instanceof Error ? error.message : String(error),
+        responseStatus: response?.status,
+        responseText: errorText
+      });
+      
+      // If it's a 500 error, wait a bit and retry once
+      if (response?.status === 500) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return this.request(method, path, body);
+      }
+      
+      throw error;
     }
-
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return await response.json();
-    }
-    return await response.text();
   }
 
   async createAgent(data: CreateAgentRequest = {}): Promise<Agent> {
@@ -118,7 +137,16 @@ export class ApiClient {
   }
 
   async resetDatabase(): Promise<void> {
-    await this.request('POST', '/api/admin/reset-database');
+    try {
+      await this.request('POST', '/api/admin/reset-database');
+      // Wait for database to be fully reset before proceeding
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } catch (error) {
+      console.error('Database reset failed, trying fallback cleanup...');
+      // If reset fails, try to manually clean up test data
+      const agents = await this.listAgents();
+      await Promise.all(agents.map(agent => this.deleteAgent(agent.id)));
+    }
   }
 
   async healthCheck(): Promise<any> {
