@@ -76,9 +76,9 @@ operational robustness.
 
 ## 6&nbsp;· Frontend (Rust / WASM)
 
-1.  **Duplicate logic** – `TopicManager` has near identical `subscribe` /
-    `unsubscribe` code in the impl block *and* the trait impl.  Collapse into
-    one.
+1.  **Duplicate logic** – ✅ **Fixed (Jun 2025)** – The `ITopicManager`
+    implementation now delegates to the inherent `TopicManager` methods so
+    logic lives in exactly one place.
 
 2.  **`RefCell` ergonomics** – many handlers use `try_borrow_mut()` and ignore
     the error; almost all borrows are exclusive and deterministic, so switch
