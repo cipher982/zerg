@@ -266,11 +266,12 @@ These improvements were identified while fixing table alignment issues and would
 - [x] Selection stored in `AppState::dashboard_scope`; dispatched via `Message::ToggleDashboardScope`
 - [x] Dashboard-specific WebSocket manager cleans up listeners on teardown (`dashboard/ws_manager.rs`)
 
-#### Search Functionality
+-#### Search Functionality
 - [x] Implement real-time filtering for the agent search input
 - [x] Filter agents by name as user types
 - [x] Show "No results" message when no matches (context-sensitive message)
 - [x] Clear search with ESC key
+- [x] Inline × clear icon inside input
 - [ ] Persist filter in localStorage (bonus – query is restored on reload)
 - **Why**: Essential for users with many agents
 

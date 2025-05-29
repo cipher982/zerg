@@ -287,6 +287,25 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     search_container.append_child(&search_icon)?;
     search_container.append_child(&search_input)?;
 
+    // Clear (×) icon inside search
+    let clear_icon = document.create_element("span")?;
+    clear_icon.set_class_name("search-clear");
+    clear_icon.set_inner_html("×");
+    clear_icon.set_attribute("title", "Clear search")?;
+    let ci_cb = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+        event.stop_propagation();
+        if let Some(input) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("agent-search")).and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok()) {
+            input.set_value("");
+        }
+        crate::state::dispatch_global_message(crate::messages::Message::UpdateDashboardSearch(String::new()));
+    }) as Box<dyn FnMut(_)>);
+    clear_icon.dyn_ref::<HtmlElement>()
+        .unwrap()
+        .add_event_listener_with_callback("click", ci_cb.as_ref().unchecked_ref())?;
+    ci_cb.forget();
+
+    search_container.append_child(&clear_icon)?;
+
 
     // -------------------------------------------------------------------
     // Scope selector (My agents / All agents)
@@ -738,6 +757,9 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     name_cell.set_inner_html(&agent.name);
     row.append_child(&name_cell)?;
 
+    // Make row focusable for keyboard nav
+    row.set_attribute("tabindex", "0")?;
+
     // Owner cell (only in AllAgents scope)
     use crate::state::DashboardScope;
     let include_owner = APP_STATE.with(|st| st.borrow().dashboard_scope == DashboardScope::AllAgents);
@@ -1046,6 +1068,59 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     // Append the inner container to the cell
     actions_cell.append_child(&actions_inner)?;
     row.append_child(&actions_cell)?;
+
+    // Keyboard navigation: Up/Down moves between sibling rows, Enter toggles expand
+    let row_toggle_id = agent.id;
+    let key_cb = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+        let key = event.key();
+        match key.as_str() {
+            "ArrowDown" | "ArrowUp" => {
+                event.prevent_default();
+                if let Some(current) = event.target().and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok()) {
+                    if let Some(parent) = current.parent_element() {
+                        let rows = parent.children();
+                        let len = rows.length();
+                        let mut idx = 0;
+                        for i in 0..len {
+                            if let Some(r) = rows.item(i) {
+                                if r.is_same_node(Some(&current)) { idx = i; break; }
+                            }
+                        }
+                        let new_idx = if key == "ArrowDown" {
+                            std::cmp::min(len-1, idx+1)
+                        } else {
+                            if idx==0 {0} else {idx-1}
+                        };
+                        if let Some(next_row) = rows.item(new_idx) {
+                            let _ = next_row.dyn_ref::<web_sys::HtmlElement>().unwrap().focus();
+                        }
+                    }
+                }
+            }
+            "Enter" => {
+                // simulate row click to toggle expand
+                event.prevent_default();
+                    crate::state::APP_STATE.with(|state_ref| {
+                    let mut s = state_ref.borrow_mut();
+                    if s.expanded_agent_rows.contains(&row_toggle_id) {
+                        s.expanded_agent_rows.remove(&row_toggle_id);
+                    } else {
+                        s.expanded_agent_rows.clear();
+                        s.expanded_agent_rows.insert(row_toggle_id);
+                    }
+                });
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::dashboard::refresh_dashboard(&doc);
+                }
+            }
+            _ => {}
+        }
+    }) as Box<dyn FnMut(_)>);
+
+    row.dyn_ref::<HtmlElement>()
+        .unwrap()
+        .add_event_listener_with_callback("keydown", key_cb.as_ref().unchecked_ref())?;
+    key_cb.forget();
 
     // ---------------- Toggle detail expansion on row click ----------------
     let toggle_id = agent.id;
