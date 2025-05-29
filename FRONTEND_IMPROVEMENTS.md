@@ -2,6 +2,8 @@
 
 This document outlines code quality and best practice improvements for the Zerg Agent Platform frontend (Rust/WASM). It's organized as a checklist for developers to track progress on modernizing and improving the codebase.
 
+> **Last updated:** 1 June 2025
+
 ## 🎯 Context for New Developers
 
 The frontend is built with:
@@ -157,7 +159,7 @@ The frontend is built with:
 ## 🎨 Style & Architecture (1-2 hours each)
 
 ### Extract Inline Styles
-- [x] Move all `set_attribute("style", ...)` to CSS classes
+- [ ] Move all `set_attribute("style", ...)` to CSS classes (⚠ ~10 remain in `mcp_server_manager.rs`, `chat_view.rs`, dashboard empty-state etc.)
 - [x] Create semantic class names for common patterns:
   - [x] `.form-row` instead of `style="margin-top: 12px"`
   - [x] `.form-row-sm` for smaller spacing
@@ -166,7 +168,7 @@ The frontend is built with:
   - [x] `.schedule-summary` for schedule text styling
   - [x] `.triggers-list` for trigger list styling
 - [x] **Files with most inline styles**: `agent_config_modal.rs`, `dashboard/mod.rs`
-- **Completed**: Added comprehensive utility CSS classes to `styles.css` and updated `constants.rs` with class name constants. Started replacing inline styles in `agent_config_modal.rs` with CSS classes. Remaining inline styles are mostly for complex styling that would benefit from more specific CSS classes.
+- **Progress**: Utility CSS classes added in `styles.css` and inline styles purged from main modal & dashboard. Outstanding calls in *mcp_server_manager.rs* and a few small components still need conversion.
 
 ### Component Extraction
 - [x] Extract repeated UI patterns into reusable functions:
@@ -258,12 +260,19 @@ These improvements were identified while fixing table alignment issues and would
 
 ### High-Impact Features (30-60 minutes each)
 
+#### Scope Toggle (Completed)
+- [x] Dropdown in dashboard header toggles between **My agents** and **All agents** scopes
+- [x] Dynamically adds/removes *Owner* column in the agents table
+- [x] Selection stored in `AppState::dashboard_scope`; dispatched via `Message::ToggleDashboardScope`
+- [x] Dashboard-specific WebSocket manager cleans up listeners on teardown (`dashboard/ws_manager.rs`)
+
 #### Search Functionality
-- [ ] Implement real-time filtering for the agent search input
-- [ ] Filter agents by name as user types
-- [ ] Show "No results" message when no matches
-- [ ] Clear search with ESC key
-- [ ] **Why**: Essential for users with many agents
+- [x] Implement real-time filtering for the agent search input
+- [x] Filter agents by name as user types
+- [x] Show "No results" message when no matches (context-sensitive message)
+- [x] Clear search with ESC key
+- [ ] Persist filter in localStorage (bonus – query is restored on reload)
+- **Why**: Essential for users with many agents
 
 #### Table Sorting
 - [ ] Implement sorting for all columns:
@@ -360,7 +369,3 @@ These improvements were identified while fixing table alignment issues and would
 
 Mark items as complete with `[x]` and add notes about any challenges or decisions made. This document should evolve as the work progresses.
 
-**Last Updated**: May 25, 2025
-**Contributors**: 
-- Claude (AI Assistant) - Completed Quick Wins section (Button Type Safety, Magic String Constants, XSS Prevention, Test Selectors) and Medium Priority (Focus Management, ARIA improvements)
-- Claude (AI Assistant) - Added Dashboard Enhancements section with quality of life improvements discovered during table alignment fix
