@@ -42,11 +42,11 @@ operational robustness.
 
 ## 3&nbsp;· Scheduler / long-running tasks
 
-* **Bad cron strings crash startup** – ⬤ **Partial** –
-  `SchedulerService.schedule_agent()` now wraps `CronTrigger.from_crontab()` in
-  `try/except`, preventing service-level crashes, **but** `crud.update_agent`
-  still lets invalid cron expressions reach the database.  Add the same
-  validation in the write-path and surface a `422` to the client.
+* **Bad cron strings crash startup** – ✅ **Fixed (Jun 2025)** – Both
+  `crud.create_agent` and `crud.update_agent` now validate the cron expression
+  via `apscheduler.CronTrigger.from_crontab` and raise `ValueError` on
+  invalid input.  SchedulerService keeps its runtime guard as a second line
+  of defence.
 
 * **DB work in scheduler thread** – writes from the APScheduler thread share
   the same synchronous engine. When moving to Postgres use a separate async
