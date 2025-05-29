@@ -34,9 +34,10 @@ operational robustness.
    uses `asyncio.gather(*callbacks, return_exceptions=True)` so one slow
    subscriber no longer blocks the others.
 
-3. **Zombie sockets** – dead clients are only culled when the *next* broadcast
-   to the same topic raises an exception. Consider a periodic
-   ping/timeout task.
+3. **Zombie sockets** – ✅ **Fixed (Jun 2025)** – `TopicConnectionManager`
+   now starts a 30-second heartbeat loop on first connect that sends a `ping`
+   frame to every client; sockets that raise are disconnected and cleaned up,
+   so stale entries no longer linger when no further topic messages arrive.
 
 ---
 
