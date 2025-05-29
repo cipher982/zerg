@@ -1,6 +1,16 @@
+# E2E log suppression: only active when E2E_LOG_SUPPRESS=1 for test runs
+import os
+
+if os.environ.get("E2E_LOG_SUPPRESS") == "1":
+    from zerg.e2e_logging_hacks import silence_info_logs
+
+    silence_info_logs()
+
+# --- TOP: Force silence for E2E or CLI if LOG_LEVEL=WARNING is set ---
 import logging
 import os
 
+# ---------------------------------------------------------------------
 from dotenv import load_dotenv
 
 # Load environment variables FIRST - before any other imports
@@ -9,6 +19,15 @@ load_dotenv()
 # fmt: off
 # ruff: noqa: E402
 # Standard library
+# fmt: on
+# --------------------------------------------------------------------------
+# LOGGING CONFIGURATION (dynamic, clean, less spammy):
+# --------------------------------------------------------------------------
+#
+# - Default log level: INFO (dev-friendly)
+# - Can be set at runtime with LOG_LEVEL env (e.g. LOG_LEVEL=WARNING for CI)
+# - Explicitly suppresses spammy WebSocket modules to WARNING by default
+#
 from pathlib import Path
 
 # Third-party
@@ -48,10 +67,19 @@ from zerg.routers.websocket import router as websocket_router
 from zerg.services.email_trigger_service import email_trigger_service  # noqa: E402
 from zerg.services.scheduler_service import scheduler_service  # noqa: E402
 
-# fmt: on
+_log_level_name = os.environ.get("LOG_LEVEL", "INFO").upper()
+try:
+    _log_level = getattr(logging, _log_level_name)
+except AttributeError:
+    _log_level = logging.INFO
+else:
+    pass
+logging.basicConfig(level=_log_level, format="%(levelname)s - %(message)s", handlers=[logging.StreamHandler()])
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s", handlers=[logging.StreamHandler()])
+# Suppress verbose INFO logs from known-noisy modules (e.g., websocket connects)
+for _noisy_mod in ("zerg.routers.websocket", "zerg.websocket.manager"):
+    logging.getLogger(_noisy_mod).setLevel(logging.WARNING)
+# --------------------------------------------------------------------------
 
 # Create the FastAPI app
 # ---------------------------------------------------------------------------

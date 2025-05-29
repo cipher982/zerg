@@ -55,7 +55,12 @@ impl ApiClient {
     // Get all agents
     pub async fn get_agents_scoped(scope: &str) -> Result<String, JsValue> {
         let url = format!("{}/api/agents?scope={}", Self::api_base_url(), scope);
-        Self::fetch_json(&url, "GET", None).await
+        let result = Self::fetch_json(&url, "GET", None).await;
+        match &result {
+            Ok(json) => web_sys::console::log_1(&format!("API_CLIENT: GET /api/agents returned: {}", json).into()),
+            Err(e) => web_sys::console::error_1(&format!("API_CLIENT: GET /api/agents error: {:?}", e).into()),
+        }
+        result
     }
 
     // Get a specific agent by ID

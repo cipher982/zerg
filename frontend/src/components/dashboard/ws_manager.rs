@@ -71,11 +71,30 @@ impl DashboardWsManager {
     /// Subscribe to agent-related events using the provided ITopicManager.
     // Change signature to accept the trait object
     pub(crate) fn subscribe_to_agent_events(&mut self, topic_manager_rc: Rc<RefCell<dyn ITopicManager>>) -> Result<(), JsValue> {
-        // Borrowing and using the trait object works the same
+        // Get current agent IDs
+        let agent_ids: Vec<u32> = crate::state::APP_STATE.with(|state_ref| {
+            state_ref.borrow().agents.keys().cloned().collect()
+        });
+
+        // If we already have a handler, just subscribe new agents to it
+        if let Some(existing_handler) = &self.agent_subscription_handler {
+            web_sys::console::log_1(&"DashboardWsManager: Using existing handler for new agents".into());
+            
+            let mut topic_manager = topic_manager_rc.borrow_mut();
+            for aid in agent_ids {
+                let topic = format!("agent:{}", aid);
+                let cloned: TopicHandler = Rc::clone(&existing_handler) as TopicHandler;
+                // This might create duplicates but TopicManager should handle that
+                topic_manager.subscribe(topic, cloned)?;
+            }
+            return Ok(());
+        }
+
+        // Create new handler only if we don't have one
+        web_sys::console::log_1(&"DashboardWsManager: Creating new handler".into());
         let mut topic_manager = topic_manager_rc.borrow_mut();
 
         // Structured handler – parse incoming JSON into strongly-typed enums
-        // and act accordingly.
         let handler = Rc::new(RefCell::new(|data: serde_json::Value| {
             use crate::network::ws_schema::WsMessage;
 
@@ -108,11 +127,6 @@ impl DashboardWsManager {
         }));
 
         self.agent_subscription_handler = Some(handler.clone());
-
-        // Subscribe to each existing agent individually (wildcards not supported by backend).
-        let agent_ids: Vec<u32> = crate::state::APP_STATE.with(|state_ref| {
-            state_ref.borrow().agents.keys().cloned().collect()
-        });
 
         // Subscribe to each existing agent individually – backend does not
         // support wildcards for normal runtime traffic.
@@ -203,4 +217,4 @@ pub fn cleanup_dashboard_ws() -> Result<(), JsValue> {
         }
         Ok(())
     })
-} 
+}
