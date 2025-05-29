@@ -59,6 +59,40 @@ mod pages;
 mod scheduling;
 mod utils;
 mod toast;
+
+// ---------------------------------------------------------------------------
+// Global keyboard shortcuts
+// ---------------------------------------------------------------------------
+
+fn init_global_shortcuts(document: &Document) {
+    use wasm_bindgen::closure::Closure;
+    use web_sys::EventTarget;
+
+    let keydown_cb = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+        let key = event.key();
+
+        // Ctrl/Cmd + K → focus dashboard search
+        if (event.ctrl_key() || event.meta_key()) && key == "k" {
+            event.prevent_default();
+            if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                if let Some(input) = doc.get_element_by_id("agent-search") {
+                    let _ = input.dyn_ref::<web_sys::HtmlElement>().unwrap().focus();
+                }
+            }
+            return;
+        }
+
+        // ? with no modifiers → show shortcut help
+        if key == "?" && !event.ctrl_key() && !event.meta_key() {
+            event.prevent_default();
+            crate::toast::info("Shortcuts:\nCtrl/⌘+K – Focus search\nN – New agent (coming soon)\n? – Show this help");
+        }
+    }) as Box<dyn FnMut(_)>);
+
+    let target: EventTarget = document.clone().into();
+    let _ = target.add_event_listener_with_callback("keydown", keydown_cb.as_ref().unchecked_ref());
+    keydown_cb.forget();
+}
 mod dom_utils;
 mod auth;
 mod ui_components;
@@ -97,6 +131,9 @@ pub fn start() -> Result<(), JsValue> {
     // Get the document
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
+
+    // Register global keyboard shortcuts
+    init_global_shortcuts(&document);
 
     // -------------------------------------------------------------------
     // NEW: Discover runtime flags from /api/system/info before deciding on

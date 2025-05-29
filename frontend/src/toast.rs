@@ -20,6 +20,10 @@ pub fn error(msg: &str) {
     show(msg, ToastKind::Error);
 }
 
+pub fn info(msg: &str) {
+    show(msg, ToastKind::Info);
+}
+
 pub fn show(message: &str, kind: ToastKind) {
     let window = match web_sys::window() {
         Some(w) => w,

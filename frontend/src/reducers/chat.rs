@@ -6,6 +6,7 @@
 
 use crate::state::AppState;
 use crate::messages::{Message, Command};
+use crate::toast;
 
 /// Returns `true` when the message was handled by the chat reducer.
 pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> bool {
@@ -500,10 +501,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         crate::messages::Message::ThreadMessageFailed(_thread_id, _client_id) => {
             web_sys::console::warn_1(&"ThreadMessageFailed is deprecated".into());
             cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
-                if let Some(_document) = web_sys::window().and_then(|w| w.document()) {
-                    web_sys::window()
-                        .and_then(|w| w.alert_with_message("Message failed to send. Please try again.").ok());
-                }
+                crate::toast::error("Message failed to send. Please try again.");
             })));
             true
         }
