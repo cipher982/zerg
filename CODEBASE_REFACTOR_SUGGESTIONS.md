@@ -18,7 +18,7 @@ operational robustness.
 |------|-------|-----------------------|
 | **Hot commit loops** | ✅ **Fixed (Jun 2025)** – `create_thread_message` now accepts `commit=False` so `ThreadService.save_new_messages` adds many rows then flushes & commits once.  New `crud.mark_messages_processed_bulk` updates rows in one statement; `ThreadService.mark_messages_processed` uses it. |
 | **Sync SQL inside async routes** | All FastAPI endpoints call the synchronous SA API which blocks the event-loop. | Either migrate to `sqlalchemy.ext.asyncio`, or wrap heavy CRUD in `anyio.to_thread`. |
-| **Session lifetime workaround** | ⬤ **Partial** – `load_scheduled_agents` now queries simple `(id, schedule)` tuples **but still keeps the Session open** to sidestep `DetachedInstanceError`. | Close the session after the query; returning tuples means the objects are no longer detached. |
+| **Session lifetime workaround** | ✅ **Fixed (Jun 2025)** – `load_scheduled_agents` now queries `(id, schedule)` tuples then closes the session before registering jobs, eliminating the DetachedInstanceError hack. |
 | **Magic strings** | Status (`"idle"`…), roles (`"assistant"`…), run triggers are free text. | Introduce small `Enum`s (Python + DB CHECK) to catch typos at commit-time. |
 
 ---
