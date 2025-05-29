@@ -4,6 +4,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+# Cron validation helper
+from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
 
 from zerg.models.models import Agent
@@ -26,9 +28,6 @@ from zerg.models.models import Trigger
 from zerg.models.models import User
 from zerg.schemas.schemas import RunStatus
 from zerg.schemas.schemas import RunTrigger
-
-# Cron validation helper
-from apscheduler.triggers.cron import CronTrigger
 
 
 def _validate_cron_or_raise(expr: str | None):
