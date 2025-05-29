@@ -41,6 +41,11 @@ class TopicConnectionManager:
         # throughput impact is negligible compared to network I/O.
         self._lock: asyncio.Lock = asyncio.Lock()
 
+        # Background task that proactively cleans up dead sockets so topics
+        # don’t accumulate zombie client IDs when a browser tab crashes but
+        # no further messages are broadcast on the subscribed topic.
+        self._cleanup_task: asyncio.Task | None = None
+
         # Register for relevant events
         self._setup_event_handlers()
 
@@ -85,6 +90,14 @@ class TopicConnectionManager:
             await self.subscribe_to_topic(client_id, personal_topic)
 
         logger.info("Client %s connected (user=%s)", client_id, user_id)
+
+        # Lazily start the cleanup ping loop on first connection.  The loop
+        # ends automatically when the task is cancelled during application
+        # shutdown (handled by FastAPI lifespan).
+        if self._cleanup_task is None or self._cleanup_task.done():
+            import asyncio
+
+            self._cleanup_task = asyncio.create_task(self._cleanup_loop())
 
     async def disconnect(self, client_id: str) -> None:
         """Remove a client connection and clean up subscriptions.
@@ -144,6 +157,35 @@ class TopicConnectionManager:
                 self.client_topics[client_id].discard(topic)
 
         logger.info("Client %s unsubscribed from topic %s", client_id, topic)
+
+    # ------------------------------------------------------------------
+    # Cleanup helpers
+    # ------------------------------------------------------------------
+
+    async def _cleanup_loop(self) -> None:
+        """Periodically ping clients and drop unresponsive sockets."""
+
+        import asyncio
+
+        try:
+            while True:
+                await asyncio.sleep(30)  # 30-second heartbeat
+
+                async with self._lock:
+                    client_ids = list(self.active_connections.keys())
+
+                for cid in client_ids:
+                    ws = self.active_connections.get(cid)
+                    if ws is None:
+                        continue
+
+                    try:
+                        await ws.send_json({"type": "ping"})
+                    except Exception:
+                        # Treat as dead – disconnect will clean maps
+                        await self.disconnect(cid)
+        except asyncio.CancelledError:  # graceful shutdown
+            logger.info("TopicConnectionManager cleanup task cancelled")
 
     async def broadcast_to_topic(self, topic: str, message: Dict[str, Any]) -> None:
         """Broadcast a message to all clients subscribed to a topic.
