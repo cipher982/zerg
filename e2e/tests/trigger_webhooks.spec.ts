@@ -10,7 +10,7 @@ test.describe('Webhook trigger management', () => {
     await page.locator(`[data-testid="edit-agent-${id}"]`).click();
     await page.waitForSelector('#agent-modal', { state: 'visible' });
     const tab = page.locator('#agent-triggers-tab');
-    if ((await tab.count()) === 0) test.skip('Triggers tab not present');
+    if ((await tab.count()) === 0) test.skip(true, 'Triggers tab not present');
     await tab.click();
   }
 
@@ -26,7 +26,7 @@ test.describe('Webhook trigger management', () => {
     await page.locator('#agent-create-trigger').click();
 
     // Expect list entry
-    await expect(page.locator('#agent-triggers-list li')).toHaveCountGreaterThan(0);
+    await expect(page.locator('#agent-triggers-list li')).toHaveCount(1, { timeout: 5000 });
   });
 
   test('Copy webhook URL placeholder', async () => {
@@ -44,7 +44,7 @@ test.describe('Webhook trigger management', () => {
   test('Delete webhook trigger', async ({ page }) => {
     await openTriggersTab(page);
     const firstLi = page.locator('#agent-triggers-list li').first();
-    if ((await firstLi.count()) === 0) test.skip('No triggers to delete');
+    if ((await firstLi.count()) === 0) test.skip(true, 'No triggers to delete');
 
     await firstLi.locator('button', { hasText: 'Delete' }).click();
     page.once('dialog', (d) => d.accept());
