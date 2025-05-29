@@ -100,6 +100,33 @@ pub fn create_button(document: &Document, config: ButtonConfig) -> Result<Elemen
     Ok(button)
 }
 
+// ---------------------------------------------------------------------------
+// Loading / spinner helpers
+// ---------------------------------------------------------------------------
+
+/// Toggle a button into *loading* state: disables it, swaps text for spinner.
+/// Pass `false` to restore original text.
+pub fn set_button_loading(btn: &Element, loading: bool) {
+    let class_list = btn.class_list();
+    if loading {
+        let _ = class_list.add_1("loading");
+        let _ = btn.set_attribute("disabled", "true");
+        // save original
+        if btn.get_attribute("data-orig-label").is_none() {
+            if let Some(label) = btn.text_content() {
+                let _ = btn.set_attribute("data-orig-label", &label);
+            }
+        }
+        btn.set_inner_html("<span class='spinner'></span>");
+    } else {
+        let _ = class_list.remove_1("loading");
+        let _ = btn.remove_attribute("disabled");
+        if let Some(orig) = btn.get_attribute("data-orig-label") {
+            btn.set_inner_html(&orig);
+        }
+    }
+}
+
 /// Create a primary action button (blue background)
 pub fn create_primary_button(document: &Document, text: &str, id: Option<&str>) -> Result<Element, JsValue> {
     let mut config = ButtonConfig::new(text).with_class("btn-primary");

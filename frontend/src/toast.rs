@@ -78,6 +78,9 @@ fn ensure_styles(document: &Document) {
 .toast-success{background:#16a34a}
 .toast-error{background:#dc2626}
 .toast-info{background:#2563eb}
+/* spinner for buttons */
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 1s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
 @keyframes toast-in{to{opacity:1}}
 ";
 
