@@ -169,6 +169,9 @@ pub enum Message {
         node_id: String,
         status: String,
     },
+
+    // Dashboard live search
+    UpdateDashboardSearch(String),
     
     // Database management
     ResetDatabase,                      // Clear all agent data from database

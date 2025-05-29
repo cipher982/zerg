@@ -120,6 +120,33 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             });
             true
         }
+
+        // -----------------------------------------------------------------
+        // Live search – update filter query and refresh UI
+        // -----------------------------------------------------------------
+        Message::UpdateDashboardSearch(query) => {
+            let new_q = query.trim().to_ascii_lowercase();
+            if state.dashboard_search_query != new_q {
+                state.dashboard_search_query = new_q.clone();
+
+                // Persist to local storage so refresh keeps the query (optional)
+                if let Some(window) = web_sys::window() {
+                    if let Ok(Some(storage)) = window.local_storage() {
+                        let _ = storage.set_item("dashboard_search_query", &new_q);
+                    }
+                }
+
+                // Trigger re-render of the dashboard only
+                commands.push(Command::UpdateUI(Box::new(|| {
+                    if let Some(win) = web_sys::window() {
+                        if let Some(doc) = win.document() {
+                            let _ = crate::components::dashboard::refresh_dashboard(&doc);
+                        }
+                    }
+                })));
+            }
+            true
+        }
         _ => false,
     }
 }

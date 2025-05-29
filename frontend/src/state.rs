@@ -210,6 +210,9 @@ pub struct AppState {
 
     /// Current filter applied to the dashboard (persisted in localStorage).
     pub dashboard_scope: DashboardScope,
+
+    /// Current text in the dashboard search box (used for live filtering)
+    pub dashboard_search_query: String,
     // Pending network call data to avoid nested borrows
     pub pending_network_call: Option<(String, String)>,
     // Loading state flags
@@ -404,6 +407,16 @@ impl AppState {
                 } else {
                     DashboardScope::MyAgents
                 }
+            },
+
+            // Live search starts empty
+            dashboard_search_query: {
+                let window = web_sys::window();
+                if let Some(w) = window {
+                    if let Ok(Some(storage)) = w.local_storage() {
+                        storage.get_item("dashboard_search_query").ok().flatten().unwrap_or_default()
+                    } else { String::new() }
+                } else { String::new() }
             },
             pending_network_call: None,
             is_loading: true,

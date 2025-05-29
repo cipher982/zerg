@@ -247,6 +247,42 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     search_input_element.set_attribute("id", "agent-search")?;
     search_input_element.set_attribute(ATTR_DATA_TESTID, "agent-search-input")?;
     
+    // Event handler: input
+    {
+        let input_el = search_input_element.clone();
+        let input_cb = Closure::wrap(Box::new(move |event: web_sys::Event| {
+            if let Some(target) = event.target() {
+                if let Ok(input) = target.dyn_into::<web_sys::HtmlInputElement>() {
+                    let value = input.value();
+                    crate::state::dispatch_global_message(crate::messages::Message::UpdateDashboardSearch(value));
+                }
+            }
+        }) as Box<dyn FnMut(_)>);
+        input_el.add_event_listener_with_callback("input", input_cb.as_ref().unchecked_ref())?;
+        input_cb.forget();
+    }
+
+    // Event handler: keydown for ESC to clear
+    {
+        let input_el = search_input_element.clone();
+        let key_cb = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+            if event.key() == "Escape" {
+                if let Ok(input) = event.target().unwrap().dyn_into::<web_sys::HtmlInputElement>() {
+                    input.set_value("");
+                    crate::state::dispatch_global_message(crate::messages::Message::UpdateDashboardSearch(String::new()));
+                }
+            }
+        }) as Box<dyn FnMut(_)>);
+        input_el.add_event_listener_with_callback("keydown", key_cb.as_ref().unchecked_ref())?;
+        key_cb.forget();
+    }
+
+    // Set initial value from AppState
+    {
+        let initial_value = APP_STATE.with(|st| st.borrow().dashboard_search_query.clone());
+        search_input_element.set_value(&initial_value);
+    }
+
     search_container.append_child(&search_icon)?;
     search_container.append_child(&search_input)?;
 
@@ -486,7 +522,18 @@ fn create_agents_table(document: &Document) -> Result<Element, JsValue> {
 fn get_agents_from_app_state() -> Vec<Agent> {
     APP_STATE.with(|state| {
         let state = state.borrow();
+
+        // Prepare search query lower-cased for case-insensitive comparison
+        let search_q = state.dashboard_search_query.trim().to_ascii_lowercase();
+
         state.agents.values()
+            .filter(|api_agent| {
+                if search_q.is_empty() {
+                    true
+                } else {
+                    api_agent.name.to_ascii_lowercase().contains(&search_q)
+                }
+            })
             .filter_map(|api_agent| {
                 // Only include agents that have a valid u32 ID
                 api_agent.id.map(|id| {
@@ -550,13 +597,22 @@ fn populate_agents_table(document: &Document) -> Result<(), JsValue> {
     let agents = get_agents_from_app_state();
     
     if agents.is_empty() {
-        // Display a "No agents found" message
+        // Display empty or no-results message depending on search
         let empty_row = document.create_element("tr")?;
         let empty_cell = document.create_element("td")?;
         let include_owner = APP_STATE.with(|st| st.borrow().dashboard_scope == crate::state::DashboardScope::AllAgents);
         let colspan = if include_owner { 7 } else { 6 };
         empty_cell.set_attribute("colspan", &colspan.to_string())?;
-        empty_cell.set_inner_html("No agents found. Click '+ Create New Agent' to get started.");
+        let no_results_msg = APP_STATE.with(|st| {
+            let query = st.borrow().dashboard_search_query.clone();
+            let q_trim = query.trim();
+            if q_trim.is_empty() {
+                "No agents found. Click '+ Create Agent' to get started.".to_string()
+            } else {
+                format!("No agents match \"{}\".", q_trim)
+            }
+        });
+        empty_cell.set_inner_html(&no_results_msg);
         empty_cell.set_attribute("style", "text-align: center; padding: 30px; color: #888;")?;
         
         empty_row.append_child(&empty_cell)?;
