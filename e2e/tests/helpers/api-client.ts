@@ -36,7 +36,7 @@ export class ApiClient {
   private baseUrl: string;
   private headers: Record<string, string>;
 
-  constructor(baseUrl: string = 'http://localhost:8001') {
+  constructor(baseUrl: string = 'http://localhost:8001') {  // Use backend port 8001
     this.baseUrl = baseUrl;
     this.headers = {
       'Content-Type': 'application/json',

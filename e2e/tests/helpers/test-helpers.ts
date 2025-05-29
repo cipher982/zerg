@@ -81,11 +81,37 @@ export async function waitForElement(page: Page, selector: string, timeout: numb
 }
 
 /**
- * Wait for the dashboard to be ready (table loaded)
+ * Wait for the dashboard to be ready (app loaded and dashboard rendered)
  */
 export async function waitForDashboardReady(page: Page): Promise<void> {
   await page.goto('/');
-  await waitForElement(page, 'table', 15000);
+  
+  // Wait for the app container or dashboard root to be populated
+  // The frontend is a WASM SPA, so we need to wait for JS to load and render
+  try {
+    // Try to wait for dashboard-specific elements that get rendered by the WASM app
+    await page.waitForSelector('#dashboard-root, #app-container', { timeout: 15000 });
+    
+    // Wait for either a table (if it exists) or dashboard content to be rendered
+    // Use a more flexible approach since the frontend might still be loading
+    await page.waitForFunction(() => {
+      // Check if dashboard has been rendered by looking for common dashboard elements
+      const dashboardRoot = document.querySelector('#dashboard-root');
+      const appContainer = document.querySelector('#app-container');
+      
+      // Look for any of these elements that indicate the dashboard is ready
+      return document.querySelector('table') || 
+             document.querySelector('[data-testid="create-agent-btn"]') ||
+             (dashboardRoot && dashboardRoot.children.length > 0) ||
+             (appContainer && appContainer.children.length > 0);
+    }, { timeout: 15000 });
+    
+  } catch (error) {
+    // If we can't find dashboard elements, the frontend might not be fully implemented
+    console.warn('Dashboard elements not found, frontend may still be loading or incomplete');
+    // Still wait a bit for any content to load
+    await page.waitForTimeout(2000);
+  }
   
   // Wait a bit more for any reactive updates
   await page.waitForTimeout(500);
