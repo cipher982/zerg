@@ -1,3 +1,6 @@
+# UTC helper
+# Keep stdlib ``datetime`` for type annotations; runtime *now()* comes from
+# ``utc_now``.
 from datetime import datetime
 from typing import Any
 from typing import Dict
@@ -28,6 +31,7 @@ from zerg.models.models import Trigger
 from zerg.models.models import User
 from zerg.schemas.schemas import RunStatus
 from zerg.schemas.schemas import RunTrigger
+from zerg.utils.time import utc_now
 
 
 def _validate_cron_or_raise(expr: str | None):
@@ -147,7 +151,7 @@ def update_agent(
     if last_error is not None:
         db_agent.last_error = last_error
 
-    db_agent.updated_at = datetime.now()
+    db_agent.updated_at = utc_now()
     db.commit()
     db.refresh(db_agent)
     return db_agent
@@ -403,7 +407,7 @@ def update_thread(
     if memory_strategy is not None:
         db_thread.memory_strategy = memory_strategy
 
-    db_thread.updated_at = datetime.now()
+    db_thread.updated_at = utc_now()
     db.commit()
     db.refresh(db_thread)
     return db_thread
