@@ -189,9 +189,9 @@ The frontend is built with:
   - All components follow accessibility best practices and use constants for consistency
 
 ### Error Handling UI
-- [ ] Implement toast/notification system for errors
-- [ ] Replace `console.error` with user-visible messages
-- [ ] Add error boundaries for component failures
+- [x] Implement toast/notification system for success/error/info
+- [x] Replace `window.alert` uses with toasts (chat send-fail, MCP preset stub, run-history actions)
+- [ ] Add error boundaries for component failures (still TBD)
 - [ ] **Why**: Better user experience
 
 ### Form Validation
@@ -285,20 +285,20 @@ These improvements were identified while fixing table alignment issues and would
 - [ ] **Why**: Column headers already have click handlers, just need implementation
 
 #### Loading States for Actions
-- [ ] Disable buttons during async operations
-- [ ] Show spinner inside button while loading
-- [ ] Prevent double-clicks
-- [ ] Success/error flash messages
-- [ ] **Why**: Better feedback, prevents race conditions
+- [x] Disable buttons during async operations (Run, Delete, Reset DB)
+- [x] Show inline spinner while loading (`set_button_loading` helper)
+- [x] Prevent double-clicks via button `disabled` attr
+- [x] Success/error toast notifications via `toast.rs`
+- **Why**: Better feedback, prevents race conditions
 
 #### Keyboard Shortcuts
-- [ ] `Ctrl/Cmd + K` - Focus search
-- [ ] `N` - New agent
-- [ ] `Arrow keys` - Navigate table rows
-- [ ] `Enter` - Expand/collapse row
-- [ ] `R` - Run selected agent
-- [ ] `?` - Show shortcuts help
-- [ ] **Why**: Power user efficiency
+- [x] `Ctrl/Cmd + K` – Focus search box
+- [ ] `N` – New agent
+- [ ] Arrow keys – Navigate table rows
+- [ ] Enter – Expand/collapse row
+- [ ] `R` – Run selected agent
+- [x] `?` – Show shortcuts help (toast overlay)
+- **Why**: Power user efficiency
 
 ### Visual Enhancements (15-30 minutes each)
 

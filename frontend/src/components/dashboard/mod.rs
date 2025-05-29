@@ -869,6 +869,9 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Run button click handler
     let agent_id = agent.id;
+    let run_btn_html: web_sys::HtmlElement = run_btn.clone().dyn_into().unwrap();
+    let run_btn_rc = std::rc::Rc::new(run_btn_html);
+
     let run_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         event.stop_propagation();
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
@@ -887,17 +890,26 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
             }
         }
 
+        use crate::ui_components::set_button_loading;
+        let btn_clone = run_btn_rc.clone();
+        set_button_loading(&btn_clone, true);
+
         wasm_bindgen_futures::spawn_local(async move {
             match crate::network::api_client::ApiClient::run_agent(agent_id).await {
                 Ok(response) => {
                     web_sys::console::log_1(&format!("Agent {} run triggered: {}", agent_id, response).into());
 
+                    crate::toast::success("Agent queued to run");
+
                     // After the task completes we refresh the specific agent to
                     // pick up the final status and timestamps.
                     crate::network::api_client::reload_agent(agent_id);
+                    set_button_loading(&btn_clone, false);
                 },
                 Err(e) => {
                     web_sys::console::error_1(&format!("Run error for agent {}: {:?}", agent_id, e).into());
+                    crate::toast::error(&format!("Failed to run agent: {:?}", e));
+                    set_button_loading(&btn_clone, false);
                 }
             }
         });
@@ -995,12 +1007,32 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     delete_btn.set_attribute(ATTR_DATA_TESTID, &format!("delete-agent-{}", agent.id))?;
 
     // Delete button click handler
-    let agent_id = agent.id;
+    let agent_id_del = agent.id;
     let delete_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         event.stop_propagation();
-        let window = web_sys::window().expect("no global window exists");
-        if window.confirm_with_message(&format!("Are you sure you want to delete agent {}?", agent_id)).unwrap_or(false) {
-            crate::state::dispatch_global_message(crate::messages::Message::RequestAgentDeletion { agent_id: agent_id.clone() });
+
+        let confirmed = web_sys::window()
+            .and_then(|w| w.confirm_with_message(&format!("Delete agent {}?", agent_id_del)).ok())
+            .unwrap_or(false);
+        if !confirmed { return; }
+
+        use crate::ui_components::set_button_loading;
+
+        if let Some(btn) = event.current_target().and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok()) {
+            set_button_loading(&btn, true);
+
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::network::api_client::ApiClient::delete_agent(agent_id_del).await {
+                    Ok(_) => {
+                        crate::toast::success("Agent deleted");
+                        crate::state::dispatch_global_message(crate::messages::Message::RefreshAgentsFromAPI);
+                    }
+                    Err(e) => {
+                        crate::toast::error(&format!("Delete failed: {:?}", e));
+                    }
+                }
+                set_button_loading(&btn, false);
+            });
         }
     }) as Box<dyn FnMut(_)>);
 
@@ -1169,8 +1201,7 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
             let run_id_for_cb = run.id;
             let cb = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
                 event.stop_propagation();
-                web_sys::window()
-                    .and_then(|w| w.alert_with_message(&format!("Actions menu for run #{} – not yet implemented", run_id_for_cb)).ok());
+                crate::toast::info(&format!("Actions menu for run #{} – not yet implemented", run_id_for_cb));
             }) as Box<dyn FnMut(_)>);
             kebab.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
             cb.forget();
