@@ -224,51 +224,12 @@ impl TopicManager {
 // --- Implement Trait for Real TopicManager --- 
 impl ITopicManager for TopicManager {
     fn subscribe(&mut self, topic: Topic, handler: TopicHandler) -> Result<(), JsValue> {
-        let is_new_topic_subscription = !self.subscribed_topics.contains(&topic);
-
-        self.topic_handlers
-            .entry(topic.clone())
-            .or_default()
-            .push(handler);
-
-        if is_new_topic_subscription {
-            self.subscribed_topics.insert(topic.clone());
-            web_sys::console::log_1(&format!("Sending subscribe request for topic: {}", topic).into());
-            let msg = create_subscribe(vec![topic]);
-            let msg_json = serde_json::to_string(&msg).map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
-            match self.ws_client.try_borrow() {
-                Ok(client) => client.send_serialized_message(&msg_json)?,
-                Err(_) => return Err(JsValue::from_str("Failed to borrow WsClient for subscribe")),
-            }
-        } else {
-            web_sys::console::log_1(&format!("Adding additional handler for already subscribed topic: {}", topic).into());
-        }
-        Ok(())
+        // Delegate to the inherent implementation to avoid duplication.
+        TopicManager::subscribe(self, topic, handler)
     }
 
     fn unsubscribe_handler(&mut self, topic: &Topic, handler_to_remove: &TopicHandler) -> Result<(), JsValue> {
-        let mut removed = false;
-        let mut topic_is_empty = false;
-
-        if let Some(handlers) = self.topic_handlers.get_mut(topic) {
-            if let Some(pos) = handlers.iter().position(|h| Rc::ptr_eq(h, handler_to_remove)) {
-                handlers.remove(pos);
-                web_sys::console::log_1(&format!("Removed specific handler for topic: {}", topic).into());
-                removed = true;
-                topic_is_empty = handlers.is_empty();
-            } else {
-                 web_sys::console::warn_1(&format!("Handler not found for topic {} during unsubscribe.", topic).into());
-            }
-        }
-
-        if removed && topic_is_empty {
-            web_sys::console::log_1(&format!("Last handler removed for topic: {}. Cleaning up subscription.", topic).into());
-            self.topic_handlers.remove(topic);
-            if self.subscribed_topics.remove(topic) {
-                 self.send_unsubscribe_message(topic)?;
-            }
-        }
-        Ok(())
+        TopicManager::unsubscribe_handler(self, topic, handler_to_remove)
     }
 
     // Implement other trait methods if they were added to ITopicManager
