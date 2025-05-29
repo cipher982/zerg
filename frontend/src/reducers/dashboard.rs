@@ -147,6 +147,44 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             }
             true
         }
+
+        // -------------------------------------------------------------
+        // Sort toggling
+        // -------------------------------------------------------------
+        Message::UpdateDashboardSort(key) => {
+            let mut asc = true;
+            if state.dashboard_sort.key == *key {
+                // Same column: toggle direction
+                asc = !state.dashboard_sort.ascending;
+            }
+
+            state.dashboard_sort = crate::state::DashboardSort { key: *key, ascending: asc };
+
+            // Persist to storage
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    let key_str = match key {
+                        crate::state::DashboardSortKey::Name => "name",
+                        crate::state::DashboardSortKey::Status => "status",
+                        crate::state::DashboardSortKey::LastRun => "last_run",
+                        crate::state::DashboardSortKey::NextRun => "next_run",
+                        crate::state::DashboardSortKey::SuccessRate => "success",
+                    };
+                    let _ = storage.set_item("dashboard_sort_key", key_str);
+                    let _ = storage.set_item("dashboard_sort_asc", if asc { "1" } else { "0" });
+                }
+            }
+
+            // Refresh UI
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::dashboard::refresh_dashboard(&doc);
+                    }
+                }
+            })));
+            true
+        }
         _ => false,
     }
 }
