@@ -12,7 +12,7 @@ test('Dashboard live update placeholder', async ({ browser }) => {
   await page1.locator('[data-testid="create-agent-btn"]').click();
 
   // Expect row appears in page2 after some time
-  await expect(page2.locator('tr[data-agent-id]')).toHaveCountGreaterThan(0, { timeout: 15_000 });
+  await expect(page2.locator('tr[data-agent-id]')).toHaveCount(1, { timeout: 15_000 });
 });
 
 test('WebSocket connection placeholder', async () => {
@@ -30,4 +30,3 @@ test('Connection recovery placeholder', async () => {
 test('Presence indicators placeholder', async () => {
   test.skip();
 });
-
