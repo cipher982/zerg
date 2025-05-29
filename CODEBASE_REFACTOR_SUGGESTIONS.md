@@ -100,7 +100,8 @@ operational robustness.
 * **CORS** – ✅ **Fixed (Jun 2025)** – When `AUTH_DISABLED=1` we keep
   wildcard.  Otherwise allowed origins come from `ALLOWED_CORS_ORIGINS`
   (comma-separated) with a safe fallback list, removing the security gap.
-* **Webhook hardening** – clamp body size (e.g. 128 KB) before HMAC validation.
+* **Webhook hardening** – ✅ **Fixed (Jun 2025)** – Gmail webhook now rejects
+  requests larger than 128 KiB (via dependency) before any JWT/HMAC work.
 
 ---
 
