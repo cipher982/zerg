@@ -90,6 +90,7 @@ pub struct WsClientV2 {
     state: Rc<RefCell<ConnectionState>>,
     reconnect_attempt: Rc<RefCell<u32>>,
     ping_interval: Option<i32>, // Store interval ID for cleanup
+    reconnect_timeout: Rc<RefCell<Option<i32>>>, // Store timeout ID so we can cancel on success
 
     // --- NEW Callbacks ---
     on_connect_callback: Option<OnConnectCallback>,
@@ -106,6 +107,7 @@ impl WsClientV2 {
             state: Rc::new(RefCell::new(ConnectionState::Disconnected)),
             reconnect_attempt: Rc::new(RefCell::new(0)),
             ping_interval: None,
+            reconnect_timeout: Rc::new(RefCell::new(None)),
             // Initialize callbacks as None
             on_connect_callback: None,
             on_message_callback: None,
@@ -371,13 +373,18 @@ impl WsClientV2 {
             }
         }) as Box<dyn FnOnce()>);
 
-        // Schedule the reconnection attempt
-        window
+        // Schedule the reconnection attempt and **store** the timeout ID so
+        // that we can cancel it when a manual connect() succeeds before the
+        // timer fires (fixes the memory leak mentioned in the refactor doc).
+
+        let timeout_id = window
             .set_timeout_with_callback_and_timeout_and_arguments_0(
                 reconnect_callback.as_ref().unchecked_ref(),
                 delay as i32,
             )
             .expect("Failed to schedule reconnection");
+
+        *self.reconnect_timeout.borrow_mut() = Some(timeout_id);
 
         // Closure::once requires forget
         reconnect_callback.forget(); 
@@ -397,6 +404,13 @@ impl WsClientV2 {
 
         // Establish the connection and set up handlers
         let ws = self.establish_connection()?;
+
+        // Clear any pending reconnect timeout – we successfully connected
+        if let Some(timeout_id) = self.reconnect_timeout.borrow_mut().take() {
+            if let Some(window) = web_sys::window() {
+                window.clear_timeout_with_handle(timeout_id);
+            }
+        }
 
         // Store WebSocket instance
         self.websocket = Some(ws);
@@ -491,6 +505,7 @@ impl Clone for WsClientV2 {
             state: self.state.clone(),
             reconnect_attempt: self.reconnect_attempt.clone(),
             ping_interval: None, // Don't clone interval ID
+            reconnect_timeout: self.reconnect_timeout.clone(),
             // Callbacks are specifically NOT cloned here. They are managed by Rc.
             on_connect_callback: self.on_connect_callback.clone(),
             on_message_callback: self.on_message_callback.clone(), 
