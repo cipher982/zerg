@@ -21,7 +21,6 @@ Design goals
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 from typing import Dict
 from typing import Sequence
@@ -79,8 +78,9 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
         # Whether this runner/LLM emits per-token chunks – treat env value
         # case-insensitively; anything truthy like "1", "true", "yes" enables
         # the feature.
-        val = os.getenv("LLM_TOKEN_STREAM", "")
-        self.enable_token_stream = val.lower() in {"1", "true", "yes", "on"}
+        from zerg.constants import LLM_TOKEN_STREAM  # late import avoids cycles
+
+        self.enable_token_stream = LLM_TOKEN_STREAM
 
     # ------------------------------------------------------------------
     # Public API – asynchronous

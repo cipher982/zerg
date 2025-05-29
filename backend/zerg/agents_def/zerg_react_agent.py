@@ -23,6 +23,9 @@ from langgraph.graph.message import add_messages
 
 # Local imports (late to avoid circulars)
 from zerg.callbacks.token_stream import WsTokenCallback
+
+# Centralised flags
+from zerg.constants import LLM_TOKEN_STREAM
 from zerg.tools.registry import get_registry
 
 logger = logging.getLogger(__name__)
@@ -43,7 +46,7 @@ def _make_llm(agent_row, tools):
 
     # Feature flag parsed directly from environment – evaluated at runtime so
     # changes in .env are respected on reload without indirection.
-    enable_token_stream = os.getenv("LLM_TOKEN_STREAM", "false").strip().lower() in {"1", "true", "yes", "y"}
+    enable_token_stream = LLM_TOKEN_STREAM
 
     # Attach the token stream callback only when the feature flag is enabled.
     kwargs: dict = {

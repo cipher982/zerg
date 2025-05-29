@@ -61,7 +61,7 @@ operational robustness.
 |-------|--------|
 | **Tool calls claimed “parallel”** | ✅ **Fixed (May 2025)** – `zerg_react_agent.py` now awaits `asyncio.gather(...)` inside the loop and wraps each blocking tool call in `asyncio.to_thread`. |
 | **Graph recompilation** | ✅ **Fixed (Jun 2025)** – `AgentRunner` now caches the compiled runnable in-process keyed by `(agent_id, updated_at, stream_flag)` so subsequent runs skip the expensive compilation. |
-| **Env flag re-parsing** | ⬤ **Partial** – `AgentRunner` now caches the environment lookup once at init-time, but helpers like `_make_llm()` and several test utilities still call `os.getenv()` on every invocation.  Move the flag to `zerg.constants` and import it. |
+| **Env flag re-parsing** | ✅ **Fixed (Jun 2025)** – A single `LLM_TOKEN_STREAM` boolean in `zerg.constants` is parsed once at import-time; `AgentRunner` and `_make_llm()` now import the constant instead of calling `os.getenv()` repeatedly. |
 
 ---
 
