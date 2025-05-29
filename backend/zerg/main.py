@@ -101,9 +101,24 @@ AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 app = FastAPI(redirect_slashes=True)
 
 # Add CORS middleware with all necessary headers
+# ------------------------------------------------------------------
+# CORS – open wildcard in dev/tests, restricted in production unless env
+# overrides it.  `ALLOWED_CORS_ORIGINS` can contain a comma-separated list.
+# ------------------------------------------------------------------
+
+if os.getenv("AUTH_DISABLED", "0") == "1":
+    cors_origins = ["*"]
+else:
+    cors_origins_env = os.getenv("ALLOWED_CORS_ORIGINS", "")
+    if cors_origins_env.strip():
+        cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+    else:
+        # Safe default: only allow same-origin frontend (assumes SPA served on 8002)
+        cors_origins = ["https://your-domain.com", "http://localhost:8002"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8002"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
