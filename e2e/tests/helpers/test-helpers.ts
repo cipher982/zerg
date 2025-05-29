@@ -192,8 +192,8 @@ export async function editAgentViaUI(page: Page, agentId: string, data: {
   // Save changes
   await page.locator('#save-agent').click();
   
-  // Wait for modal to close
-  await expect(page.locator('#agent-modal')).toHaveCount(0, { timeout: 5000 });
+  // Wait for modal to close (hidden)
+  await expect(page.locator('#agent-modal')).not.toBeVisible({ timeout: 5000 });
 }
 
 /**

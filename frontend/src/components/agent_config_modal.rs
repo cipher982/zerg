@@ -888,8 +888,14 @@ impl AgentConfigModal {
                     );
                 }
 
-                // auto-close
-                let _ = Self::close(&document);
+                // auto-close after a short delay to avoid race with state update
+                let doc_clone = document.clone();
+                let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                    Closure::once_into_js(move || {
+                        let _ = Self::close(&doc_clone);
+                    }).as_ref().unchecked_ref(),
+                    150
+                );
             }));
             save_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
             cb.forget();
