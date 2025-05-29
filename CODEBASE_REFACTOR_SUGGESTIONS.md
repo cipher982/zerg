@@ -92,8 +92,11 @@ operational robustness.
 
 ## 7&nbsp;· Cross-cutting
 
-* **Timezone** – every timestamp is naïve.  Return UTC ISO-8601 (`datetime.now(tz=UTC)`)
-  from `get_current_time()` and add `pytz`/`pendulum` to deps.
+* **Timezone** – ✅ **Fixed (Jun 2025)** – `zerg.utils.time.utc_now()` returns
+  aware UTC timestamps; all new code imports this helper.  Built-in tool
+  `get_current_time` now emits UTC ISO-8601 and CRUD helpers use
+  `utc_now()` instead of naïve `datetime.now()`.  Models will be upgraded to
+  `timezone=True` columns in a follow-up migration once deployed.
 * **CORS** – wildcard in dev is fine; honour `AUTH_DISABLED=0` by limiting
   origins in production.
 * **Webhook hardening** – clamp body size (e.g. 128 KB) before HMAC validation.
