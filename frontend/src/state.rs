@@ -213,6 +213,9 @@ pub struct AppState {
 
     /// Current text in the dashboard search box (used for live filtering)
     pub dashboard_search_query: String,
+
+    /// Current sort settings for the dashboard table
+    pub dashboard_sort: DashboardSort,
     // Pending network call data to avoid nested borrows
     pub pending_network_call: Option<(String, String)>,
     // Loading state flags
@@ -347,6 +350,25 @@ pub struct AppState {
     pub mcp_connection_status: HashMap<String, ConnectionStatus>,
 }
 
+// ---------------------------------------------------------------------------
+// Dashboard sort state – column + ascending flag
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DashboardSortKey {
+    Name,
+    Status,
+    LastRun,
+    NextRun,
+    SuccessRate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DashboardSort {
+    pub key: DashboardSortKey,
+    pub ascending: bool,
+}
+
 impl AppState {
     pub fn new() -> Self {
         // --- Initialize WsClientV2 and TopicManager ---
@@ -409,6 +431,8 @@ impl AppState {
                 }
             },
 
+            // Default sort: Name ascending
+
             // Live search starts empty
             dashboard_search_query: {
                 let window = web_sys::window();
@@ -417,6 +441,32 @@ impl AppState {
                         storage.get_item("dashboard_search_query").ok().flatten().unwrap_or_default()
                     } else { String::new() }
                 } else { String::new() }
+            },
+
+            dashboard_sort: {
+                // Try restoring from localStorage
+                let window = web_sys::window();
+                if let Some(w) = window {
+                    if let Ok(Some(storage)) = w.local_storage() {
+                        if let Ok(Some(key)) = storage.get_item("dashboard_sort_key") {
+                            let key_enum = match key.as_str() {
+                                "status" => DashboardSortKey::Status,
+                                "last_run" => DashboardSortKey::LastRun,
+                                "next_run" => DashboardSortKey::NextRun,
+                                "success" => DashboardSortKey::SuccessRate,
+                                _ => DashboardSortKey::Name,
+                            };
+                            let asc = storage.get_item("dashboard_sort_asc").ok().flatten().map(|v| v != "0").unwrap_or(true);
+                            DashboardSort { key: key_enum, ascending: asc }
+                        } else {
+                            DashboardSort { key: DashboardSortKey::Name, ascending: true }
+                        }
+                    } else {
+                        DashboardSort { key: DashboardSortKey::Name, ascending: true }
+                    }
+                } else {
+                    DashboardSort { key: DashboardSortKey::Name, ascending: true }
+                }
             },
             pending_network_call: None,
             is_loading: true,

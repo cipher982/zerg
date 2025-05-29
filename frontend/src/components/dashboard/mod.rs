@@ -491,9 +491,17 @@ fn create_agents_table(document: &Document) -> Result<Element, JsValue> {
         }
         
         // Add click handler for sorting
+        let key_for_msg = match column.as_str() {
+            "Name" => crate::state::DashboardSortKey::Name,
+            "Status" => crate::state::DashboardSortKey::Status,
+            "Last Run" => crate::state::DashboardSortKey::LastRun,
+            "Next Run" => crate::state::DashboardSortKey::NextRun,
+            "Success Rate" => crate::state::DashboardSortKey::SuccessRate,
+            _ => crate::state::DashboardSortKey::Name,
+        };
+
         let sort_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
-            web_sys::console::log_1(&format!("Sort by: {}", column_id).into());
-            // Implement sorting logic
+            crate::state::dispatch_global_message(crate::messages::Message::UpdateDashboardSort(key_for_msg));
         }) as Box<dyn FnMut(_)>);
         
         th.dyn_ref::<HtmlElement>()
@@ -503,6 +511,20 @@ fn create_agents_table(document: &Document) -> Result<Element, JsValue> {
         // We need to forget the closure to avoid it being cleaned up when leaving scope
         sort_callback.forget();
         
+        // Add sort indicator
+        APP_STATE.with(|st| {
+            let st = st.borrow();
+            let sort = &st.dashboard_sort;
+            let is_this = (sort.key == key_for_msg);
+            if is_this {
+                let arrow = if sort.ascending { "▲" } else { "▼" };
+                let indicator_span = document.create_element("span").unwrap();
+                indicator_span.set_class_name("sort-indicator");
+                indicator_span.set_inner_html(arrow);
+                let _ = th.append_child(&indicator_span);
+            }
+        });
+
         header_row.append_child(&th)?;
     }
     
@@ -526,7 +548,7 @@ fn get_agents_from_app_state() -> Vec<Agent> {
         // Prepare search query lower-cased for case-insensitive comparison
         let search_q = state.dashboard_search_query.trim().to_ascii_lowercase();
 
-        state.agents.values()
+    let mut list: Vec<_> = state.agents.values()
             .filter(|api_agent| {
                 if search_q.is_empty() {
                     true
@@ -581,7 +603,42 @@ fn get_agents_from_app_state() -> Vec<Agent> {
                 }
                 })
             })
-            .collect()
+            .collect();
+
+        // Sorting ------------------------------------------------------
+        let sort_cfg = state.dashboard_sort;
+        list.sort_by(|a, b| {
+            use crate::state::DashboardSortKey::*;
+            let ord = match sort_cfg.key {
+                Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                Status => {
+                    let ord_a = match a.status {
+                        AgentStatus::Running => 0,
+                        AgentStatus::Scheduled => 1,
+                        AgentStatus::Idle => 2,
+                        AgentStatus::Paused => 3,
+                        AgentStatus::Error => 4,
+                    };
+                    let ord_b = match b.status {
+                        AgentStatus::Running => 0,
+                        AgentStatus::Scheduled => 1,
+                        AgentStatus::Idle => 2,
+                        AgentStatus::Paused => 3,
+                        AgentStatus::Error => 4,
+                    };
+                    ord_a.cmp(&ord_b)
+                },
+                LastRun => a.last_run.cmp(&b.last_run),
+                NextRun => a.next_run.cmp(&b.next_run),
+                SuccessRate => {
+                    use std::cmp::Ordering;
+                    a.success_rate.partial_cmp(&b.success_rate).unwrap_or(Ordering::Equal)
+                },
+            };
+            if sort_cfg.ascending { ord } else { ord.reverse() }
+        });
+
+        list
     })
 }
 

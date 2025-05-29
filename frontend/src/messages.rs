@@ -172,6 +172,9 @@ pub enum Message {
 
     // Dashboard live search
     UpdateDashboardSearch(String),
+
+    // Toggle / change dashboard sort
+    UpdateDashboardSort(crate::state::DashboardSortKey),
     
     // Database management
     ResetDatabase,                      // Clear all agent data from database
