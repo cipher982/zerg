@@ -4,16 +4,14 @@ import datetime as dt
 from typing import Optional
 
 from zerg.tools.registry import register_tool
+from zerg.utils.time import utc_now
 
 
 @register_tool(name="get_current_time", description="Get the current date and time in ISO-8601 format")
 def get_current_time() -> str:
-    """Return the current date/time as ISO-8601 string.
+    """Return the current UTC date/time as ISO-8601 string (tz-aware)."""
 
-    Returns:
-        Current datetime in ISO-8601 format (e.g., "2025-05-25T17:30:00.123456")
-    """
-    return dt.datetime.now().isoformat()
+    return utc_now().isoformat()
 
 
 @register_tool(name="datetime_diff", description="Calculate the difference between two dates/times")
