@@ -54,4 +54,21 @@ __all__ = [
     "THREADS_PREFIX",
     "MODELS_PREFIX",
     "get_full_path",
+    # Feature flags
+    "LLM_TOKEN_STREAM",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Feature flags (evaluated once at import time)
+# ---------------------------------------------------------------------------
+
+
+def _env_truthy(name: str, default: str | None = None) -> bool:
+    """Return True if *name* env var is set to a truthy value."""
+
+    val = os.getenv(name, default or "").strip().lower()
+    return val in {"1", "true", "yes", "on"}
+
+
+LLM_TOKEN_STREAM: bool = _env_truthy("LLM_TOKEN_STREAM")
