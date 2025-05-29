@@ -221,11 +221,7 @@ impl WsClientV2 {
 
             // --- Call on_connect callback --- 
             if let Some(callback_rc) = &on_connect_cb_clone {
-                if let Ok(mut callback) = callback_rc.try_borrow_mut() {
-                    (*callback)();
-                } else {
-                    web_sys::console::error_1(&"Failed to borrow on_connect callback".into());
-                }
+                (callback_rc.borrow_mut())();
             }
         }) as Box<dyn FnMut(web_sys::Event)>);
         ws.set_onopen(Some(onopen_closure.as_ref().unchecked_ref()));
@@ -258,11 +254,7 @@ impl WsClientV2 {
 
             // --- Call on_disconnect callback --- 
             if let Some(callback_rc) = &on_disconnect_cb_clone_for_close {
-                 if let Ok(mut callback) = callback_rc.try_borrow_mut() {
-                    (*callback)();
-                } else {
-                    web_sys::console::error_1(&"Failed to borrow on_disconnect callback".into());
-                }
+                (callback_rc.borrow_mut())();
             }
 
             // Check if reconnection should be attempted
@@ -306,13 +298,7 @@ impl WsClientV2 {
                                 _ => {
                                     // Forward all other messages to topic manager via callback
                                     if let Some(callback_rc) = &on_message_cb_clone {
-                                        if let Ok(mut callback) = callback_rc.try_borrow_mut() {
-                                            (*callback)(parsed_value);
-                                        } else {
-                                            web_sys::console::error_1(
-                                                &"Failed to borrow on_message callback".into()
-                                            );
-                                        }
+                                        (callback_rc.borrow_mut())(parsed_value);
                                     }
                                 }
                             }
