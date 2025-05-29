@@ -58,6 +58,7 @@ mod models_config;
 mod pages;
 mod scheduling;
 mod utils;
+mod toast;
 mod dom_utils;
 mod auth;
 mod ui_components;

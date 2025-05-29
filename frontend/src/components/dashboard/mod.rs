@@ -429,8 +429,8 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                         }
                     },
                     Err(e) => {
+                        crate::toast::error(&format!("Failed to reset database: {:?}", e));
                         web_sys::console::error_1(&format!("Error resetting database: {:?}", e).into());
-                        window.alert_with_message(&format!("Error resetting database: {:?}", e)).unwrap();
                     }
                 }
             });
@@ -515,7 +515,7 @@ fn create_agents_table(document: &Document) -> Result<Element, JsValue> {
         APP_STATE.with(|st| {
             let st = st.borrow();
             let sort = &st.dashboard_sort;
-            let is_this = (sort.key == key_for_msg);
+            let is_this = sort.key == key_for_msg;
             if is_this {
                 let arrow = if sort.ascending { "▲" } else { "▼" };
                 let indicator_span = document.create_element("span").unwrap();
