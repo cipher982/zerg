@@ -16,7 +16,8 @@ use crate::constants::{
     // DEFAULT_THREAD_TITLE (unused)
 };
 use wasm_bindgen::closure::Closure;
-use crate::ui_components::{ButtonConfig, create_button, create_danger_button};
+use crate::ui_components::{ButtonConfig, create_button, create_danger_button, set_button_loading};
+use crate::toast;
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -384,6 +385,8 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     reset_btn.set_class_name("btn-danger reset-db-btn");
     
     // Reset button click handler
+    // we'll fetch the button by id when toggling loading
+
     let reset_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&"Reset database requested".into());
         
@@ -398,6 +401,11 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
             use crate::network::ApiClient;
             
             spawn_local(async move {
+                // show spinner
+                if let Some(el) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("reset-db-btn")) {
+                    set_button_loading(&el, true);
+                }
+
                 match ApiClient::reset_database().await {
                     Ok(response) => {
                         web_sys::console::log_1(&format!("Database reset successful: {}", response).into());
@@ -405,6 +413,8 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                         // Use message-based state update instead of direct mutation
                         crate::state::dispatch_global_message(crate::messages::Message::ResetDatabase);
                         
+                        toast::success("Database reset successfully");
+
                         // Force a hard refresh without showing another popup
                         let window = web_sys::window().unwrap();
                         if let Some(document) = window.document() {
@@ -426,12 +436,21 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                                 &js_sys::Array::new()
                             );
                             reload_callback.forget();
+
+                            if let Some(el) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("reset-db-btn")) {
+                                set_button_loading(&el, false);
+                            }
                         }
                     },
                     Err(e) => {
-                        crate::toast::error(&format!("Failed to reset database: {:?}", e));
+                        toast::error(&format!("Failed to reset database: {:?}", e));
                         web_sys::console::error_1(&format!("Error resetting database: {:?}", e).into());
                     }
+                }
+
+                // restore button
+                if let Some(el) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("reset-db-btn")) {
+                    set_button_loading(&el, false);
                 }
             });
         }
