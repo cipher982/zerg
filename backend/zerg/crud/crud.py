@@ -27,6 +27,21 @@ from zerg.models.models import User
 from zerg.schemas.schemas import RunStatus
 from zerg.schemas.schemas import RunTrigger
 
+# Cron validation helper
+from apscheduler.triggers.cron import CronTrigger
+
+
+def _validate_cron_or_raise(expr: str | None):
+    """Raise ``ValueError`` if *expr* is not a valid crontab string."""
+
+    if expr is None:
+        return
+
+    try:
+        CronTrigger.from_crontab(expr)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"Invalid cron expression: {expr} ({exc})") from exc
+
 
 # Agent CRUD operations
 def get_agents(
@@ -69,6 +84,9 @@ def create_agent(
 
     ``owner_id`` is **required** – every agent belongs to exactly one user.
     """
+
+    # Validate cron expression if provided
+    _validate_cron_or_raise(schedule)
 
     db_agent = Agent(
         owner_id=owner_id,
@@ -119,6 +137,7 @@ def update_agent(
     if status is not None:
         db_agent.status = status
     if schedule is not None:
+        _validate_cron_or_raise(schedule)
         db_agent.schedule = schedule
     if config is not None:
         db_agent.config = config
