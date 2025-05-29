@@ -20,8 +20,11 @@ if [[ ! -d "node_modules" ]]; then
     npm install
 fi
 
+# Reduce backend noise unless caller overrode LOG_LEVEL already
+export LOG_LEVEL="${LOG_LEVEL:-WARNING}"
+
 # Run Playwright tests
-echo "[run_e2e_tests] Running Playwright tests..." >&2
+echo "[run_e2e_tests] Running Playwright tests with LOG_LEVEL=$LOG_LEVEL ..." >&2
 npx playwright test
 
 echo "[run_e2e_tests] ✔ E2E tests completed successfully" >&2
