@@ -10,6 +10,8 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Suppress warnings about unused variants
 pub enum Message {
+    /// Enable or disable global keyboard shortcuts (“Power Mode”)
+    SetPowerMode(bool),
     // View switching
     ToggleView(ActiveView),              // Switch between Dashboard and Canvas
     
@@ -169,6 +171,10 @@ pub enum Message {
         node_id: String,
         status: String,
     },
+
+
+    // Toggle / change dashboard sort
+    UpdateDashboardSort(crate::state::DashboardSortKey),
     
     // Database management
     ResetDatabase,                      // Clear all agent data from database

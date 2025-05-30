@@ -2,6 +2,7 @@
 
 use crate::messages::{Message, Command};
 use crate::state::AppState;
+use crate::toast;
 
 /// Handles MCP/integration-related messages. Returns true if the message was handled.
 pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) -> bool {
@@ -193,8 +194,8 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             web_sys::console::log_1(&format!("ConnectMCPPreset for agent {}: {}", agent_id, preset_id).into());
             let preset_id_cloned = preset_id.clone();
             commands.push(Command::UpdateUI(Box::new(move || {
-                if let Some(win) = web_sys::window() {
-                    let _ = win.alert_with_message(&format!("Connect to {} preset (auth flow to be implemented)", preset_id_cloned));
+                if web_sys::window().is_some() {
+                    crate::toast::info(&format!("Connect to {} preset (auth flow coming soon)", preset_id_cloned));
                 }
             })));
             true

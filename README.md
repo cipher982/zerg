@@ -326,6 +326,15 @@ This architecture creates a seamless real-time experience: when an agent is crea
 • **SEO-Friendly Pre‑Rendering**  
   - A Node + Playwright system captures static HTML snapshots, serving them to web crawlers.  
 
+• **UX polish (June 2025)**  
+  - Built-in toast notification system (`toast.rs`) surfaces success / error / info without blocking modals.  
+  - Power-user keyboard shortcuts in the Dashboard:  
+    • `Ctrl/⌘ + K` focus search  
+    • `N` create a new agent  
+    • `R` run the focused row  
+    • `↑ / ↓ / Enter` full keyboard navigation & expand/collapse rows  
+  - Fully responsive Dashboard – below 768 px the table transforms into mobile-friendly cards.  
+
 • **Canvas Editor written in Rust/wgpu‑free 2‑D renderer**  
   - Custom rendering for efficient performance and fluid user interactions.
 
@@ -432,6 +441,10 @@ After launching the frontend (http://localhost:8002):
 1. **Dashboard**  
    - The default tab shows "Agent Dashboard," with existing agents in a table.  
    - Each card shows agent name, status, quick actions (run, pause, edit), logs if available.
+   - Live-search (top-right) filters as you type – `ESC` clears the query.  
+   - Click any column header to sort; indicator ▲/▼ reflects direction.  
+   - Keyboard shortcuts: `N` new agent, `R` run selected row, `↑/↓` move focus, `Enter` expand row.  
+   - On small screens (< 768 px) the table auto-converts to a card list for seamless mobile use.  
 
 2. **Canvas Editor**  
    - Switch to "Canvas Editor" from the top tabs.  

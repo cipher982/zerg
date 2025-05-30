@@ -16,7 +16,8 @@ use crate::constants::{
     // DEFAULT_THREAD_TITLE (unused)
 };
 use wasm_bindgen::closure::Closure;
-use crate::ui_components::{ButtonConfig, create_button, create_danger_button};
+use crate::ui_components::{ButtonConfig, create_button, create_danger_button, set_button_loading};
+use crate::toast;
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -231,24 +232,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     let header = document.create_element("div")?;
     header.set_class_name("dashboard-header");
     
-    // Search box
-    let search_container = document.create_element("div")?;
-    search_container.set_class_name("search-container");
-    
-    let search_icon = document.create_element("span")?;
-    search_icon.set_class_name("search-icon");
-    search_icon.set_inner_html("🔍");
-    
-    let search_input = document.create_element("input")?;
-    search_input.set_class_name("search-input");
-    let search_input_element = search_input.dyn_ref::<web_sys::HtmlInputElement>()
-        .ok_or(JsValue::from_str("Could not cast to HtmlInputElement"))?;
-    search_input_element.set_placeholder("Search agents...");
-    search_input_element.set_attribute("id", "agent-search")?;
-    search_input_element.set_attribute(ATTR_DATA_TESTID, "agent-search-input")?;
-    
-    search_container.append_child(&search_icon)?;
-    search_container.append_child(&search_input)?;
+
 
 
     // -------------------------------------------------------------------
@@ -306,7 +290,6 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     // Finally, assemble header children
     // -------------------------------------------------------------------
 
-    header.append_child(&search_container)?;
     header.append_child(&scope_select)?;
 
     // -------------------------------------------------------------------
@@ -348,6 +331,8 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     reset_btn.set_class_name("btn-danger reset-db-btn");
     
     // Reset button click handler
+    // we'll fetch the button by id when toggling loading
+
     let reset_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         web_sys::console::log_1(&"Reset database requested".into());
         
@@ -362,6 +347,11 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
             use crate::network::ApiClient;
             
             spawn_local(async move {
+                // show spinner
+                if let Some(el) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("reset-db-btn")) {
+                    set_button_loading(&el, true);
+                }
+
                 match ApiClient::reset_database().await {
                     Ok(response) => {
                         web_sys::console::log_1(&format!("Database reset successful: {}", response).into());
@@ -369,6 +359,8 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                         // Use message-based state update instead of direct mutation
                         crate::state::dispatch_global_message(crate::messages::Message::ResetDatabase);
                         
+                        toast::success("Database reset successfully");
+
                         // Force a hard refresh without showing another popup
                         let window = web_sys::window().unwrap();
                         if let Some(document) = window.document() {
@@ -390,12 +382,21 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                                 &js_sys::Array::new()
                             );
                             reload_callback.forget();
+
+                            if let Some(el) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("reset-db-btn")) {
+                                set_button_loading(&el, false);
+                            }
                         }
                     },
                     Err(e) => {
+                        toast::error(&format!("Failed to reset database: {:?}", e));
                         web_sys::console::error_1(&format!("Error resetting database: {:?}", e).into());
-                        window.alert_with_message(&format!("Error resetting database: {:?}", e)).unwrap();
                     }
+                }
+
+                // restore button
+                if let Some(el) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("reset-db-btn")) {
+                    set_button_loading(&el, false);
                 }
             });
         }
@@ -455,9 +456,17 @@ fn create_agents_table(document: &Document) -> Result<Element, JsValue> {
         }
         
         // Add click handler for sorting
+        let key_for_msg = match column.as_str() {
+            "Name" => crate::state::DashboardSortKey::Name,
+            "Status" => crate::state::DashboardSortKey::Status,
+            "Last Run" => crate::state::DashboardSortKey::LastRun,
+            "Next Run" => crate::state::DashboardSortKey::NextRun,
+            "Success Rate" => crate::state::DashboardSortKey::SuccessRate,
+            _ => crate::state::DashboardSortKey::Name,
+        };
+
         let sort_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
-            web_sys::console::log_1(&format!("Sort by: {}", column_id).into());
-            // Implement sorting logic
+            crate::state::dispatch_global_message(crate::messages::Message::UpdateDashboardSort(key_for_msg));
         }) as Box<dyn FnMut(_)>);
         
         th.dyn_ref::<HtmlElement>()
@@ -467,6 +476,20 @@ fn create_agents_table(document: &Document) -> Result<Element, JsValue> {
         // We need to forget the closure to avoid it being cleaned up when leaving scope
         sort_callback.forget();
         
+        // Add sort indicator
+        APP_STATE.with(|st| {
+            let st = st.borrow();
+            let sort = &st.dashboard_sort;
+            let is_this = sort.key == key_for_msg;
+            if is_this {
+                let arrow = if sort.ascending { "▲" } else { "▼" };
+                let indicator_span = document.create_element("span").unwrap();
+                indicator_span.set_class_name("sort-indicator");
+                indicator_span.set_inner_html(arrow);
+                let _ = th.append_child(&indicator_span);
+            }
+        });
+
         header_row.append_child(&th)?;
     }
     
@@ -481,12 +504,11 @@ fn create_agents_table(document: &Document) -> Result<Element, JsValue> {
     Ok(table)
 }
 
-// Helper function to extract agents from APP_STATE and convert them
-// This function now directly uses the u32 ID and skips agents without one.
 fn get_agents_from_app_state() -> Vec<Agent> {
     APP_STATE.with(|state| {
         let state = state.borrow();
-        state.agents.values()
+
+        let mut list: Vec<_> = state.agents.values()
             .filter_map(|api_agent| {
                 // Only include agents that have a valid u32 ID
                 api_agent.id.map(|id| {
@@ -534,7 +556,42 @@ fn get_agents_from_app_state() -> Vec<Agent> {
                 }
                 })
             })
-            .collect()
+            .collect();
+
+        // Sorting ------------------------------------------------------
+        let sort_cfg = state.dashboard_sort;
+        list.sort_by(|a, b| {
+            use crate::state::DashboardSortKey::*;
+            let ord = match sort_cfg.key {
+                Name => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                Status => {
+                    let ord_a = match a.status {
+                        AgentStatus::Running => 0,
+                        AgentStatus::Scheduled => 1,
+                        AgentStatus::Idle => 2,
+                        AgentStatus::Paused => 3,
+                        AgentStatus::Error => 4,
+                    };
+                    let ord_b = match b.status {
+                        AgentStatus::Running => 0,
+                        AgentStatus::Scheduled => 1,
+                        AgentStatus::Idle => 2,
+                        AgentStatus::Paused => 3,
+                        AgentStatus::Error => 4,
+                    };
+                    ord_a.cmp(&ord_b)
+                },
+                LastRun => a.last_run.cmp(&b.last_run),
+                NextRun => a.next_run.cmp(&b.next_run),
+                SuccessRate => {
+                    use std::cmp::Ordering;
+                    a.success_rate.partial_cmp(&b.success_rate).unwrap_or(Ordering::Equal)
+                },
+            };
+            if sort_cfg.ascending { ord } else { ord.reverse() }
+        });
+
+        list
     })
 }
 
@@ -550,14 +607,59 @@ fn populate_agents_table(document: &Document) -> Result<(), JsValue> {
     let agents = get_agents_from_app_state();
     
     if agents.is_empty() {
-        // Display a "No agents found" message
+        // Display empty or no-results message depending on search
         let empty_row = document.create_element("tr")?;
         let empty_cell = document.create_element("td")?;
         let include_owner = APP_STATE.with(|st| st.borrow().dashboard_scope == crate::state::DashboardScope::AllAgents);
         let colspan = if include_owner { 7 } else { 6 };
         empty_cell.set_attribute("colspan", &colspan.to_string())?;
-        empty_cell.set_inner_html("No agents found. Click '+ Create New Agent' to get started.");
-        empty_cell.set_attribute("style", "text-align: center; padding: 30px; color: #888;")?;
+        let no_results_msg = "No agents found. Click '+ Create Agent' to get started.".to_string();
+        // Build empty-state container with illustration and CTA button.
+        let wrapper = document.create_element("div")?;
+        wrapper.set_class_name("empty-state");
+
+        // Simple robot illustration (emoji fallback for now)
+        let illustration = document.create_element("div")?;
+        illustration.set_class_name("empty-state-illustration");
+        illustration.set_inner_html("🤖");
+        wrapper.append_child(&illustration)?;
+
+        // Message text
+        let msg_el = document.create_element("p")?;
+        msg_el.set_class_name("empty-state-text");
+        msg_el.set_inner_html(&no_results_msg);
+        wrapper.append_child(&msg_el)?;
+
+        // CTA button (Create Agent)
+        let cta_btn = crate::ui_components::create_button(
+            document,
+            crate::ui_components::ButtonConfig::new("Create Agent")
+                .with_class("create-agent-button")
+                .with_testid("create-agent-btn-empty"),
+        )?;
+
+        // Attach same handler as the header create button: dispatch RequestCreateAgent
+        let click_cb = wasm_bindgen::closure::Closure::wrap(Box::new(move || {
+            let agent_name = format!(
+                "{} {}",
+                crate::constants::DEFAULT_AGENT_NAME,
+                (js_sys::Math::random() * 100.0).round()
+            );
+            crate::state::dispatch_global_message(crate::messages::Message::RequestCreateAgent {
+                name: agent_name,
+                system_instructions: crate::constants::DEFAULT_SYSTEM_INSTRUCTIONS.to_string(),
+                task_instructions: crate::constants::DEFAULT_TASK_INSTRUCTIONS.to_string(),
+            });
+        }) as Box<dyn FnMut()>);
+        cta_btn
+            .dyn_ref::<web_sys::HtmlElement>()
+            .unwrap()
+            .set_onclick(Some(click_cb.as_ref().unchecked_ref()));
+        click_cb.forget();
+
+        wrapper.append_child(&cta_btn)?;
+
+        empty_cell.append_child(&wrapper)?;
         
         empty_row.append_child(&empty_cell)?;
         tbody.append_child(&empty_row)?;
@@ -603,8 +705,12 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Name cell
     let name_cell = document.create_element("td")?;
+    name_cell.set_attribute("data-label", "Name")?;
     name_cell.set_inner_html(&agent.name);
     row.append_child(&name_cell)?;
+
+    // Make row focusable for keyboard nav
+    row.set_attribute("tabindex", "0")?;
 
     // Owner cell (only in AllAgents scope)
     use crate::state::DashboardScope;
@@ -612,6 +718,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
 
     if include_owner {
         let owner_cell = document.create_element("td")?;
+            owner_cell.set_attribute("data-label", "Owner")?;
         owner_cell.set_class_name("owner-cell");
 
         if let Some(label) = &agent.owner_label {
@@ -653,6 +760,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Status cell
     let status_cell = document.create_element("td")?;
+    status_cell.set_attribute("data-label", "Status")?;
     let status_indicator = document.create_element("span")?;
     status_indicator.set_class_name(&format!("status-indicator status-{:?}", agent.status).to_lowercase());
     
@@ -705,21 +813,25 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Last Run cell
     let last_run_cell = document.create_element("td")?;
+    last_run_cell.set_attribute("data-label", "Last Run")?;
     last_run_cell.set_inner_html(&agent.last_run.as_deref().unwrap_or("-"));
     row.append_child(&last_run_cell)?;
     
     // Next Run cell
     let next_run_cell = document.create_element("td")?;
+    next_run_cell.set_attribute("data-label", "Next Run")?;
     next_run_cell.set_inner_html(&agent.next_run.as_deref().unwrap_or("-"));
     row.append_child(&next_run_cell)?;
     
     // Success Rate cell
     let success_cell = document.create_element("td")?;
+    success_cell.set_attribute("data-label", "Success Rate")?;
     success_cell.set_inner_html(&format!("{:.1}% ({})", agent.success_rate, agent.run_count));
     row.append_child(&success_cell)?;
     
     // Actions cell
     let actions_cell = document.create_element("td")?;
+    actions_cell.set_attribute("data-label", "Actions")?;
     actions_cell.set_class_name("actions-cell");
     
     // Create inner container for buttons
@@ -737,6 +849,9 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Run button click handler
     let agent_id = agent.id;
+    let run_btn_html: web_sys::HtmlElement = run_btn.clone().dyn_into().unwrap();
+    let run_btn_rc = std::rc::Rc::new(run_btn_html);
+
     let run_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         event.stop_propagation();
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
@@ -755,17 +870,26 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
             }
         }
 
+        use crate::ui_components::set_button_loading;
+        let btn_clone = run_btn_rc.clone();
+        set_button_loading(&btn_clone, true);
+
         wasm_bindgen_futures::spawn_local(async move {
             match crate::network::api_client::ApiClient::run_agent(agent_id).await {
                 Ok(response) => {
                     web_sys::console::log_1(&format!("Agent {} run triggered: {}", agent_id, response).into());
 
+                    crate::toast::success("Agent queued to run");
+
                     // After the task completes we refresh the specific agent to
                     // pick up the final status and timestamps.
                     crate::network::api_client::reload_agent(agent_id);
+                    set_button_loading(&btn_clone, false);
                 },
                 Err(e) => {
                     web_sys::console::error_1(&format!("Run error for agent {}: {:?}", agent_id, e).into());
+                    crate::toast::error(&format!("Failed to run agent: {:?}", e));
+                    set_button_loading(&btn_clone, false);
                 }
             }
         });
@@ -863,12 +987,32 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     delete_btn.set_attribute(ATTR_DATA_TESTID, &format!("delete-agent-{}", agent.id))?;
 
     // Delete button click handler
-    let agent_id = agent.id;
+    let agent_id_del = agent.id;
     let delete_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         event.stop_propagation();
-        let window = web_sys::window().expect("no global window exists");
-        if window.confirm_with_message(&format!("Are you sure you want to delete agent {}?", agent_id)).unwrap_or(false) {
-            crate::state::dispatch_global_message(crate::messages::Message::RequestAgentDeletion { agent_id: agent_id.clone() });
+
+        let confirmed = web_sys::window()
+            .and_then(|w| w.confirm_with_message(&format!("Delete agent {}?", agent_id_del)).ok())
+            .unwrap_or(false);
+        if !confirmed { return; }
+
+        use crate::ui_components::set_button_loading;
+
+        if let Some(btn) = event.current_target().and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok()) {
+            set_button_loading(&btn, true);
+
+            wasm_bindgen_futures::spawn_local(async move {
+                match crate::network::api_client::ApiClient::delete_agent(agent_id_del).await {
+                    Ok(_) => {
+                        crate::toast::success("Agent deleted");
+                        crate::state::dispatch_global_message(crate::messages::Message::RefreshAgentsFromAPI);
+                    }
+                    Err(e) => {
+                        crate::toast::error(&format!("Delete failed: {:?}", e));
+                    }
+                }
+                set_button_loading(&btn, false);
+            });
         }
     }) as Box<dyn FnMut(_)>);
 
@@ -882,6 +1026,59 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     // Append the inner container to the cell
     actions_cell.append_child(&actions_inner)?;
     row.append_child(&actions_cell)?;
+
+    // Keyboard navigation: Up/Down moves between sibling rows, Enter toggles expand
+    let row_toggle_id = agent.id;
+    let key_cb = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+        let key = event.key();
+        match key.as_str() {
+            "ArrowDown" | "ArrowUp" => {
+                event.prevent_default();
+                if let Some(current) = event.target().and_then(|t| t.dyn_into::<web_sys::HtmlElement>().ok()) {
+                    if let Some(parent) = current.parent_element() {
+                        let rows = parent.children();
+                        let len = rows.length();
+                        let mut idx = 0;
+                        for i in 0..len {
+                            if let Some(r) = rows.item(i) {
+                                if r.is_same_node(Some(&current)) { idx = i; break; }
+                            }
+                        }
+                        let new_idx = if key == "ArrowDown" {
+                            std::cmp::min(len-1, idx+1)
+                        } else {
+                            if idx==0 {0} else {idx-1}
+                        };
+                        if let Some(next_row) = rows.item(new_idx) {
+                            let _ = next_row.dyn_ref::<web_sys::HtmlElement>().unwrap().focus();
+                        }
+                    }
+                }
+            }
+            "Enter" => {
+                // simulate row click to toggle expand
+                event.prevent_default();
+                    crate::state::APP_STATE.with(|state_ref| {
+                    let mut s = state_ref.borrow_mut();
+                    if s.expanded_agent_rows.contains(&row_toggle_id) {
+                        s.expanded_agent_rows.remove(&row_toggle_id);
+                    } else {
+                        s.expanded_agent_rows.clear();
+                        s.expanded_agent_rows.insert(row_toggle_id);
+                    }
+                });
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::dashboard::refresh_dashboard(&doc);
+                }
+            }
+            _ => {}
+        }
+    }) as Box<dyn FnMut(_)>);
+
+    row.dyn_ref::<HtmlElement>()
+        .unwrap()
+        .add_event_listener_with_callback("keydown", key_cb.as_ref().unchecked_ref())?;
+    key_cb.forget();
 
     // ---------------- Toggle detail expansion on row click ----------------
     let toggle_id = agent.id;
@@ -1037,8 +1234,7 @@ fn create_agent_detail_row(document: &Document, agent: &Agent) -> Result<Element
             let run_id_for_cb = run.id;
             let cb = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
                 event.stop_propagation();
-                web_sys::window()
-                    .and_then(|w| w.alert_with_message(&format!("Actions menu for run #{} – not yet implemented", run_id_for_cb)).ok());
+                crate::toast::info(&format!("Actions menu for run #{} – not yet implemented", run_id_for_cb));
             }) as Box<dyn FnMut(_)>);
             kebab.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
             cb.forget();

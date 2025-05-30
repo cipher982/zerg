@@ -152,6 +152,8 @@ pub enum ConnectionStatus {
 
 // Store global application state
 pub struct AppState {
+    /// If true, global keyboard shortcuts (power mode) are enabled
+    pub power_mode: bool,
     // Agent domain data (business logic)
     pub agents: HashMap<u32, ApiAgent>,        // Backend agent data
     pub agents_on_canvas: HashSet<u32>,        // Track which agents are already placed on canvas
@@ -210,6 +212,10 @@ pub struct AppState {
 
     /// Current filter applied to the dashboard (persisted in localStorage).
     pub dashboard_scope: DashboardScope,
+
+
+    /// Current sort settings for the dashboard table
+    pub dashboard_sort: DashboardSort,
     // Pending network call data to avoid nested borrows
     pub pending_network_call: Option<(String, String)>,
     // Loading state flags
@@ -342,6 +348,26 @@ pub struct AppState {
     
     /// Connection status for each MCP server (key: "agent_id:server_name")
     pub mcp_connection_status: HashMap<String, ConnectionStatus>,
+    
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard sort state – column + ascending flag
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DashboardSortKey {
+    Name,
+    Status,
+    LastRun,
+    NextRun,
+    SuccessRate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DashboardSort {
+    pub key: DashboardSortKey,
+    pub ascending: bool,
 }
 
 impl AppState {
@@ -403,6 +429,35 @@ impl AppState {
                     }
                 } else {
                     DashboardScope::MyAgents
+                }
+            },
+
+            // Default sort: Name ascending
+
+
+            dashboard_sort: {
+                // Try restoring from localStorage
+                let window = web_sys::window();
+                if let Some(w) = window {
+                    if let Ok(Some(storage)) = w.local_storage() {
+                        if let Ok(Some(key)) = storage.get_item("dashboard_sort_key") {
+                            let key_enum = match key.as_str() {
+                                "status" => DashboardSortKey::Status,
+                                "last_run" => DashboardSortKey::LastRun,
+                                "next_run" => DashboardSortKey::NextRun,
+                                "success" => DashboardSortKey::SuccessRate,
+                                _ => DashboardSortKey::Name,
+                            };
+                            let asc = storage.get_item("dashboard_sort_asc").ok().flatten().map(|v| v != "0").unwrap_or(true);
+                            DashboardSort { key: key_enum, ascending: asc }
+                        } else {
+                            DashboardSort { key: DashboardSortKey::Name, ascending: true }
+                        }
+                    } else {
+                        DashboardSort { key: DashboardSortKey::Name, ascending: true }
+                    }
+                } else {
+                    DashboardSort { key: DashboardSortKey::Name, ascending: true }
                 }
             },
             pending_network_call: None,
@@ -480,6 +535,7 @@ impl AppState {
             agent_mcp_configs: HashMap::new(),
             available_mcp_tools: HashMap::new(),
             mcp_connection_status: HashMap::new(),
+            power_mode: false,
         }
     }
 
