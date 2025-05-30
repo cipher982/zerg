@@ -72,3 +72,19 @@ def _env_truthy(name: str, default: str | None = None) -> bool:
 
 
 LLM_TOKEN_STREAM: bool = _env_truthy("LLM_TOKEN_STREAM")
+
+
+# ---------------------------------------------------------------------------
+# Test helper – allow reloading env driven flags without re-importing module
+# ---------------------------------------------------------------------------
+
+
+def _refresh_feature_flags() -> None:  # pragma: no cover – test helper
+    """Re-evaluate environment variables and refresh module-level flags."""
+
+    global LLM_TOKEN_STREAM  # noqa: PLW0603 – module global
+
+    LLM_TOKEN_STREAM = _env_truthy("LLM_TOKEN_STREAM")
+
+
+__all__.append("_refresh_feature_flags")

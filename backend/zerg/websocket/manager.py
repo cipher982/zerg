@@ -187,6 +187,26 @@ class TopicConnectionManager:
         except asyncio.CancelledError:  # graceful shutdown
             logger.info("TopicConnectionManager cleanup task cancelled")
 
+    # ------------------------------------------------------------------
+    # Graceful shutdown helper – called from FastAPI lifespan
+    # ------------------------------------------------------------------
+
+    async def shutdown(self) -> None:  # noqa: D401 – simple helper
+        """Cancel background heartbeat task and close websockets."""
+
+        if self._cleanup_task and not self._cleanup_task.done():
+            self._cleanup_task.cancel()
+            try:
+                await self._cleanup_task
+            except Exception:  # pragma: no cover – swallowed
+                pass
+        # Close active websockets
+        for ws in list(self.active_connections.values()):
+            try:
+                await ws.close()
+            except Exception:
+                pass
+
     async def broadcast_to_topic(self, topic: str, message: Dict[str, Any]) -> None:
         """Broadcast a message to all clients subscribed to a topic.
 

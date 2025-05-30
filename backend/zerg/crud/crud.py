@@ -476,6 +476,9 @@ def create_thread_message(
     if commit:
         db.commit()
         db.refresh(db_message)
+    else:
+        # Ensure primary key is assigned so callers can reference ``row.id``
+        db.flush([db_message])
     return db_message
 
 

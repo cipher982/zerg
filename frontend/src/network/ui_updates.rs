@@ -100,6 +100,13 @@ pub fn show_auth_error_banner() {
         el.set_class_name("error-banner");
         el.set_inner_html("Authentication required – please sign in again.");
 
+        // Inline minimal styling so the banner is visible even without
+        // external CSS bundles.
+        let style = "position:fixed;top:0;left:0;width:100%;padding:6px 10px;\
+                     background:#c00;color:#fff;font-weight:600;z-index:9999;\
+                     text-align:center;box-shadow:0 2px 4px rgba(0,0,0,0.2);";
+        let _ = el.set_attribute("style", style);
+
         // Insert right after <body> start so it spans full width.
         if let Some(body) = document.body() {
             // Insert as first child so it sits above any other content.
@@ -113,6 +120,11 @@ pub fn show_auth_error_banner() {
         el
     };
 
-    // Ensure the banner is visible (it may have been hidden earlier).
-    banner_el.set_attribute("style", "display: block;").ok();
+    // Ensure the banner is visible (in case a previous call hid it).
+    if let Some(mut existing) = banner_el.get_attribute("style") {
+        if !existing.contains("display") {
+            existing.push_str("display:block;");
+            let _ = banner_el.set_attribute("style", &existing);
+        }
+    }
 }

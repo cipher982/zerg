@@ -100,6 +100,14 @@ AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 # Create FastAPI APP
 app = FastAPI(redirect_slashes=True)
 
+
+@app.on_event("shutdown")
+async def _shutdown_ws_manager():  # noqa: D401 – internal
+    from zerg.websocket.manager import topic_manager
+
+    await topic_manager.shutdown()
+
+
 # Add CORS middleware with all necessary headers
 # ------------------------------------------------------------------
 # CORS – open wildcard in dev/tests, restricted in production unless env
