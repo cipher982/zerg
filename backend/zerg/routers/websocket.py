@@ -69,15 +69,19 @@ async def websocket_endpoint(
 
     db_for_auth = get_websocket_session()
     try:
-        try:
-            user = validate_ws_jwt(token, db_for_auth)
-            logger.debug("WebSocket auth succeeded for user %s (client %s)", getattr(user, "id", "?"), client_id)
-        except Exception as exc:  # pragma: no cover – handled below
-            logger.info("WebSocket auth failed (%s) – closing connection", exc)
-            await websocket.close(code=4401, reason="Unauthorized")
-            return
+        user = validate_ws_jwt(token, db_for_auth)
     finally:
         db_for_auth.close()
+
+    if user is None:
+        # Auth failed and AUTH_DISABLED is *not* enabled.  We close the
+        # connection *before* accepting the handshake so the browser sees a
+        # clean 4401 closure code.  (4401 chosen to mirror HTTP 401.)
+        logger.info("WebSocket auth failed – closing connection for client %s", client_id)
+        await websocket.close(code=4401, reason="Unauthorized")
+        return
+
+    logger.debug("WebSocket auth succeeded for user %s (client %s)", getattr(user, "id", "?"), client_id)
 
     try:
         await websocket.accept()

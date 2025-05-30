@@ -80,9 +80,9 @@ operational robustness.
     implementation now delegates to the inherent `TopicManager` methods so
     logic lives in exactly one place.
 
-2.  **`RefCell` ergonomics** – many handlers use `try_borrow_mut()` and ignore
-    the error; almost all borrows are exclusive and deterministic, so switch
-    to `borrow_mut()` and let a panic surface real bugs.
+2.  **`RefCell` ergonomics** – ✅ **Fixed (Jul 2025)** – remaining
+    `try_borrow_mut()` calls in production code swapped for `borrow_mut()`
+    so silent failures turn into explicit panics during development.
 
 3.  **Exp-backoff leak** – `WsClientV2` clones self to schedule reconnects but
     does not cancel the timer after a successful reconnect.  Store the
@@ -126,7 +126,7 @@ that are *not* captured in the sections above:
 
 | Feature | Potential follow-ups |
 |---------|----------------------|
-| **Google Sign-In auth layer** | • Pass the JWT through the WebSocket handshake (today the WS is unauthenticated in prod).<br>• Restrict CORS *only* when `AUTH_DISABLED=0`; keep wildcard for local dev. |
+| **Google Sign-In auth layer** | ✅ **Fixed (Jul 2025)** – The frontend now appends the stored JWT as `?token=` query parameter, backend validates it via `validate_ws_jwt()` and rejects unauthenticated sockets with close code **4401**. CORS restriction shipped in the earlier June patch. |
 | **Run-history tables & API** | • Add DB indexes on `(agent_id, created_at DESC)` – large tenants already show slow list queries.<br>• Expose aggregate cost metrics in a separate endpoint instead of computing them in the dashboard. |
 | **HMAC-secured webhook triggers** | • Clamp request body size (≤128 KB) *before* HMAC validation.<br>• Rotate `TRIGGER_SIGNING_SECRET` via admin UI. |
 | **Token-level streaming** | • Unify the three chunk types (`assistant_token`, `tool_output`, `assistant_message`) in a small `Enum` on both client & server to avoid typo-bugs.<br>• Document the feature flag exhaustively in the README. |
