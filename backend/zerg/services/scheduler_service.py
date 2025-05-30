@@ -135,25 +135,22 @@ class SchedulerService:
 
         db_session = self.session_factory()
         try:
-            # Get all agents that have a non-null schedule
-            agent_rows = (
+            # Query as plain tuples so ORM instances are never leaked outside
+            # this helper – allows us to close the session safely.
+            agent_rows: list[tuple[int, str]] = (
                 db_session.query(crud.Agent.id, crud.Agent.schedule).filter(crud.Agent.schedule.isnot(None)).all()
             )
-
-            for agent_id, cron_expr in agent_rows:
-                await self.schedule_agent(agent_id, cron_expr)
-                logger.info(f"Scheduled agent {agent_id} with cron: {cron_expr}")
-
-        except Exception as e:
-            logger.error(f"Error loading scheduled agents: {e}")
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Error loading scheduled agents: %s", exc)
+            agent_rows = []
         finally:
-            # Intentionally do *not* close the session here. Doing so would
-            # detach the ORM objects that the caller (e.g. test cases) may
-            # still hold references to, leading to DetachedInstanceError when
-            # their attributes are later accessed. The session will be
-            # garbage‑collected at the end of the test, and production code
-            # runs load_scheduled_agents() only once on startup.
-            pass
+            db_session.close()
+
+        # Register jobs outside the DB session – schedule_agent queries the
+        # DB again if needed but mostly just registers APScheduler jobs.
+        for agent_id, cron_expr in agent_rows:
+            await self.schedule_agent(agent_id, cron_expr)
+            logger.info("Scheduled agent %s with cron: %s", agent_id, cron_expr)
 
     async def schedule_agent(self, agent_id: int, cron_expression: str):
         """
