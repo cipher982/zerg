@@ -200,12 +200,44 @@ impl TopicManager {
         }
     }
 
-    /// Helper: run all handlers registered for *topic* with the provided payload.
+    /// Helper: run all handlers registered for *topic* with the provided
+    /// payload.
+    ///
+    /// **Borrowing caveat** – Executing handlers **inside** the immutable
+    /// borrow of `TopicManager` (established via `RefCell::borrow()` in the
+    /// WebSocket `on_message` callback) causes a `BorrowMutError` whenever a
+    /// handler dispatches a message that, in turn, tries to obtain a *mutable*
+    /// borrow of the same `TopicManager` (e.g. to subscribe to a new topic).
+    ///
+    /// To avoid this re-entrancy issue we:
+    /// 1. Clone the relevant handler list while the immutable borrow is still
+    ///    active.
+    /// 2. Drop that borrow (by letting the `handlers_ref` go out of scope)
+    ///    *before* executing any user code.
+    /// 3. Execute each handler **asynchronously** on the next micro-task via
+    ///    `wasm_bindgen_futures::spawn_local`, ensuring the original borrow
+    ///    is fully released.
     fn dispatch_to_topic_handlers(&self, topic: &str, payload: serde_json::Value) {
-        if let Some(handlers) = self.topic_handlers.get(topic) {
+        use wasm_bindgen_futures::spawn_local;
+
+        // 1. Clone handlers while the immutable borrow of `self` is held.
+        let handlers_cloned: Option<Vec<TopicHandler>> =
+            self.topic_handlers
+                .get(topic)
+                .map(|vec| vec.iter().cloned().collect());
+
+        // 2. Borrow ends here (handlers_cloned owns independent `Rc`s).
+
+        if let Some(handlers) = handlers_cloned {
             for handler_rc in handlers {
-                let mut handler = handler_rc.borrow_mut();
-                (*handler)(payload.clone());
+                let payload_clone = payload.clone();
+                spawn_local(async move {
+                    // Run handler in its own micro-task so we never execute
+                    // user callbacks while a borrow on the TopicManager is
+                    // active.  This eliminates the runtime RefCell panic seen
+                    // on rapid subscribe/unsubscribe cycles.
+                    (handler_rc.borrow_mut())(payload_clone);
+                });
             }
         } else {
             web_sys::console::debug_1(&format!("No handlers registered for determined topic: {}", topic).into());

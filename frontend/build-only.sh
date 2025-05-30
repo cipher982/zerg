@@ -19,4 +19,16 @@ RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir www
 echo "Copying JS files..."
 cp www/agent_platform_frontend.js www/index.js
 
+# Create config.js + bootstrap.js so tests and manual runs find them
+cat > www/config.js <<'EOF'
+// Auto-generated – build-only.sh
+window.ZERG_CONFIG = {
+  API_BASE_URL: window.API_BASE_URL || 'http://localhost:8001',
+};
+EOF
+
+cat > www/bootstrap.js <<'EOF'
+import './index.js';
+EOF
+
 echo "Frontend build complete. Files are ready in www/ directory."
