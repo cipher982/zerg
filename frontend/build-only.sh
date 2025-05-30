@@ -18,21 +18,16 @@ echo "[build-only] writing bootstrap.js …"
 cat > www/bootstrap.js 
 import init, { init_api_config_js } from './agent_platform_frontend.js';
 
-async function main() {
-  await init();
-  init_api_config_js('http://localhost:8001');
-}
-
-main();
+# Create config.js + bootstrap.js so tests and manual runs find them
+cat > www/config.js <<'EOF'
+// Auto-generated – build-only.sh
+window.ZERG_CONFIG = {
+  API_BASE_URL: window.API_BASE_URL || 'http://localhost:8001',
+};
 EOF
 
-# Stub config.js if missing
-echo "[build-only] ensuring config.js …"
-if [ ! -f www/config.js ]; then
-  cat <<'EOF' > www/config.js
-window.__APP_CONFIG__ = window.__APP_CONFIG__ || {};
-window.__APP_CONFIG__.BUILD = 'debug';
+cat > www/bootstrap.js <<'EOF'
+import './index.js';
 EOF
-fi
 
-echo "Build complete – artefacts in ./www/"
+echo "Frontend build complete. Files are ready in www/ directory."
