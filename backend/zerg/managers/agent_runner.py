@@ -57,6 +57,14 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
     def __init__(self, agent_row: AgentModel, *, thread_service: ThreadService | None = None):
         self.agent = agent_row
         self.thread_service = thread_service or ThreadService
+
+        # Whether this runner/LLM emits per-token chunks – treat env value
+        # case-insensitively; anything truthy like "1", "true", "yes" enables
+        # the feature.
+        from zerg.constants import LLM_TOKEN_STREAM  # late import avoids cycles
+
+        self.enable_token_stream = LLM_TOKEN_STREAM
+
         # ------------------------------------------------------------------
         # Lazily compile (or fetch from cache) the LangGraph runnable.  Using
         # a small in-process cache avoids the expensive graph compilation on
@@ -74,13 +82,6 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
             self._runnable = zerg_react_agent.get_runnable(agent_row)
             _RUNNABLE_CACHE[cache_key] = self._runnable
             logger.debug("AgentRunner: compiled & cached runnable for agent %s", agent_row.id)
-
-        # Whether this runner/LLM emits per-token chunks – treat env value
-        # case-insensitively; anything truthy like "1", "true", "yes" enables
-        # the feature.
-        from zerg.constants import LLM_TOKEN_STREAM  # late import avoids cycles
-
-        self.enable_token_stream = LLM_TOKEN_STREAM
 
     # ------------------------------------------------------------------
     # Public API – asynchronous
