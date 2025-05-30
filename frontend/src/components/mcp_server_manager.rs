@@ -112,7 +112,6 @@ impl MCPServerManager {
         let header = document.create_element("div")?;
         header.set_class_name("mcp-header");
         header.set_inner_html("🛠️ Tool Configuration");
-        header.set_attribute("style", "font-size: 1.1em; font-weight: bold; margin-bottom: 16px;")?;
 
         // Built-in tools section
         let builtin_section = self.build_builtin_tools_section(document)?;
@@ -120,12 +119,10 @@ impl MCPServerManager {
         // Tab container
         let tab_container = document.create_element("div")?;
         tab_container.set_class_name("mcp-tab-container");
-        tab_container.set_attribute("style", "margin: 16px 0;")?;
 
         // Tab buttons
         let tabs_wrapper = document.create_element("div")?;
         tabs_wrapper.set_class_name("mcp-tabs");
-        tabs_wrapper.set_attribute("style", "display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 16px;")?;
 
         let quick_tab = self.create_tab_button(document, "Quick Connect", &MCPTab::QuickConnect)?;
         let custom_tab = self.create_tab_button(document, "Custom Server", &MCPTab::Custom)?;
@@ -171,14 +168,13 @@ impl MCPServerManager {
     fn build_builtin_tools_section(&self, document: &Document) -> Result<Element, JsValue> {
         let section = document.create_element("div")?;
         section.set_class_name("builtin-tools-section");
-        section.set_attribute("style", "margin-bottom: 24px; padding: 12px; background: var(--surface-color); border-radius: 6px;")?;
 
         let title = document.create_element("h4")?;
         title.set_inner_html("Built-in Tools ✓");
-        title.set_attribute("style", "margin: 0 0 8px 0; color: var(--success-color);")?;
+        title.set_class_name("builtin-tools-title");
 
         let tools_list = document.create_element("ul")?;
-        tools_list.set_attribute("style", "margin: 0; padding-left: 20px; color: var(--text-secondary);")?;
+        tools_list.set_class_name("builtin-tools-list");
 
         let builtin_tools = [
             "Date/Time (get_current_time)",
@@ -203,7 +199,7 @@ impl MCPServerManager {
         button.set_attribute("type", "button")?;
         button.set_class_name("mcp-tab");
         button.set_inner_html(label);
-        button.set_attribute("style", "padding: 8px 16px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent;")?;
+        // Visual styling moved to CSS (.mcp-tab)
 
         // Add click handler
         let tab_clone = tab_type.clone();
@@ -227,11 +223,11 @@ impl MCPServerManager {
 
         let intro = document.create_element("p")?;
         intro.set_inner_html("🚀 Connect to popular services with one click:");
-        intro.set_attribute("style", "margin-bottom: 16px; color: var(--text-secondary);")?;
+        intro.set_class_name("mcp-intro-text");
 
         let grid = document.create_element("div")?;
         grid.set_class_name("mcp-presets-grid");
-        grid.set_attribute("style", "display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;")?;
+        grid.set_class_name("mcp-presets-grid");
 
         for preset in &self.presets {
             let card = self.create_preset_card(document, preset)?;
@@ -247,27 +243,27 @@ impl MCPServerManager {
     fn create_preset_card(&self, document: &Document, preset: &MCPPreset) -> Result<Element, JsValue> {
         let card = document.create_element("div")?;
         card.set_class_name("mcp-preset-card");
-        card.set_attribute("style", "border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: var(--surface-color); cursor: pointer; transition: border-color 0.2s;")?;
+        card.set_class_name("mcp-preset-card");
 
         let header = document.create_element("div")?;
-        header.set_attribute("style", "display: flex; align-items: center; margin-bottom: 8px;")?;
+        header.set_class_name("mcp-preset-card-header");
 
         let icon = document.create_element("span")?;
         icon.set_inner_html(&preset.icon);
-        icon.set_attribute("style", "margin-right: 8px; font-size: 1.2em;")?;
+        icon.set_class_name("mcp-preset-icon");
 
         let title = document.create_element("strong")?;
         title.set_inner_html(&preset.name);
 
         let description = document.create_element("div")?;
         description.set_inner_html(&preset.description);
-        description.set_attribute("style", "color: var(--text-secondary); font-size: 0.9em; margin-bottom: 12px;")?;
+        description.set_class_name("mcp-preset-description");
 
         let button = document.create_element("button")?;
         button.set_attribute("type", "button")?;
         button.set_class_name("btn-primary");
         button.set_inner_html(&format!("Connect {}", preset.name));
-        button.set_attribute("style", "width: 100%; padding: 6px;")?;
+        button.set_class_name("mcp-preset-connect-btn");
 
         // Add click handler for preset connection
         let preset_id = preset.id.clone();
@@ -297,11 +293,11 @@ impl MCPServerManager {
 
         let intro = document.create_element("p")?;
         intro.set_inner_html("➕ Add your own MCP server:");
-        intro.set_attribute("style", "margin-bottom: 16px; color: var(--text-secondary);")?;
+        intro.set_class_name("mcp-custom-intro");
 
         let form = document.create_element("div")?;
         form.set_class_name("mcp-custom-form");
-        form.set_attribute("style", "display: flex; flex-direction: column; gap: 12px;")?;
+        form.set_class_name("mcp-custom-form");
 
         // Server URL input
         let url_label = document.create_element("label")?;
@@ -338,7 +334,7 @@ impl MCPServerManager {
 
         // Buttons
         let buttons = document.create_element("div")?;
-        buttons.set_attribute("style", "display: flex; gap: 8px;")?;
+        buttons.set_class_name("mcp-custom-buttons");
 
         let test_btn = document.create_element("button")?;
         test_btn.set_attribute("type", "button")?;
@@ -414,14 +410,14 @@ impl MCPServerManager {
     fn build_connected_servers_section(&self, document: &Document) -> Result<Element, JsValue> {
         let section = document.create_element("div")?;
         section.set_class_name("mcp-connected-servers");
-        section.set_attribute("style", "margin-top: 24px;")?;
+        section.set_class_name("mcp-connected-section");
 
         let separator = document.create_element("hr")?;
-        separator.set_attribute("style", "margin: 16px 0; border: none; border-top: 1px solid var(--border-color);")?;
+        separator.set_class_name("mcp-section-separator");
 
         let title = document.create_element("h4")?;
         title.set_inner_html("📊 Connected MCP Servers");
-        title.set_attribute("style", "margin: 0 0 12px 0;")?;
+        title.set_class_name("mcp-connected-title");
 
         let list = document.create_element("div")?;
         list.set_id("mcp-servers-list");
@@ -430,7 +426,7 @@ impl MCPServerManager {
         if self.servers.is_empty() {
             let empty = document.create_element("p")?;
             empty.set_inner_html("No MCP servers connected yet.");
-            empty.set_attribute("style", "color: var(--text-secondary); font-style: italic;")?;
+            empty.set_class_name("mcp-connected-empty");
             list.append_child(&empty)?;
         } else {
             for server in &self.servers {
@@ -449,10 +445,10 @@ impl MCPServerManager {
     fn create_server_card(&self, document: &Document, server: &MCPServerConfig) -> Result<Element, JsValue> {
         let card = document.create_element("div")?;
         card.set_class_name("mcp-server-card");
-        card.set_attribute("style", "border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; margin-bottom: 8px; background: var(--surface-color);")?;
+        card.set_class_name("mcp-server-card");
 
         let header = document.create_element("div")?;
-        header.set_attribute("style", "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;")?;
+        header.set_class_name("mcp-server-card-header");
 
         let info = document.create_element("div")?;
         
@@ -460,7 +456,7 @@ impl MCPServerManager {
         name.set_inner_html(&server.name);
 
         let details = document.create_element("div")?;
-        details.set_attribute("style", "font-size: 0.9em; color: var(--text-secondary);")?;
+        details.set_class_name("mcp-server-details");
         
         let tools_text = match server.tools_count {
             Some(count) => format!("{} tools", count),
@@ -478,13 +474,13 @@ impl MCPServerManager {
         details.set_inner_html(&format!("{} • {}", tools_text, status_text));
 
         let actions = document.create_element("div")?;
-        actions.set_attribute("style", "display: flex; gap: 8px;")?;
+        actions.set_class_name("mcp-server-actions");
 
         let remove_btn = document.create_element("button")?;
         remove_btn.set_attribute("type", "button")?;
         remove_btn.set_class_name("btn btn-danger");
         remove_btn.set_inner_html("Remove");
-        remove_btn.set_attribute("style", "padding: 4px 8px; font-size: 0.9em;")?;
+        remove_btn.set_class_name("mcp-remove-btn");
 
         // Add remove handler
         let server_name = server.name.clone();

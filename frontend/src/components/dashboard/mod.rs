@@ -707,8 +707,52 @@ fn populate_agents_table(document: &Document) -> Result<(), JsValue> {
                 format!("No agents match \"{}\".", q_trim)
             }
         });
-        empty_cell.set_inner_html(&no_results_msg);
-        empty_cell.set_attribute("style", "text-align: center; padding: 30px; color: #888;")?;
+        // Build empty-state container with illustration and CTA button.
+        let wrapper = document.create_element("div")?;
+        wrapper.set_class_name("empty-state");
+
+        // Simple robot illustration (emoji fallback for now)
+        let illustration = document.create_element("div")?;
+        illustration.set_class_name("empty-state-illustration");
+        illustration.set_inner_html("🤖");
+        wrapper.append_child(&illustration)?;
+
+        // Message text
+        let msg_el = document.create_element("p")?;
+        msg_el.set_class_name("empty-state-text");
+        msg_el.set_inner_html(&no_results_msg);
+        wrapper.append_child(&msg_el)?;
+
+        // CTA button (Create Agent)
+        let cta_btn = crate::ui_components::create_button(
+            document,
+            crate::ui_components::ButtonConfig::new("Create Agent")
+                .with_class("create-agent-button")
+                .with_testid("create-agent-btn-empty"),
+        )?;
+
+        // Attach same handler as the header create button: dispatch RequestCreateAgent
+        let click_cb = wasm_bindgen::closure::Closure::wrap(Box::new(move || {
+            let agent_name = format!(
+                "{} {}",
+                crate::constants::DEFAULT_AGENT_NAME,
+                (js_sys::Math::random() * 100.0).round()
+            );
+            crate::state::dispatch_global_message(crate::messages::Message::RequestCreateAgent {
+                name: agent_name,
+                system_instructions: crate::constants::DEFAULT_SYSTEM_INSTRUCTIONS.to_string(),
+                task_instructions: crate::constants::DEFAULT_TASK_INSTRUCTIONS.to_string(),
+            });
+        }) as Box<dyn FnMut()>);
+        cta_btn
+            .dyn_ref::<web_sys::HtmlElement>()
+            .unwrap()
+            .set_onclick(Some(click_cb.as_ref().unchecked_ref()));
+        click_cb.forget();
+
+        wrapper.append_child(&cta_btn)?;
+
+        empty_cell.append_child(&wrapper)?;
         
         empty_row.append_child(&empty_cell)?;
         tbody.append_child(&empty_row)?;
@@ -754,6 +798,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Name cell
     let name_cell = document.create_element("td")?;
+    name_cell.set_attribute("data-label", "Name")?;
     name_cell.set_inner_html(&agent.name);
     row.append_child(&name_cell)?;
 
@@ -766,6 +811,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
 
     if include_owner {
         let owner_cell = document.create_element("td")?;
+            owner_cell.set_attribute("data-label", "Owner")?;
         owner_cell.set_class_name("owner-cell");
 
         if let Some(label) = &agent.owner_label {
@@ -807,6 +853,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Status cell
     let status_cell = document.create_element("td")?;
+    status_cell.set_attribute("data-label", "Status")?;
     let status_indicator = document.create_element("span")?;
     status_indicator.set_class_name(&format!("status-indicator status-{:?}", agent.status).to_lowercase());
     
@@ -859,21 +906,25 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     
     // Last Run cell
     let last_run_cell = document.create_element("td")?;
+    last_run_cell.set_attribute("data-label", "Last Run")?;
     last_run_cell.set_inner_html(&agent.last_run.as_deref().unwrap_or("-"));
     row.append_child(&last_run_cell)?;
     
     // Next Run cell
     let next_run_cell = document.create_element("td")?;
+    next_run_cell.set_attribute("data-label", "Next Run")?;
     next_run_cell.set_inner_html(&agent.next_run.as_deref().unwrap_or("-"));
     row.append_child(&next_run_cell)?;
     
     // Success Rate cell
     let success_cell = document.create_element("td")?;
+    success_cell.set_attribute("data-label", "Success Rate")?;
     success_cell.set_inner_html(&format!("{:.1}% ({})", agent.success_rate, agent.run_count));
     row.append_child(&success_cell)?;
     
     // Actions cell
     let actions_cell = document.create_element("td")?;
+    actions_cell.set_attribute("data-label", "Actions")?;
     actions_cell.set_class_name("actions-cell");
     
     // Create inner container for buttons
