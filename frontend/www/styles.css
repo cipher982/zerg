@@ -165,6 +165,8 @@ body {
     justify-content: center;
     padding: var(--spacing-xl);
     color: var(--text-secondary);
+    min-height: 400px; /* Ensure consistent height */
+    width: 100%; /* Take full width of container */
 }
 
 .empty-state-illustration {
@@ -898,7 +900,9 @@ button {
 .dashboard-container {
     flex: 1;
     padding: 20px;
+    width: 100%;
     max-width: 1200px;
+    min-width: 800px; /* Ensure minimum width for consistency */
     margin: 0 auto;
     background-color: #2a2a3a;
     border-radius: 8px;
@@ -906,6 +910,7 @@ button {
     overflow-y: auto;
     height: auto; /* Let it grow with the content */
     min-height: 0; /* Allow it to shrink */
+    box-sizing: border-box; /* Include padding in width calculation */
 }
 
 .dashboard-header {
@@ -924,6 +929,7 @@ button {
     border-radius: 4px;
     padding: 8px 16px;
     width: 300px;
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
 .search-icon {
@@ -942,6 +948,21 @@ button {
 
 #agent-search::placeholder {
     color: #777;
+}
+
+.search-clear {
+    cursor: pointer;
+    color: #aaa;
+    font-size: 18px;
+    line-height: 1;
+    padding: 2px;
+    margin-left: 4px;
+    user-select: none;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+.search-clear:hover {
+    color: #fff;
 }
 
 /* Scope selector dropdown styling */
@@ -1291,6 +1312,7 @@ button {
     .dashboard-container {
         overflow-x: auto;
         padding-bottom: var(--spacing-md);
+        min-width: 600px; /* Reduce minimum width on smaller screens */
     }
     
     /* Ensure consistent cell heights with flexible widths */
