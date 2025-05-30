@@ -528,10 +528,9 @@ pub(crate) fn fix_stub_nodes() {
     use crate::state::APP_STATE;
 
     APP_STATE.with(|state_ref| {
-        let mut st = match state_ref.try_borrow_mut() {
-            Ok(b) => b,
-            Err(_) => return, // Early exit if already mutably borrowed
-        };
+        // Panic on borrow error – should not occur in normal operation and
+        // indicates a programming mistake when it does.
+        let mut st = state_ref.borrow_mut();
 
         // Work with *copies* to avoid Rust's strict aliasing rules.
 

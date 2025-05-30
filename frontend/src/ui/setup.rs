@@ -75,24 +75,20 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
         // listener during normal operation.
         let on_pagehide = Closure::<dyn FnMut(web_sys::Event)>::new(move |_| {
             crate::state::APP_STATE.with(|s| {
-                // Attempt to persist without panicking if another borrow is
-                // active – unloading happens late in the event loop when no
-                // other borrows exist.
-                if let Ok(mut st) = s.try_borrow_mut() {
-                    // Force-clear dragging flags so persistence logic emits
-                    // the PATCH even if the user closes the tab mid-drag.
-                    st.is_dragging_agent = false;
-                    st.canvas_dragging = false;
+                // Acquire a *unique* mutable borrow – panic if another borrow
+                // is still active so the issue is caught during development.
+                let mut st = s.borrow_mut();
 
-                    // Force a persistence attempt even if
-                    // `state_modified` was already reset by the most recent
-                    // animation tick.  Without this the final layout change
-                    // could be lost when the user closes the tab *very*
-                    // quickly after releasing the mouse.
-                    st.state_modified = true;
+                // Force-clear dragging flags so persistence logic emits the
+                // final PATCH even if the user closes the tab mid-drag.
+                st.is_dragging_agent = false;
+                st.canvas_dragging = false;
 
-                    let _ = st.save_if_modified();
-                }
+                // Force a persistence attempt even if `state_modified` was
+                // already reset by the most recent animation tick.
+                st.state_modified = true;
+
+                let _ = st.save_if_modified();
             });
         });
 

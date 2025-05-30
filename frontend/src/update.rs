@@ -215,7 +215,8 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 let topic_manager_rc = state.topic_manager.clone();
 
                 commands.push(Command::UpdateUI(Box::new(move || {
-                    if let Ok(mut tm) = topic_manager_rc.try_borrow_mut() {
+                    {
+                        let mut tm = topic_manager_rc.borrow_mut();
                         // Prepare handler closure
                         use std::rc::Rc;
                         use std::cell::RefCell;
