@@ -82,7 +82,9 @@ operational robustness.
 
 2.  **`RefCell` ergonomics** – ✅ **Fixed (Jul 2025)** – remaining
     `try_borrow_mut()` calls in production code swapped for `borrow_mut()`
-    so silent failures turn into explicit panics during development.
+    so silent failures turn into explicit panics during development.  A small
+    `mut_borrow!` macro was added (`frontend/src/macros.rs`) for concise,
+    self-documenting borrows going forward.
 
 3.  **Exp-backoff leak** – `WsClientV2` clones self to schedule reconnects but
     does not cancel the timer after a successful reconnect.  Store the
