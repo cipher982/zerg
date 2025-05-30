@@ -204,11 +204,6 @@ class ThreadService:
                 kwargs["parent_id"] = current_parent_id
 
             row = crud.create_thread_message(db=db, thread_id=thread_id, commit=False, **kwargs)
-
-            # Ensure primary key is available when we need to reference it as
-            # *parent_id* for subsequent tool messages.
-            if row.id is None:
-                db.flush()
             created_rows.append(row)
 
             # Update parent tracker whenever we hit a new assistant row.

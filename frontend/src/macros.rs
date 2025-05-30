@@ -1,8 +1,9 @@
 //! Small crate-wide convenience macros.
 
-/// Acquire a **mutable** borrow from a `RefCell` (or `Rc<RefCell>`).  The
-/// macro panics with a descriptive message if another mutable borrow is
-/// still active so bugs surface early during development.
+/// Acquire a **mutable** borrow from a `RefCell` (or `Rc<RefCell>`).
+/// If another mutable borrow is still active the call panics – the standard
+/// panic message emitted by `RefCell::borrow_mut()` is preserved to keep the
+/// macro zero-cost.
 ///
 /// ```rust,ignore
 /// use std::cell::RefCell;
