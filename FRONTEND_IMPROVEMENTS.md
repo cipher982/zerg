@@ -159,7 +159,7 @@ The frontend is built with:
 ## 🎨 Style & Architecture (1-2 hours each)
 
 ### Extract Inline Styles
-- [ ] Move all `set_attribute("style", ...)` to CSS classes (⚠ ~10 remain in `mcp_server_manager.rs`, `chat_view.rs`, dashboard empty-state etc.)
+- [x] Move all `set_attribute("style", ...)` to CSS classes (Completed 2 Jun 2025)
 - [x] Create semantic class names for common patterns:
   - [x] `.form-row` instead of `style="margin-top: 12px"`
   - [x] `.form-row-sm` for smaller spacing
@@ -294,10 +294,10 @@ These improvements were identified while fixing table alignment issues and would
 
 #### Keyboard Shortcuts
 - [x] `Ctrl/Cmd + K` – Focus search box
-- [ ] `N` – New agent
-- [ ] Arrow keys – Navigate table rows
-- [ ] Enter – Expand/collapse row
-- [ ] `R` – Run selected agent
+- [x] `N` – New agent
+- [x] Arrow keys – Navigate table rows
+- [x] Enter – Expand/collapse row
+- [x] `R` – Run selected agent
 - [x] `?` – Show shortcuts help (toast overlay)
 - **Why**: Power user efficiency
 
@@ -311,10 +311,10 @@ These improvements were identified while fixing table alignment issues and would
 - [ ] **Why**: Better visual feedback
 
 #### Empty State Design
-- [ ] Add illustration/icon for empty dashboard
-- [ ] Prominent "Create First Agent" button
-- [ ] Quick tips or tutorial link
-- [ ] **Why**: Better onboarding experience
+- [x] Add illustration/icon for empty dashboard
+- [x] Prominent "Create First Agent" button
+- [ ] Quick tips or tutorial link *(nice-to-have)*
+- [x] **Why**: Better onboarding experience – implemented 2 Jun 2025
 
 #### Row Animations
 - [ ] Smooth expand/collapse transitions
@@ -351,11 +351,11 @@ These improvements were identified while fixing table alignment issues and would
 - [ ] **Why**: Better analysis and debugging
 
 #### Responsive Design
-- [ ] Card layout for mobile (< 768px)
-- [ ] Priority columns on medium screens
-- [ ] Touch-friendly action buttons
-- [ ] Swipe gestures for actions
-- [ ] **Why**: Mobile accessibility
+- [x] Card layout for mobile (< 768px)
+- [ ] Priority columns on medium screens *(backlog)*
+- [x] Touch-friendly action buttons (larger hit-area CSS)
+- [ ] Swipe gestures for actions *(out of scope phase II)*
+- [x] **Why**: Mobile accessibility – initial slice landed 2 Jun 2025
 
 ### Table Alignment Fix (Completed)
 - [x] Fixed Actions column vertical alignment issue
