@@ -311,6 +311,10 @@ This architecture creates a seamless real-time experience: when an agent is crea
   - The Dashboard is a table-like view of agent cards (showing status, quick actions, logs).  
   - The Canvas Editor (in Rust/WASM) is used for more advanced flows or multi-step instructions.  
 
+• **Strict WebSocket authentication (Jul 2025)** – when `AUTH_DISABLED=0` the
+  frontend appends the JWT as `?token=` to `/api/ws`, the backend validates it
+  before accepting the handshake and closes with **4401** on failure.  Local
+  dev mode remains token-less.  
 • **Real-Time AI Streaming (token-level)**  
   - With the `LLM_TOKEN_STREAM` feature flag the backend forwards **each individual token** as it is generated (`chunk_type="assistant_token"`).  
   - Full message chunks (`assistant_message`, `tool_output`) are still emitted so clients without token mode remain compatible.
