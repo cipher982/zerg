@@ -244,7 +244,8 @@ impl WsClientV2 {
             if let Ok(close_evt) = evt.dyn_into::<web_sys::CloseEvent>() {
                 let code = close_evt.code();
                 if code == 4401 || code == 4003 {
-                    // 4401: unauthenticated, 4003: forbidden – logout.
+                    // 4401: unauthenticated, 4003: forbidden – logout and show banner.
+                    crate::network::ui_updates::show_auth_error_banner();
                     let _ = crate::utils::logout();
                 }
             }
