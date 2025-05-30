@@ -232,79 +232,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     let header = document.create_element("div")?;
     header.set_class_name("dashboard-header");
     
-    // Search box
-    let search_container = document.create_element("div")?;
-    search_container.set_class_name("search-container");
-    
-    let search_icon = document.create_element("span")?;
-    search_icon.set_class_name("search-icon");
-    search_icon.set_inner_html("🔍");
-    
-    let search_input = document.create_element("input")?;
-    search_input.set_class_name("search-input");
-    let search_input_element = search_input.dyn_ref::<web_sys::HtmlInputElement>()
-        .ok_or(JsValue::from_str("Could not cast to HtmlInputElement"))?;
-    search_input_element.set_placeholder("Search agents...");
-    search_input_element.set_attribute("id", "agent-search")?;
-    search_input_element.set_attribute(ATTR_DATA_TESTID, "agent-search-input")?;
-    
-    // Event handler: input
-    {
-        let input_el = search_input_element.clone();
-        let input_cb = Closure::wrap(Box::new(move |event: web_sys::Event| {
-            if let Some(target) = event.target() {
-                if let Ok(input) = target.dyn_into::<web_sys::HtmlInputElement>() {
-                    let value = input.value();
-                    crate::state::dispatch_global_message(crate::messages::Message::UpdateDashboardSearch(value));
-                }
-            }
-        }) as Box<dyn FnMut(_)>);
-        input_el.add_event_listener_with_callback("input", input_cb.as_ref().unchecked_ref())?;
-        input_cb.forget();
-    }
 
-    // Event handler: keydown for ESC to clear
-    {
-        let input_el = search_input_element.clone();
-        let key_cb = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
-            if event.key() == "Escape" {
-                if let Ok(input) = event.target().unwrap().dyn_into::<web_sys::HtmlInputElement>() {
-                    input.set_value("");
-                    crate::state::dispatch_global_message(crate::messages::Message::UpdateDashboardSearch(String::new()));
-                }
-            }
-        }) as Box<dyn FnMut(_)>);
-        input_el.add_event_listener_with_callback("keydown", key_cb.as_ref().unchecked_ref())?;
-        key_cb.forget();
-    }
-
-    // Set initial value from AppState
-    {
-        let initial_value = APP_STATE.with(|st| st.borrow().dashboard_search_query.clone());
-        search_input_element.set_value(&initial_value);
-    }
-
-    search_container.append_child(&search_icon)?;
-    search_container.append_child(&search_input)?;
-
-    // Clear (×) icon inside search
-    let clear_icon = document.create_element("span")?;
-    clear_icon.set_class_name("search-clear");
-    clear_icon.set_inner_html("×");
-    clear_icon.set_attribute("title", "Clear search")?;
-    let ci_cb = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
-        event.stop_propagation();
-        if let Some(input) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.get_element_by_id("agent-search")).and_then(|e| e.dyn_into::<web_sys::HtmlInputElement>().ok()) {
-            input.set_value("");
-        }
-        crate::state::dispatch_global_message(crate::messages::Message::UpdateDashboardSearch(String::new()));
-    }) as Box<dyn FnMut(_)>);
-    clear_icon.dyn_ref::<HtmlElement>()
-        .unwrap()
-        .add_event_listener_with_callback("click", ci_cb.as_ref().unchecked_ref())?;
-    ci_cb.forget();
-
-    search_container.append_child(&clear_icon)?;
 
 
     // -------------------------------------------------------------------
@@ -362,7 +290,6 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     // Finally, assemble header children
     // -------------------------------------------------------------------
 
-    header.append_child(&search_container)?;
     header.append_child(&scope_select)?;
 
     // -------------------------------------------------------------------
@@ -577,23 +504,11 @@ fn create_agents_table(document: &Document) -> Result<Element, JsValue> {
     Ok(table)
 }
 
-// Helper function to extract agents from APP_STATE and convert them
-// This function now directly uses the u32 ID and skips agents without one.
 fn get_agents_from_app_state() -> Vec<Agent> {
     APP_STATE.with(|state| {
         let state = state.borrow();
 
-        // Prepare search query lower-cased for case-insensitive comparison
-        let search_q = state.dashboard_search_query.trim().to_ascii_lowercase();
-
-    let mut list: Vec<_> = state.agents.values()
-            .filter(|api_agent| {
-                if search_q.is_empty() {
-                    true
-                } else {
-                    api_agent.name.to_ascii_lowercase().contains(&search_q)
-                }
-            })
+        let mut list: Vec<_> = state.agents.values()
             .filter_map(|api_agent| {
                 // Only include agents that have a valid u32 ID
                 api_agent.id.map(|id| {
@@ -698,15 +613,7 @@ fn populate_agents_table(document: &Document) -> Result<(), JsValue> {
         let include_owner = APP_STATE.with(|st| st.borrow().dashboard_scope == crate::state::DashboardScope::AllAgents);
         let colspan = if include_owner { 7 } else { 6 };
         empty_cell.set_attribute("colspan", &colspan.to_string())?;
-        let no_results_msg = APP_STATE.with(|st| {
-            let query = st.borrow().dashboard_search_query.clone();
-            let q_trim = query.trim();
-            if q_trim.is_empty() {
-                "No agents found. Click '+ Create Agent' to get started.".to_string()
-            } else {
-                format!("No agents match \"{}\".", q_trim)
-            }
-        });
+        let no_results_msg = "No agents found. Click '+ Create Agent' to get started.".to_string();
         // Build empty-state container with illustration and CTA button.
         let wrapper = document.create_element("div")?;
         wrapper.set_class_name("empty-state");
