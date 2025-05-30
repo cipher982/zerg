@@ -456,6 +456,9 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             true
         }
         Message::ReceiveRunUpdate { agent_id, run } => {
+            // Keep track if this run just transitioned from running → finished.
+            let was_running = state.running_runs.contains(&run.id);
+
             let runs_list = state.agent_runs.entry(*agent_id).or_default();
             if let Some(pos) = runs_list.iter().position(|r| r.id == run.id) {
                 runs_list.remove(pos);
@@ -466,13 +469,32 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                 runs_list.truncate(20);
             }
 
-            // Manage running_runs set
+            // Manage running_runs set and fire toast if we just completed
             match run.status.as_str() {
                 "running" => {
                     state.running_runs.insert(run.id);
                 }
                 "success" | "failed" | "queued" => {
                     state.running_runs.remove(&run.id);
+
+                    if was_running {
+                        // Show toast – success or error variant.
+                        let name = state
+                            .agents
+                            .get(agent_id)
+                            .map(|a| a.name.clone())
+                            .unwrap_or_else(|| format!("Agent {}", agent_id));
+                        let msg = if run.status == "success" {
+                            format!("{} finished successfully", name)
+                        } else {
+                            format!("{} run failed", name)
+                        };
+                        if run.status == "success" {
+                            crate::toast::success(&msg);
+                        } else {
+                            crate::toast::error(&msg);
+                        }
+                    }
                 }
                 _ => {}
             }
