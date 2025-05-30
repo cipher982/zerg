@@ -70,3 +70,49 @@ pub fn update_layout_status(msg: &str, color: &str) {
         }
     }
 }
+
+/// Display a red, dismissible banner at the top of the page when an
+/// authentication error occurs (e.g. WebSocket close code **4401**).  The
+/// banner is inserted only once – subsequent calls simply make it visible
+/// again.
+pub fn show_auth_error_banner() {
+    // Attempt to obtain window + document – bail quietly on failure so we do
+    // not panic inside error-handling paths.
+    let window = match web_sys::window() {
+        Some(w) => w,
+        None => return,
+    };
+    let document = match window.document() {
+        Some(d) => d,
+        None => return,
+    };
+
+    // Either fetch the existing element or create a new one.
+    let banner_el = if let Some(el) = document.get_element_by_id("auth-error-banner") {
+        el
+    } else {
+        // Create a new banner element.
+        let el = match document.create_element("div") {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        el.set_id("auth-error-banner");
+        el.set_class_name("error-banner");
+        el.set_inner_html("Authentication required – please sign in again.");
+
+        // Insert right after <body> start so it spans full width.
+        if let Some(body) = document.body() {
+            // Insert as first child so it sits above any other content.
+            let first_child = body.first_child();
+            let _ = match first_child {
+                Some(ref node) => body.insert_before(&el, Some(node)),
+                None => body.append_child(&el),
+            };
+        }
+
+        el
+    };
+
+    // Ensure the banner is visible (it may have been hidden earlier).
+    banner_el.set_attribute("style", "display: block;").ok();
+}
