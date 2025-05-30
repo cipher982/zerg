@@ -198,7 +198,18 @@ def _get_or_create_dev_user(db: Session):
         return user
 
     # Create dev user with ADMIN role
-    return crud.create_user(db, email=DEV_EMAIL, provider=None, role="ADMIN")
+    try:
+        return crud.create_user(db, email=DEV_EMAIL, provider=None, role="ADMIN")
+    except Exception as e:
+        # Handle race condition where another process created the user
+        if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
+            db.rollback()
+            # Try to fetch the user again
+            user = crud.get_user_by_email(db, DEV_EMAIL)
+            if user:
+                return user
+        # Re-raise if it's a different error
+        raise
 
 
 # ---------------------------------------------------------------------------

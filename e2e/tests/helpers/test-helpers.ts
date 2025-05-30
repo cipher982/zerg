@@ -84,33 +84,30 @@ export async function waitForElement(page: Page, selector: string, timeout: numb
  * Wait for the dashboard to be ready (app loaded and dashboard rendered)
  */
 export async function waitForDashboardReady(page: Page): Promise<void> {
-  await page.goto('/');
-  
-  // Wait for the app container or dashboard root to be populated
-  // The frontend is a WASM SPA, so we need to wait for JS to load and render
   try {
-    // Try to wait for dashboard-specific elements that get rendered by the WASM app
-    await page.waitForSelector('#dashboard-root, #app-container', { timeout: 15000 });
+    await page.goto('/', { waitUntil: 'networkidle' });
     
-    // Wait for either a table (if it exists) or dashboard content to be rendered
-    // Use a more flexible approach since the frontend might still be loading
-    await page.waitForFunction(() => {
-      // Check if dashboard has been rendered by looking for common dashboard elements
-      const dashboardRoot = document.querySelector('#dashboard-root');
-      const appContainer = document.querySelector('#app-container');
-      
-      // Look for any of these elements that indicate the dashboard is ready
-      return document.querySelector('table') || 
-             document.querySelector('[data-testid="create-agent-btn"]') ||
-             (dashboardRoot && dashboardRoot.children.length > 0) ||
-             (appContainer && appContainer.children.length > 0);
-    }, { timeout: 15000 });
-    
+    // Wait for critical UI elements to be interactive
+    await Promise.all([
+      page.waitForSelector('#dashboard:visible', { timeout: 2000 }),
+      page.waitForSelector('[data-testid="create-agent-btn"]:not([disabled])', { timeout: 2000 })
+    ]);
   } catch (error) {
-    // If we can't find dashboard elements, the frontend might not be fully implemented
-    console.warn('Dashboard elements not found, frontend may still be loading or incomplete');
-    // Still wait a bit for any content to load
-    await page.waitForTimeout(2000);
+    // Log detailed error information
+    console.error('Dashboard failed to load properly:', error);
+    
+    // Try to get current DOM state for debugging
+    const domState = await page.evaluate(() => ({
+      dashboardRoot: !!document.querySelector('#dashboard-root'),
+      dashboardContainer: !!document.querySelector('#dashboard-container'),
+      dashboard: !!document.querySelector('#dashboard'),
+      table: !!document.querySelector('table'),
+      createBtn: !!document.querySelector('[data-testid="create-agent-btn"]'),
+      bodyHTML: document.body.innerHTML.substring(0, 200)
+    }));
+    
+    console.error('Current DOM state:', domState);
+    throw new Error(`Dashboard did not load properly. DOM state: ${JSON.stringify(domState)}`);
   }
   
   // Wait a bit more for any reactive updates
@@ -121,7 +118,8 @@ export async function waitForDashboardReady(page: Page): Promise<void> {
  * Get the count of agent rows in the dashboard
  */
 export async function getAgentRowCount(page: Page): Promise<number> {
-  return await page.locator('tr[data-agent-id]').count();
+  await page.waitForLoadState('networkidle');
+  return await page.locator('tr[data-agent-id]:visible').count();
 }
 
 /**
@@ -130,9 +128,16 @@ export async function getAgentRowCount(page: Page): Promise<number> {
 export async function createAgentViaUI(page: Page): Promise<string> {
   await page.locator('[data-testid="create-agent-btn"]').click();
   
-  // Wait for the new row to appear
+  // Wait for new row to be visible and stable
   const newRow = page.locator('tr[data-agent-id]').first();
-  await expect(newRow).toBeVisible({ timeout: 15000 });
+  await expect(newRow).toBeVisible({ timeout: 2000 });
+  await page.waitForFunction(
+    (selector) => {
+      const row = document.querySelector(selector);
+      return row && row.clientHeight > 0 && row.clientWidth > 0;
+    },
+    'tr[data-agent-id]:first-of-type'
+  );
   
   const agentId = await newRow.getAttribute('data-agent-id');
   if (!agentId) {
@@ -154,7 +159,8 @@ export async function editAgentViaUI(page: Page, agentId: string, data: {
 }): Promise<void> {
   // Open edit modal
   await page.locator(`[data-testid="edit-agent-${agentId}"]`).click();
-  await waitForElement(page, '#agent-modal');
+  await expect(page.locator('#agent-modal')).toBeVisible({ timeout: 2000 });
+  await page.waitForSelector('#agent-name:not([disabled])', { timeout: 2000 });
 
   // Fill form fields
   if (data.name !== undefined) {
@@ -186,8 +192,8 @@ export async function editAgentViaUI(page: Page, agentId: string, data: {
   // Save changes
   await page.locator('#save-agent').click();
   
-  // Wait for modal to close
-  await expect(page.locator('#agent-modal')).toHaveCount(0, { timeout: 5000 });
+  // Wait for modal to close (hidden)
+  await expect(page.locator('#agent-modal')).not.toBeVisible({ timeout: 5000 });
 }
 
 /**
@@ -234,11 +240,31 @@ export async function navigateToChat(page: Page, agentId: string): Promise<void>
  * Reset the database to a clean state
  */
 export async function resetDatabase(): Promise<void> {
-  try {
-    await apiClient.resetDatabase();
-  } catch (error) {
-    console.warn('Failed to reset database via API:', error);
+  let attempts = 0;
+  const maxAttempts = 3;
+  
+  while (attempts < maxAttempts) {
+    try {
+      await apiClient.resetDatabase();
+      
+      // Verify reset was successful by checking agent count
+      const agents = await apiClient.listAgents();
+      if (agents.length === 0) {
+        return;
+      }
+      
+      console.warn(`Reset attempt ${attempts + 1}: Found ${agents.length} remaining agents`);
+    } catch (error) {
+      console.warn(`Reset attempt ${attempts + 1} failed:`, error);
+    }
+    
+    attempts++;
+    if (attempts < maxAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
+  
+  throw new Error(`Failed to reset database after ${maxAttempts} attempts`);
 }
 
 /**
