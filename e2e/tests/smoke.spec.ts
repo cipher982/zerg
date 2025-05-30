@@ -8,19 +8,24 @@ import {
   editAgentViaUI,
   deleteAgentViaUI,
   checkBackendHealth,
+  resetDatabase,
   TestContext
 } from './helpers/test-helpers';
+import { apiClient } from './helpers/api-client';
 
 test.describe('Smoke Tests - Basic Infrastructure', () => {
   let testContext: TestContext;
 
   test.beforeEach(async () => {
-    // Ensure backend is healthy
+    // Reset database and verify clean state
+    await resetDatabase();
     const isHealthy = await checkBackendHealth();
     expect(isHealthy).toBe(true);
     
-    // Start with clean state
+    // Verify empty state
     testContext = { agents: [], threads: [] };
+    const agentCount = await apiClient.listAgents();
+    expect(agentCount).toHaveLength(0);
   });
 
   test.afterEach(async () => {
@@ -36,9 +41,12 @@ test.describe('Smoke Tests - Basic Infrastructure', () => {
   test('Dashboard loads with clean database', async ({ page }) => {
     await waitForDashboardReady(page);
     
-    // With a clean database, there should be no agents
+    // Verify UI matches empty database state
+    await expect(page.locator('table')).toBeVisible();
     const agentCount = await getAgentRowCount(page);
     expect(agentCount).toBe(0);
+    // Check for the empty state message in the table
+    await expect(page.locator('table')).toContainText("No agents found. Click '+ Create New Agent' to get started.");
     
     // Dashboard should still show the table structure
     await expect(page.locator('table')).toBeVisible();

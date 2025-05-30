@@ -9,8 +9,9 @@ if ! command -v wasm-pack >/dev/null 2>&1; then
   exit 1
 fi
 
-# Build WASM package
-RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir www
+# Build with debug profile and set API_BASE_URL for e2e tests
+echo "Building WASM module..."
+API_BASE_URL="http://localhost:8001" RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir www
 
 # Bootstrap loader identical to dev script (minus server)
 echo "[build-only] writing bootstrap.js …"
