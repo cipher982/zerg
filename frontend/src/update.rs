@@ -160,6 +160,21 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     }
 
     match msg {
+        Message::SetPowerMode(enabled) => {
+            state.power_mode = enabled;
+            if let Some(window) = web_sys::window() {
+                if let Some(doc) = window.document() {
+                    if enabled {
+                        crate::register_global_shortcuts(&doc);
+                        crate::toast::info("Power Mode enabled: Keyboard shortcuts are active. Press '?' for help.");
+                    } else {
+                        crate::remove_global_shortcuts(&doc);
+                        crate::toast::info("Power Mode disabled: Keyboard shortcuts are off.");
+                    }
+                }
+            }
+            return vec![];
+        }
         // ---------------------------------------------------------------
         // Auth / profile handling
         // ---------------------------------------------------------------

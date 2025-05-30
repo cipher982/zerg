@@ -152,6 +152,8 @@ pub enum ConnectionStatus {
 
 // Store global application state
 pub struct AppState {
+    /// If true, global keyboard shortcuts (power mode) are enabled
+    pub power_mode: bool,
     // Agent domain data (business logic)
     pub agents: HashMap<u32, ApiAgent>,        // Backend agent data
     pub agents_on_canvas: HashSet<u32>,        // Track which agents are already placed on canvas
@@ -211,8 +213,6 @@ pub struct AppState {
     /// Current filter applied to the dashboard (persisted in localStorage).
     pub dashboard_scope: DashboardScope,
 
-    /// Current text in the dashboard search box (used for live filtering)
-    pub dashboard_search_query: String,
 
     /// Current sort settings for the dashboard table
     pub dashboard_sort: DashboardSort,
@@ -348,6 +348,7 @@ pub struct AppState {
     
     /// Connection status for each MCP server (key: "agent_id:server_name")
     pub mcp_connection_status: HashMap<String, ConnectionStatus>,
+    
 }
 
 // ---------------------------------------------------------------------------
@@ -433,15 +434,6 @@ impl AppState {
 
             // Default sort: Name ascending
 
-            // Live search starts empty
-            dashboard_search_query: {
-                let window = web_sys::window();
-                if let Some(w) = window {
-                    if let Ok(Some(storage)) = w.local_storage() {
-                        storage.get_item("dashboard_search_query").ok().flatten().unwrap_or_default()
-                    } else { String::new() }
-                } else { String::new() }
-            },
 
             dashboard_sort: {
                 // Try restoring from localStorage
@@ -543,6 +535,7 @@ impl AppState {
             agent_mcp_configs: HashMap::new(),
             available_mcp_tools: HashMap::new(),
             mcp_connection_status: HashMap::new(),
+            power_mode: false,
         }
     }
 
