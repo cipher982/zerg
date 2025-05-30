@@ -102,7 +102,7 @@ impl AgentConfigModal {
             connected_span.set_id("agent-gmail-connected-span");
             connected_span.set_inner_html("Gmail connected ✓");
             // Static styling (colour + margin) – visibility handled via helper
-            connected_span.set_attribute("style", "color:var(--success-color);margin-left:4px;")?;
+            connected_span.set_class_name("text-success ml-4");
             dom_utils::hide(&connected_span);
             gmail_row.append_child(&connected_span)?;
 
@@ -119,7 +119,7 @@ impl AgentConfigModal {
                     let form_card = document.create_element("div")?;
                     form_card.set_id("agent-add-trigger-form");
                     form_card.set_class_name("card");
-                    form_card.set_attribute("style", "padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
+                    form_card.set_class_name("form-card mt-12");
                     dom_utils::hide(&form_card);
 
                     let lbl = document.create_element("label")?;
@@ -164,7 +164,7 @@ impl AgentConfigModal {
                     let list_ul = document.create_element("ul")?;
                     list_ul.set_id("agent-triggers-list");
                     list_ul.set_class_name("triggers-list");
-                    list_ul.set_attribute("style", "margin-top:12px;")?;
+                    list_ul.set_class_name("mt-12");
                     triggers_content.append_child(&list_ul)?;
 
                     // Append after existing tab-content containers
@@ -308,7 +308,7 @@ impl AgentConfigModal {
         let form_card = document.create_element("div")?;
         form_card.set_id("agent-add-trigger-form");
         form_card.set_class_name("card");
-        form_card.set_attribute("style", "padding:12px;border:1px solid var(--border-color);margin-top:12px;border-radius:4px;")?;
+        form_card.set_class_name("form-card mt-12");
         dom_utils::hide(&form_card);
 
         // Type label + select
@@ -339,7 +339,7 @@ impl AgentConfigModal {
         // Actions row
         let actions_div = document.create_element("div")?;
         actions_div.set_class_name("actions-row");
-        actions_div.set_attribute("style", "margin-top:12px;display:flex;gap:8px;")?;
+        actions_div.set_class_name("actions-row mt-12");
 
         let cancel_btn = document.create_element("button")?;
         cancel_btn.set_attribute("type", "button")?;
@@ -366,7 +366,7 @@ impl AgentConfigModal {
         let list_el = document.create_element("ul")?;
         list_el.set_id("agent-triggers-list");
         list_el.set_class_name("triggers-list");
-        list_el.set_attribute("style", "margin-top:12px;")?;
+        list_el.set_class_name("mt-12");
         triggers_content.append_child(&list_el)?;
 
         // --------------------------------------------------------------
@@ -559,7 +559,7 @@ impl AgentConfigModal {
         // Summary line
         let summary_div = document.create_element("div")?;
         summary_div.set_id("sched-summary");
-        summary_div.set_attribute("style", "font-size: 0.9em; color: #555; margin-top: 6px;")?;
+        summary_div.set_class_name("summary-text mt-6");
         summary_div.set_inner_html("No schedule set");
 
         // Assemble schedule container
@@ -1397,7 +1397,7 @@ pub fn render_gmail_connect_status(document: &Document) -> Result<(), JsValue> {
     }
     if let Some(span) = document.get_element_by_id("agent-gmail-connected-span") {
         // Ensure colour always applied
-        let _ = span.set_attribute("style", "color:var(--success-color);margin-left:4px;");
+        span.set_class_name("text-success ml-4");
         if connected {
             dom_utils::show(&span);
         } else {

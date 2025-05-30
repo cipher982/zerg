@@ -1676,6 +1676,43 @@ button {
 }
 
 /* -------------------------------------------------------------
+   Generic utility classes extracted from inline styles
+   ------------------------------------------------------------- */
+
+.text-success {
+    color: var(--color-success);
+}
+
+.ml-4 {
+    margin-left: 4px;
+}
+
+.mt-6 {
+    margin-top: 6px;
+}
+
+.mt-12 {
+    margin-top: 12px;
+}
+
+.form-card {
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-darker);
+}
+
+.actions-row {
+    display: flex;
+    gap: 8px;
+}
+
+.summary-text {
+    font-size: 0.9em;
+    color: #555;
+}
+
+/* -------------------------------------------------------------
    Dashboard responsive card layout (<768px)
    ------------------------------------------------------------- */
 
