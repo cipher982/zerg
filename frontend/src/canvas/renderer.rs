@@ -192,7 +192,7 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             
             // Icon background circle
             context.begin_path();
-            context.arc(node.x + 28.0, node.y + 35.0, 14.0, 0.0, 2.0 * std::f64::consts::PI);
+            let _ = context.arc(node.x + 28.0, node.y + 35.0, 14.0, 0.0, 2.0 * std::f64::consts::PI);
             context.set_fill_style_str(status_bg);
             context.fill();
             
