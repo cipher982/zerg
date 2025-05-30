@@ -1,241 +1,138 @@
 # Agent Platform
 
-Agent Platform is a full-stack application combining a Rust + WebAssembly (WASM) frontend, a FastAPI/OpenAI backend, and an optional Node/Playwright pre‑rendering layer for improved SEO. It enables you to create and manage AI-driven "agents" to handle user requests in real-time, streaming AI-generated responses into the browser.
+Agent Platform is a full-stack reference application that lets you **create &
+orchestrate AI agents** in real-time.  It couples a FastAPI backend (Python
+3.12) with a purely-Rust + WASM front-end, and ships an optional Node +
+Playwright pre-rendering layer for SEO.
 
---------------------------------------------------------------------------------
+The project acts as both a production-ready starter kit *and* a playground for
+modern WebSocket streaming patterns, LangGraph-based agents, and a
+canvas-style visual editor – all under one repo.
+
+-------------------------------------------------------------------------------
 ## Table of Contents
 
-1. [Overview](#overview)  
-2. [Quick Start](#quick-start)  
-3. [Architecture Overview](#architecture-overview)  
-4. [Frontend State Management](#frontend-state-management)  
-5. [Canvas Nodes vs. Agents](docs/canvas_nodes_vs_agents.md)  
-6. [WebSocket & Event Communication](#websocket--event-communication)  
-7. [Key Features](#key-features)  
-8. [Directory Structure](#directory-structure)  
-9. [Dependencies](#dependencies)  
-10. [Setup & Running](#setup--running)  
-   - [Backend Setup](#backend-setup)  
-   - [Frontend Setup](#frontend-setup)  
-   - [Pre‑Rendering Setup (Optional)](#pre-rendering-setup-optional)  
-11. [Using the Dashboard & Canvas Editor](#using-the-dashboard--canvas-editor)  
-12. [Pre-Rendering & SEO Details](#pre-rendering--seo-details)  
-13. [How It Works](#how-it-works)  
-14. [Extending the Project & Future Plans](#extending-the-project--future-plans)  
-15. [Testing & Verification](#testing--verification)  
-16. [Authentication](#authentication)  
+1. [Overview](#overview)  – what it does, at a glance  
+2. [Key Features](#key-features)  – why it is interesting  
+3. [Quick Start](#quick-start)  – run everything locally in minutes  
+4. [Architecture](#architecture)  – BE / FE / Pre-render  
+5. [Authentication](#authentication)  – Google Sign-In + JWT + WS  
+6. [WebSocket & Event Flow](#websocket--event-flow)  
+7. [Frontend State Management](#frontend-state-management)  
+8. [Directory Layout](#directory-layout)  
+9. [Testing](#testing)  
+10. [Extending / Road-map](#extending--road-map)
 
---------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 ## Overview
 
-Agent Platform is designed for users who need to create, manage, and orchestrate thread-based AI "agents." At a high level:  
+*   **Dashboard** – spreadsheet-like table of agents with run/pause, stats,
+    quick debugging links.  
+*   **Canvas Editor** – node-based UI (Rust + WebGL-free renderer) to design
+    multi-step or multi-tool workflows visually.  
+*   **Chat view** – chat with any agent, token-level streaming, message
+    history.
 
-• Agents can be created or edited via either:  
-  1. The Dashboard view (for a structured, spreadsheet-like experience of agent cards).  
-  2. A node-based "Canvas Editor" (built in Rust/WASM) for visually configuring complex instructions or multi-step flows.  
+Agents live in a SQL database, can be triggered on-demand or via CRON, and are
+implemented as *fully functional* LangGraph runnables.
 
-• Agents can be paused, scheduled, or run on-demand. Each agent can maintain a thread history and system instructions.  
+-------------------------------------------------------------------------------
+## Key Features
 
-• The backend (FastAPI) streams real-time responses from the OpenAI API to connected browsers over WebSockets.  
+• **Strict WebSocket authentication (Jul 2025)** – every browser opens
+  `wss://…/api/ws?token=<jwt>`.  The backend validates the token *before*
+  `accept()`; bad or missing tokens close with code **4401**.  Local-dev keeps
+  `AUTH_DISABLED=1` so no token is needed.
 
-• An optional Node/Playwright-based pre‑rendering system can generate static snapshots for SEO, serving them to crawlers while humans see the interactive WASM interface.
+• **Token-level AI streaming** – enable `LLM_TOKEN_STREAM=1` and the backend
+  emits `assistant_token` chunks for real-time typing effect; still sends full
+  `assistant_message` for non-live clients.
 
---------------------------------------------------------------------------------
+• **Elm-style front-end architecture** – global `AppState`, `Message` enum,
+  pure `update()` reducer -> predictable, no borrow-checker fights.  A tiny
+  `mut_borrow!` macro encapsulates RefCell borrows.
+
+• **Google Sign-In production auth, zero-friction local dev** – toggle via
+  `AUTH_DISABLED`.
+
+• **ReAct-style LangGraph agents** – cached runnable compilation, tool calls
+  executed concurrently with `asyncio.gather`.
+
+• **SEO snapshotting** – Node + Playwright captures static HTML and serves it
+  to crawlers; humans get the live WASM SPA.
+
+-------------------------------------------------------------------------------
 ## Quick Start
 
-**IMPORTANT:** FOR ANY PYTHON CLI CALLS, USE `uv run` TO RUN THE COMMAND. Also NEVER use pip, use UV ONLY.
+Prereqs: Python 3.12, [uv](https://github.com/astral-sh/uv), Rust (+ wasm-pack),
+Node 16+.
 
-• **Running Backend Tests (MANDATORY METHOD):**
-  To run the backend test suite, you **MUST** use the provided helper script. This script ensures the correct environment, applies necessary flags, and handles other pre-test configurations.
-  ```bash
-  cd backend && ./run_backend_tests.sh
-  ```
+```bash
+# 1. clone & install rust/wasm targets as usual
 
-  **CRITICAL NOTE ON RUNNING BACKEND TESTS:**
-  It is **ESSENTIAL** to use the `run_backend_tests.sh` script as shown above.
-  *   **DO NOT** attempt to run tests using `uv run pytest tests/` directly.
-  *   **ABSOLUTELY NEVER** run tests using `pytest` or `python -m pytest` directly.
+# 2. backend
+cd backend
+cp .env.example .env                 # add OPENAI_API_KEY here
+uv run python -m uvicorn zerg.main:app --reload --port 8001
 
-  Bypassing the `run_backend_tests.sh` script will likely lead to:
-      *   An incorrect or incomplete testing environment.
-      *   Missing required flags (e.g., the script passes `-p no:warnings` for cleaner CI logs).
-      *   Inconsistent test results or outright failures due to improper setup.
-      *   Potential interference with CI processes or local development state.
+# 3. frontend (in another tab)
+cd ../frontend
+./build.sh                           # prod build + dev server on :8002
 
-  Always use `cd backend && ./run_backend_tests.sh` for reliability and consistency.
+# 4. visit http://localhost:8002  – login overlay skipped in dev mode
+```
 
-An experimental **MCP test-runner** that bootstraps a full local cluster lives under `tools/mcp_test_runner/` – see its README if you need integration-style smoke tests.
+Tests must be executed via helper scripts (they set env & flags):
 
-Here's the minimal set of commands to get Agent Platform running locally:
+```bash
+cd backend   && ./run_backend_tests.sh   # not pytest directly!
+cd frontend  && ./run_frontend_tests.sh
+```
 
-1. Clone the repository:  
-   » git clone https://github.com/your-username/agent-platform.git  
+-------------------------------------------------------------------------------
+## Architecture
 
-2. Install prerequisites:  
-   - Python 3.12+  
-   - uv (https://github.com/astral-sh/uv)
-   - Rust (with wasm-pack)  
-   - Node.js and npm  
+### Backend (FastAPI)
 
-### Backend
-1. cd backend  
-2. Copy the example environment file:  
-   » cp backend/.env.example .env  
-   (Insert your OPENAI_API_KEY in the .env file to enable AI calls.)   
-   If you want to **disable** the Google-login overlay during local testing keep `AUTH_DISABLED=1` (already in the template).
-   For production remember to populate `GOOGLE_CLIENT_ID`, `JWT_SECRET` and `TRIGGER_SIGNING_SECRET`.
-3. Run backend server:  
-   » uv run python -m uvicorn zerg.main:app --reload --port 8001
-4. Run backend tests:
-   » ./backend/run_backend_tests.sh
+*   **Routers** under `backend/zerg/routers/` – CRUD, auth, WebSocket.  
+*   **EventBus** – in-process pub/sub; decorators publish automatically.  
+*   **TopicConnectionManager** – holds per-socket topic subscriptions and
+    broadcasts EventBus packets.  Uses a single `asyncio.Lock` and a 30-s
+    heartbeat to drop zombies.
 
-### Frontend
-1. cd frontend  
-2. Build the WASM module and start a local server:  
-   » ./build.sh   (production build on http://localhost:8002)  
-   or  
-   » ./build-debug.sh (debug build with source maps)  
-3. Run frontend tests:
-   » ./frontend/run_frontend_tests.sh
+*   **AgentRunner** compiles + runs LangGraph runnables, streams tokens over
+    WS, persists messages.
 
-### Authentication (new as of May 2025)
+### Front-end (Rust + WASM)
 
-(A concise overview is given here – a more detailed explanation of the Google
-Sign-In flow, JWT minting and the `AUTH_DISABLED` dev shortcut is available in
-[`docs/auth_overview.md`](docs/auth_overview.md).)
+*   `WsClientV2` – reconnects with exp-back-off, appends `?token=…`, shows
+    auth-error banner on 4401, has packet ping.
+*   `TopicManager` – subscribe/unsubscribe, dispatches messages to closures.
+*   `state.rs` – single RefCell holding `AppState`; message reducer pattern.
 
-The platform now ships a *Google Sign-In* authentication layer.
+### Pre-render (optional)
 
-* **Local development** – leave `AUTH_DISABLED=1` (default in `.env.example`).  The backend injects a deterministic `dev@local` user so the UI skips the login overlay.
-* **Production / staging** – set the following **required** variables in your environment or `.env` file:
-
-  ```bash
-  GOOGLE_CLIENT_ID="your-gcp-oauth-client.apps.googleusercontent.com"
-  JWT_SECRET="change-this-to-a-long-random-string"
-  AUTH_DISABLED="0"        # or simply remove the variable
-  # Required only if you use webhook triggers
-  TRIGGER_SIGNING_SECRET="super-secret-hex"
-  ```
-
-  On first load the SPA shows a Google button in a full-screen overlay.  After sign-in the backend issues a **short-lived JWT** which the browser stores in `localStorage` and forwards on every REST / WebSocket request.
-
-> The login overlay is **not** shown in dev-mode so tests and local hacking remain friction-free.
-
-   The test runner needs a headless-capable Chrome or Firefox binary. On
-   macOS, the usual drag-and-drop installation stores the executable
-   inside the *.app* bundle so it is **not** on `$PATH`. The script now
-   tries, in order:
-   1. Any `google-chrome` / `chromium` or `firefox` already on `$PATH`.
-   2. Homebrew wrappers in `/opt/homebrew/bin/google-chrome`.
-   3. The default bundle locations
-      `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` and
-      `/Applications/Firefox.app/Contents/MacOS/firefox`.
-
-   You can also override the detection by setting
-   `CHROME_BIN=/absolute/path/to/chrome` or `FIREFOX_BIN=…` before
-   running the script.
-
-### (Optional) Pre‑rendering
-1. cd prerender  
-2. npm install  
-3. npm run prerender     (Generates dist/index.html as a static snapshot)  
-4. node server.js        (Serves content on http://localhost:8003 to bots)  
-
-Visit http://localhost:8002 to see the UI.  
-
-**Note for new developers:** Agents are scheduled if their `schedule` field is set (as a CRON string). There is no separate boolean flag for scheduling.
+Node + Playwright snapshot → `prerender/dist/index.html`; Express server serves
+it to bots based on UA sniffing.
 
 -------------------------------------------------------------------------------
 ## Authentication
 
-The platform uses **Google Sign-In** for production deployments but offers a
-"no-questions-asked" local-dev mode:
+Production: Google Sign-In → backend verifies Google ID-token → issues
+30-minute HS256 JWT → stored in `localStorage[zerg_jwt]` and sent:
 
-1. **Production / staging** – set the three required secrets:
-   ```bash
-   GOOGLE_CLIENT_ID="your-oauth-client.apps.googleusercontent.com"
-   JWT_SECRET="change-this-to-a-long-random-string"
-   TRIGGER_SIGNING_SECRET="hex-string"          # only needed if you use triggers
-   ```
-   On first load the SPA shows a Google button.  After sign-in the backend
-   issues a **30-minute JWT** which the browser stores in `localStorage` and
-   forwards on every REST & WebSocket request.
+* as `Authorization: Bearer …` on every REST call, and  
+* appended as `?token=…` when the front-end opens the WebSocket.
 
-2. **Local development** – leave `AUTH_DISABLED=1` (default in `.env.example`).
-   The backend injects a deterministic `dev@local` user so the UI skips the
-   overlay and all tests run without mocking auth.
+Local development: leave `AUTH_DISABLED=1` (default).  Backend injects a
+deterministic `dev@local` user; WS accepts even without token.
 
-For a deeper dive (token flow diagrams, code pointers, CLI cheat-sheet) see
-[`docs/auth_overview.md`](docs/auth_overview.md).
+Secrets required for prod:
 
---------------------------------------------------------------------------------
-## Architecture Overview
-
-The repository is divided into three main areas:
-
-1. **Frontend (Rust + WebAssembly)**  
-   - Uses wasm-bindgen, web-sys, and js-sys for DOM/event handling  
-   - Implements an "Elm-style" architecture where:
-     • User actions produce Messages (defined in messages.rs)
-     • An update function (update.rs) handles state changes
-     • Commands handle side effects (API calls, WebSocket actions)
-   - Renders three main views:
-     • Dashboard for quick agent management
-     • Canvas Editor for visual flow configuration
-     • Chat interface for real-time agent interaction
-   - State management via AppState (state.rs) as single source of truth
-   - Uses pure wasm-bindgen + web-sys DOM helpers for rendering
-   - Communicates with backend via REST API calls and real-time WebSocket connection
-
-2. **Backend (Python + FastAPI)**  
-   - Provides both REST and WebSocket endpoints to handle streaming from OpenAI.
-   - Uses an event-based architecture with custom decorators and an event bus.
-   - REST endpoints handle CRUD operations while WebSocket connections provide real-time updates.
-   - Environment variables (OPENAI_API_KEY, etc.) loaded from a .env file.
-   - Main entry point is backend/zerg/main.py
-   - Uses a **ReAct-style functional agent** compiled in `zerg/agents_def/zerg_react_agent.py` and orchestrated by `zerg/managers/agent_runner.py`.
-     (The previous `legacy_agent_manager.AgentManager.process_message()` helper is still shipped but considered *deprecated* and will be removed in a future release.)
-   - uvicorn or gunicorn can host the app in production.
-
-3. **Pre-Rendering (Node/Playwright)**  
-   - Uses a headless browser to capture HTML snapshots for SEO.  
-   - An Express-based server (server.js) detects bot user agents and returns the pre-rendered snapshot.
-
---------------------------------------------------------------------------------
-## Frontend State Management
-
-The frontend uses an Elm-like message-passing architecture for state management:
-
-### Message-Based State Updates
-
-All state modifications follow these principles:
-
-1. **Never Directly Mutate State**: Instead of directly modifying `APP_STATE`, dispatch a message that describes the change.
-
-2. **Messages Define Intent**: Each state change has a corresponding message type in `messages.rs`.
-
-3. **Pure State Updates**: The `update()` function in `update.rs` handles state mutations and returns Commands for side effects.
-
-4. **Commands Handle Side Effects**: Network calls, WebSocket actions, and other side effects are handled by command executors.
-
-5. **Use the Message/Command Pattern**:
-```rust
-// Good: Message that may produce Commands
-crate::state::dispatch_global_message(Message::SendThreadMessage { 
-    thread_id,
-    content: "Hello agent".to_string(),
-    client_id: Some("user-123".to_string())
-});
-// This will:
-// 1. Update thread state in update()
-// 2. Return a Command::SendThreadMessage
-// 3. command_executor handles the API call
-
-// Bad: Direct mutation or side effects
-APP_STATE.with(|state| {
-    let mut state = state.borrow_mut();
-    state.send_message_to_thread(thread_id, message);  // Don't mix state and side effects!
-});
+```bash
+GOOGLE_CLIENT_ID="…apps.googleusercontent.com"
+JWT_SECRET="change-me"
+TRIGGER_SIGNING_SECRET="hex-string"   # only if you use triggers
 ```
 
 ### Avoiding Borrowing Issues
@@ -695,3 +592,78 @@ All routers are version‑less but live under prefix "/api".
 - Browser subscribes to topics → receives JSON deltas → DOM updates via wasm-bindgen.
 
 This should give you a solid grasp of "everything" without drowning in code. Let me know if you want to zoom into any specific file, execution path or test!
+-------------------------------------------------------------------------------
+## WebSocket & Event Flow
+
+```text
+LLM / CRUD change ──▶ EventBus ──▶ TopicConnectionManager ──▶ browser
+                                      │                       ▲
+                                      └──── heartbeat / ping──┘
+```
+
+1. Browser opens `wss://<host>/api/ws?token=<jwt>`.  
+2. `validate_ws_jwt()` runs **before** `websocket.accept()`.  
+3. Success → socket auto-subscribed to `user:{id}` personal topic.  
+4. Failure → close code 4401; front-end banner + logout.
+
+Message schema (v1):
+
+```jsonc
+{
+  "v": 1,
+  "id": "uuid4",
+  "topic": "thread:42",
+  "type": "thread_message_created",
+  "ts": 1719958453,
+  "data": { … }
+}
+```
+
+-------------------------------------------------------------------------------
+## Frontend State Management
+
+Same Elm-style description as before (Message enum, pure reducer, command
+executors) – see `frontend/src/update.rs` for details.
+
+-------------------------------------------------------------------------------
+## Directory Layout (excerpt)
+
+```
+backend/
+  zerg/
+    routers/…     FastAPI routes incl. websocket.py
+    websocket/…   TopicConnectionManager + helpers
+    agents_def/   Pure LangGraph agent templates
+
+frontend/
+  src/
+    network/      ws_client_v2.rs, topic_manager.rs, …
+    canvas/       Rust renderer for the visual editor
+    macros.rs     mut_borrow! convenience macro
+
+prerender/        Node snapshotper (optional)
+docs/             Deep-dives & task docs
+```
+
+-------------------------------------------------------------------------------
+## Testing
+
+* **Backend** – `./backend/run_backend_tests.sh` (200+ pytest tests, >95 % cov).  
+* **Frontend** – `./frontend/run_frontend_tests.sh` (wasm-bindgen + headless
+  browser).  
+* **E2E** – Playwright specs under `e2e/`, run via `./e2e/run_e2e_tests.sh`.
+
+The CI checks also run `cargo clippy -D warnings`, `ruff`, and the pre-commit
+hooks.
+
+-------------------------------------------------------------------------------
+## Extending / Road-map
+
+*   **Milestone WS-02** – move broadcast to per-socket queue, add trace-id &
+    Prometheus counters (see `docs/task_websocket_hardening.md`).  
+*   Agent plugins for external services (email, db, http).  
+*   Graphical editor: condition/branch nodes, tool nodes.  
+*   PostgreSQL migration & async SQLAlchemy once multi-worker fan-out lands.
+
+-------------------------------------------------------------------------------
+#EOF

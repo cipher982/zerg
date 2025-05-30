@@ -241,6 +241,10 @@ mod auth;
 mod ui_components;
 pub mod reducers;
 
+// Export convenience macros crate-wide
+#[macro_use]
+mod macros;
+
 /// Basic hash router for a handful of top-level pages.
 fn route_hash(hash: &str) {
     use crate::storage::ActiveView;
