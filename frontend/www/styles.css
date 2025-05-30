@@ -154,6 +154,32 @@ body {
     display: none !important;
 }
 
+/* -------------------------------------------------------------
+   Empty-state (dashboard) styles
+   ------------------------------------------------------------- */
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    color: var(--text-secondary);
+    min-height: 400px; /* Ensure consistent height */
+    width: 100%; /* Take full width of container */
+}
+
+.empty-state-illustration {
+    font-size: 64px;
+    margin-bottom: var(--spacing-md);
+}
+
+.empty-state-text {
+    margin: 0 0 var(--spacing-md) 0;
+    font-size: 18px;
+    text-align: center;
+}
+
 /* Elements that carry the boolean `hidden` attribute should not take any
    layout space.  All modern browsers already ship this behaviour but we make
    it explicit so older CSS resets do not override it. */
@@ -874,7 +900,9 @@ button {
 .dashboard-container {
     flex: 1;
     padding: 20px;
+    width: 100%;
     max-width: 1200px;
+    min-width: 800px; /* Ensure minimum width for consistency */
     margin: 0 auto;
     background-color: #2a2a3a;
     border-radius: 8px;
@@ -882,6 +910,7 @@ button {
     overflow-y: auto;
     height: auto; /* Let it grow with the content */
     min-height: 0; /* Allow it to shrink */
+    box-sizing: border-box; /* Include padding in width calculation */
 }
 
 .dashboard-header {
@@ -900,6 +929,7 @@ button {
     border-radius: 4px;
     padding: 8px 16px;
     width: 300px;
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
 .search-icon {
@@ -918,6 +948,21 @@ button {
 
 #agent-search::placeholder {
     color: #777;
+}
+
+.search-clear {
+    cursor: pointer;
+    color: #aaa;
+    font-size: 18px;
+    line-height: 1;
+    padding: 2px;
+    margin-left: 4px;
+    user-select: none;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+.search-clear:hover {
+    color: #fff;
 }
 
 /* Scope selector dropdown styling */
@@ -1267,6 +1312,7 @@ button {
     .dashboard-container {
         overflow-x: auto;
         padding-bottom: var(--spacing-md);
+        min-width: 600px; /* Reduce minimum width on smaller screens */
     }
     
     /* Ensure consistent cell heights with flexible widths */
@@ -1480,13 +1526,250 @@ button {
 }
 
 /* Empty state styling */
-.empty-state {
-    text-align: center;
-    padding: 30px;
-    color: #888;
-}
 
-/* Text content with preserved whitespace */
+/* Text content helper – can be applied elsewhere if inline styles were removed */
 .preserve-whitespace {
     white-space: pre-wrap;
+}
+
+/* -------------------------------------------------------------
+   MCP Server Manager component clean-up (inline styles → classes)
+   ------------------------------------------------------------- */
+
+.mcp-header {
+    font-size: 1.1em;
+    font-weight: bold;
+    margin-bottom: 16px;
+}
+
+.mcp-tab-container {
+    margin: 16px 0;
+}
+
+.mcp-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 16px;
+}
+
+/* MCP Tab button */
+.mcp-tab {
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    color: var(--text-primary);
+}
+
+.mcp-tab.active {
+    border-bottom-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+/* Built-in tools section */
+.builtin-tools-section {
+    margin-bottom: 24px;
+    padding: 12px;
+    background: var(--bg-darker);
+    border-radius: 6px;
+}
+
+.builtin-tools-title {
+    margin: 0 0 8px 0;
+    color: var(--color-success);
+}
+
+.builtin-tools-list {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--text-secondary);
+}
+
+/* Presets grid */
+.mcp-intro-text,
+.mcp-custom-intro {
+    margin-bottom: 16px;
+    color: var(--text-secondary);
+}
+
+.mcp-presets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.mcp-preset-card {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+    background: var(--bg-darker);
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.mcp-preset-card:hover {
+    border-color: var(--color-primary);
+}
+
+.mcp-preset-card-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.mcp-preset-icon {
+    margin-right: 8px;
+    font-size: 1.2em;
+}
+
+.mcp-preset-description {
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    margin-bottom: 12px;
+}
+
+.mcp-preset-connect-btn {
+    width: 100%;
+    padding: 6px;
+}
+
+/* Custom form */
+.mcp-custom-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.mcp-custom-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+/* Connected servers */
+.mcp-connected-section {
+    margin-top: 24px;
+}
+
+.mcp-section-separator {
+    margin: 16px 0;
+    border: none;
+    border-top: 1px solid var(--border-color);
+}
+
+.mcp-connected-title {
+    margin: 0 0 12px 0;
+}
+
+.mcp-connected-empty {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.mcp-server-card {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    background: var(--bg-darker);
+}
+
+.mcp-server-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.mcp-server-details {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+.mcp-server-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.mcp-remove-btn {
+    padding: 4px 8px;
+    font-size: 0.9em;
+}
+
+/* -------------------------------------------------------------
+   Generic utility classes extracted from inline styles
+   ------------------------------------------------------------- */
+
+.text-success {
+    color: var(--color-success);
+}
+
+.ml-4 {
+    margin-left: 4px;
+}
+
+.mt-6 {
+    margin-top: 6px;
+}
+
+.mt-12 {
+    margin-top: 12px;
+}
+
+.form-card {
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-darker);
+}
+
+.actions-row {
+    display: flex;
+    gap: 8px;
+}
+
+.summary-text {
+    font-size: 0.9em;
+    color: #555;
+}
+
+/* -------------------------------------------------------------
+   Dashboard responsive card layout (<768px)
+   ------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  .agents-table {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .agents-table thead {
+    display: none;
+  }
+
+  .agents-table tr {
+    display: block;
+    background: var(--bg-darker);
+    margin-bottom: var(--spacing-sm);
+    border-radius: 6px;
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  .agents-table td {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--spacing-xs) 0;
+  }
+
+  .agents-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .agents-table td.actions-cell {
+    justify-content: flex-end;
+  }
 }

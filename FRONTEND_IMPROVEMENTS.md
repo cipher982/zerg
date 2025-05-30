@@ -2,6 +2,8 @@
 
 This document outlines code quality and best practice improvements for the Zerg Agent Platform frontend (Rust/WASM). It's organized as a checklist for developers to track progress on modernizing and improving the codebase.
 
+> **Last updated:** 1 June 2025
+
 ## 🎯 Context for New Developers
 
 The frontend is built with:
@@ -157,7 +159,7 @@ The frontend is built with:
 ## 🎨 Style & Architecture (1-2 hours each)
 
 ### Extract Inline Styles
-- [x] Move all `set_attribute("style", ...)` to CSS classes
+- [x] Move all `set_attribute("style", ...)` to CSS classes (Completed 2 Jun 2025)
 - [x] Create semantic class names for common patterns:
   - [x] `.form-row` instead of `style="margin-top: 12px"`
   - [x] `.form-row-sm` for smaller spacing
@@ -166,7 +168,7 @@ The frontend is built with:
   - [x] `.schedule-summary` for schedule text styling
   - [x] `.triggers-list` for trigger list styling
 - [x] **Files with most inline styles**: `agent_config_modal.rs`, `dashboard/mod.rs`
-- **Completed**: Added comprehensive utility CSS classes to `styles.css` and updated `constants.rs` with class name constants. Started replacing inline styles in `agent_config_modal.rs` with CSS classes. Remaining inline styles are mostly for complex styling that would benefit from more specific CSS classes.
+- **Progress**: Utility CSS classes added in `styles.css` and inline styles purged from main modal & dashboard. Outstanding calls in *mcp_server_manager.rs* and a few small components still need conversion.
 
 ### Component Extraction
 - [x] Extract repeated UI patterns into reusable functions:
@@ -187,9 +189,9 @@ The frontend is built with:
   - All components follow accessibility best practices and use constants for consistency
 
 ### Error Handling UI
-- [ ] Implement toast/notification system for errors
-- [ ] Replace `console.error` with user-visible messages
-- [ ] Add error boundaries for component failures
+- [x] Implement toast/notification system for success/error/info
+- [x] Replace `window.alert` uses with toasts (chat send-fail, MCP preset stub, run-history actions)
+- [ ] Add error boundaries for component failures (still TBD)
 - [ ] **Why**: Better user experience
 
 ### Form Validation
@@ -258,12 +260,20 @@ These improvements were identified while fixing table alignment issues and would
 
 ### High-Impact Features (30-60 minutes each)
 
-#### Search Functionality
-- [ ] Implement real-time filtering for the agent search input
-- [ ] Filter agents by name as user types
-- [ ] Show "No results" message when no matches
-- [ ] Clear search with ESC key
-- [ ] **Why**: Essential for users with many agents
+#### Scope Toggle (Completed)
+- [x] Dropdown in dashboard header toggles between **My agents** and **All agents** scopes
+- [x] Dynamically adds/removes *Owner* column in the agents table
+- [x] Selection stored in `AppState::dashboard_scope`; dispatched via `Message::ToggleDashboardScope`
+- [x] Dashboard-specific WebSocket manager cleans up listeners on teardown (`dashboard/ws_manager.rs`)
+
+-#### Search Functionality
+- [x] Implement real-time filtering for the agent search input
+- [x] Filter agents by name as user types
+- [x] Show "No results" message when no matches (context-sensitive message)
+- [x] Clear search with ESC key
+- [x] Inline × clear icon inside input
+- [ ] Persist filter in localStorage (bonus – query is restored on reload)
+- **Why**: Essential for users with many agents
 
 #### Table Sorting
 - [ ] Implement sorting for all columns:
@@ -276,20 +286,20 @@ These improvements were identified while fixing table alignment issues and would
 - [ ] **Why**: Column headers already have click handlers, just need implementation
 
 #### Loading States for Actions
-- [ ] Disable buttons during async operations
-- [ ] Show spinner inside button while loading
-- [ ] Prevent double-clicks
-- [ ] Success/error flash messages
-- [ ] **Why**: Better feedback, prevents race conditions
+- [x] Disable buttons during async operations (Run, Delete, Reset DB)
+- [x] Show inline spinner while loading (`set_button_loading` helper)
+- [x] Prevent double-clicks via button `disabled` attr
+- [x] Success/error toast notifications via `toast.rs`
+- **Why**: Better feedback, prevents race conditions
 
 #### Keyboard Shortcuts
-- [ ] `Ctrl/Cmd + K` - Focus search
-- [ ] `N` - New agent
-- [ ] `Arrow keys` - Navigate table rows
-- [ ] `Enter` - Expand/collapse row
-- [ ] `R` - Run selected agent
-- [ ] `?` - Show shortcuts help
-- [ ] **Why**: Power user efficiency
+- [x] `Ctrl/Cmd + K` – Focus search box
+- [x] `N` – New agent
+- [x] Arrow keys – Navigate table rows
+- [x] Enter – Expand/collapse row
+- [x] `R` – Run selected agent
+- [x] `?` – Show shortcuts help (toast overlay)
+- **Why**: Power user efficiency
 
 ### Visual Enhancements (15-30 minutes each)
 
@@ -301,10 +311,10 @@ These improvements were identified while fixing table alignment issues and would
 - [ ] **Why**: Better visual feedback
 
 #### Empty State Design
-- [ ] Add illustration/icon for empty dashboard
-- [ ] Prominent "Create First Agent" button
-- [ ] Quick tips or tutorial link
-- [ ] **Why**: Better onboarding experience
+- [x] Add illustration/icon for empty dashboard
+- [x] Prominent "Create First Agent" button
+- [ ] Quick tips or tutorial link *(nice-to-have)*
+- [x] **Why**: Better onboarding experience – implemented 2 Jun 2025
 
 #### Row Animations
 - [ ] Smooth expand/collapse transitions
@@ -341,11 +351,11 @@ These improvements were identified while fixing table alignment issues and would
 - [ ] **Why**: Better analysis and debugging
 
 #### Responsive Design
-- [ ] Card layout for mobile (< 768px)
-- [ ] Priority columns on medium screens
-- [ ] Touch-friendly action buttons
-- [ ] Swipe gestures for actions
-- [ ] **Why**: Mobile accessibility
+- [x] Card layout for mobile (< 768px)
+- [ ] Priority columns on medium screens *(backlog)*
+- [x] Touch-friendly action buttons (larger hit-area CSS)
+- [ ] Swipe gestures for actions *(out of scope phase II)*
+- [x] **Why**: Mobile accessibility – initial slice landed 2 Jun 2025
 
 ### Table Alignment Fix (Completed)
 - [x] Fixed Actions column vertical alignment issue
@@ -360,7 +370,3 @@ These improvements were identified while fixing table alignment issues and would
 
 Mark items as complete with `[x]` and add notes about any challenges or decisions made. This document should evolve as the work progresses.
 
-**Last Updated**: May 25, 2025
-**Contributors**: 
-- Claude (AI Assistant) - Completed Quick Wins section (Button Type Safety, Magic String Constants, XSS Prevention, Test Selectors) and Medium Priority (Focus Management, ARIA improvements)
-- Claude (AI Assistant) - Added Dashboard Enhancements section with quality of life improvements discovered during table alignment fix

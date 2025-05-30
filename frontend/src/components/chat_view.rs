@@ -438,10 +438,9 @@ pub fn update_conversation_ui(
             message_element.set_class_name(&class_name);
             // Create content element
             let content = document.create_element("div")?;
-            content.set_class_name("message-content");
-            // XSS Prevention: Use set_text_content for user-generated content, then use CSS for line breaks
+            content.set_class_name("message-content preserve-whitespace");
+            // XSS Prevention: Set text content (no HTML).  Whitespace preserved via CSS class.
             content.set_text_content(Some(&message.content));
-            content.set_attribute("style", "white-space: pre-wrap")?;
             // Create timestamp element
             let timestamp = document.create_element("div")?;
             timestamp.set_class_name("message-time");

@@ -1,3 +1,91 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
+thread_local! {
+    static SHORTCUT_HANDLER: RefCell<Option<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::KeyboardEvent)>>> = RefCell::new(None);
+}
+
+/// Register the global keyboard shortcut handler if not already.
+pub fn register_global_shortcuts(document: &web_sys::Document) {
+    use wasm_bindgen::closure::Closure;
+    use web_sys::EventTarget;
+    // If already registered, do nothing
+    SHORTCUT_HANDLER.with(|cell| {
+        if cell.borrow().is_some() { return; }
+        let keydown_cb = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+            // Prevent global shortcuts from firing inside input fields or editable areas.
+            if let Some(active_el) = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.active_element())
+            {
+                let tag = active_el.node_name();
+                let is_input = tag == "INPUT" || tag == "TEXTAREA";
+                let is_editable = active_el.dyn_ref::<web_sys::HtmlElement>().map_or(false, |el| el.is_content_editable());
+                if is_input || is_editable {
+                    // User is typing in input or editable, skip shortcuts
+                    return;
+                }
+            }
+            let key = event.key();
+            // ? with no modifiers → show shortcut help
+            if key == "?" && !event.ctrl_key() && !event.meta_key() {
+                event.prevent_default();
+                crate::toast::info("Shortcuts:\nN – New agent\nR – Run focused agent\n↑/↓ – Move row focus\nEnter – Expand row\n? – Show this help");
+                return;
+            }
+            // Global dashboard-only shortcuts without modifiers --------------
+            use crate::storage::ActiveView;
+            let active_view = crate::state::APP_STATE.with(|s| s.borrow().active_view.clone());
+            if active_view == ActiveView::Dashboard && !event.ctrl_key() && !event.meta_key() {
+                match key.as_str() {
+                    "n" | "N" => {
+                        event.prevent_default();
+                        let agent_name = format!(
+                            "{} {}",
+                            crate::constants::DEFAULT_AGENT_NAME,
+                            (js_sys::Math::random() * 100.0).round()
+                        );
+                        crate::state::dispatch_global_message(crate::messages::Message::RequestCreateAgent {
+                            name: agent_name,
+                            system_instructions: crate::constants::DEFAULT_SYSTEM_INSTRUCTIONS.to_string(),
+                            task_instructions: crate::constants::DEFAULT_TASK_INSTRUCTIONS.to_string(),
+                        });
+                    }
+                    "r" | "R" => {
+                        event.prevent_default();
+                        if let Some(active_el) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.active_element()) {
+                            if let Some(agent_id_attr) = active_el.get_attribute("data-agent-id") {
+                                if let Ok(agent_id) = agent_id_attr.parse::<u32>() {
+                                    wasm_bindgen_futures::spawn_local(async move {
+                                        match crate::network::api_client::ApiClient::run_agent(agent_id).await {
+                                            Ok(_) => crate::toast::success("Agent queued to run"),
+                                            Err(e) => crate::toast::error(&format!("Failed to run agent: {:?}", e)),
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }) as Box<dyn FnMut(_)>);
+        let target: web_sys::EventTarget = document.clone().into();
+        let _ = target.add_event_listener_with_callback("keydown", keydown_cb.as_ref().unchecked_ref());
+        cell.replace(Some(keydown_cb));
+    });
+}
+
+/// Remove global keyboard shortcuts handler (power mode off)
+pub fn remove_global_shortcuts(document: &web_sys::Document) {
+    use web_sys::EventTarget;
+    SHORTCUT_HANDLER.with(|cell| {
+        if let Some(cb) = cell.borrow_mut().take() {
+            let target: EventTarget = document.clone().into();
+            let _ = target.remove_event_listener_with_callback("keydown", cb.as_ref().unchecked_ref());
+        }
+    });
+}
 //---------------------------------------------------------------------------
 // Temporary lint relaxations ------------------------------------------------
 //---------------------------------------------------------------------------
@@ -58,6 +146,87 @@ mod models_config;
 mod pages;
 mod scheduling;
 mod utils;
+mod toast;
+
+// ---------------------------------------------------------------------------
+// Global keyboard shortcuts
+// ---------------------------------------------------------------------------
+
+fn init_global_shortcuts(document: &Document) {
+    use wasm_bindgen::closure::Closure;
+    use web_sys::EventTarget;
+
+    let keydown_cb = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+        // Prevent global shortcuts from firing inside input fields or editable areas.
+        if let Some(active_el) = web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.active_element())
+        {
+            let tag = active_el.node_name();
+            let is_input = tag == "INPUT" || tag == "TEXTAREA";
+            let is_editable = active_el.dyn_ref::<web_sys::HtmlElement>().map_or(false, |el| el.is_content_editable());
+            if is_input || is_editable {
+                // User is typing in input or editable, skip shortcuts
+                return;
+            }
+        }
+
+        let key = event.key();
+
+
+        // ? with no modifiers → show shortcut help
+        if key == "?" && !event.ctrl_key() && !event.meta_key() {
+            event.prevent_default();
+            crate::toast::info("Shortcuts:\nN – New agent\nR – Run focused agent\n↑/↓ – Move row focus\nEnter – Expand row\n? – Show this help");
+            return;
+        }
+
+        // Global dashboard-only shortcuts without modifiers --------------
+        use crate::storage::ActiveView;
+        let active_view = crate::state::APP_STATE.with(|s| s.borrow().active_view.clone());
+
+        if active_view == ActiveView::Dashboard && !event.ctrl_key() && !event.meta_key() {
+            match key.as_str() {
+                "n" | "N" => {
+                    event.prevent_default();
+                    // Generate random name similar to UI button behaviour
+                    let agent_name = format!(
+                        "{} {}",
+                        crate::constants::DEFAULT_AGENT_NAME,
+                        (js_sys::Math::random() * 100.0).round()
+                    );
+                    crate::state::dispatch_global_message(crate::messages::Message::RequestCreateAgent {
+                        name: agent_name,
+                        system_instructions: crate::constants::DEFAULT_SYSTEM_INSTRUCTIONS.to_string(),
+                        task_instructions: crate::constants::DEFAULT_TASK_INSTRUCTIONS.to_string(),
+                    });
+                }
+                "r" | "R" => {
+                    event.prevent_default();
+                    // If focused row has data-agent-id, trigger run.
+                    if let Some(active_el) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.active_element()) {
+                        if let Some(agent_id_attr) = active_el.get_attribute("data-agent-id") {
+                            if let Ok(agent_id) = agent_id_attr.parse::<u32>() {
+                                // Reuse ApiClient::run_agent logic (without spinner)
+                                wasm_bindgen_futures::spawn_local(async move {
+                                    match crate::network::api_client::ApiClient::run_agent(agent_id).await {
+                                        Ok(_) => crate::toast::success("Agent queued to run"),
+                                        Err(e) => crate::toast::error(&format!("Failed to run agent: {:?}", e)),
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }) as Box<dyn FnMut(_)>);
+
+    let target: EventTarget = document.clone().into();
+    let _ = target.add_event_listener_with_callback("keydown", keydown_cb.as_ref().unchecked_ref());
+    keydown_cb.forget();
+}
 mod dom_utils;
 mod auth;
 mod ui_components;
@@ -96,6 +265,10 @@ pub fn start() -> Result<(), JsValue> {
     // Get the document
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
+
+    // Power-mode keyboard shortcuts are now opt-in.  The handler will be
+    // installed via `Message::SetPowerMode(true)` after the user toggles the
+    // switch in the profile dropdown.
 
     // -------------------------------------------------------------------
     // NEW: Discover runtime flags from /api/system/info before deciding on
