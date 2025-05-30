@@ -355,9 +355,15 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             commands.push(Command::SendMessage(crate::messages::Message::RefreshCanvasLabels));
 
             // Reconcile placeholder canvas nodes that were inserted while the
-            // agent list was still loading.  This upgrades them to proper
-            // AgentIdentity nodes with correct labels.
-            crate::storage::fix_stub_nodes();
+            // agent list was still loading.  Calling `fix_stub_nodes()`
+            // directly here would re-borrow `APP_STATE` while the current
+            // mutable borrow (`state`) is still active, triggering a
+            // `BorrowMutError`.  Instead we defer the work until after the
+            // reducer completes by scheduling it through `Command::UpdateUI`.
+
+            commands.push(Command::UpdateUI(Box::new(|| {
+                crate::storage::fix_stub_nodes();
+            })));
             true
         }
         Message::RefreshCanvasLabels => {
