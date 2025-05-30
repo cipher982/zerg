@@ -85,7 +85,49 @@ fn init_global_shortcuts(document: &Document) {
         // ? with no modifiers → show shortcut help
         if key == "?" && !event.ctrl_key() && !event.meta_key() {
             event.prevent_default();
-            crate::toast::info("Shortcuts:\nCtrl/⌘+K – Focus search\nN – New agent (coming soon)\n? – Show this help");
+            crate::toast::info("Shortcuts:\nCtrl/⌘+K – Focus search\nN – New agent\nR – Run focused agent\n↑/↓ – Move row focus\nEnter – Expand row\n? – Show this help");
+            return;
+        }
+
+        // Global dashboard-only shortcuts without modifiers --------------
+        use crate::storage::ActiveView;
+        let active_view = crate::state::APP_STATE.with(|s| s.borrow().active_view.clone());
+
+        if active_view == ActiveView::Dashboard && !event.ctrl_key() && !event.meta_key() {
+            match key.as_str() {
+                "n" | "N" => {
+                    event.prevent_default();
+                    // Generate random name similar to UI button behaviour
+                    let agent_name = format!(
+                        "{} {}",
+                        crate::constants::DEFAULT_AGENT_NAME,
+                        (js_sys::Math::random() * 100.0).round()
+                    );
+                    crate::state::dispatch_global_message(crate::messages::Message::RequestCreateAgent {
+                        name: agent_name,
+                        system_instructions: crate::constants::DEFAULT_SYSTEM_INSTRUCTIONS.to_string(),
+                        task_instructions: crate::constants::DEFAULT_TASK_INSTRUCTIONS.to_string(),
+                    });
+                }
+                "r" | "R" => {
+                    event.prevent_default();
+                    // If focused row has data-agent-id, trigger run.
+                    if let Some(active_el) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.active_element()) {
+                        if let Some(agent_id_attr) = active_el.get_attribute("data-agent-id") {
+                            if let Ok(agent_id) = agent_id_attr.parse::<u32>() {
+                                // Reuse ApiClient::run_agent logic (without spinner)
+                                wasm_bindgen_futures::spawn_local(async move {
+                                    match crate::network::api_client::ApiClient::run_agent(agent_id).await {
+                                        Ok(_) => crate::toast::success("Agent queued to run"),
+                                        Err(e) => crate::toast::error(&format!("Failed to run agent: {:?}", e)),
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
         }
     }) as Box<dyn FnMut(_)>);
 
