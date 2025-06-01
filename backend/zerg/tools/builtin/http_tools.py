@@ -4,17 +4,16 @@ import json
 import logging
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
-
-from zerg.tools.registry import register_tool
+from langchain_core.tools import StructuredTool
 
 logger = logging.getLogger(__name__)
 
 
-@register_tool(name="http_get", description="Make an HTTP GET request to a URL and return the response")
 def http_get(
     url: str,
     params: Optional[Dict[str, str]] = None,
@@ -87,3 +86,10 @@ def http_get(
     except Exception as e:
         logger.exception(f"Unexpected error in http_get for URL: {url}")
         return {"status_code": 0, "error": f"Unexpected error: {str(e)}", "url": url}
+
+
+TOOLS: List[StructuredTool] = [
+    StructuredTool.from_function(
+        func=http_get, name="http_get", description="Make an HTTP GET request to a URL and return the response"
+    ),
+]

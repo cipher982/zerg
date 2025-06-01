@@ -17,6 +17,7 @@ from zerg.crud import crud
 from zerg.database import get_db
 from zerg.dependencies.auth import get_current_user
 from zerg.schemas.schemas import Agent
+from zerg.tools import get_registry
 
 # MCP manager singleton – needed by several endpoints
 from zerg.tools.mcp_adapter import MCPManager  # noqa: E402 – placed after stdlib imports
@@ -24,7 +25,6 @@ from zerg.tools.mcp_exceptions import MCPAuthenticationError
 from zerg.tools.mcp_exceptions import MCPConfigurationError
 from zerg.tools.mcp_exceptions import MCPConnectionError
 from zerg.tools.mcp_presets import PRESET_MCP_SERVERS
-from zerg.tools.registry import get_registry
 from zerg.utils import crypto
 from zerg.utils.json_helpers import set_json_field
 
@@ -137,7 +137,7 @@ async def list_mcp_servers(
 
         # Get tools for this server
         tool_prefix = f"mcp_{name}_"
-        tools = [tool.name for tool in registry.get_all_tools() if tool.name.startswith(tool_prefix)]
+        tools = [tool.name for tool in registry.all_tools() if tool.name.startswith(tool_prefix)]
 
         response.append(
             MCPServerResponse(
@@ -386,9 +386,9 @@ async def get_available_tools(
     if agent.owner_id != current_user.id and current_user.role != "ADMIN":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this agent")
 
-    # Get all tools from registry
-    registry = get_registry()
-    all_tools = registry.get_all_tools()
+        # Get all tools from registry
+        registry = get_registry()
+        all_tools = registry.all_tools()
 
     # Categorize tools
     builtin_tools = []

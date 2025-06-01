@@ -1,20 +1,19 @@
 """Date and time related tools."""
 
 import datetime as dt
+from typing import List
 from typing import Optional
 
-from zerg.tools.registry import register_tool
+from langchain_core.tools import StructuredTool
+
 from zerg.utils.time import utc_now
 
 
-@register_tool(name="get_current_time", description="Get the current date and time in ISO-8601 format")
 def get_current_time() -> str:
     """Return the current UTC date/time as ISO-8601 string (tz-aware)."""
-
     return utc_now().isoformat()
 
 
-@register_tool(name="datetime_diff", description="Calculate the difference between two dates/times")
 def datetime_diff(start_time: str, end_time: str, unit: Optional[str] = "seconds") -> float:
     """Calculate the difference between two datetime strings.
 
@@ -48,3 +47,13 @@ def datetime_diff(start_time: str, end_time: str, unit: Optional[str] = "seconds
         return total_seconds / 86400
     else:
         raise ValueError(f"Invalid unit '{unit}'. Must be one of: seconds, minutes, hours, days")
+
+
+TOOLS: List[StructuredTool] = [
+    StructuredTool.from_function(
+        func=get_current_time, name="get_current_time", description="Get the current date and time in ISO-8601 format"
+    ),
+    StructuredTool.from_function(
+        func=datetime_diff, name="datetime_diff", description="Calculate the difference between two dates/times"
+    ),
+]
