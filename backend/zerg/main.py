@@ -1,14 +1,16 @@
 # E2E log suppression: only active when E2E_LOG_SUPPRESS=1 for test runs
-import os
 
-if os.environ.get("E2E_LOG_SUPPRESS") == "1":
+from zerg.config import get_settings
+
+_settings = get_settings()
+
+if _settings.e2e_log_suppress:
     from zerg.e2e_logging_hacks import silence_info_logs
 
     silence_info_logs()
 
 # --- TOP: Force silence for E2E or CLI if LOG_LEVEL=WARNING is set ---
 import logging
-import os
 
 # ---------------------------------------------------------------------
 from dotenv import load_dotenv
@@ -67,7 +69,7 @@ from zerg.routers.websocket import router as websocket_router
 from zerg.services.email_trigger_service import email_trigger_service  # noqa: E402
 from zerg.services.scheduler_service import scheduler_service  # noqa: E402
 
-_log_level_name = os.environ.get("LOG_LEVEL", "INFO").upper()
+_log_level_name = _settings.log_level.upper()
 try:
     _log_level = getattr(logging, _log_level_name)
 except AttributeError:
@@ -114,10 +116,10 @@ async def _shutdown_ws_manager():  # noqa: D401 – internal
 # overrides it.  `ALLOWED_CORS_ORIGINS` can contain a comma-separated list.
 # ------------------------------------------------------------------
 
-if os.getenv("AUTH_DISABLED", "0") == "1":
+if _settings.auth_disabled:
     cors_origins = ["*"]
 else:
-    cors_origins_env = os.getenv("ALLOWED_CORS_ORIGINS", "")
+    cors_origins_env = _settings.allowed_cors_origins
     if cors_origins_env.strip():
         cors_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
     else:
@@ -196,7 +198,7 @@ async def startup_event():
         logger.info("Database tables initialized")
 
         # Start core background services ----------------------------------
-        if not os.getenv("TESTING"):
+        if not _settings.testing:
             await scheduler_service.start()
             await email_trigger_service.start()
 
@@ -209,7 +211,7 @@ async def startup_event():
 async def shutdown_event():
     """Clean up services on app shutdown."""
     try:
-        if not os.getenv("TESTING"):
+        if not _settings.testing:
             await scheduler_service.stop()
             await email_trigger_service.stop()
 

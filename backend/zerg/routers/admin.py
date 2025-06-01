@@ -1,11 +1,13 @@
 import logging
-import os
 
 # FastAPI helpers
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
+
+# Centralised settings
+from zerg.config import get_settings
 
 # Database helpers
 from zerg.database import Base
@@ -29,7 +31,8 @@ logger = logging.getLogger(__name__)
 async def reset_database():
     """Reset the database by dropping all tables and recreating them. For development only."""
     # Check if we're in development mode
-    if os.environ.get("ENVIRONMENT") != "development":
+    settings = get_settings()
+    if (settings.environment or "") != "development":
         logger.warning("Attempted to reset database in non-development environment")
         raise HTTPException(status_code=403, detail="Database reset is only available in development environment")
 

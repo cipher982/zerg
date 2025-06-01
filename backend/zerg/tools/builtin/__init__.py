@@ -14,3 +14,15 @@ BUILTIN_TOOLS = DATETIME_TOOLS + HTTP_TOOLS + MATH_TOOLS + UUID_TOOLS
 __all__ = [
     "BUILTIN_TOOLS",
 ]
+
+# ---------------------------------------------------------------------------
+# Automatically register built-in tools with the *mutable* singleton registry
+# so legacy tests (and any runtime code relying on ToolRegistry) see them.
+# ---------------------------------------------------------------------------
+
+from zerg.tools.registry import ToolRegistry  # late import to avoid cycles
+
+_registry = ToolRegistry()
+for _tool in BUILTIN_TOOLS:
+    if _tool.name not in _registry.list_tool_names():  # idempotent
+        _registry.register(_tool)

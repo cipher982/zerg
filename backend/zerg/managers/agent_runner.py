@@ -65,10 +65,12 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
         # that toggle the flag via ``monkeypatch.setenv`` after
         # ``zerg.constants`` was initially imported still take effect.
 
-        import os
+        # Resolve feature flag via *central* settings object so tests can
+        # override through ``os.environ`` + ``constants._refresh_feature_flags``.
 
-        raw_flag = os.getenv("LLM_TOKEN_STREAM", "0").lower()
-        self.enable_token_stream = raw_flag in {"1", "true", "yes"}
+        from zerg.config import get_settings
+
+        self.enable_token_stream = get_settings().llm_token_stream
 
         # ------------------------------------------------------------------
         # Lazily compile (or fetch from cache) the LangGraph runnable.  Using

@@ -6,7 +6,6 @@ AgentRunner.
 """
 
 import logging
-import os
 from typing import List
 from typing import Optional
 
@@ -23,6 +22,7 @@ from langgraph.graph.message import add_messages
 
 # Local imports (late to avoid circulars)
 from zerg.callbacks.token_stream import WsTokenCallback
+from zerg.config import get_settings
 
 # Centralised flags
 from zerg.tools import get_registry
@@ -47,14 +47,14 @@ def _make_llm(agent_row, tools):
     # that tweak ``LLM_TOKEN_STREAM`` via ``monkeypatch.setenv`` after the
     # module import still take effect.
 
-    enable_token_stream = os.getenv("LLM_TOKEN_STREAM", "0").lower() in {"1", "true", "yes"}
+    enable_token_stream = get_settings().llm_token_stream
 
     # Attach the token stream callback only when the feature flag is enabled.
     kwargs: dict = {
         "model": agent_row.model,
         "temperature": 0.6,
         "streaming": enable_token_stream,
-        "api_key": os.environ.get("OPENAI_API_KEY"),
+        "api_key": get_settings().openai_api_key,
     }
 
     if enable_token_stream:
