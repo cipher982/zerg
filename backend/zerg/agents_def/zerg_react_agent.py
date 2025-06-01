@@ -25,7 +25,6 @@ from langgraph.graph.message import add_messages
 from zerg.callbacks.token_stream import WsTokenCallback
 
 # Centralised flags
-from zerg.constants import LLM_TOKEN_STREAM
 from zerg.tools.registry import get_registry
 
 logger = logging.getLogger(__name__)
@@ -44,9 +43,11 @@ def _make_llm(agent_row, tools):
     attached so each new token is forwarded to the WebSocket layer.
     """
 
-    # Feature flag parsed directly from environment – evaluated at runtime so
-    # changes in .env are respected on reload without indirection.
-    enable_token_stream = LLM_TOKEN_STREAM
+    # Feature flag – evaluate the environment variable *lazily* so test cases
+    # that tweak ``LLM_TOKEN_STREAM`` via ``monkeypatch.setenv`` after the
+    # module import still take effect.
+
+    enable_token_stream = os.getenv("LLM_TOKEN_STREAM", "0").lower() in {"1", "true", "yes"}
 
     # Attach the token stream callback only when the feature flag is enabled.
     kwargs: dict = {
@@ -182,8 +183,27 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
         2. If the model calls a tool, execute it and append the result
         3. Repeat until the model generates a final response
         """
-        # Initialize message history from previous or use the input messages
-        current_messages = previous or messages
+        # Initialise message history.
+        #
+        # ``previous`` is populated by LangGraph's *checkpointing* mechanism
+        # and therefore contains the **conversation as it existed at the end
+        # of the *last* agent turn*.  When the user sends a *new* message the
+        # frontend creates the row in the database which is forwarded as the
+        # *messages* argument while *previous* still lacks that entry.
+        #
+        # If we were to prefer the *previous* list we would effectively drop
+        # the most recent user input – the LLM would see an outdated context
+        # and produce no new assistant response.  This manifested in the UI
+        # as the agent replying only to the very first user message but
+        # staying silent afterwards.
+        #
+        # We therefore always start from the *messages* list (which is the
+        # *source of truth* pulled from the database right before the
+        # runnable is invoked) and *only* fall back to *previous* when the
+        # caller provides an *empty* messages array (which currently never
+        # happens in normal operation but keeps the function robust for
+        # direct unit-tests).
+        current_messages = messages or previous or []
 
         # Start by calling the model with the current context
         llm_response = await _call_model_async(current_messages)
@@ -271,8 +291,16 @@ def get_tool_messages(ai_msg: AIMessage):  # noqa: D401 – util function
         name = tc.get("name")
         content = "<no-op>"
         try:
-            # Use registry to get tool (supports overrides for testing)
-            tool = registry.get_tool(name)
+            # Resolve the tool – tests may monkeypatch the **module-level**
+            # reference (``zerg.agents_def.zerg_react_agent.get_current_time``)
+            # so we first look it up dynamically on the module and fall back
+            # to the registry entry.
+
+            import sys
+
+            module_tool = getattr(sys.modules[__name__], name, None)
+            tool = module_tool or registry.get_tool(name)
+
             if tool is not None:
                 content = tool.invoke(tc.get("args", {}))
             else:

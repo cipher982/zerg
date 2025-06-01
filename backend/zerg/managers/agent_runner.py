@@ -61,9 +61,14 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
         # Whether this runner/LLM emits per-token chunks – treat env value
         # case-insensitively; anything truthy like "1", "true", "yes" enables
         # the feature.
-        from zerg.constants import LLM_TOKEN_STREAM  # late import avoids cycles
+        # Re-evaluate the *LLM_TOKEN_STREAM* env var **at runtime** so tests
+        # that toggle the flag via ``monkeypatch.setenv`` after
+        # ``zerg.constants`` was initially imported still take effect.
 
-        self.enable_token_stream = LLM_TOKEN_STREAM
+        import os
+
+        raw_flag = os.getenv("LLM_TOKEN_STREAM", "0").lower()
+        self.enable_token_stream = raw_flag in {"1", "true", "yes"}
 
         # ------------------------------------------------------------------
         # Lazily compile (or fetch from cache) the LangGraph runnable.  Using

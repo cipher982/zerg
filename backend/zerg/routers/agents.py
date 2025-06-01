@@ -78,6 +78,14 @@ def read_agents(
     if scope == "my":
         return crud.get_agents(db, skip=skip, limit=limit, owner_id=current_user.id)
 
+    from zerg.dependencies.auth import AUTH_DISABLED  # local import to avoid cycle
+
+    if AUTH_DISABLED:
+        # Dev/test mode – return entire list regardless of role so the SPA
+        # dashboard (which always requests *scope=all*) continues to work
+        # without requiring admin privileges or a bearer token.
+        return crud.get_agents(db, skip=skip, limit=limit)
+
     if getattr(current_user, "role", "USER") != "ADMIN":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required for scope=all")
     return crud.get_agents(db, skip=skip, limit=limit)
