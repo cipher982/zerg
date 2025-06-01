@@ -8,6 +8,8 @@ from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import Text
 from sqlalchemy import UniqueConstraint
+from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -50,7 +52,7 @@ class User(Base):
     # User-supplied avatar URL (fallback: generated initial)
     avatar_url = Column(String, nullable=True)
     # Store arbitrary UI preferences (theme, timezone, etc.)
-    prefs = Column(JSON, nullable=True, default={})
+    prefs = Column(MutableDict.as_mutable(JSON), nullable=True, default={})
 
     # Login tracking
     last_login = Column(DateTime, nullable=True)
@@ -91,7 +93,7 @@ class Agent(Base):
     task_instructions = Column(Text, nullable=False)
     schedule = Column(String, nullable=True)  # CRON expression or interval
     model = Column(String, nullable=False)  # Model to use (no default)
-    config = Column(JSON, nullable=True)  # Additional configuration as JSON
+    config = Column(MutableDict.as_mutable(JSON), nullable=True)  # Additional configuration as JSON
 
     # -------------------------------------------------------------------
     # Tool allowlist – controls which tools this agent can use
@@ -99,7 +101,7 @@ class Agent(Base):
     # Empty/NULL means all tools are allowed. Otherwise, it's a JSON array
     # of tool names that the agent is allowed to use. Supports wildcards
     # like "http_*" to allow all HTTP tools.
-    allowed_tools = Column(JSON, nullable=True)
+    allowed_tools = Column(MutableDict.as_mutable(JSON), nullable=True)
 
     # -------------------------------------------------------------------
     # Ownership – every agent belongs to *one* user (creator / owner).
@@ -176,8 +178,8 @@ class CanvasLayout(Base):
     workspace = Column(String, nullable=True)
 
     # Raw JSON blobs coming from the WASM frontend.
-    nodes_json = Column(JSON, nullable=False)
-    viewport = Column(JSON, nullable=True)
+    nodes_json = Column(MutableDict.as_mutable(JSON), nullable=False)
+    viewport = Column(MutableDict.as_mutable(JSON), nullable=True)
 
     # Track last update timestamp (creation time is implicit – equals first
     # value of *updated_at*).
@@ -216,7 +218,7 @@ class Thread(Base):
     title = Column(String, nullable=False)
     active = Column(Boolean, default=True)
     # Store additional metadata like agent state
-    agent_state = Column(JSON, nullable=True)
+    agent_state = Column(MutableDict.as_mutable(JSON), nullable=True)
     memory_strategy = Column(String, default="buffer", nullable=True)
     thread_type = Column(String, default="chat", nullable=False)  # Types: chat, scheduled, manual
     created_at = Column(DateTime, server_default=func.now())
@@ -257,7 +259,7 @@ class Trigger(Base):
     # model forward-compatible so new trigger types (e.g. *email*, *slack*)
     # can persist arbitrary settings without schema migrations.  For webhook
     # triggers the column is generally **NULL**.
-    config = Column(JSON, nullable=True)
+    config = Column(MutableDict.as_mutable(JSON), nullable=True)
 
     # -------------------------------------------------------------------
     # Typed *config* accessor
@@ -301,13 +303,13 @@ class ThreadMessage(Base):
     thread_id = Column(Integer, ForeignKey("agent_threads.id"))
     role = Column(String, nullable=False)  # "system", "user", "assistant", "tool"
     content = Column(Text, nullable=False)
-    # Store tool calls and their results
-    tool_calls = Column(JSON, nullable=True)
+    # Store *list* of tool call dicts emitted by OpenAI ChatCompleteion
+    tool_calls = Column(MutableList.as_mutable(JSON), nullable=True)
     tool_call_id = Column(String, nullable=True)  # For tool responses
     name = Column(String, nullable=True)  # For tool messages
     timestamp = Column(DateTime, server_default=func.now())
     processed = Column(Boolean, default=False, nullable=False)  # Track if message has been processed by agent
-    message_metadata = Column(JSON, nullable=True)  # Store additional metadata
+    message_metadata = Column(MutableDict.as_mutable(JSON), nullable=True)  # Store additional metadata
     parent_id = Column(Integer, ForeignKey("thread_messages.id"), nullable=True)
 
     # Define relationship with Thread

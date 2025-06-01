@@ -152,6 +152,17 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
         # Touch timestamp
         self.thread_service.touch_thread_timestamp(db, thread.id)
 
+        # ------------------------------------------------------------------
+        # Safety net – if we *had* unprocessed user messages but the runnable
+        # failed to generate **any** new assistant/tool message we treat this
+        # as an error.  Without this guard the request would appear to succeed
+        # (HTTP 202) yet the user sees no response in the UI and the bug can
+        # stay unnoticed.
+        # ------------------------------------------------------------------
+
+        if unprocessed_rows and not created_rows:
+            raise RuntimeError("Agent produced no messages despite pending user input.")
+
         # Return *all* created rows so callers can decide how to emit them
         # over WebSocket (assistant **and** tool messages).  The caller can
         # easily derive subsets by inspecting the ``role`` field.

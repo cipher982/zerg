@@ -516,9 +516,26 @@ def mark_messages_processed_bulk(db: Session, message_ids: List[int]):
 
 def get_unprocessed_messages(db: Session, thread_id: int):
     """Get unprocessed messages for a thread"""
+    # ------------------------------------------------------------------
+    # SQLAlchemy filter helpers
+    # ------------------------------------------------------------------
+    #
+    # Using Python's boolean *not* operator on an InstrumentedAttribute
+    # (`not ThreadMessage.processed`) evaluates the *truthiness* of the
+    # attribute **eagerly** which yields a plain ``False`` value instead of a
+    # SQL expression.  The resulting ``WHERE false`` clause caused the query
+    # to **always** return an empty result set so the AgentRunner never saw
+    # any *unprocessed* user messages – the UI therefore stayed silent after
+    # every prompt.
+    #
+    # The correct approach is to build an explicit boolean comparison that
+    # SQLAlchemy can translate into the appropriate SQL (`processed = 0`).
+    # The `is_(False)` helper generates portable SQL across dialects.
+    # ------------------------------------------------------------------
+
     return (
         db.query(ThreadMessage)
-        .filter(ThreadMessage.thread_id == thread_id, not ThreadMessage.processed)
+        .filter(ThreadMessage.thread_id == thread_id, ThreadMessage.processed.is_(False))
         .order_by(ThreadMessage.timestamp)
         .all()
     )

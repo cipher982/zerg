@@ -26,6 +26,7 @@ from zerg.tools.mcp_exceptions import MCPConnectionError
 from zerg.tools.mcp_presets import PRESET_MCP_SERVERS
 from zerg.tools.registry import get_registry
 from zerg.utils import crypto
+from zerg.utils.json_helpers import set_json_field
 
 logger = logging.getLogger(__name__)
 
@@ -244,10 +245,7 @@ async def add_mcp_server(
     updated_config = _update_mcp_servers_in_config(current_config, mcp_servers)
 
     # Save to database
-    agent.config = updated_config
-    from sqlalchemy.orm.attributes import flag_modified  # type: ignore
-
-    flag_modified(agent, "config")
+    set_json_field(agent, "config", updated_config)
     db.commit()
     db.refresh(agent)
     return agent
@@ -290,12 +288,7 @@ async def remove_mcp_server(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"MCP server '{server_name}' not found")
 
     # Update agent config
-    agent.config = {"mcp_servers": updated_servers}
-    # Inform SQLAlchemy that the JSON field has changed so the UPDATE is
-    # actually persisted.
-    from sqlalchemy.orm.attributes import flag_modified  # noqa: E402
-
-    flag_modified(agent, "config")
+    set_json_field(agent, "config", {"mcp_servers": updated_servers})
     db.commit()
 
     return None
