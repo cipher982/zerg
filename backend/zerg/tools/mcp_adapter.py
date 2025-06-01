@@ -73,26 +73,12 @@ class MCPClient:
 
     def __init__(self, config: MCPServerConfig):
         self.config = config
-        # Enable HTTP/2 for better multiplexing **when available**.  The
-        # optional *h2* dependency is not part of the minimal test
-        # environment, therefore attempting to open an ``AsyncClient`` with
-        # ``http2=True`` raises an ``ImportError``.  We gracefully fall back
-        # to standard HTTP/1.1 in that case so unit-tests can run without
-        # installing extra wheels.
-
-        try:
-            self.client = httpx.AsyncClient(
-                timeout=config.timeout,
-                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
-                http2=True,
-            )
-        except ImportError:
-            # "h2" package missing – retry without HTTP/2 support.
-            self.client = httpx.AsyncClient(
-                timeout=config.timeout,
-                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
-                http2=False,
-            )
+        # Enable HTTP/2 for better multiplexing
+        self.client = httpx.AsyncClient(
+            timeout=config.timeout,
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+            http2=True,
+        )
         self._health_check_passed = False
 
     async def __aenter__(self):
