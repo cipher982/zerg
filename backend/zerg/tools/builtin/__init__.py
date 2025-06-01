@@ -1,20 +1,16 @@
 """Built-in tools for Zerg agents.
 
 This module contains the standard tools that come with the platform.
-All tools in this module are automatically registered when imported.
+All tools in this module are aggregated into a single list for registry construction.
 """
 
-# Import all built-in tools to trigger registration
-from zerg.tools.builtin.datetime_tools import datetime_diff
-from zerg.tools.builtin.datetime_tools import get_current_time
-from zerg.tools.builtin.http_tools import http_get
-from zerg.tools.builtin.math_tools import math_eval
-from zerg.tools.builtin.uuid_tools import generate_uuid
+from zerg.tools.builtin.datetime_tools import TOOLS as DATETIME_TOOLS
+from zerg.tools.builtin.http_tools import TOOLS as HTTP_TOOLS
+from zerg.tools.builtin.math_tools import TOOLS as MATH_TOOLS
+from zerg.tools.builtin.uuid_tools import TOOLS as UUID_TOOLS
+
+BUILTIN_TOOLS = DATETIME_TOOLS + HTTP_TOOLS + MATH_TOOLS + UUID_TOOLS
 
 __all__ = [
-    "get_current_time",
-    "datetime_diff",
-    "http_get",
-    "math_eval",
-    "generate_uuid",
+    "BUILTIN_TOOLS",
 ]

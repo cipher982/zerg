@@ -43,7 +43,8 @@ from zerg.tools.mcp_exceptions import MCPConfigurationError
 from zerg.tools.mcp_exceptions import MCPConnectionError
 from zerg.tools.mcp_exceptions import MCPToolExecutionError
 from zerg.tools.mcp_exceptions import MCPValidationError
-from zerg.tools.registry import register_tool
+
+# from zerg.tools.registry import register_tool
 
 # ---------------------------------------------------------------------------
 # Logging helper
@@ -225,16 +226,12 @@ class MCPToolAdapter:
                         self._tool_schemas[tool_name] = tool_spec["inputSchema"]
 
                     # Create a wrapper function for this tool
-                    tool_func = self._create_tool_wrapper(tool_name, tool_spec)
+                    _ = self._create_tool_wrapper(tool_name, tool_spec)
 
-                    # Register with our internal registry
-                    register_tool(
-                        name=f"{self.tool_prefix}{tool_name}",
-                        description=tool_spec.get("description", f"MCP tool: {tool_name}"),
-                        return_direct=False,
-                    )(tool_func)
-
-                    logger.info(f"Registered MCP tool: {self.tool_prefix}{tool_name}")
+                    # MCP tool registration would go here in the new registry system.
+                    # For now, MCP tools should be added to a dynamic tool list and
+                    # included in the registry build process.
+                    # logger.info(f"Registered MCP tool: {self.tool_prefix}{tool_name}")
 
             except MCPConnectionError as e:
                 logger.error(f"Failed to register MCP tools: {e}")

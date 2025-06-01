@@ -25,7 +25,7 @@ from langgraph.graph.message import add_messages
 from zerg.callbacks.token_stream import WsTokenCallback
 
 # Centralised flags
-from zerg.tools.registry import get_registry
+from zerg.tools import get_registry
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
     # ------------------------------------------------------------------
     registry = get_registry()
     allowed_tools = getattr(agent_row, "allowed_tools", None)
-    tools = registry.filter_tools_by_allowlist(allowed_tools)
+    tools = registry.filter_by_allowlist(allowed_tools)
 
     if not tools:
         logger.warning(f"No tools available for agent {agent_row.id}")
@@ -299,7 +299,7 @@ def get_tool_messages(ai_msg: AIMessage):  # noqa: D401 – util function
             import sys
 
             module_tool = getattr(sys.modules[__name__], name, None)
-            tool = module_tool or registry.get_tool(name)
+            tool = module_tool or registry.get(name)
 
             if tool is not None:
                 content = tool.invoke(tc.get("args", {}))
@@ -321,4 +321,4 @@ import zerg.tools.builtin  # noqa: F401, E402
 
 # Get the tool from registry and expose it at module level for tests
 _registry = get_registry()
-get_current_time = _registry.get_tool("get_current_time")
+get_current_time = _registry.get("get_current_time")
