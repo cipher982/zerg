@@ -193,6 +193,7 @@ impl TopicManager {
         } else if let Some(t) = message.get("type").and_then(|t| t.as_str()) {
             // Non-topic frames – log but do not treat as fatal.
             match t {
+                "ping" => web_sys::console::debug_1(&"WS ping received".into()),
                 "pong" => web_sys::console::debug_1(&"WS pong received".into()),
                 "error" => web_sys::console::error_1(&format!("Received WS error frame: {:?}", message).into()),
                 other => web_sys::console::error_1(&format!("Unhandled WS frame type '{}': {:?}", other, message).into()),
@@ -268,4 +269,4 @@ impl ITopicManager for TopicManager {
 }
 
 // Remove old `unsubscribe` if no longer needed, or keep if used elsewhere.
-// pub fn unsubscribe(&mut self, topic: &Topic) -> Result<(), JsValue> { ... } 
+// pub fn unsubscribe(&mut self, topic: &Topic) -> Result<(), JsValue> { ... }
