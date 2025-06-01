@@ -518,7 +518,7 @@ def get_unprocessed_messages(db: Session, thread_id: int):
     """Get unprocessed messages for a thread"""
     return (
         db.query(ThreadMessage)
-        .filter(ThreadMessage.thread_id == thread_id, ~ThreadMessage.processed)
+        .filter(ThreadMessage.thread_id == thread_id, not ThreadMessage.processed)
         .order_by(ThreadMessage.timestamp)
         .all()
     )
