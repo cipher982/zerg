@@ -25,7 +25,11 @@ import base64
 import hashlib
 import hmac
 import json
-import os
+
+from zerg.config import get_settings
+
+# Single shared Settings instance for this module
+_settings = get_settings()
 from datetime import datetime
 from typing import Any
 
@@ -43,23 +47,13 @@ from zerg.database import get_db
 # ---------------------------------------------------------------------------
 
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
+JWT_SECRET = _settings.jwt_secret
 
 # Normalise AUTH_DISABLED to boolean – accepts "1", "true", "yes" (case-ins).
-_AUTH_DISABLED_RAW = os.getenv("AUTH_DISABLED")
+AUTH_DISABLED = _settings.auth_disabled or _settings.testing
 
-# If AUTH_DISABLED is explicitly provided use that value; otherwise fall back
-# to the *TESTING* flag so unit-tests run without dealing with auth boilerplate.
-if _AUTH_DISABLED_RAW is None:
-    _AUTH_DISABLED_RAW = os.getenv("TESTING", "0")
-
-AUTH_DISABLED = _AUTH_DISABLED_RAW.lower() in {"1", "true", "yes"}
-
-# Optional opt-in: set DEV_ADMIN=1 in your environment to create the implicit
-# dev-mode account with *ADMIN* role so you can hit admin-only endpoints right
-# after wiping the database.
-
-DEV_ADMIN = os.getenv("DEV_ADMIN", "0").lower() in {"1", "true", "yes"}
+# Optional opt-in: set DEV_ADMIN=1 in your environment
+DEV_ADMIN = _settings.dev_admin
 
 # E-mail used for the implicit development user when auth is disabled.
 DEV_EMAIL = "dev@local"

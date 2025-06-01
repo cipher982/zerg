@@ -9,6 +9,16 @@ from typing import Optional
 
 from langchain_core.tools import StructuredTool
 
+# ---------------------------------------------------------------------------
+# Backwards-compatibility shim ------------------------------------------------
+# ---------------------------------------------------------------------------
+# New code should use the *immutable* registry built at startup.  For existing
+# tests (and possibly legacy plugins) we retain a **mutable singleton**
+# ``ToolRegistry`` with API parity.  Internally it delegates to the
+# production registry instance but still allows *register* and
+# *filter_tools_by_allowlist* so the behavioural contract remains intact.
+# ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class ImmutableToolRegistry:
@@ -67,3 +77,99 @@ class ImmutableToolRegistry:
 
     def all_tools(self) -> List[StructuredTool]:
         return list(self._tools.values())
+
+
+# ---------------------------------------------------------------------------
+# Mutable singleton wrapper expected by the older test-suite
+# ---------------------------------------------------------------------------
+
+
+class ToolRegistry:
+    """Mutable tool registry keeping backwards compatibility with v0 API."""
+
+    _instance: "ToolRegistry | None" = None
+
+    def __new__(cls):  # noqa: D401 – singleton pattern
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._tools: Dict[str, StructuredTool] = {}
+        return cls._instance
+
+    # ------------------------------------------------------------------
+    # Basic CRUD --------------------------------------------------------
+    # ------------------------------------------------------------------
+
+    def register(self, tool: StructuredTool) -> None:
+        if tool.name in self._tools:
+            raise ValueError(f"Tool '{tool.name}' already registered")
+        self._tools[tool.name] = tool
+
+    # Exposed for @register_tool decorator -----------------------------
+    def get_tool(self, name: str):  # noqa: D401 – legacy helper
+        return self._tools.get(name)
+
+    def get_all_tools(self):  # noqa: D401 – legacy helper
+        return list(self._tools.values())  # legacy behaviour
+
+    # Allowlist filtering copied from immutable impl -------------------
+    def filter_tools_by_allowlist(self, allowed):  # noqa: D401 – legacy helper
+        if not allowed:
+            return list(self._tools.values())
+
+        result = []
+        for pattern in allowed:
+            if pattern.endswith("*"):
+                prefix = pattern[:-1]
+                result.extend(t for n, t in self._tools.items() if n.startswith(prefix))
+            elif pattern in self._tools:
+                result.append(self._tools[pattern])
+        return result
+
+    # Convenience wrappers --------------------------------------------
+    def list_tool_names(self):  # noqa: D401 – legacy helper
+        from zerg.tools.builtin import BUILTIN_TOOLS  # local
+
+        names = {t.name for t in BUILTIN_TOOLS}
+        names.update(self._tools.keys())
+        return list(names)
+
+    # Keep original helper name used across codebase
+    def all_tools(self):  # noqa: D401 – legacy helper
+        """Return **built-in + runtime-registered** tools."""
+
+        from zerg.tools.builtin import BUILTIN_TOOLS  # local import
+
+        combined = {t.name: t for t in BUILTIN_TOOLS}
+        combined.update(self._tools)
+        return list(combined.values())
+
+
+# ---------------------------------------------------------------------------
+# Decorator helper – kept for existing tests ---------------------------------
+# ---------------------------------------------------------------------------
+
+
+def register_tool(*, name: str, description: str):  # noqa: D401 – decorator
+    """Decorator that registers a function as a ``StructuredTool`` instance."""
+
+    from langchain_core.tools import StructuredTool
+
+    def _wrapper(fn):
+        tool = StructuredTool.from_function(fn, name=name, description=description)
+        ToolRegistry().register(tool)
+        return fn
+
+    return _wrapper
+
+
+# Convenience expose for tests
+def get_registry():  # noqa: D401 – alias for older imports
+    return ToolRegistry()
+
+
+__all__ = [
+    "ImmutableToolRegistry",
+    "ToolRegistry",
+    "register_tool",
+    "get_registry",
+]

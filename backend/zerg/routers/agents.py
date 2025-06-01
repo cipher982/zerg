@@ -1,20 +1,25 @@
 """Agent routes module."""
 
 import logging
-import os
 from typing import Any
 from typing import List
 
 from dotenv import load_dotenv
+
+# FastAPI imports
 from fastapi import APIRouter
+from fastapi import Body
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Query
 from fastapi import Response
 from fastapi import status
+
+# Instantiate OpenAI client with API key from central settings
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
+from zerg.config import get_settings
 from zerg.crud import crud
 from zerg.database import get_db
 from zerg.events import EventType
@@ -58,7 +63,7 @@ from zerg.dependencies.auth import get_current_user  # noqa: E402
 
 router = APIRouter(tags=["agents"], dependencies=[Depends(get_current_user)])
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+client = OpenAI(api_key=get_settings().openai_api_key)
 
 # ---------------------------------------------------------------------------
 # List / create
@@ -95,7 +100,7 @@ def read_agents(
 @router.post("", response_model=Agent, status_code=status.HTTP_201_CREATED)
 @publish_event(EventType.AGENT_CREATED)
 async def create_agent(
-    agent: AgentCreate,
+    agent: AgentCreate = Body(...),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):

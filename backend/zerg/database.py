@@ -1,4 +1,8 @@
-import os
+from __future__ import annotations
+
+from zerg.config import get_settings
+
+_settings = get_settings()
 from typing import Any
 from typing import Iterator
 
@@ -72,14 +76,15 @@ def get_session_factory() -> sessionmaker:
     # *in-memory* SQLite engine because the file system location is
     # irrelevant and the tests patch the session/engine anyway.
     # ---------------------------------------------------------------------
-    db_url = os.getenv("DATABASE_URL")
+    # Honour the *centralised* settings object.  The fallbacks mirror the
+    # previous logic so behaviour remains unchanged.
+
+    db_url = _settings.database_url
+
     if not db_url:
-        if os.getenv("TESTING") == "1":
-            # Use an in-memory database that plays well with StaticPool and
-            # will be swapped out by the fixtures later on.
+        if _settings.testing:
             db_url = "sqlite:///:memory:"
         else:
-            # Default production fallback (dev-friendly, zero config).
             db_url = "sqlite:///./app.db"
     engine = make_engine(db_url)
     return make_sessionmaker(engine)
@@ -90,12 +95,7 @@ def get_session_factory() -> sessionmaker:
 # importing this module never crashes – the returned engine is still safe for
 # overwriting in tests via ``zerg.database.default_engine = …``.
 
-_resolved_db_url = os.getenv("DATABASE_URL")
-if not _resolved_db_url:
-    if os.getenv("TESTING") == "1":
-        _resolved_db_url = "sqlite:///:memory:"
-    else:
-        _resolved_db_url = "sqlite:///./app.db"
+_resolved_db_url = _settings.database_url or ("sqlite:///:memory:" if _settings.testing else "sqlite:///./app.db")
 
 default_engine = make_engine(_resolved_db_url)
 default_session_factory = make_sessionmaker(default_engine)

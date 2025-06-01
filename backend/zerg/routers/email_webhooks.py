@@ -26,7 +26,11 @@ the *"push to HTTPS"* option.  Validation is **always enabled** unless the
 from __future__ import annotations
 
 import logging
-import os
+
+# Replace direct env look-up with unified Settings helper
+from zerg.config import get_settings
+
+_settings = get_settings()
 from typing import Dict
 
 from fastapi import APIRouter
@@ -109,7 +113,7 @@ def _validate_google_jwt(auth_header: str | None):  # noqa: D401 – helper
     # not need to embed real JWTs.  This keeps runtime behaviour unchanged
     # for dev & prod which never set TESTING.
 
-    if os.getenv("TESTING") == "1":
+    if _settings.testing:
         return
 
     if not auth_header:

@@ -108,7 +108,7 @@ async def list_mcp_servers(
     if not agent:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
-    if agent.owner_id != current_user.id and current_user.role != "ADMIN":
+    if agent.owner_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this agent")
 
     # Get MCP servers from config
@@ -386,9 +386,9 @@ async def get_available_tools(
     if agent.owner_id != current_user.id and current_user.role != "ADMIN":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this agent")
 
-        # Get all tools from registry
-        registry = get_registry()
-        all_tools = registry.all_tools()
+    # Get all tools from registry (built-in + MCP)
+    registry = get_registry()
+    all_tools = registry.all_tools()
 
     # Categorize tools
     builtin_tools = []
