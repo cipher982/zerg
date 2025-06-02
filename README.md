@@ -9,6 +9,8 @@ The project acts as both a production-ready starter kit *and* a playground for
 modern WebSocket streaming patterns, LangGraph-based agents, and a
 canvas-style visual editor – all under one repo.
 
+NEVER CALL 'python' or 'pytest' directly – use the provided helper scripts OR go through UV.
+
 -------------------------------------------------------------------------------
 ## Table of Contents
 
