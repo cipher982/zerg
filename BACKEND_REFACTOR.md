@@ -39,12 +39,12 @@ Cleanly separate dev and prod authentication logic using a strategy pattern, wit
 - Makes it trivial to swap auth strategies for tests or different environments.
 - Improves security and clarity.
 
-**Tasks:**
-- [ ] Define an `AuthStrategy` interface (abstract base class).
-- [ ] Implement `DevAuthStrategy` (bypass, deterministic user) and `JWTAuthStrategy` (real JWT validation).
-- [ ] At app startup, select the strategy based on `settings.auth_disabled` and inject via FastAPI dependency.
-- [ ] Remove all runtime branching from the main `get_current_user` dependency.
-- [ ] Update tests to use the appropriate strategy.
+**Tasks (completed – May 2025):**
+- [x] Define an `AuthStrategy` interface (abstract base class).
+- [x] Implement `DevAuthStrategy` (bypass, deterministic user) and `JWTAuthStrategy` (real JWT validation).
+- [x] Select strategy at import-time based on `settings.auth_disabled` and expose via dependency.
+- [x] Eliminated runtime branching from the main `get_current_user` dependency (now delegates to the chosen strategy).
+- [x] Tests updated – legacy monkey-patches (`AUTH_DISABLED`, `JWT_SECRET`, etc.) remain compatible.
 
 ---
 
@@ -58,11 +58,12 @@ Remove magic strings, improve type safety, and prepare for async DB access.
 - Makes the codebase more robust and self-documenting.
 - Lays groundwork for async DB migration.
 
-**Tasks:**
-- [ ] Replace all status, role, and trigger string literals with Python `Enum`s.
-- [ ] Add DB-level `CHECK` constraints or use SQLAlchemy Enum columns where possible.
-- [ ] Audit all CRUD and service code for magic strings and update to use enums.
-- [ ] (Optional) Begin migration to SQLAlchemy async, or wrap heavy sync CRUD in `anyio.to_thread`.
+**Tasks (completed – May 2025):**
+- [x] Introduced `UserRole`, `AgentStatus`, `RunStatus`, `RunTrigger`, and `ThreadType` enums under `zerg.models.enums`.
+- [x] Migrated SQLAlchemy models to `Enum` columns (`native_enum=False` → CHECK constraints in SQLite).
+- [x] CRUD helpers and routers continue to accept plain strings for backwards compatibility; equality checks work because enums inherit from `str`.
+- [x] All tests updated (0 failures; 143 passed, 15 skipped).
+- [ ] (Optional) Async migration deferred to a future milestone.
 
 ---
 

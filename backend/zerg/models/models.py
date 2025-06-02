@@ -1,7 +1,9 @@
 from sqlalchemy import JSON
+# SQLAlchemy core imports
 from sqlalchemy import Boolean
 from sqlalchemy import Column
 from sqlalchemy import DateTime
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy import Float
 from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
@@ -13,7 +15,9 @@ from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
+# Local helpers / enums
 from zerg.database import Base
+from zerg.models.enums import AgentStatus, RunStatus, RunTrigger, ThreadType, UserRole
 
 # ---------------------------------------------------------------------------
 # Authentication – User table (Stage 1)
@@ -39,10 +43,12 @@ class User(Base):
     email = Column(String, unique=True, nullable=False, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
 
-    # Role / permission level – currently "USER" or "ADMIN".  Use a simple
-    # VARCHAR instead of a full Enum so we can add roles without migrations
-    # in development.  In production we might switch to Enum later.
-    role = Column(String, nullable=False, default="USER")
+    # Role / permission level – backed by :class:`zerg.models.enums.UserRole`.
+    role = Column(
+        SAEnum(UserRole, native_enum=False, name="user_role_enum"),
+        nullable=False,
+        default=UserRole.USER.value,
+    )
 
     # -------------------------------------------------------------------
     # Personalisation fields (introduced in *User Personalisation* feature)
@@ -88,7 +94,10 @@ class Agent(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    status = Column(String, default="idle")
+    status = Column(
+        SAEnum(AgentStatus, native_enum=False, name="agent_status_enum"),
+        default=AgentStatus.IDLE.value,
+    )
     system_instructions = Column(Text, nullable=False)
     task_instructions = Column(Text, nullable=False)
     schedule = Column(String, nullable=True)  # CRON expression or interval
@@ -220,7 +229,11 @@ class Thread(Base):
     # Store additional metadata like agent state
     agent_state = Column(MutableDict.as_mutable(JSON), nullable=True)
     memory_strategy = Column(String, default="buffer", nullable=True)
-    thread_type = Column(String, default="chat", nullable=False)  # Types: chat, scheduled, manual
+    thread_type = Column(
+        SAEnum(ThreadType, native_enum=False, name="thread_type_enum"),
+        default=ThreadType.CHAT.value,
+        nullable=False,
+    )  # Types: chat, scheduled, manual
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -340,8 +353,16 @@ class AgentRun(Base):
     thread_id = Column(Integer, ForeignKey("agent_threads.id"), nullable=False)
 
     # Lifecycle ----------------------------------------------------------
-    status = Column(String, default="queued", nullable=False)  # queued → running → success|failed
-    trigger = Column(String, default="manual", nullable=False)  # manual / schedule / api
+    status = Column(
+        SAEnum(RunStatus, native_enum=False, name="run_status_enum"),
+        default=RunStatus.QUEUED.value,
+        nullable=False,
+    )  # queued → running → success|failed
+    trigger = Column(
+        SAEnum(RunTrigger, native_enum=False, name="run_trigger_enum"),
+        default=RunTrigger.MANUAL.value,
+        nullable=False,
+    )  # manual / schedule / api
 
     # Timing -------------------------------------------------------------
     started_at = Column(DateTime, nullable=True)
