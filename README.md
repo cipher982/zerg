@@ -67,29 +67,47 @@ implemented as *fully functional* LangGraph runnables.
 ## Quick Start
 
 Prereqs: Python 3.12, [uv](https://github.com/astral-sh/uv), Rust (+ wasm-pack),
-Node 16+.
+Node 16+, and GNU Make (installed by default on macOS/Linux; Windows users can
+install via `choco install make`).
+
+### 1. One-liner local dev (recommended)
 
 ```bash
-# 1. clone & install rust/wasm targets as usual
+make dev
+# starts backend on :8001 and frontend on :8002
+# …open http://localhost:8002 in your browser
+```
 
-# 2. backend
-cd backend
-cp .env.example .env                 # add OPENAI_API_KEY here
+`make dev` simply wraps the exact commands you may have run manually; it just
+avoids the port-clash & “what was that command again?” issues.
+
+### 2. Manual steps (if you prefer)
+
+```bash
+# backend
+cd backend && cp .env.example .env   # add OPENAI_API_KEY here
 uv run python -m uvicorn zerg.main:app --reload --port 8001
 
-# 3. frontend (in another tab)
-cd ../frontend
-./build.sh                           # prod build + dev server on :8002
+# frontend (new terminal tab)
+cd frontend && ./build-debug.sh      # dev build + server on :8002
 
-# 4. visit http://localhost:8002  – login overlay skipped in dev mode
+# visit http://localhost:8002
 ```
 
-Tests must be executed via helper scripts (they set env & flags):
+### 3. Running tests
 
 ```bash
-cd backend   && ./run_backend_tests.sh   # not pytest directly!
-cd frontend  && ./run_frontend_tests.sh
+# fast unit / service tests
+make test
+
+# full browser end-to-end suite
+make e2e
 ```
+
+Under the hood those targets call the existing helper scripts
+(`backend/run_backend_tests.sh`, `frontend/run_frontend_tests.sh`,
+`e2e/run_e2e_tests.sh`) so nothing about the individual test runners has
+changed – there is now just one canonical entry-point.
 
 -------------------------------------------------------------------------------
 ## Architecture

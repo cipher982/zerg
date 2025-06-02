@@ -1,39 +1,30 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# End-to-End Test Runner
+# ---------------------------------------------------------------------------
+# 1. Make sure nothing is already using the Playwright ports (8001 backend,
+#    8002 frontend) – stray dev servers are the usual culprit.
+# 2. Delegate all server start-up to Playwright via playwright.config.js.
+# 3. Forward any extra CLI flags to Playwright (`./run_e2e_tests.sh --grep @tag`).
+# ---------------------------------------------------------------------------
+set -euo pipefail
 
-# E2E test runner: launches backend with TESTING=1 and runs Playwright tests against it
+# Ensure we run from the e2e directory regardless of where the script was
+# invoked from.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
 
-# Kill any previous test backend
-if lsof -i:8002 >/dev/null 2>&1; then
-  echo "Killing previous backend on port 8002"
-  lsof -ti:8002 | xargs kill -9
-fi
-
-# Start backend with TESTING=1 in the background
-echo "Starting backend with TESTING=1 on port 8002"
-(
-  cd ../backend
-  TESTING=1 LOG_LEVEL=WARNING uv run python -m uvicorn zerg.main:app --host 0.0.0.0 --port 8002
-) &
-BACKEND_PID=$!
-
-# Wait for backend to be ready
-echo "Waiting for backend to start..."
-for i in {1..30}; do
-  if curl -s http://localhost:8002/ | grep -q 'Agent Platform API'; then
-    echo "Backend is up!"
-    break
+# Shut down any process that might occupy the ports Playwright needs.
+for PORT in 8001 8002; do
+  if lsof -i:"$PORT" >/dev/null 2>&1; then
+    echo "[run_e2e_tests] Killing process on port $PORT …" >&2
+    lsof -ti:"$PORT" | xargs -r kill -9 || true
   fi
-  sleep 1
 done
 
-# Run Playwright E2E tests
-echo "Running Playwright E2E tests..."
-npm test
+echo "[run_e2e_tests] Running Playwright tests…" >&2
 
-# Kill backend after tests
-echo "Stopping backend..."
-kill $BACKEND_PID
-wait $BACKEND_PID 2>/dev/null || true
+# Pass through all given args to the underlying npm command
+npm test -- "$@"
 
-echo "E2E tests complete."
+echo "[run_e2e_tests] ✔ complete" >&2
