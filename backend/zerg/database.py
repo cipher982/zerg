@@ -3,7 +3,9 @@ from __future__ import annotations
 # Standard library
 import threading
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
+from typing import Dict
+
 # Thread-safe caches for per-worker engines/sessionmakers --------------------
 
 _WORKER_ENGINES: Dict[str, Engine] = {}
