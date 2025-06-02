@@ -2,7 +2,6 @@
 
 use crate::messages::{Message, Command};
 use crate::state::AppState;
-use crate::toast;
 
 /// Handles MCP/integration-related messages. Returns true if the message was handled.
 pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) -> bool {

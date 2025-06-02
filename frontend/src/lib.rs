@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use std::cell::RefCell;
-use std::rc::Rc;
 
 thread_local! {
     static SHORTCUT_HANDLER: RefCell<Option<wasm_bindgen::closure::Closure<dyn FnMut(web_sys::KeyboardEvent)>>> = RefCell::new(None);
@@ -10,7 +9,6 @@ thread_local! {
 /// Register the global keyboard shortcut handler if not already.
 pub fn register_global_shortcuts(document: &web_sys::Document) {
     use wasm_bindgen::closure::Closure;
-    use web_sys::EventTarget;
     // If already registered, do nothing
     SHORTCUT_HANDLER.with(|cell| {
         if cell.borrow().is_some() { return; }
