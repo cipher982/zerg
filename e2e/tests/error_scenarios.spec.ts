@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { test } from './fixtures';
 
 test('Offline mode behavior placeholder', async ({ page }) => {
   test.skip(true, 'Offline mode requires service worker');

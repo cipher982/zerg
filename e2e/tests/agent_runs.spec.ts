@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.describe('Agent run history view', () => {
   test('Open run history tab placeholder', async ({ page }) => {

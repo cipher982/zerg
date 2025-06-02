@@ -169,6 +169,24 @@ app.add_middleware(
 # Mount /static for avatars (and any future assets served by the backend)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# ---------------------------------------------------------------------------
+# Playwright worker database isolation – attach middleware early so every
+# request, including those made during router setup, carries the correct
+# context.
+# ---------------------------------------------------------------------------
+
+# We import lazily so local *unit-tests* that do not include the middleware
+# file in their truncated import tree continue to work.
+from importlib import import_module
+
+
+try:
+    WorkerDBMiddleware = getattr(import_module("zerg.middleware.worker_db"), "WorkerDBMiddleware")
+    app.add_middleware(WorkerDBMiddleware)
+except Exception:  # pragma: no cover – keep startup resilient
+    # Defer logging until *logger* is available (defined right below).
+    pass
+
 # Include our API routers with centralized prefixes
 app.include_router(agents_router, prefix=f"{API_PREFIX}{AGENTS_PREFIX}")
 app.include_router(mcp_servers_router, prefix=f"{API_PREFIX}")  # MCP servers nested under agents
