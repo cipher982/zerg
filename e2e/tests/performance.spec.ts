@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { test } from './fixtures';
 
 test('Load dashboard with 100+ agents (placeholder)', async ({ page }) => {
   test.skip(true, 'Requires fixture to seed DB with many agents');

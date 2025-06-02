@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.beforeEach(async ({ request }) => {
   await request.post('http://localhost:8001/admin/reset-database');

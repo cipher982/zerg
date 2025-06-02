@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { test } from './fixtures';
 
 test.describe('Authentication flows', () => {
   test('Login redirect when unauthenticated (dev mode bypass)', async ({ page }) => {

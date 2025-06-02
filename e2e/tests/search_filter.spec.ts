@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test.describe('Agent search & filtering', () => {
   test('Search agents by name', async ({ page }) => {

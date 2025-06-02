@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // E2E test: Canvas agent shelf loads agents and displays them as pills.
 test('Agent shelf loads and displays agents on canvas', async ({ page }) => {

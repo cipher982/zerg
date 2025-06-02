@@ -16,13 +16,20 @@ const config = {
     headless: true,
     viewport: { width: 1280, height: 800 },
     trace: 'on-first-retry',
+    extraHTTPHeaders: {
+      // Forward the Playwright worker index so the backend can route the
+      // request to the correct *isolated* SQLite file.
+      'X-Test-Worker': process.env.PW_TEST_WORKER_INDEX || '0',
+    },
   },
 
   // Test configuration
-  fullyParallel: false,  // Disable parallel execution due to shared database
+  fullyParallel: true,  // safe again – DB isolated per worker
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
-  workers: 1,  // Use only one worker to avoid database conflicts
+  // Let Playwright auto-detect CPU count (or override via CLI)
+  // Common CI runners expose 2-4 vCPUs; this setting plays well with that.
+  // We keep the flag unspecified so local developers get full parallelism.
 
   // Automatically start backend + frontend unless they are already running.
   webServer: [

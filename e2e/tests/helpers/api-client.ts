@@ -40,6 +40,7 @@ export class ApiClient {
     this.baseUrl = baseUrl;
     this.headers = {
       'Content-Type': 'application/json',
+      'X-Test-Worker': process.env.PW_TEST_WORKER_INDEX || '0',
     };
   }
 

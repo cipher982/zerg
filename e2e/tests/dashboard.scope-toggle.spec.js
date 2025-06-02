@@ -1,7 +1,7 @@
 // Checks that the Owner column in the Dashboard only appears when the
 // scope selector is switched to "All agents".
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 test('Owner column toggles with scope selector', async ({ page }) => {
   await page.goto('/');

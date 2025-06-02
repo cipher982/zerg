@@ -1,6 +1,35 @@
 from __future__ import annotations
 
-from typing import Any
+# Standard library
+import threading
+from pathlib import Path
+from typing import Any, Dict
+# Thread-safe caches for per-worker engines/sessionmakers --------------------
+
+_WORKER_ENGINES: Dict[str, Engine] = {}
+_WORKER_SESSIONMAKERS: Dict[str, sessionmaker] = {}
+_WORKER_LOCK = threading.Lock()
+
+# ---------------------------------------------------------------------------
+# Playwright worker-based DB isolation (E2E tests)
+# ---------------------------------------------------------------------------
+
+# We *dynamically* route each HTTP/WebSocket request to its own SQLite file
+# during Playwright runs.  The current worker id is injected by the middleware
+# and stored in a context variable.  Importing here avoids a circular
+# dependency (middleware imports *this* module).  The conditional import keeps
+# the overhead negligible for production usage.
+
+try:
+    from zerg.middleware.worker_db import current_worker_id  # type: ignore
+
+except ModuleNotFoundError:  # pragma: no cover – unit-tests without middleware
+    import contextvars
+
+    current_worker_id = contextvars.ContextVar("current_worker_id", default=None)
+
+# from pathlib import Path  # duplicate removed above
+# import threading  # duplicate
 from typing import Iterator
 
 import dotenv
@@ -77,18 +106,60 @@ def get_session_factory() -> sessionmaker:
     # *in-memory* SQLite engine because the file system location is
     # irrelevant and the tests patch the session/engine anyway.
     # ---------------------------------------------------------------------
-    # Honour the *centralised* settings object.  The fallbacks mirror the
-    # previous logic so behaviour remains unchanged.
+    # ------------------------------------------------------------------
+    # Playwright E2E tests: isolate database per worker ------------------
+    # ------------------------------------------------------------------
+    # When the *WorkerDBMiddleware* sets `current_worker_id` we look up a
+    # dedicated engine / sessionmaker pair from an in-memory cache.  The very
+    # first request for a worker lazily creates `sqlite:///./test_worker_<id>.db`
+    # and initialises the schema.
+    #
+    # Outside the Playwright context – i.e. when *current_worker_id* is None –
+    # we fall back to the original single-engine behaviour so that unit
+    # tests, dev server sessions, and production deployments remain
+    # unaffected.
+    # ------------------------------------------------------------------
 
-    db_url = _settings.database_url
+    worker_id = current_worker_id.get()
 
-    if not db_url:
-        if _settings.testing:
-            db_url = "sqlite:///:memory:"
-        else:
-            db_url = "sqlite:///./app.db"
-    engine = make_engine(db_url)
-    return make_sessionmaker(engine)
+    if worker_id is None:
+        # --- Legacy/shared behaviour -----------------------------------
+        db_url = _settings.database_url
+
+        if not db_url:
+            if _settings.testing:
+                db_url = "sqlite:///:memory:"
+            else:
+                db_url = "sqlite:///./app.db"
+
+        engine = make_engine(db_url)
+        return make_sessionmaker(engine)
+
+    # --- Per-worker engine/session --------------------------------------
+    if worker_id in _WORKER_SESSIONMAKERS:
+        return _WORKER_SESSIONMAKERS[worker_id]
+
+    # Lazily build the engine (thread-safe)
+    with _WORKER_LOCK:
+        if worker_id in _WORKER_SESSIONMAKERS:
+            return _WORKER_SESSIONMAKERS[worker_id]
+
+        # Place the database file **inside the backend directory** so the
+        # helper script `backend/cleanup_test_dbs.py` can delete it after the
+        # Playwright run.
+        db_path = Path(__file__).resolve().parents[1] / f"test_worker_{worker_id}.db"
+        db_url = f"sqlite:///{db_path}"
+
+        engine = make_engine(db_url)
+        # Create tables on first use
+        initialize_database(engine)
+
+        session_factory = make_sessionmaker(engine)
+
+        _WORKER_ENGINES[worker_id] = engine
+        _WORKER_SESSIONMAKERS[worker_id] = session_factory
+
+        return session_factory
 
 
 # Default engine and sessionmaker instances for app usage
@@ -111,7 +182,7 @@ def get_db(session_factory: Any = None) -> Iterator[Session]:
     Yields:
         SQLAlchemy Session object
     """
-    factory = session_factory or default_session_factory
+    factory = session_factory or get_session_factory()
     db = factory()
     try:
         yield db

@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page } from './fixtures';
 
 // Reset DB before each test to keep thread ids predictable
 test.beforeEach(async ({ request }) => {

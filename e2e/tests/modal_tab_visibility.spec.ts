@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // NB:  This is a *smoke* test – we do not attempt to mock the entire backend.
 // The compiled WASM app is expected to be served on http://localhost:8002 by

@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page } from './fixtures';
 
 // Helper to count dashboard agent rows (each <tr data-agent-id="…">)
 async function getAgentRowCount(page: Page) {

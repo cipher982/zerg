@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Ensure every test in this file starts with an empty DB so row counts are
 // deterministic across parallel pages.
