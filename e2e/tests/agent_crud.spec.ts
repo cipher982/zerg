@@ -13,8 +13,20 @@ async function waitForDashboardReady(page: Page) {
 }
 
 test.describe('Agent CRUD – dashboard interactions', () => {
+  /**
+   * Ensure a clean slate before every test so row-counts and IDs are
+   * deterministic.  A quick call to the dev-only POST /admin/reset-database
+   * endpoint is faster than clicking the UI button and avoids flakiness when
+   * multiple tests mutate data in the same browser session.
+   */
   test.beforeEach(async ({ page }) => {
+    await page.request.post('http://localhost:8001/admin/reset-database');
     await waitForDashboardReady(page);
+  });
+
+  // Also wipe data afterwards so other spec-files don’t inherit our state.
+  test.afterEach(async ({ page }) => {
+    await page.request.post('http://localhost:8001/admin/reset-database');
   });
 
   test('Create agent with minimal configuration', async ({ page }) => {
@@ -93,9 +105,9 @@ test.describe('Agent CRUD – dashboard interactions', () => {
     // Save → button id="save-agent".
     await page.locator('#save-agent').click();
 
-    // Modal auto-closes; wait for WebSocket update then verify row text updated.
-    await page.waitForTimeout(1000); // Allow WebSocket update
-    await expect(page.locator(`tr[data-agent-id="${agentId}"] td`).first()).toContainText('Edited Agent');
+    // Modal auto-closes.  Wait until the first cell of that row reflects the
+    // updated name – allow up to 5 s for the WebSocket patch round-trip.
+    await expect(page.locator(`tr[data-agent-id="${agentId}"] td`).first()).toContainText('Edited Agent', { timeout: 5_000 });
   });
 
   test('Delete agent with confirmation dialog', async ({ page }) => {
@@ -191,9 +203,7 @@ test.describe('Agent CRUD – dashboard interactions', () => {
     }
 
     await page.locator('#save-agent').click();
-    // Wait for WebSocket update
-    await page.waitForTimeout(1000);
-    await expect(page.locator(`tr[data-agent-id="${agentId}"] td`).first()).toContainText('Full Config Agent');
+    await expect(page.locator(`tr[data-agent-id="${agentId}"] td`).first()).toContainText('Full Config Agent', { timeout: 5_000 });
   });
 
   test('Validate required fields show errors', async ({ page }) => {

@@ -24,6 +24,13 @@ done
 
 echo "[run_e2e_tests] Running Playwright tests…" >&2
 
+# Avoid sandbox tmp permission issues in restrictive environments
+export PLAYWRIGHT_CACHE_DIR="${SCRIPT_DIR}/.pw_cache"
+mkdir -p "$PLAYWRIGHT_CACHE_DIR"
+export TMPDIR="${SCRIPT_DIR}/.pw_tmp"
+mkdir -p "$TMPDIR"
+export PW_TMP_DIR="$TMPDIR"
+
 # Pass through all given args to the underlying npm command
 npm test -- "$@"
 

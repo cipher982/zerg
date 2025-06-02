@@ -30,7 +30,7 @@ const config = {
   webServer: [
     {
       // Backend on port 8001 (will kill existing server if needed)
-      command: 'cd ../backend && TESTING=1 E2E_LOG_SUPPRESS=1 LOG_LEVEL=WARNING uv run python -m uvicorn zerg.main:app --port 8001 --log-level warning',
+      command: 'cd ../backend && mkdir -p .uv_cache .uv_tmp && XDG_CACHE_HOME=$(pwd)/.uv_cache TMPDIR=$(pwd)/.uv_tmp TESTING=1 E2E_LOG_SUPPRESS=1 LOG_LEVEL=WARNING uv run python -m uvicorn zerg.main:app --port 8001 --log-level warning',
       port: 8001,
       reuseExistingServer: false,
       timeout: 120_000,
