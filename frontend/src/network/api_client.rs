@@ -473,7 +473,9 @@ pub fn load_agents() {
                                                     });
 
                                                     if let Some(handler) = handler_opt {
-                                                        if let Ok(mut tm) = topic_manager_rc.try_borrow_mut() {
+                                                        {
+                                                            // Fail loudly if a borrow conflict exists – indicates logical error.
+                                                            let mut tm = topic_manager_rc.borrow_mut();
                                                             for id in state.agents.keys() {
                                                                 let topic = format!("agent:{}", id);
                                                                 let _ = tm.subscribe(topic.clone(), Rc::clone(&handler));

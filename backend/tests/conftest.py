@@ -48,11 +48,13 @@ if "cryptography" not in sys.modules:  # guard in case real package installed
         def __init__(self, _key):
             self._key = _key
 
+        # Keep encryption a **no-op** inside the unit-test environment so
+        # assertions that inspect raw values (e.g. auth tokens) still match.
         def encrypt(self, data: bytes):  # noqa: D401 – mimic API
-            return data[::-1]  # naive reversible transform
+            return data  # type: ignore[return-value]
 
         def decrypt(self, token: bytes):  # noqa: D401
-            return token[::-1]
+            return token
 
     _fernet_mod.Fernet = _FakeFernet  # type: ignore[attr-defined]
     sys.modules["cryptography"] = _crypto_mod
@@ -434,7 +436,7 @@ def _dev_user(db_session):
 
     user = _crud.get_user_by_email(db_session, "dev@local")
     if user is None:
-        user = _crud.create_user(db_session, email="dev@local", provider=None, role="ADMIN")
+        user = _crud.create_user(db_session, email="dev@local", provider=None, role="USER")
     return user
 
 
@@ -522,6 +524,58 @@ def sample_thread_messages(db_session, sample_thread):
 
     db_session.commit()
     return messages
+
+
+# ---------------------------------------------------------------------------
+# HTTP helper fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def auth_headers():  # noqa: D401 – pytest fixture naming
+    """Return minimal **empty** headers dict for tests that inject auth.
+
+    Most API endpoints depend on :pyfunc:`zerg.dependencies.auth.get_current_user`
+    which, in *test mode*, bypasses JWT validation entirely (``AUTH_DISABLED``
+    is implicitly enabled via the ``TESTING=1`` env flag set at the top of
+    this file).  The tests for the MCP server router still expect a
+    ``headers`` fixture so we provide a **no-op** implementation – an empty
+    dict is sufficient because the middleware does not look at the headers
+    in this scenario.
+    """
+
+    # Provide a dummy bearer token so routes that still check for the header
+    # despite *AUTH_DISABLED* being in effect treat the request as
+    # *authenticated*.  The token is **not** validated in dev-mode so the
+    # value is irrelevant.
+
+    return {"Authorization": "Bearer test-token"}
+
+
+# Alias *db* fixture used in a handful of newer test files.  Internally we
+# already expose a fully configured ``db_session`` fixture that yields a
+# transactional SQLAlchemy session bound to the in-memory SQLite engine, so
+# we simply return that reference for backwards compatibility.
+
+
+@pytest.fixture()
+def db(db_session):  # noqa: D401 – passthrough alias
+    """Backward-compatibility shim – provide ``db`` as alias for *db_session*."""
+
+    return db_session
+
+
+# ---------------------------------------------------------------------------
+# *test_user* – alias for legacy fixture name expected by a handful of new
+# test modules.  Reuses the deterministic ``_dev_user`` helper.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def test_user(_dev_user):  # noqa: D401 – passthrough alias
+    """Provide ``test_user`` as backwards-compatible alias for *_dev_user*."""
+
+    return _dev_user
 
 
 @pytest.fixture

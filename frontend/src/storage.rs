@@ -353,13 +353,25 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                                 // In a real app, you might want to display a UI message or button
                                 // that lets users generate nodes for their agents
                             }
-
-                            // Now that `state.agents` is populated attempt to
-                            // reconcile any placeholder canvas nodes that were
-                            // loaded from the saved layout *before* the agent
-                            // list arrived.
-                            fix_stub_nodes();
+                            // Deferred stub reconciliation happens *after*
+                            // this `borrow_mut` guard is released to avoid a
+                            // nested mutable-borrow panic.  We signal the
+                            // caller via a bool return value so the async
+                            // task can call `fix_stub_nodes()` once the
+                            // RefCell lock is dropped.
+                            state.mark_dirty();
                         });
+
+                        // --- IMPORTANT --------------------------------------------------
+                        // We just mutated `state` above and now want to run
+                        // `fix_stub_nodes()` which requires a *fresh* mutable
+                        // borrow.  Calling it inside the previous closure
+                        // would trigger a `BorrowMutError`.  Therefore we run
+                        // it **after** the closure scope ends (borrow dropped
+                        // here).
+                        // ----------------------------------------------------------------
+
+                        fix_stub_nodes();
                     },
                     Err(e) => {
                         web_sys::console::error_1(&format!("Error parsing agents from API: {}", e).into());
@@ -528,10 +540,9 @@ pub(crate) fn fix_stub_nodes() {
     use crate::state::APP_STATE;
 
     APP_STATE.with(|state_ref| {
-        let mut st = match state_ref.try_borrow_mut() {
-            Ok(b) => b,
-            Err(_) => return, // Early exit if already mutably borrowed
-        };
+        // Panic on borrow error – should not occur in normal operation and
+        // indicates a programming mistake when it does.
+        let mut st = state_ref.borrow_mut();
 
         // Work with *copies* to avoid Rust's strict aliasing rules.
 

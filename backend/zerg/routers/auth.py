@@ -1,6 +1,7 @@
 """Authentication routes (Stage 2 – Google Sign-In)."""
 
-import os
+from __future__ import annotations
+
 from datetime import datetime
 from datetime import timedelta
 from typing import Any
@@ -12,6 +13,7 @@ from fastapi import HTTPException
 from fastapi import status
 from sqlalchemy.orm import Session
 
+from zerg.config import get_settings
 from zerg.crud import crud
 from zerg.database import get_db
 from zerg.dependencies.auth import get_current_user
@@ -21,14 +23,23 @@ load_dotenv()
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+# Unified settings ---------------------------------------------------------
+
+_settings = get_settings()
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
+# Snapshot of critical secrets – access once at import time.  We purposefully
+# *copy* the values rather than referencing the Settings object throughout so
+# that test fixtures which mutates settings after import need to patch
+# *this* module explicitly (mirrors old behaviour).
+
+GOOGLE_CLIENT_ID = _settings.google_client_id
+JWT_SECRET = _settings.jwt_secret
 
 # Client secret is required for *server-side* OAuth code exchange when users
 # connect their Gmail account to enable *email triggers*.  The variable is
@@ -36,7 +47,7 @@ JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
 # only needs the *client ID* for ID-token verification) keeps working in
 # existing development setups.
 
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_CLIENT_SECRET = _settings.google_client_secret
 
 
 def _verify_google_id_token(id_token_str: str) -> dict[str, Any]:

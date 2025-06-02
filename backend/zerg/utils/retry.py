@@ -34,13 +34,14 @@ from __future__ import annotations
 import asyncio
 import functools
 import logging
-import os
 import random
 from typing import Awaitable
 from typing import Callable
 from typing import ParamSpec
 from typing import TypeVar
 
+# Centralised settings access
+from zerg.config import get_settings
 from zerg.metrics import external_api_retry_total
 from zerg.metrics import gmail_api_error_total
 
@@ -86,7 +87,7 @@ def async_retry(
 
     # Shrink retry duration dramatically when running inside the *unit-test*
     # harness so slow external-path tests do not dominate runtime.
-    if os.getenv("TESTING") == "1":
+    if get_settings().testing:
         max_attempts = min(max_attempts, 2)
         base_delay = min(base_delay, 0.01)
         max_delay = min(max_delay, 0.05)

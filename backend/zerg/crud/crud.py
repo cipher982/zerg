@@ -1,9 +1,14 @@
+# UTC helper
+# Keep stdlib ``datetime`` for type annotations; runtime *now()* comes from
+# ``utc_now``.
 from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 
+# Cron validation helper
+from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
 
 from zerg.models.models import Agent
@@ -26,6 +31,19 @@ from zerg.models.models import Trigger
 from zerg.models.models import User
 from zerg.schemas.schemas import RunStatus
 from zerg.schemas.schemas import RunTrigger
+from zerg.utils.time import utc_now
+
+
+def _validate_cron_or_raise(expr: str | None):
+    """Raise ``ValueError`` if *expr* is not a valid crontab string."""
+
+    if expr is None:
+        return
+
+    try:
+        CronTrigger.from_crontab(expr)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"Invalid cron expression: {expr} ({exc})") from exc
 
 
 # Agent CRUD operations
@@ -69,6 +87,9 @@ def create_agent(
 
     ``owner_id`` is **required** – every agent belongs to exactly one user.
     """
+
+    # Validate cron expression if provided
+    _validate_cron_or_raise(schedule)
 
     db_agent = Agent(
         owner_id=owner_id,
@@ -119,6 +140,7 @@ def update_agent(
     if status is not None:
         db_agent.status = status
     if schedule is not None:
+        _validate_cron_or_raise(schedule)
         db_agent.schedule = schedule
     if config is not None:
         db_agent.config = config
@@ -129,7 +151,7 @@ def update_agent(
     if last_error is not None:
         db_agent.last_error = last_error
 
-    db_agent.updated_at = datetime.now()
+    db_agent.updated_at = utc_now()
     db.commit()
     db.refresh(db_agent)
     return db_agent
@@ -385,7 +407,7 @@ def update_thread(
     if memory_strategy is not None:
         db_thread.memory_strategy = memory_strategy
 
-    db_thread.updated_at = datetime.now()
+    db_thread.updated_at = utc_now()
     db.commit()
     db.refresh(db_thread)
     return db_thread
@@ -430,6 +452,8 @@ def create_thread_message(
     name: Optional[str] = None,
     processed: bool = False,
     parent_id: Optional[int] = None,
+    *,
+    commit: bool = True,
 ):
     """Create a new message for a thread"""
     db_message = ThreadMessage(
@@ -443,8 +467,18 @@ def create_thread_message(
         parent_id=parent_id,
     )
     db.add(db_message)
-    db.commit()
-    db.refresh(db_message)
+
+    # For callers that batch-insert multiple messages we allow skipping the
+    # commit so they can flush/commit once at the end.  When *commit* is
+    # False we rely on the caller to perform a ``session.flush()`` so that
+    # primary keys are assigned (required for subsequent parent_id linking).
+
+    if commit:
+        db.commit()
+        db.refresh(db_message)
+    else:
+        # Ensure primary key is assigned so callers can reference ``row.id``
+        db.flush([db_message])
     return db_message
 
 
@@ -459,11 +493,49 @@ def mark_message_processed(db: Session, message_id: int):
     return None
 
 
+# ---------------------------------------------------------------------------
+# Bulk helpers – performance critical paths
+# ---------------------------------------------------------------------------
+
+
+def mark_messages_processed_bulk(db: Session, message_ids: List[int]):
+    """Set processed=True for the given message IDs in one UPDATE."""
+
+    if not message_ids:
+        return 0
+
+    updated = (
+        db.query(ThreadMessage)
+        .filter(ThreadMessage.id.in_(message_ids))
+        .update({ThreadMessage.processed: True}, synchronize_session=False)
+    )
+
+    db.commit()
+    return updated
+
+
 def get_unprocessed_messages(db: Session, thread_id: int):
     """Get unprocessed messages for a thread"""
+    # ------------------------------------------------------------------
+    # SQLAlchemy filter helpers
+    # ------------------------------------------------------------------
+    #
+    # Using Python's boolean *not* operator on an InstrumentedAttribute
+    # (`not ThreadMessage.processed`) evaluates the *truthiness* of the
+    # attribute **eagerly** which yields a plain ``False`` value instead of a
+    # SQL expression.  The resulting ``WHERE false`` clause caused the query
+    # to **always** return an empty result set so the AgentRunner never saw
+    # any *unprocessed* user messages – the UI therefore stayed silent after
+    # every prompt.
+    #
+    # The correct approach is to build an explicit boolean comparison that
+    # SQLAlchemy can translate into the appropriate SQL (`processed = 0`).
+    # The `is_(False)` helper generates portable SQL across dialects.
+    # ------------------------------------------------------------------
+
     return (
         db.query(ThreadMessage)
-        .filter(ThreadMessage.thread_id == thread_id, ~ThreadMessage.processed)
+        .filter(ThreadMessage.thread_id == thread_id, ThreadMessage.processed.is_(False))
         .order_by(ThreadMessage.timestamp)
         .all()
     )

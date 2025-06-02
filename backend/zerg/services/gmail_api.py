@@ -18,14 +18,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import urllib.parse
 import urllib.request
 from typing import Any
 from typing import Dict
 from typing import List
 
+from zerg.config import get_settings
 from zerg.utils.retry import async_retry
+
+# Unified settings snapshot for the module
+_settings = get_settings()
 
 logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
@@ -180,8 +183,8 @@ def exchange_refresh_token(refresh_token: str) -> str:  # noqa: D401 – helper
     automatic retries because the service layer already loops regularly.
     """
 
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    client_id = _settings.google_client_id
+    client_secret = _settings.google_client_secret
 
     if not client_id or not client_secret:
         raise RuntimeError(

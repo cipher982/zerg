@@ -1,4 +1,19 @@
-import os
+# ---------------------------------------------------------------------------
+# NOTE: This module is imported pretty much **everywhere** so we avoid any
+# heavyweight dependencies or side-effects here.  Importing
+# ``zerg.config.get_settings`` is cheap thanks to the underlying
+# ``functools.lru_cache`` but we still guard against circular import issues by
+# performing the call *inside* the module scope after the function reference
+# is available.
+# ---------------------------------------------------------------------------
+
+from typing import Final
+from typing import Optional
+
+from zerg.config import get_settings
+
+# Singleton settings instance – safe due to lru_cache internal memoisation
+_settings = get_settings()
 
 # Base API prefix (all HTTP routes are served under /api/*)
 API_PREFIX = "/api"
@@ -24,13 +39,15 @@ MODELS_PREFIX = "/models"
 # variable is absent **and** the ``TESTING`` flag is set.
 # ---------------------------------------------------------------------------
 
-if "TRIGGER_SIGNING_SECRET" in os.environ:
-    TRIGGER_SIGNING_SECRET: str = os.environ["TRIGGER_SIGNING_SECRET"]
+# Resolve trigger signing secret from unified settings.  In *production* the
+# value **must** be provided; in *testing* mode we fall back to the deterministic
+# value used across the suite so cryptographic checks stay reproducible.
+
+if _settings.trigger_signing_secret is not None:
+    TRIGGER_SIGNING_SECRET: Final[str] = _settings.trigger_signing_secret
 else:
-    if os.getenv("TESTING") == "1":
-        # Deterministic value – identical to fixture used elsewhere so HMAC
-        # computations remain reproducible across the suite.
-        TRIGGER_SIGNING_SECRET = "super-secret-hex"
+    if _settings.testing:
+        TRIGGER_SIGNING_SECRET = "super-secret-hex"  # noqa: S105 – test only
     else:
         raise KeyError(
             "TRIGGER_SIGNING_SECRET is not set. This secret is required for "
@@ -54,4 +71,62 @@ __all__ = [
     "THREADS_PREFIX",
     "MODELS_PREFIX",
     "get_full_path",
+    # Feature flags
+    "LLM_TOKEN_STREAM",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Feature flags (evaluated once at import time)
+# ---------------------------------------------------------------------------
+
+
+# Deprecated helper – retained for backwards-compatibility of *tests* that
+# patched feature flags directly.  New code should access values via
+# ``settings.<flag>``.
+
+
+def _env_truthy(name: str, default: Optional[str] = None) -> bool:  # noqa: D401 – legacy
+    """Return True if *name* env var is set to a truthy value.
+
+    The function now merely proxies to the canonical Settings instance so the
+    semantics remain unchanged while moving away from direct env access.
+    """
+
+    return getattr(_settings, name.lower(), False)  # type: ignore[arg-type]
+
+
+# Public flag exported under the previous constant name so imports stay
+# functional while we gradually migrate call-sites.
+LLM_TOKEN_STREAM: Final[bool] = _settings.llm_token_stream
+
+
+# ---------------------------------------------------------------------------
+# Test helper – allow reloading env driven flags without re-importing module
+# ---------------------------------------------------------------------------
+
+
+# -----------------------------------------------------------------------
+# Test helper – keep backwards compatibility with existing test-suite
+# -----------------------------------------------------------------------
+
+
+def _refresh_feature_flags() -> None:  # pragma: no cover – test helper
+    """Reload ``Settings`` from the *current* environment and refresh flags.
+
+    Tests that temporarily monkeypatch ``os.environ`` can call this function
+    so the globally cached Settings instance picks up the changed variables.
+    """
+
+    from zerg.config import get_settings as _get_settings  # local import
+
+    # Reset the lru_cache and fetch a fresh instance
+    _get_settings.cache_clear()  # type: ignore[attr-defined]
+    global _settings  # noqa: PLW0603 – module global
+    _settings = _get_settings()
+
+    global LLM_TOKEN_STREAM  # noqa: PLW0603 – module global
+    LLM_TOKEN_STREAM = _settings.llm_token_stream
+
+
+__all__.append("_refresh_feature_flags")
