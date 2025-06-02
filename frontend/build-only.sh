@@ -9,9 +9,21 @@ if ! command -v wasm-pack >/dev/null 2>&1; then
   exit 1
 fi
 
-# Build with debug profile and set API_BASE_URL for e2e tests
+# Load repo-root .env so variables like API_BASE_URL can be overridden
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ENV_FILE="$ROOT_DIR/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck source=/dev/null
+  . "$ENV_FILE"
+  set +a
+fi
+
+# Default if not provided via env
+API_BASE_URL="${API_BASE_URL:-http://localhost:8001}"
+
 echo "Building WASM module..."
-API_BASE_URL="http://localhost:8001" RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir www
+API_BASE_URL="$API_BASE_URL" RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir www
 
 # Bootstrap loader identical to dev script (minus server)
 echo "[build-only] writing bootstrap.js …"

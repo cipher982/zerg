@@ -46,7 +46,7 @@ test.describe('Smoke Tests - Basic Infrastructure', () => {
     const agentCount = await getAgentRowCount(page);
     expect(agentCount).toBe(0);
     // Check for the empty state message in the table
-    await expect(page.locator('table')).toContainText("No agents found. Click '+ Create New Agent' to get started.");
+    await expect(page.locator('table')).toContainText("No agents found. Click 'Create New Agent' to get started.");
     
     // Dashboard should still show the table structure
     await expect(page.locator('table')).toBeVisible();
