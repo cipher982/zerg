@@ -3,9 +3,10 @@
 import ast
 import logging
 import operator
+from typing import List
 from typing import Union
 
-from zerg.tools.registry import register_tool
+from langchain_core.tools import StructuredTool
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +65,6 @@ class SafeMathEvaluator(ast.NodeVisitor):
 
     def visit_Name(self, node):
         """Visit name node (for constants like pi, e)."""
-        # Could add support for math constants here if needed
         raise ValueError(f"Variables not supported: {node.id}")
 
     def visit_Call(self, node):
@@ -85,7 +85,6 @@ class SafeMathEvaluator(ast.NodeVisitor):
         raise ValueError(f"Unsupported expression type: {type(node).__name__}")
 
 
-@register_tool(name="math_eval", description="Safely evaluate mathematical expressions")
 def math_eval(expression: str) -> Union[int, float]:
     """Safely evaluate a mathematical expression.
 
@@ -138,3 +137,10 @@ def math_eval(expression: str) -> Union[int, float]:
     except Exception as e:
         logger.error(f"Error evaluating expression '{expression}': {e}")
         raise ValueError(f"Error evaluating expression: {e}")
+
+
+TOOLS: List[StructuredTool] = [
+    StructuredTool.from_function(
+        func=math_eval, name="math_eval", description="Safely evaluate mathematical expressions"
+    ),
+]

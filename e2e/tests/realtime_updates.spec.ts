@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
 
+// Ensure every test in this file starts with an empty DB so row counts are
+// deterministic across parallel pages.
+test.beforeEach(async ({ request }) => {
+  await request.post('http://localhost:8001/admin/reset-database');
+});
+
 test('Dashboard live update placeholder', async ({ browser }) => {
   // Open two tabs to simulate multi-tab sync
   const context = await browser.newContext();

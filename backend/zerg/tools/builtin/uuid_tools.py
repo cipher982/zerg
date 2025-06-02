@@ -1,12 +1,12 @@
 """UUID generation tools."""
 
 import uuid
+from typing import List
 from typing import Optional
 
-from zerg.tools.registry import register_tool
+from langchain_core.tools import StructuredTool
 
 
-@register_tool(name="generate_uuid", description="Generate a universally unique identifier (UUID)")
 def generate_uuid(version: Optional[int] = 4, namespace: Optional[str] = None, name: Optional[str] = None) -> str:
     """Generate a UUID.
 
@@ -94,5 +94,12 @@ def _get_namespace_uuid(namespace: str) -> uuid.UUID:
         return uuid.UUID(namespace)
     except ValueError:
         raise ValueError(
-            f"Invalid namespace '{namespace}'. " f"Must be one of {list(predefined.keys())} or a valid UUID string"
+            f"Invalid namespace '{namespace}'. Must be one of {list(predefined.keys())} or a valid UUID string"
         )
+
+
+TOOLS: List[StructuredTool] = [
+    StructuredTool.from_function(
+        func=generate_uuid, name="generate_uuid", description="Generate a universally unique identifier (UUID)"
+    ),
+]

@@ -26,17 +26,21 @@ the *"push to HTTPS"* option.  Validation is **always enabled** unless the
 from __future__ import annotations
 
 import logging
-import os
 from typing import Dict
 
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import Header
 from fastapi import HTTPException
+from fastapi import Request
 from fastapi import status
 from sqlalchemy.orm import Session
 
+from zerg.config import get_settings
 from zerg.database import get_db
+
+# Replace direct env look-up with unified Settings helper
+_settings = get_settings()
 
 # Event publication and agent execution are handled inside
 # `EmailTriggerService` from now on.  The router only enqueues the service
@@ -52,6 +56,36 @@ logger = logging.getLogger(__name__)
 
 
 router = APIRouter(tags=["email-webhooks"])
+
+# ---------------------------------------------------------------------------
+# Helper – clamp request body size before any heavy processing/HMAC.
+# ---------------------------------------------------------------------------
+
+MAX_BODY_BYTES = 128 * 1024  # 128 KiB
+
+
+async def _clamp_body_size(request: Request):  # noqa: D401 – dependency
+    """Reject requests with bodies larger than *MAX_BODY_BYTES*."""
+
+    # Prefer Content-Length header to avoid reading the body twice.  If the
+    # header is missing we read the body anyways (stream consumed only once
+    # by FastAPI) and compare len().
+
+    cl_header = request.headers.get("content-length")
+    if cl_header and cl_header.isdigit():
+        if int(cl_header) > MAX_BODY_BYTES:
+            raise HTTPException(status_code=413, detail="Request body too large")
+        return  # Size acceptable – don't consume body.
+
+    # Fallback – read body bytes *once* and stash in request.state so the
+    # route handler can access it without re-awaiting .body().  FastAPI docs
+    # allow this pattern.
+
+    raw = await request.body()
+    if len(raw) > MAX_BODY_BYTES:
+        raise HTTPException(status_code=413, detail="Request body too large")
+
+    request.state.raw_body = raw  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +112,7 @@ def _validate_google_jwt(auth_header: str | None):  # noqa: D401 – helper
     # not need to embed real JWTs.  This keeps runtime behaviour unchanged
     # for dev & prod which never set TESTING.
 
-    if os.getenv("TESTING") == "1":
+    if _settings.testing:
         return
 
     if not auth_header:
@@ -109,7 +143,11 @@ def _validate_google_jwt(auth_header: str | None):  # noqa: D401 – helper
 # enforces presence except when `TESTING=1`.
 
 
-@router.post("/email/webhook/google", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/email/webhook/google",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(_clamp_body_size)],
+)
 async def gmail_webhook(
     *,
     x_goog_channel_token: str = Header(..., alias="X-Goog-Channel-Token"),

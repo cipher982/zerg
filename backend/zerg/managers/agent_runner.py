@@ -21,8 +21,10 @@ Design goals
 from __future__ import annotations
 
 import logging
-import os
+from typing import Any
+from typing import Dict
 from typing import Sequence
+from typing import Tuple
 
 from sqlalchemy.orm import Session
 
@@ -37,6 +39,17 @@ from zerg.services.thread_service import ThreadService
 
 logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Local in-memory cache for compiled LangGraph runnables.
+# Keyed by (agent_id, agent_updated_at, stream_flag) so that any edit to the
+# agent definition automatically busts the cache.  The cache is deliberately
+# **process-local** – workers in a multi-process Gunicorn deployment will each
+# compile their own runnable once on first use which is acceptable given the
+# small cost (~100 ms).
+# ---------------------------------------------------------------------------
+
+_RUNNABLE_CACHE: Dict[Tuple[int, str, bool], Any] = {}
+
 
 class AgentRunner:  # noqa: D401 – naming follows project conventions
     """Run one agent turn (async)."""
@@ -44,15 +57,38 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
     def __init__(self, agent_row: AgentModel, *, thread_service: ThreadService | None = None):
         self.agent = agent_row
         self.thread_service = thread_service or ThreadService
-        # Lazily compile runnable so tests can monkey-patch implementation
-        # get_runnable now returns the compiled entrypoint function
-        self._runnable = zerg_react_agent.get_runnable(agent_row)
 
         # Whether this runner/LLM emits per-token chunks – treat env value
         # case-insensitively; anything truthy like "1", "true", "yes" enables
         # the feature.
-        val = os.getenv("LLM_TOKEN_STREAM", "")
-        self.enable_token_stream = val.lower() in {"1", "true", "yes", "on"}
+        # Re-evaluate the *LLM_TOKEN_STREAM* env var **at runtime** so tests
+        # that toggle the flag via ``monkeypatch.setenv`` after
+        # ``zerg.constants`` was initially imported still take effect.
+
+        # Resolve feature flag via *central* settings object so tests can
+        # override through ``os.environ`` + ``constants._refresh_feature_flags``.
+
+        from zerg.config import get_settings
+
+        self.enable_token_stream = get_settings().llm_token_stream
+
+        # ------------------------------------------------------------------
+        # Lazily compile (or fetch from cache) the LangGraph runnable.  Using
+        # a small in-process cache avoids the expensive graph compilation on
+        # every single run (~100 ms) while still picking up changes whenever
+        # the Agent row is modified (updated_at changes).
+        # ------------------------------------------------------------------
+
+        updated_at_str = agent_row.updated_at.isoformat() if getattr(agent_row, "updated_at", None) else "0"
+        cache_key = (agent_row.id, updated_at_str, self.enable_token_stream)
+
+        if cache_key in _RUNNABLE_CACHE:
+            self._runnable = _RUNNABLE_CACHE[cache_key]
+            logger.debug("AgentRunner: using cached runnable for agent %s", agent_row.id)
+        else:
+            self._runnable = zerg_react_agent.get_runnable(agent_row)
+            _RUNNABLE_CACHE[cache_key] = self._runnable
+            logger.debug("AgentRunner: compiled & cached runnable for agent %s", agent_row.id)
 
     # ------------------------------------------------------------------
     # Public API – asynchronous
@@ -117,6 +153,17 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
 
         # Touch timestamp
         self.thread_service.touch_thread_timestamp(db, thread.id)
+
+        # ------------------------------------------------------------------
+        # Safety net – if we *had* unprocessed user messages but the runnable
+        # failed to generate **any** new assistant/tool message we treat this
+        # as an error.  Without this guard the request would appear to succeed
+        # (HTTP 202) yet the user sees no response in the UI and the bug can
+        # stay unnoticed.
+        # ------------------------------------------------------------------
+
+        if unprocessed_rows and not created_rows:
+            raise RuntimeError("Agent produced no messages despite pending user input.")
 
         # Return *all* created rows so callers can decide how to emit them
         # over WebSocket (assistant **and** tool messages).  The caller can

@@ -7,8 +7,9 @@ exits early with a helpful message.
 
 from __future__ import annotations
 
-import os
 from typing import Final
+
+from zerg.config import get_settings
 
 try:
     from cryptography.fernet import Fernet  # type: ignore
@@ -24,7 +25,7 @@ except ModuleNotFoundError as exc:  # pragma: no cover – mandatory dep missing
 # Load and validate secret
 # ---------------------------------------------------------------------------
 
-_SECRET_B64: Final[str | None] = os.getenv("FERNET_SECRET")
+_SECRET_B64: Final[str | None] = get_settings().fernet_secret
 
 if not _SECRET_B64:
     raise SystemExit("FERNET_SECRET environment variable must be set.")

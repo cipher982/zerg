@@ -1,14 +1,24 @@
 #!/bin/bash
 set -e
 
-# Load environment overrides if present
-if [ -f .env ]; then
-  # shellcheck disable=SC2046
-  export $(grep -v '^#' .env | xargs)
+# Load *repository-root* .env so frontend uses the same configuration as backend
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ENV_FILE="$ROOT_DIR/.env"
+
+if [ -f "$ENV_FILE" ]; then
+  # Enable automatic export of all assigned variables
+  set -a
+  # shellcheck source=/dev/null
+  . "$ENV_FILE"
+  set +a
 fi
 
 echo "[build-debug] HELLO compiling WASM (debug)..."
-RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir www
+
+# Default API_BASE_URL if not provided via .env
+API_BASE_URL="${API_BASE_URL:-http://localhost:8001}"
+
+API_BASE_URL="$API_BASE_URL" RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir www
 
 # -------------------------------------------------------------
 # Generate bootstrap.js expected by index.html

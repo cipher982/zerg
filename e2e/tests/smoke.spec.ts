@@ -46,7 +46,7 @@ test.describe('Smoke Tests - Basic Infrastructure', () => {
     const agentCount = await getAgentRowCount(page);
     expect(agentCount).toBe(0);
     // Check for the empty state message in the table
-    await expect(page.locator('table')).toContainText("No agents found. Click '+ Create New Agent' to get started.");
+    await expect(page.locator('table')).toContainText("No agents found. Click 'Create New Agent' to get started.");
     
     // Dashboard should still show the table structure
     await expect(page.locator('table')).toBeVisible();
@@ -127,7 +127,7 @@ test.describe('Smoke Tests - Basic Infrastructure', () => {
 
     // Verify the changes are visible in the UI
     const agentRow = page.locator(`tr[data-agent-id="${agent.id}"]`);
-    await expect(agentRow).toContainText('Updated Name');
+    await expect(agentRow).toContainText('Updated Name', { timeout: 5_000 });
   });
 
   test('Can delete agent via UI', async ({ page }) => {

@@ -193,6 +193,7 @@ impl TopicManager {
         } else if let Some(t) = message.get("type").and_then(|t| t.as_str()) {
             // Non-topic frames – log but do not treat as fatal.
             match t {
+                "ping" => web_sys::console::debug_1(&"WS ping received".into()),
                 "pong" => web_sys::console::debug_1(&"WS pong received".into()),
                 "error" => web_sys::console::error_1(&format!("Received WS error frame: {:?}", message).into()),
                 other => web_sys::console::error_1(&format!("Unhandled WS frame type '{}': {:?}", other, message).into()),
@@ -200,15 +201,44 @@ impl TopicManager {
         }
     }
 
-    /// Helper: run all handlers registered for *topic* with the provided payload.
+    /// Helper: run all handlers registered for *topic* with the provided
+    /// payload.
+    ///
+    /// **Borrowing caveat** – Executing handlers **inside** the immutable
+    /// borrow of `TopicManager` (established via `RefCell::borrow()` in the
+    /// WebSocket `on_message` callback) causes a `BorrowMutError` whenever a
+    /// handler dispatches a message that, in turn, tries to obtain a *mutable*
+    /// borrow of the same `TopicManager` (e.g. to subscribe to a new topic).
+    ///
+    /// To avoid this re-entrancy issue we:
+    /// 1. Clone the relevant handler list while the immutable borrow is still
+    ///    active.
+    /// 2. Drop that borrow (by letting the `handlers_ref` go out of scope)
+    ///    *before* executing any user code.
+    /// 3. Execute each handler **asynchronously** on the next micro-task via
+    ///    `wasm_bindgen_futures::spawn_local`, ensuring the original borrow
+    ///    is fully released.
     fn dispatch_to_topic_handlers(&self, topic: &str, payload: serde_json::Value) {
-        if let Some(handlers) = self.topic_handlers.get(topic) {
+        use wasm_bindgen_futures::spawn_local;
+
+        // 1. Clone handlers while the immutable borrow of `self` is held.
+        let handlers_cloned: Option<Vec<TopicHandler>> =
+            self.topic_handlers
+                .get(topic)
+                .map(|vec| vec.iter().cloned().collect());
+
+        // 2. Borrow ends here (handlers_cloned owns independent `Rc`s).
+
+        if let Some(handlers) = handlers_cloned {
             for handler_rc in handlers {
-                if let Ok(mut handler) = handler_rc.try_borrow_mut() {
-                    (*handler)(payload.clone());
-                } else {
-                    web_sys::console::error_1(&format!("Failed to borrow handler for topic {}", topic).into());
-                }
+                let payload_clone = payload.clone();
+                spawn_local(async move {
+                    // Run handler in its own micro-task so we never execute
+                    // user callbacks while a borrow on the TopicManager is
+                    // active.  This eliminates the runtime RefCell panic seen
+                    // on rapid subscribe/unsubscribe cycles.
+                    (handler_rc.borrow_mut())(payload_clone);
+                });
             }
         } else {
             web_sys::console::debug_1(&format!("No handlers registered for determined topic: {}", topic).into());
@@ -224,51 +254,12 @@ impl TopicManager {
 // --- Implement Trait for Real TopicManager --- 
 impl ITopicManager for TopicManager {
     fn subscribe(&mut self, topic: Topic, handler: TopicHandler) -> Result<(), JsValue> {
-        let is_new_topic_subscription = !self.subscribed_topics.contains(&topic);
-
-        self.topic_handlers
-            .entry(topic.clone())
-            .or_default()
-            .push(handler);
-
-        if is_new_topic_subscription {
-            self.subscribed_topics.insert(topic.clone());
-            web_sys::console::log_1(&format!("Sending subscribe request for topic: {}", topic).into());
-            let msg = create_subscribe(vec![topic]);
-            let msg_json = serde_json::to_string(&msg).map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
-            match self.ws_client.try_borrow() {
-                Ok(client) => client.send_serialized_message(&msg_json)?,
-                Err(_) => return Err(JsValue::from_str("Failed to borrow WsClient for subscribe")),
-            }
-        } else {
-            web_sys::console::log_1(&format!("Adding additional handler for already subscribed topic: {}", topic).into());
-        }
-        Ok(())
+        // Delegate to the inherent implementation to avoid duplication.
+        TopicManager::subscribe(self, topic, handler)
     }
 
     fn unsubscribe_handler(&mut self, topic: &Topic, handler_to_remove: &TopicHandler) -> Result<(), JsValue> {
-        let mut removed = false;
-        let mut topic_is_empty = false;
-
-        if let Some(handlers) = self.topic_handlers.get_mut(topic) {
-            if let Some(pos) = handlers.iter().position(|h| Rc::ptr_eq(h, handler_to_remove)) {
-                handlers.remove(pos);
-                web_sys::console::log_1(&format!("Removed specific handler for topic: {}", topic).into());
-                removed = true;
-                topic_is_empty = handlers.is_empty();
-            } else {
-                 web_sys::console::warn_1(&format!("Handler not found for topic {} during unsubscribe.", topic).into());
-            }
-        }
-
-        if removed && topic_is_empty {
-            web_sys::console::log_1(&format!("Last handler removed for topic: {}. Cleaning up subscription.", topic).into());
-            self.topic_handlers.remove(topic);
-            if self.subscribed_topics.remove(topic) {
-                 self.send_unsubscribe_message(topic)?;
-            }
-        }
-        Ok(())
+        TopicManager::unsubscribe_handler(self, topic, handler_to_remove)
     }
 
     // Implement other trait methods if they were added to ITopicManager
@@ -278,4 +269,4 @@ impl ITopicManager for TopicManager {
 }
 
 // Remove old `unsubscribe` if no longer needed, or keep if used elsewhere.
-// pub fn unsubscribe(&mut self, topic: &Topic) -> Result<(), JsValue> { ... } 
+// pub fn unsubscribe(&mut self, topic: &Topic) -> Result<(), JsValue> { ... }

@@ -6,7 +6,6 @@ AgentRunner.
 """
 
 import logging
-import os
 from typing import List
 from typing import Optional
 
@@ -18,12 +17,14 @@ from langchain_core.messages import ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.func import entrypoint
-from langgraph.func import task
 from langgraph.graph.message import add_messages
 
 # Local imports (late to avoid circulars)
 from zerg.callbacks.token_stream import WsTokenCallback
-from zerg.tools.registry import get_registry
+from zerg.config import get_settings
+
+# Centralised flags
+from zerg.tools import get_registry
 
 logger = logging.getLogger(__name__)
 
@@ -41,16 +42,18 @@ def _make_llm(agent_row, tools):
     attached so each new token is forwarded to the WebSocket layer.
     """
 
-    # Feature flag parsed directly from environment – evaluated at runtime so
-    # changes in .env are respected on reload without indirection.
-    enable_token_stream = os.getenv("LLM_TOKEN_STREAM", "false").strip().lower() in {"1", "true", "yes", "y"}
+    # Feature flag – evaluate the environment variable *lazily* so test cases
+    # that tweak ``LLM_TOKEN_STREAM`` via ``monkeypatch.setenv`` after the
+    # module import still take effect.
+
+    enable_token_stream = get_settings().llm_token_stream
 
     # Attach the token stream callback only when the feature flag is enabled.
     kwargs: dict = {
         "model": agent_row.model,
         "temperature": 0.6,
         "streaming": enable_token_stream,
-        "api_key": os.environ.get("OPENAI_API_KEY"),
+        "api_key": get_settings().openai_api_key,
     }
 
     if enable_token_stream:
@@ -92,7 +95,7 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
     # ------------------------------------------------------------------
     registry = get_registry()
     allowed_tools = getattr(agent_row, "allowed_tools", None)
-    tools = registry.filter_tools_by_allowlist(allowed_tools)
+    tools = registry.filter_by_allowlist(allowed_tools)
 
     if not tools:
         logger.warning(f"No tools available for agent {agent_row.id}")
@@ -104,12 +107,21 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
     checkpointer = MemorySaver()
 
     # --- Define Tasks ---
-    @task
-    def _call_model_sync(messages: List[BaseMessage]):
-        """**Synchronous** model invocation helper.
+    # ------------------------------------------------------------------
+    # Model invocation helpers
+    # ------------------------------------------------------------------
 
-        Wrapped via :pyfunc:`asyncio.to_thread` in :pyfunc:`_call_model_async`
-        so that the heavy OpenAI HTTP request never blocks the event-loop.
+    def _call_model_sync(messages: List[BaseMessage]):
+        """Blocking LLM call (executes in *current* thread).
+
+        We keep this as a *plain* function rather than a LangGraph ``@task``
+        because the latter returns a *Task* object that requires calling
+        ``.result()`` **inside** a runnable context.  Our agent executes the
+        model call from within its own coroutine, *outside* the graph
+        execution engine, therefore the additional indirection only made the
+        code harder to reason about and raised confusing runtime errors like:
+
+            "Called get_config outside of a runnable context"
         """
 
         return llm_with_tools.invoke(messages)
@@ -119,7 +131,7 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
 
         import asyncio
 
-        return await asyncio.to_thread(lambda: _call_model_sync(messages).result())
+        return await asyncio.to_thread(_call_model_sync, messages)
 
     #
     # NOTE ON CONCURRENCY
@@ -135,9 +147,8 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
     # ``asyncio.gather``.
     #
 
-    @task
     def _call_tool_sync(tool_call: dict):  # noqa: D401 – internal helper
-        """Execute a single tool call (synchronous version)."""
+        """Execute a single tool call (blocking)."""
 
         tool_name = tool_call["name"]
         tool_to_call = tools_by_name.get(tool_name)
@@ -147,7 +158,7 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
             logger.error(observation)
         else:
             try:
-                observation = tool_to_call.invoke(tool_call["args"])
+                observation = tool_to_call.invoke(tool_call.get("args", {}))
             except Exception as exc:  # noqa: BLE001
                 observation = f"<tool-error> {exc}"
                 logger.exception("Error executing tool %s", tool_name)
@@ -155,19 +166,11 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
         return ToolMessage(content=str(observation), tool_call_id=tool_call["id"], name=tool_name)
 
     async def _call_tool_async(tool_call: dict):  # noqa: D401 – coroutine helper
-        """Async wrapper around :pyfunc:`_call_tool_sync`.
-
-        The function is executed in a default thread-pool so that long-running
-        or blocking tool work (I/O, CPU) does **not** block the event-loop.
-        """
-
-        # ``_call_tool_sync`` returns a Future-like langgraph task object; the
-        # actual synchronous work kicks off when we call ``.result()``.  We
-        # therefore *wrap* that blocking call in ``asyncio.to_thread``.
+        """Run tool execution in a worker thread."""
 
         import asyncio
 
-        return await asyncio.to_thread(lambda: _call_tool_sync(tool_call).result())
+        return await asyncio.to_thread(_call_tool_sync, tool_call)
 
     # --- Define main entrypoint ---
     async def _agent_executor_async(
@@ -179,8 +182,27 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
         2. If the model calls a tool, execute it and append the result
         3. Repeat until the model generates a final response
         """
-        # Initialize message history from previous or use the input messages
-        current_messages = previous or messages
+        # Initialise message history.
+        #
+        # ``previous`` is populated by LangGraph's *checkpointing* mechanism
+        # and therefore contains the **conversation as it existed at the end
+        # of the *last* agent turn*.  When the user sends a *new* message the
+        # frontend creates the row in the database which is forwarded as the
+        # *messages* argument while *previous* still lacks that entry.
+        #
+        # If we were to prefer the *previous* list we would effectively drop
+        # the most recent user input – the LLM would see an outdated context
+        # and produce no new assistant response.  This manifested in the UI
+        # as the agent replying only to the very first user message but
+        # staying silent afterwards.
+        #
+        # We therefore always start from the *messages* list (which is the
+        # *source of truth* pulled from the database right before the
+        # runnable is invoked) and *only* fall back to *previous* when the
+        # caller provides an *empty* messages array (which currently never
+        # happens in normal operation but keeps the function robust for
+        # direct unit-tests).
+        current_messages = messages or previous or []
 
         # Start by calling the model with the current context
         llm_response = await _call_model_async(current_messages)
@@ -268,8 +290,16 @@ def get_tool_messages(ai_msg: AIMessage):  # noqa: D401 – util function
         name = tc.get("name")
         content = "<no-op>"
         try:
-            # Use registry to get tool (supports overrides for testing)
-            tool = registry.get_tool(name)
+            # Resolve the tool – tests may monkeypatch the **module-level**
+            # reference (``zerg.agents_def.zerg_react_agent.get_current_time``)
+            # so we first look it up dynamically on the module and fall back
+            # to the registry entry.
+
+            import sys
+
+            module_tool = getattr(sys.modules[__name__], name, None)
+            tool = module_tool or registry.get(name)
+
             if tool is not None:
                 content = tool.invoke(tc.get("args", {}))
             else:
@@ -290,4 +320,4 @@ import zerg.tools.builtin  # noqa: F401, E402
 
 # Get the tool from registry and expose it at module level for tests
 _registry = get_registry()
-get_current_time = _registry.get_tool("get_current_time")
+get_current_time = _registry.get("get_current_time")
