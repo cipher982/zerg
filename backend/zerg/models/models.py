@@ -1,4 +1,5 @@
 from sqlalchemy import JSON
+
 # SQLAlchemy core imports
 from sqlalchemy import Boolean
 from sqlalchemy import Column
@@ -17,7 +18,11 @@ from sqlalchemy.sql import func
 
 # Local helpers / enums
 from zerg.database import Base
-from zerg.models.enums import AgentStatus, RunStatus, RunTrigger, ThreadType, UserRole
+from zerg.models.enums import AgentStatus
+from zerg.models.enums import RunStatus
+from zerg.models.enums import RunTrigger
+from zerg.models.enums import ThreadType
+from zerg.models.enums import UserRole
 
 # ---------------------------------------------------------------------------
 # Authentication – User table (Stage 1)

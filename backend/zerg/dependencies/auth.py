@@ -9,12 +9,16 @@ easier to test.
 
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import Request
+from fastapi import status
 from sqlalchemy.orm import Session
 
-from zerg.auth.strategy import DevAuthStrategy, JWTAuthStrategy
+from zerg.auth.strategy import DevAuthStrategy
+from zerg.auth.strategy import JWTAuthStrategy
+from zerg.auth.strategy import _decode_jwt_fallback as _decode_jwt_fallback  # type: ignore
 from zerg.config import get_settings
-# (``crud`` import no longer required)
 from zerg.database import get_db
 
 # ---------------------------------------------------------------------------
@@ -36,7 +40,7 @@ AUTH_DISABLED: bool = _settings.auth_disabled  # noqa: N816 – keep legacy name
 JWT_SECRET: str = _settings.jwt_secret  # noqa: N816 – legacy export
 
 # Also expose the tiny decoder for tests that want to introspect JWT content.
-from zerg.auth.strategy import _decode_jwt_fallback as _decode_jwt_fallback  # type: ignore
+
 
 # Dev e-mail constant used in a handful of assertions
 DEV_EMAIL: str = "dev@local"  # noqa: N816 – keep legacy name
@@ -100,6 +104,9 @@ def validate_ws_jwt(token: str | None, db: Session):
 # Re-export strategy so tests can monkey-patch
 # ---------------------------------------------------------------------------
 
+
+# Expose the strategy getter for testing monkey-patching
+_strategy = _get_strategy
 
 __all__ = [
     "get_current_user",
