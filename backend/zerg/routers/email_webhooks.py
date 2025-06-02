@@ -26,11 +26,6 @@ the *"push to HTTPS"* option.  Validation is **always enabled** unless the
 from __future__ import annotations
 
 import logging
-
-# Replace direct env look-up with unified Settings helper
-from zerg.config import get_settings
-
-_settings = get_settings()
 from typing import Dict
 
 from fastapi import APIRouter
@@ -41,7 +36,11 @@ from fastapi import Request
 from fastapi import status
 from sqlalchemy.orm import Session
 
+from zerg.config import get_settings
 from zerg.database import get_db
+
+# Replace direct env look-up with unified Settings helper
+_settings = get_settings()
 
 # Event publication and agent execution are handled inside
 # `EmailTriggerService` from now on.  The router only enqueues the service

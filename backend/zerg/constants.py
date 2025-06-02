@@ -8,6 +8,7 @@
 # ---------------------------------------------------------------------------
 
 from typing import Final
+from typing import Optional
 
 from zerg.config import get_settings
 
@@ -83,9 +84,6 @@ __all__ = [
 # Deprecated helper – retained for backwards-compatibility of *tests* that
 # patched feature flags directly.  New code should access values via
 # ``settings.<flag>``.
-
-
-from typing import Optional
 
 
 def _env_truthy(name: str, default: Optional[str] = None) -> bool:  # noqa: D401 – legacy

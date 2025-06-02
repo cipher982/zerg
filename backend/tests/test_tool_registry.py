@@ -22,9 +22,6 @@ class TestToolRegistry:
         # Get registry but don't clear it (to avoid affecting other tests)
         registry = get_registry()
 
-        # Save current state
-        original_tools = list(registry._tools.keys())
-
         @register_tool(name="test_tool", description="A test tool")
         def my_test_tool(x: int) -> int:
             """Double the input."""
