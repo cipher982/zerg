@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from zerg.config import get_settings
-
-_settings = get_settings()
 from typing import Any
 from typing import Iterator
 
@@ -12,6 +9,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
+
+from zerg.config import get_settings
+
+_settings = get_settings()
 
 dotenv.load_dotenv()
 

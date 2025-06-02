@@ -8,6 +8,7 @@ from zerg.tools.builtin.datetime_tools import TOOLS as DATETIME_TOOLS
 from zerg.tools.builtin.http_tools import TOOLS as HTTP_TOOLS
 from zerg.tools.builtin.math_tools import TOOLS as MATH_TOOLS
 from zerg.tools.builtin.uuid_tools import TOOLS as UUID_TOOLS
+from zerg.tools.registry import ToolRegistry
 
 BUILTIN_TOOLS = DATETIME_TOOLS + HTTP_TOOLS + MATH_TOOLS + UUID_TOOLS
 
@@ -19,8 +20,6 @@ __all__ = [
 # Automatically register built-in tools with the *mutable* singleton registry
 # so legacy tests (and any runtime code relying on ToolRegistry) see them.
 # ---------------------------------------------------------------------------
-
-from zerg.tools.registry import ToolRegistry  # late import to avoid cycles
 
 _registry = ToolRegistry()
 for _tool in BUILTIN_TOOLS:
