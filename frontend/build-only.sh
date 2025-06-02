@@ -34,6 +34,15 @@ API_BASE_URL="${API_BASE_URL:-http://localhost:8001}"
 # --------------------------------------------------
 echo "[build-only] 🏗  wasm-pack build …" >&2
 API_BASE_URL="$API_BASE_URL" RUSTFLAGS="-C debuginfo=2" \
+
+# Ensure a writable TMPDIR for systems with restricted /var directories (e.g. sandboxed CI)
+TMPDIR_OVERRIDDEN="${TMPDIR:-}"
+if [[ -z "$TMPDIR_OVERRIDDEN" || ! -w "$TMPDIR_OVERRIDDEN" ]]; then
+  export TMPDIR="$(pwd)/.tmp_build"
+  mkdir -p "$TMPDIR"
+fi
+
+API_BASE_URL="$API_BASE_URL" RUSTFLAGS="-C debuginfo=2" \
   wasm-pack build --dev --target web --out-dir www
 
 # Ensure output dir exists (wasm-pack creates it but be safe)

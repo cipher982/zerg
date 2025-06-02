@@ -19,12 +19,12 @@ const config = {
   },
 
   // Test configuration
-  fullyParallel: false,
+  fullyParallel: true,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
 
-  // Run tests sequentially to avoid database conflicts
-  workers: 1,
+  // Enable as many workers as available CPU cores (default behavior)
+  // workers: undefined,
 
   // Automatically start backend + frontend unless they are already running.
   webServer: [
