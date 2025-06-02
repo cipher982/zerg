@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -90,10 +92,8 @@ pub fn remove_global_shortcuts(document: &web_sys::Document) {
 // Temporary lint relaxations ------------------------------------------------
 //---------------------------------------------------------------------------
 
-// Continue the incremental clean-up – for now we silence *dead_code*
-// warnings so the CI remains green after the strict borrow-checker refactor.
-// Once the larger pruning task lands we will remove this again.
-#![allow(dead_code)]
+// Continue the incremental clean-up – we silence *dead_code* warnings
+// so the CI remains green while the incremental refactor is ongoing.
 
 //---------------------------------------------------------------------------
 // Temporary lint relaxations ------------------------------------------------

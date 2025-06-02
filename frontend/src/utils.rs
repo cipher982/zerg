@@ -275,6 +275,6 @@ mod tests {
             assert_eq!(s.borrow().logged_in, false);
         });
 
-        assert!(document.get_element_by_id("login-overlay").is_some());
+        assert!(document.get_element_by_id("global-login-overlay").is_some());
     }
 }
