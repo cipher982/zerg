@@ -583,6 +583,8 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     let canvas_tab = document.create_element("button")?;
     canvas_tab.set_attribute(ATTR_TYPE, BUTTON_TYPE_BUTTON)?;
     canvas_tab.set_id(ID_GLOBAL_CANVAS_TAB);
+    // Expose for E2E tests – keeps parity with dashboard tab
+    canvas_tab.set_attribute("data-testid", "global-canvas-tab")?;
     canvas_tab.set_class_name(CSS_TAB_BUTTON);
     canvas_tab.set_inner_html("Canvas Editor");
     
