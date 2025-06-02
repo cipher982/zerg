@@ -179,7 +179,6 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 # file in their truncated import tree continue to work.
 from importlib import import_module
 
-
 try:
     WorkerDBMiddleware = getattr(import_module("zerg.middleware.worker_db"), "WorkerDBMiddleware")
     app.add_middleware(WorkerDBMiddleware)
@@ -202,6 +201,18 @@ app.include_router(users_router, prefix=f"{API_PREFIX}")
 app.include_router(graph_router, prefix=f"{API_PREFIX}")
 app.include_router(system_router, prefix=API_PREFIX)
 app.include_router(metrics_router)  # no prefix – Prometheus expects /metrics
+
+# ---------------------------------------------------------------------------
+# Legacy admin routes without /api prefix – keep at very end so they override
+# nothing and remain an optional convenience for old tests.
+# ---------------------------------------------------------------------------
+
+try:
+    from zerg.routers.admin import _mount_legacy  # noqa: E402
+
+    _mount_legacy(app)
+except ImportError:  # pragma: no cover – should not happen
+    pass
 
 # Set up logging
 logger = logging.getLogger(__name__)

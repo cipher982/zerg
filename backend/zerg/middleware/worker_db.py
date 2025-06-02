@@ -14,21 +14,19 @@ unchanged.
 
 from __future__ import annotations
 
-import asyncio
 import contextvars
-from typing import Callable, Awaitable
 
-from starlette.types import ASGIApp, Receive, Scope, Send
-
+from starlette.types import ASGIApp
+from starlette.types import Receive
+from starlette.types import Scope
+from starlette.types import Send
 
 # ---------------------------------------------------------------------------
 # Public accessor so zerg.database can import the variable without a dependency
 # cycle (middleware <-> database).
 # ---------------------------------------------------------------------------
 
-current_worker_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "current_worker_id", default=None
-)
+current_worker_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("current_worker_id", default=None)
 
 
 class WorkerDBMiddleware:  # noqa: D401 – ASGI middleware
