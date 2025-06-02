@@ -613,7 +613,7 @@ fn populate_agents_table(document: &Document) -> Result<(), JsValue> {
         let include_owner = APP_STATE.with(|st| st.borrow().dashboard_scope == crate::state::DashboardScope::AllAgents);
         let colspan = if include_owner { 7 } else { 6 };
         empty_cell.set_attribute("colspan", &colspan.to_string())?;
-        let no_results_msg = "No agents found. Click '+ Create Agent' to get started.".to_string();
+        let no_results_msg = "No agents found. Click 'Create Agent' to get started.".to_string();
         // Build empty-state container with illustration and CTA button.
         let wrapper = document.create_element("div")?;
         wrapper.set_class_name("empty-state");
@@ -630,34 +630,7 @@ fn populate_agents_table(document: &Document) -> Result<(), JsValue> {
         msg_el.set_inner_html(&no_results_msg);
         wrapper.append_child(&msg_el)?;
 
-        // CTA button (Create Agent)
-        let cta_btn = crate::ui_components::create_button(
-            document,
-            crate::ui_components::ButtonConfig::new("Create Agent")
-                .with_class("create-agent-button")
-                .with_testid("create-agent-btn-empty"),
-        )?;
-
-        // Attach same handler as the header create button: dispatch RequestCreateAgent
-        let click_cb = wasm_bindgen::closure::Closure::wrap(Box::new(move || {
-            let agent_name = format!(
-                "{} {}",
-                crate::constants::DEFAULT_AGENT_NAME,
-                (js_sys::Math::random() * 100.0).round()
-            );
-            crate::state::dispatch_global_message(crate::messages::Message::RequestCreateAgent {
-                name: agent_name,
-                system_instructions: crate::constants::DEFAULT_SYSTEM_INSTRUCTIONS.to_string(),
-                task_instructions: crate::constants::DEFAULT_TASK_INSTRUCTIONS.to_string(),
-            });
-        }) as Box<dyn FnMut()>);
-        cta_btn
-            .dyn_ref::<web_sys::HtmlElement>()
-            .unwrap()
-            .set_onclick(Some(click_cb.as_ref().unchecked_ref()));
-        click_cb.forget();
-
-        wrapper.append_child(&cta_btn)?;
+        // No secondary create-agent CTA – header already provides this action.
 
         empty_cell.append_child(&wrapper)?;
         

@@ -17,7 +17,6 @@ from langchain_core.messages import ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.func import entrypoint
-from langgraph.func import task
 from langgraph.graph.message import add_messages
 
 # Local imports (late to avoid circulars)
@@ -108,12 +107,21 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
     checkpointer = MemorySaver()
 
     # --- Define Tasks ---
-    @task
-    def _call_model_sync(messages: List[BaseMessage]):
-        """**Synchronous** model invocation helper.
+    # ------------------------------------------------------------------
+    # Model invocation helpers
+    # ------------------------------------------------------------------
 
-        Wrapped via :pyfunc:`asyncio.to_thread` in :pyfunc:`_call_model_async`
-        so that the heavy OpenAI HTTP request never blocks the event-loop.
+    def _call_model_sync(messages: List[BaseMessage]):
+        """Blocking LLM call (executes in *current* thread).
+
+        We keep this as a *plain* function rather than a LangGraph ``@task``
+        because the latter returns a *Task* object that requires calling
+        ``.result()`` **inside** a runnable context.  Our agent executes the
+        model call from within its own coroutine, *outside* the graph
+        execution engine, therefore the additional indirection only made the
+        code harder to reason about and raised confusing runtime errors like:
+
+            "Called get_config outside of a runnable context"
         """
 
         return llm_with_tools.invoke(messages)
@@ -123,7 +131,7 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
 
         import asyncio
 
-        return await asyncio.to_thread(lambda: _call_model_sync(messages).result())
+        return await asyncio.to_thread(_call_model_sync, messages)
 
     #
     # NOTE ON CONCURRENCY
@@ -139,9 +147,8 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
     # ``asyncio.gather``.
     #
 
-    @task
     def _call_tool_sync(tool_call: dict):  # noqa: D401 – internal helper
-        """Execute a single tool call (synchronous version)."""
+        """Execute a single tool call (blocking)."""
 
         tool_name = tool_call["name"]
         tool_to_call = tools_by_name.get(tool_name)
@@ -151,7 +158,7 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
             logger.error(observation)
         else:
             try:
-                observation = tool_to_call.invoke(tool_call["args"])
+                observation = tool_to_call.invoke(tool_call.get("args", {}))
             except Exception as exc:  # noqa: BLE001
                 observation = f"<tool-error> {exc}"
                 logger.exception("Error executing tool %s", tool_name)
@@ -159,19 +166,11 @@ def get_runnable(agent_row):  # noqa: D401 – matches public API naming
         return ToolMessage(content=str(observation), tool_call_id=tool_call["id"], name=tool_name)
 
     async def _call_tool_async(tool_call: dict):  # noqa: D401 – coroutine helper
-        """Async wrapper around :pyfunc:`_call_tool_sync`.
-
-        The function is executed in a default thread-pool so that long-running
-        or blocking tool work (I/O, CPU) does **not** block the event-loop.
-        """
-
-        # ``_call_tool_sync`` returns a Future-like langgraph task object; the
-        # actual synchronous work kicks off when we call ``.result()``.  We
-        # therefore *wrap* that blocking call in ``asyncio.to_thread``.
+        """Run tool execution in a worker thread."""
 
         import asyncio
 
-        return await asyncio.to_thread(lambda: _call_tool_sync(tool_call).result())
+        return await asyncio.to_thread(_call_tool_sync, tool_call)
 
     # --- Define main entrypoint ---
     async def _agent_executor_async(
