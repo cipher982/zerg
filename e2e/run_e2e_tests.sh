@@ -33,5 +33,13 @@ export PW_TMP_DIR="$TMPDIR"
 
 # Pass through all given args to the underlying npm command
 npm test -- "$@"
+TEST_EXIT_CODE=$?
+
+# Clean up worker-specific test databases
+echo "[run_e2e_tests] Cleaning up test databases..." >&2
+if [ -f "../backend/cleanup_test_dbs.sh" ]; then
+  (cd ../backend && ./cleanup_test_dbs.sh)
+fi
 
 echo "[run_e2e_tests] ✔ complete" >&2
+exit $TEST_EXIT_CODE

@@ -19,18 +19,17 @@ const config = {
   },
 
   // Test configuration
-  fullyParallel: true,
+  fullyParallel: false,  // Disable parallel execution due to shared database
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
-
-  // Enable as many workers as available CPU cores (default behavior)
-  // workers: undefined,
+  workers: 1,  // Use only one worker to avoid database conflicts
 
   // Automatically start backend + frontend unless they are already running.
   webServer: [
     {
       // Backend on port 8001 (will kill existing server if needed)
-      command: 'cd ../backend && mkdir -p .uv_cache .uv_tmp && XDG_CACHE_HOME=$(pwd)/.uv_cache TMPDIR=$(pwd)/.uv_tmp TESTING=1 E2E_LOG_SUPPRESS=1 LOG_LEVEL=WARNING uv run python -m uvicorn zerg.main:app --port 8001 --log-level warning',
+      // Each Playwright worker gets a unique WORKER_ID injected automatically
+      command: 'cd ../backend && mkdir -p .uv_cache .uv_tmp && XDG_CACHE_HOME=$(pwd)/.uv_cache TMPDIR=$(pwd)/.uv_tmp TESTING=1 WORKER_ID=$PW_TEST_WORKER_INDEX E2E_LOG_SUPPRESS=1 LOG_LEVEL=WARNING uv run python -m uvicorn zerg.main:app --port 8001 --log-level warning',
       port: 8001,
       reuseExistingServer: false,
       timeout: 120_000,
