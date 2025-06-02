@@ -127,7 +127,7 @@ test.describe('Smoke Tests - Basic Infrastructure', () => {
 
     // Verify the changes are visible in the UI
     const agentRow = page.locator(`tr[data-agent-id="${agent.id}"]`);
-    await expect(agentRow).toContainText('Updated Name');
+    await expect(agentRow).toContainText('Updated Name', { timeout: 5_000 });
   });
 
   test('Can delete agent via UI', async ({ page }) => {

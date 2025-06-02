@@ -1,5 +1,10 @@
 import { test, expect, Page } from '@playwright/test';
 
+// Reset DB before each test to keep thread ids predictable
+test.beforeEach(async ({ request }) => {
+  await request.post('http://localhost:8001/admin/reset-database');
+});
+
 async function createAgentAndGetId(page: Page): Promise<string> {
   await page.goto('/');
   await page.locator('[data-testid="create-agent-btn"]').click();

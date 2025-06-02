@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Agent scheduling UI', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.request.post('http://localhost:8001/admin/reset-database');
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.request.post('http://localhost:8001/admin/reset-database');
+  });
+
   async function createAndOpenConfig(page) {
     await page.goto('/');
     await page.locator('[data-testid="create-agent-btn"]').click();
