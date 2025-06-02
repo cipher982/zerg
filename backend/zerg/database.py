@@ -82,10 +82,15 @@ def make_sessionmaker(engine: Engine) -> sessionmaker:
     # preventing DetachedInstanceError in situations where objects outlive the
     # session lifecycle (e.g. during test helpers that commit and then access
     # attributes after other background DB activity).
+    # ``expire_on_commit=True`` forces SQLAlchemy to *reload* objects from the
+    # database the next time they are accessed after a commit.  This prevents
+    # stale identity-map rows from surviving across the test-suite’s
+    # reset-database calls where we truncate all tables without restarting the
+    # backend process.
     return sessionmaker(
         autocommit=False,
         autoflush=False,
-        expire_on_commit=False,
+        expire_on_commit=True,
         bind=engine,
     )
 

@@ -1,13 +1,3 @@
-// Playwright configuration for Zerg E2E tests.
-//
-// Running `npx playwright test` from the `e2e/` directory will:
-//   1. Spin-up the backend (port 9001) and the frontend dev server (port 9002)
-//      via the `webServer` helper, unless they are already running.
-//   2. Execute all specs found in `./tests`.
-//
-// Uses ports 8001/8002 with reuseExistingServer: false to avoid conflicts
-//
-/** @type {import('@playwright/test').PlaywrightTestConfig} */
 const config = {
   testDir: './tests',
 
@@ -17,32 +7,23 @@ const config = {
     viewport: { width: 1280, height: 800 },
     trace: 'on-first-retry',
     extraHTTPHeaders: {
-      // Forward the Playwright worker index so the backend can route the
-      // request to the correct *isolated* SQLite file.
       'X-Test-Worker': process.env.PW_TEST_WORKER_INDEX || '0',
     },
   },
 
-  // Test configuration
-  fullyParallel: true,  // safe again – DB isolated per worker
+  fullyParallel: true,
+  workers: 16,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
-  // Let Playwright auto-detect CPU count (or override via CLI)
-  // Common CI runners expose 2-4 vCPUs; this setting plays well with that.
-  // We keep the flag unspecified so local developers get full parallelism.
 
-  // Automatically start backend + frontend unless they are already running.
   webServer: [
     {
-      // Backend on port 8001 (will kill existing server if needed)
-      // Each Playwright worker gets a unique WORKER_ID injected automatically
       command: 'cd ../backend && mkdir -p .uv_cache .uv_tmp && XDG_CACHE_HOME=$(pwd)/.uv_cache TMPDIR=$(pwd)/.uv_tmp TESTING=1 DEV_ADMIN=1 WORKER_ID=$PW_TEST_WORKER_INDEX E2E_LOG_SUPPRESS=1 LOG_LEVEL=WARNING uv run python -m uvicorn zerg.main:app --port 8001 --log-level warning',
       port: 8001,
       reuseExistingServer: false,
       timeout: 120_000,
     },
     {
-      // Frontend on port 8002 with WASM-aware server
       command: 'cd ../frontend && ./build-only.sh && cd ../e2e && node wasm-server.js',
       port: 8002,
       reuseExistingServer: false,

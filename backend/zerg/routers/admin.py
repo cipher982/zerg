@@ -56,6 +56,12 @@ async def reset_database():
         # then re-enable.  Avoids losing autoincrement counters that some
         # tests rely on for deterministic IDs.
 
+        from sqlalchemy.orm import close_all_sessions
+
+        # Close any open Sessions first to avoid lingering identity maps that
+        # would otherwise return *stale* ORM objects after the truncate.
+        close_all_sessions()
+
         with engine.begin() as conn:
             if engine.dialect.name == "sqlite":
                 conn.exec_driver_sql("PRAGMA foreign_keys = OFF;")
