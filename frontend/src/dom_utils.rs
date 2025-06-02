@@ -173,7 +173,6 @@ pub fn is_focusable(element: &Element) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     // wasm-bindgen unit tests have to run in a wasm-bindgen test
     // environment.  Here we only test the **string** manipulation helpers so
@@ -186,8 +185,8 @@ mod tests {
         // Simple smoke test that the helpers compile on non-wasm targets.
         // Real DOM tests run in the Playwright suite.
         fn dummy(el: &mut web_sys::Element) {
-            set_active(el);
-            set_inactive(el);
+            super::set_active(el);
+            super::set_inactive(el);
         }
 
         // The dummy function is never called but ensures the generic code

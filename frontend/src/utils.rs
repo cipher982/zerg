@@ -242,8 +242,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_logout_clears_token_and_overlay() {
-        use wasm_bindgen::JsCast;
-
         // Prepare environment ------------------------------------------------
         let window = web_sys::window().unwrap();
         let document = window.document().unwrap();
