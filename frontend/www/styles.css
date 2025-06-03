@@ -1,3 +1,10 @@
+/* ------------------------------------------------------------------ */
+/*  Global imports                                                     */
+/* ------------------------------------------------------------------ */
+
+/* Inject design-token variables (colours, spacing, etc.) */
+@import url("tokens.css");
+
 /* Polished select box for modal-frequency selector (Agent Config Modal) */
 .modal-select {
     width: 100%;
@@ -19,8 +26,8 @@
 }
 .modal-select:focus {
     outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 5px rgba(52, 152, 219, 0.5);
+    border-color: var(--primary);
+    box-shadow: 0 0 5px rgba(100, 255, 218, 0.5);
 }
 .modal-select option {
     background: #252535;
@@ -29,10 +36,11 @@
 }
 :root {
   /* Colors */
-  --color-primary: #3498db;
-  --color-success: #2ecc71;
-  --color-warning: #f39c12;
-  --color-error: #e74c3c;
+  /* Alias brand tokens so existing selectors keep working */
+  --color-primary: var(--primary);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
   --color-neutral: #95a5a6;
   
   /* Background colors */
@@ -138,8 +146,11 @@ body {
     margin: 0;
     padding: 0;
     overflow: hidden;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background-color: #1e1e2e;
+    /* Modern system UI stack matches branding drafts */
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+        Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background-color: var(--dark);
+    color: var(--text);
 }
 
 /* -------------------------------------------------------------
@@ -197,10 +208,11 @@ body {
     top: 0;
     left: 0;
     right: 0;
-    background-color: #3498db;
-    color: white;
+    /* Brand gradient */
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: var(--text);
     padding: 10px 20px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-md);
     z-index: 10;
 }
 
@@ -215,7 +227,7 @@ body {
     top: 60px;
     left: 0;
     right: 0;
-    background-color: #2980b9;
+    background: linear-gradient(135deg, var(--secondary), var(--primary));
     padding: 0 20px;
     display: flex;
     z-index: 10;
@@ -249,11 +261,11 @@ body {
     bottom: 0;
     left: 0;
     right: 0;
-    background-color: #f1f1f1;
+    background: linear-gradient(135deg, var(--secondary), var(--primary));
     padding: 5px 15px;
     font-size: 12px;
-    color: #555;
-    border-top: 1px solid #ddd;
+    color: var(--text);
+    border-top: 1px solid rgba(0,0,0,0.15);
     display: flex;
     justify-content: space-between;
     z-index: 100;
@@ -687,7 +699,7 @@ button {
 }
 
 .node.agent-identity:hover {
-    border-color: #3498db;
+    border-color: var(--primary);
     box-shadow: 0 0 15px rgba(52, 152, 219, 0.5);
 }
 
@@ -775,8 +787,8 @@ button {
 }
 
 .tab-button.active {
-    color: #3498db;
-    border-bottom: 2px solid #3498db;
+    color: var(--primary);
+    border-bottom: 2px solid var(--primary);
 }
 
 .tab-content {
@@ -818,8 +830,8 @@ button {
 
 .modal textarea:focus, .modal input[type="text"]:focus {
     outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 5px rgba(52, 152, 219, 0.5);
+    border-color: var(--primary);
+    box-shadow: 0 0 5px rgba(100, 255, 218, 0.5);
 }
 
 .modal-buttons {
@@ -850,12 +862,12 @@ button {
 }
 
 #send-to-agent {
-    background-color: #3498db;
-    color: white;
+    background-color: var(--primary);
+    color: var(--dark);
 }
 
 #send-to-agent:hover {
-    background-color: #2980b9;
+    background-color: var(--secondary);
 }
 
 /* History Container */
@@ -883,8 +895,8 @@ button {
 
 /* Create Agent Button */
 #create-agent-button {
-    background-color: #3498db;
-    color: white;
+    background-color: var(--primary);
+    color: var(--dark);
     padding: 8px 16px;
     border: none;
     border-radius: 4px;
@@ -893,7 +905,7 @@ button {
 }
 
 #create-agent-button:hover {
-    background-color: #2980b9;
+    background-color: var(--secondary);
 }
 
 /* Dashboard Styles */
@@ -1003,8 +1015,8 @@ button {
 }
 
 .create-agent-btn {
-    background: #3498db;
-    color: white;
+    background: var(--primary);
+    color: var(--dark);
     border: none;
     border-radius: 4px;
     padding: 10px 16px;
@@ -1095,7 +1107,7 @@ button {
 }
 
 .status-scheduled {
-    color: #3498db; /* Blue for scheduled */
+    color: var(--primary);
 }
 
 .status-paused {
@@ -1278,8 +1290,8 @@ button {
 }
 
 .view-tab-button.active {
-    color: #3498db;
-    border-bottom: 3px solid #3498db;
+    color: var(--primary);
+    border-bottom: 3px solid var(--primary);
 }
 
 /* Owner cell styling in dashboard */
