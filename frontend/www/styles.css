@@ -417,13 +417,13 @@ body {
     padding: 12px 14px;
     background: linear-gradient(135deg, #2e2e3e 0%, #2a2a3a 100%);
     border: 1px solid #3d3d5c;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
     font-size: 14px;
     color: #e0e0e0;
     transition: all 0.2s ease;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-sm);
 }
 
 .agent-pill::before {
@@ -485,7 +485,7 @@ body {
 .agent-pill.dragging {
     opacity: 0.9;
     background: linear-gradient(135deg, #4a5177 0%, #3e4466 100%);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-lg);
     transform: scale(1.05) rotate(-2deg);
     border: 2px dashed #7f8ec0;
     cursor: grabbing;
@@ -700,7 +700,7 @@ button {
 
 .node.agent-identity:hover {
     border-color: var(--primary);
-    box-shadow: 0 0 15px rgba(52, 152, 219, 0.5);
+    box-shadow: 0 0 15px rgba(100, 255, 218, 0.5);
 }
 
 /* Modal Dialog */
@@ -886,7 +886,7 @@ button {
 }
 
 .history-item.user {
-    background-color: rgba(52, 152, 219, 0.2);
+    background-color: rgba(100, 255, 218, 0.2);
 }
 
 .history-item.agent {
@@ -1004,7 +1004,7 @@ button {
 
 .scope-select:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+    box-shadow: 0 0 0 2px rgba(100, 255, 218, 0.2);
 }
 
 /* Style the dropdown options */
@@ -1467,23 +1467,71 @@ button {
 .profile-input:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.4);
+    box-shadow: 0 0 0 2px rgba(100, 255, 218, 0.4);
 }
 
 .btn-primary {
     align-self: flex-start;
-    background-color: var(--color-primary);
+    background-color: var(--primary);
     border: none;
-    padding: 10px 18px;
+    padding: var(--spacing-sm) var(--spacing-lg);
     font-size: 14px;
-    border-radius: 4px;
-    color: #fff;
+    border-radius: var(--radius-md);
+    color: var(--dark);
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
 }
 
 .btn-primary:hover {
-    background-color: #2380c4;
+    background-color: var(--secondary);
+    transform: translateY(-1px);
+}
+
+/* Secondary (neutral surface) */
+.btn,
+.btn-secondary {
+    background-color: var(--dark-card);
+    color: var(--text);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.btn:hover,
+.btn-secondary:hover {
+    background-color: var(--dark-lighter);
+    transform: translateY(-1px);
+}
+
+
+
+/* Ghost button – transparent, coloured outline */
+.btn-ghost {
+    background: transparent;
+    color: var(--primary);
+    border: 1px solid var(--primary);
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.btn-ghost:hover {
+    background: rgba(100, 255, 218, 0.12);
+    transform: translateY(-1px);
+}
+
+/* Size modifiers */
+.btn-sm {
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-size: 12px;
+}
+
+.btn-lg {
+    padding: var(--spacing-md) var(--spacing-xl);
+    font-size: 16px;
 }
 
 /* ------------------------------------------------------------------

@@ -24,12 +24,12 @@ This markdown file tracks the high-level work items for the upcoming visual over
 ## Phase 2 – Component Polish
 
 ### Buttons
-- [ ] Implement reusable Button component variants (primary / secondary / ghost).
-- [ ] Add size modifiers (sm / md / lg).
-- [ ] Animate hover/active states using `var(--transition-normal)`.
+- [x] Implement reusable Button component variants (primary / secondary / ghost).
+- [x] Add size modifiers (sm / md / lg).
+- [x] Animate hover/active states using `var(--transition-normal)`.
 
 ### Agent Pill & Shelf
-- [ ] Apply `--radius-lg` and token-based shadows.
+- [x] Apply `--radius-lg` and token-based shadows.
 - [ ] Harmonise drag-and-drop “ghost” styling with new palette.
 
 ### Modal & Form Elements
