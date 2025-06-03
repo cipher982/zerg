@@ -783,6 +783,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     }
     
     row.append_child(&status_cell)?;
+
+    // (Toggle column removed – implementation postponed)
     
     // Last Run cell
     let last_run_cell = document.create_element("td")?;

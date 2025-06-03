@@ -874,28 +874,17 @@ impl AgentConfigModal {
                     schedule: schedule_value_opt,
                 });
 
-                // feedback
-                if let Some(btn) = document.get_element_by_id("save-agent") {
-                    let original = btn.inner_html();
-                    btn.set_inner_html("Saved!");
-                    let btn_clone = btn.clone();
-                    let reset = Closure::once_into_js(move || {
-                        btn_clone.set_inner_html(&original);
-                    });
-                    let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
-                        reset.as_ref().unchecked_ref(),
-                        1500,
-                    );
-                }
+                // ------------------------------------------------------------------
+                // UX feedback: immediately disable the Save button and change its
+                // label to “Saving…”.  The button (and modal) will be restored or
+                // closed by the success / error handlers triggered once the
+                // Command::UpdateAgent network call completes.
+                // ------------------------------------------------------------------
 
-                // auto-close after a short delay to avoid race with state update
-                let doc_clone = document.clone();
-                let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
-                    Closure::once_into_js(move || {
-                        let _ = Self::close(&doc_clone);
-                    }).as_ref().unchecked_ref(),
-                    150
-                );
+                if let Some(btn) = document.get_element_by_id("save-agent") {
+                    btn.set_inner_html("Saving…");
+                    let _ = btn.set_attribute("disabled", "true");
+                }
             }));
             save_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
             cb.forget();
@@ -1142,6 +1131,34 @@ impl AgentConfigModal {
         // --------------------------------------------------------------
         // 2. Populate DOM elements
         // --------------------------------------------------------------
+
+        // --------------------------------------------------------------
+        // Ensure *model selector* exists and is populated once.
+        // --------------------------------------------------------------
+
+        if document.get_element_by_id("model-select").is_none() {
+            if let Some(main_tab) = document.get_element_by_id("agent-main-content") {
+                // Create wrapper div with same small-row CSS as other fields
+                let model_row = document.create_element("div")?;
+                model_row.set_class_name(crate::constants::CSS_FORM_ROW_SM);
+
+                let label = document.create_element("label")?;
+                label.set_inner_html("Model");
+                label.set_attribute("for", "model-select")?;
+                model_row.append_child(&label)?;
+
+                let select_el = document.create_element("select")?;
+                select_el.set_id("model-select");
+                select_el.set_class_name("modal-select");
+                model_row.append_child(&select_el)?;
+
+                main_tab.append_child(&model_row)?;
+            }
+        }
+
+        // Populate options + attach change handler (idempotent).
+        let _ = crate::components::model_selector::update_model_dropdown(document);
+        let _ = crate::components::model_selector::setup_model_selector_handlers(document);
 
         // Store current agent id for later
         if let Some(modal) = document.get_element_by_id("agent-modal") {

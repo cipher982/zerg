@@ -278,21 +278,5 @@ test.describe('Agent CRUD – dashboard interactions', () => {
     }
   });
 
-  test('Agent status toggle (active/inactive)', async ({ page }) => {
-    const agentId = await ensureAgentExists(page);
-    const firstRow = page.locator(`tr[data-agent-id="${agentId}"]`).first();
 
-    // locate toggle button maybe data-testid="toggle-agent-{id}".
-    const toggleBtn = page.locator(`[data-testid="toggle-agent-${agentId}"]`);
-    if (await toggleBtn.count() === 0) {
-      test.skip(true, 'Toggle status button not implemented yet');
-      return;
-    }
-
-    const beforeText = await firstRow.textContent();
-    await toggleBtn.click();
-    await page.waitForTimeout(500); // allow update
-    const afterText = await firstRow.textContent();
-    expect(afterText).not.toEqual(beforeText);
-  });
 });
