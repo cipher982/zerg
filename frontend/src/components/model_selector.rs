@@ -18,6 +18,12 @@ pub fn update_model_dropdown(document: &Document) -> Result<(), JsValue> {
             state.available_models.clone()
         });
         
+        // Skip if we have no models yet – list will be populated once the
+        // backend fetch completes.
+        if models.is_empty() {
+            return Ok(());
+        }
+
         // Get selected model
         let selected_model = APP_STATE.with(|state| {
             let state = state.borrow();

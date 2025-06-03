@@ -405,7 +405,7 @@ impl AppState {
             latest_user_input_id: None,
             message_id_to_node_id: HashMap::new(),
             selected_model: String::new(),
-            available_models: Vec::new(), // Start with empty models, will fetch from API
+            available_models: Vec::new(),
             default_model_id: String::new(),
             state_modified: false,
 

@@ -273,6 +273,12 @@ pub fn start() -> Result<(), JsValue> {
         return Err(JsValue::from_str(&format!("API config initialization failed: {}", e)));
     }
 
+    // Kick off model list fetch ASAP so dropdown is populated by the time
+    // users open the Agent Config modal.
+    if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+        let _ = crate::components::model_selector::fetch_models_from_backend(&doc);
+    }
+
     // Get the document
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
