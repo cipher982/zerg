@@ -1,0 +1,108 @@
+/* ------------------------------------------------------------------ */
+/*  Canvas view – layout and controls                                 */
+/* ------------------------------------------------------------------ */
+
+#app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding-top: 108px; /* header + tabs height */
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+#app-container.canvas-view {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  padding-top: 108px;
+  box-sizing: border-box;
+}
+
+#canvas-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+  position: relative;
+  padding: clamp(8px, 2vw, 24px);
+}
+
+/* Light grid overlay */
+#canvas-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+  pointer-events: none;
+}
+
+#node-canvas {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+  background-color: #33334a !important;
+}
+
+/* Input toolbar anchored to top of canvas */
+#input-panel {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  background: rgba(42, 42, 58, 0.9);
+  border-bottom: 1px solid #3d3d5c;
+  z-index: 5;
+}
+
+/* Chat / command input within panel */
+#user-input {
+  width: 300px;
+  padding: 8px;
+  margin-right: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #ccc;
+}
+
+#send-button { background-color: var(--success); }
+
+#center-button {
+  background-color: var(--primary);
+  color: var(--dark);
+}
+
+#center-button:disabled {
+  background-color: #bbb;
+  color: #fff;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+#clear-button { background-color: var(--error); }
+
+#model-select {
+  padding: 8px;
+  margin-left: 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid #ccc;
+}
+
+/* Toggle switch */
+.toggle-container { display: inline-flex; align-items: center; margin-left: 10px; }
+.toggle-label { position: relative; display: inline-flex; align-items: center; cursor: pointer; user-select: none; }
+.toggle-label::before { content: 'Auto-Fit'; margin-right: 8px; font-size: 14px; color: #ccc; }
+.toggle-checkbox { opacity: 0; width: 0; height: 0; position: absolute; }
+.toggle-slider { position: relative; display: inline-block; width: 40px; height: 20px; background-color: #ccc; border-radius: 20px; transition: .1s; }
+.toggle-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; border-radius: 50%; transition: .1s; }
+.toggle-checkbox:checked + .toggle-slider { background-color: var(--success); }
+.toggle-checkbox:checked + .toggle-slider:before { transform: translateX(20px); }
+
+/* Simple responsive tweak when shelf collapses (redundant with agent_shelf.css but harmless) */
+@media (max-width: 768px) {
+  #app-container.canvas-view { flex-direction: column; }
+  .main-content-area { min-width: 0; }
+}
