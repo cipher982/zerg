@@ -33,14 +33,14 @@ This markdown file tracks the high-level work items for the upcoming visual over
 - [ ] Harmonise drag-and-drop “ghost” styling with new palette.
 
 ### Modal & Form Elements
-- [ ] Standardise spacing, typography and focus-ring colour.
+- [x] Standardise spacing, typography and focus-ring colour.
 
 ### Toast / Alert System
-- [ ] Create Toast component with success / warning / error themes.
+- [x] Create Toast component with success / warning / error themes (CSS + animation; integration to Rust pending).
 
 ## Phase 3 – Layout & Responsiveness
 
-- [ ] Introduce `layout.css` (or util classes) for common flex/grid patterns.
+- [x] Introduce `layout.css` (or util classes) for common flex/grid patterns.
 - [ ] Refactor canvas view to use modern `clamp()` sizing.
 - [ ] Collapse agent shelf into off-canvas drawer on < 768 px viewports.
 

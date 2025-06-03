@@ -4,6 +4,7 @@
 
 /* Inject design-token variables (colours, spacing, etc.) */
 @import url("tokens.css");
+@import url("layout.css");
 
 /* Polished select box for modal-frequency selector (Agent Config Modal) */
 .modal-select {
@@ -150,6 +151,10 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
         Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     background-color: var(--dark);
+
+    /* Normalise the base font size to prevent unexpected text scaling
+       after the font-family switch. */
+    font-size: 14px;
     color: var(--text);
 }
 
@@ -1050,6 +1055,51 @@ button {
     background-color: #c0392b !important; /* Darker red on hover */
 }
 
+/* ------------------------------------------------------------------
+   Toast / Alert System
+   ------------------------------------------------------------------ */
+
+#toast-container {
+    position: fixed;
+    bottom: var(--spacing-lg);
+    right: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    z-index: 2000;
+}
+
+.toast {
+    min-width: 240px;
+    max-width: 320px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
+    background: var(--dark-card);
+    color: var(--text);
+    font-size: 14px;
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    border-left: 4px solid var(--primary);
+    opacity: 0;
+    transform: translateX(100%);
+    animation: toast-enter 400ms forwards, toast-exit 400ms forwards 4.6s;
+}
+
+.toast-success { border-left-color: var(--success); }
+.toast-warning { border-left-color: var(--warning); }
+.toast-error   { border-left-color: var(--error);   }
+
+@keyframes toast-enter {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0);   }
+}
+
+@keyframes toast-exit {
+  to   { opacity: 0; transform: translateX(100%); }
+}
+
 .agents-table {
     width: 100%;
     border-collapse: collapse;
@@ -1546,6 +1596,51 @@ button {
 .form-row-sm {
     margin-top: 8px;
 }
+
+/* ------------------------------------------------------------------
+   Unified Form Controls (inputs, selects, textareas)
+   ------------------------------------------------------------------ */
+
+.form-control,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea,
+select {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--dark-card);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 14px;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    box-sizing: border-box;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--text-secondary);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(100, 255, 218, 0.25);
+}
+
+/* Error state */
+.input-error {
+    border-color: var(--error) !important;
+}
+
+.input-error:focus {
+    border-color: var(--error) !important;
+    box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.25);
+}
+
 
 .form-row-xs {
     margin-top: 6px;
