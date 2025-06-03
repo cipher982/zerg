@@ -275,6 +275,71 @@
 
 .actions-row { display: flex; gap: 8px; margin-top: var(--spacing-sm); }
 
+/* -------------------------------------------------------------
+   Agent Detail & Debug modal content
+   ------------------------------------------------------------- */
+
+.overview-list { list-style: none; padding-left: 0; margin: 0; color: var(--text-primary); }
+.overview-list li { margin-bottom: var(--spacing-sm); }
+
+.raw-json {
+  background: var(--bg-darker);
+  color: var(--text-primary);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  font-size: 0.85rem;
+  white-space: pre-wrap; word-break: break-word;
+}
+
+.tab-body { margin-top: var(--spacing-md); }
+
+.agent-detail-container { padding: var(--spacing-md); display: flex; flex-direction: column; gap: var(--spacing-md); }
+
+.error-block {
+  background: rgba(231,76,60,0.1);
+  border-left: 3px solid var(--error);
+  color: var(--text-primary);
+  padding: var(--spacing-md);
+  overflow-x: auto;
+  font-family: monospace;
+  border-radius: var(--radius-sm);
+  white-space: pre-wrap; word-break: break-word;
+}
+
+.detail-actions { display: flex; gap: var(--spacing-md); justify-content: flex-start; }
+
+.detail-btn {
+  background: var(--bg-button);
+  color: var(--text-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.detail-btn:hover { background: var(--bg-button-hover); transform: translateY(-2px); }
+
+.last-run-indicator { margin-left: 5px; font-size: 0.8em; }
+.last-run-success { color: var(--success); }
+.last-run-failure { color: var(--error); }
+
+/* Schedule / triggers summary text */
+.schedule-summary { font-size: 0.9em; color: #555; margin-top: 6px; }
+
+.triggers-list { margin-top: var(--spacing-md); }
+
+.summary-text { font-size: 0.9em; color: #555; }
+
+/* MCP (server manager) intro sections reuse card/grid util from dashboard */
+.mcp-intro-text, .mcp-custom-intro { margin-bottom: var(--spacing-md); color: var(--text-secondary); }
+
+
 /* Utility */
 .text-success { color: var(--success); }
 
