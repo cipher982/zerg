@@ -309,6 +309,63 @@ body {
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
 }
 
+/* ------------------------------------------------------------------
+   Responsive behaviour – off-canvas agent shelf for mobile
+   ------------------------------------------------------------------ */
+
+@media (max-width: 767px) {
+  #agent-shelf {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    transition: transform var(--transition-normal);
+    width: 240px; /* slightly narrower on mobile */
+    box-shadow: var(--shadow-lg);
+    z-index: 1500;
+  }
+
+  #agent-shelf.open {
+    transform: translateX(0);
+  }
+
+  /* Provide more room for main content */
+  #app-container.canvas-view {
+    padding-left: 0; /* don't allocate shelf space */
+  }
+
+  /* Floating hamburger to open shelf */
+  #shelf-toggle-btn {
+    position: fixed;
+    top: var(--spacing-md);
+    left: var(--spacing-md);
+    z-index: 1600;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--primary);
+    color: var(--dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+    transition: transform var(--transition-fast);
+  }
+
+  #shelf-toggle-btn:hover {
+    transform: scale(1.05);
+  }
+
+  /* Hide toggle button on larger screens */
+}
+
+@media (min-width: 768px) {
+  #shelf-toggle-btn { display: none; }
+}
+
 /* Agent shelf header */
 .agent-shelf-header {
     font-size: 14px;
@@ -337,6 +394,7 @@ body {
     overflow: hidden; /* Prevent overflow issues */
     background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
     position: relative;
+    padding: clamp(8px, 2vw, 24px);
 }
 
 /* Canvas grid pattern background */
