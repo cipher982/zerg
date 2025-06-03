@@ -41,8 +41,8 @@ This markdown file tracks the high-level work items for the upcoming visual over
 ## Phase 3 – Layout & Responsiveness
 
 - [x] Introduce `layout.css` (or util classes) for common flex/grid patterns.
-- [ ] Refactor canvas view to use modern `clamp()` sizing.
-- [ ] Collapse agent shelf into off-canvas drawer on < 768 px viewports.
+- [x] Refactor canvas view to use modern `clamp()` sizing.
+- [x] Collapse agent shelf into off-canvas drawer on < 768 px viewports.
 
 ## Phase 4 – Delight Layer
 

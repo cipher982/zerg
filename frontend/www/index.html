@@ -58,9 +58,15 @@
     <!-- Legacy container used by the current code-base.  Will be removed once
          all components are migrated to the dedicated view roots. -->
     <div id="app-container"></div>
+
+    <!-- Mobile hamburger to toggle the agent shelf -->
+    <button id="shelf-toggle-btn" aria-label="Toggle agent panel">☰</button>
     
     <!-- Load configuration -->
     <script src="config.js"></script>
+
+    <!-- Shelf toggle (mobile) -->
+    <script src="shelf-toggle.js" defer></script>
     
     <!-- Load bootstrap code -->
     <script type="module" src="bootstrap.js"></script>
