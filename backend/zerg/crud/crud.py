@@ -7,10 +7,11 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from sqlalchemy.orm import Session
+from sqlalchemy.orm import selectinload
+
 # Cron validation helper
 from apscheduler.triggers.cron import CronTrigger
-from sqlalchemy.orm import Session
-
 from zerg.models.models import Agent
 from zerg.models.models import AgentMessage
 from zerg.models.models import AgentRun
@@ -60,7 +61,17 @@ def get_agents(
     user.  Otherwise all agents are returned (paginated).
     """
 
-    query = db.query(Agent)
+    # Eager-load relationships that the Pydantic ``Agent`` response model
+    # serialises (``owner`` and ``messages``) so that FastAPI’s response
+    # rendering still works *after* the request-scoped SQLAlchemy Session is
+    # closed.  Without this the lazy relationship access attempts to perform a
+    # new query on a detached instance which raises ``DetachedInstanceError``
+    # and bubbles up as a ``ResponseValidationError``.
+
+    query = db.query(Agent).options(
+        selectinload(Agent.owner),
+        selectinload(Agent.messages),
+    )
     if owner_id is not None:
         query = query.filter(Agent.owner_id == owner_id)
 
@@ -69,7 +80,15 @@ def get_agents(
 
 def get_agent(db: Session, agent_id: int):
     """Get a single agent by ID"""
-    return db.query(Agent).filter(Agent.id == agent_id).first()
+    return (
+        db.query(Agent)
+        .options(
+            selectinload(Agent.owner),
+            selectinload(Agent.messages),
+        )
+        .filter(Agent.id == agent_id)
+        .first()
+    )
 
 
 def create_agent(

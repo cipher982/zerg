@@ -110,7 +110,9 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                     agent.name = name.to_string();
                     agent.system_instructions = Some(system_instructions.clone());
                     agent.task_instructions = Some(task_instructions.clone());
-                    agent.model = Some(model.clone());
+                    if !model.is_empty() {
+                        agent.model = Some(model.clone());
+                    }
                     agent.schedule = schedule.clone();
 
                     // Build update struct
@@ -120,7 +122,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                         status: None,
                         system_instructions: Some(agent.system_instructions.clone().unwrap_or_default()),
                         task_instructions: Some(task_instructions.clone()),
-                        model: Some(model.clone()),
+                        model: if model.is_empty() { None } else { Some(model.clone()) },
                         schedule: schedule.clone(),
                         config: None,
                         last_error: None,
@@ -149,14 +151,11 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             // Save state to API
             let _ = state.save_if_modified();
 
-            // Close the modal after saving
-            if let Some(window) = web_sys::window() {
-                if let Some(document) = window.document() {
-                    if let Err(e) = crate::components::agent_config_modal::AgentConfigModal::close(&document) {
-                        web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
-                    }
-                }
-            }
+            // Do NOT close the modal yet – the modal will be closed once the
+            // Command::UpdateAgent network request succeeds (handled in
+            // command_executors.rs).  This guarantees the UI only disappears
+            // after the backend has acknowledged the save.
+
             true
         }
         Message::CloseAgentModal => {

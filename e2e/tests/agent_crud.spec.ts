@@ -12,6 +12,32 @@ async function waitForDashboardReady(page: Page) {
   await page.waitForSelector('table');
 }
 
+// Ensure at least one agent row exists.  If the dashboard is empty we click the
+// global “create agent” button to add a fresh agent.  The helper returns the
+// *data-agent-id* of an existing (or newly created) row so the caller can work
+// with a deterministic target.
+async function ensureAgentExists(page: Page): Promise<string> {
+  // If a row already exists we simply return its id.
+  const firstRow = page.locator('tr[data-agent-id]').first();
+  if (await firstRow.count()) {
+    const id = await firstRow.getAttribute('data-agent-id');
+    if (id) return id;
+  }
+
+  // No rows – create one via the header plus-button.
+  await page.locator('[data-testid="create-agent-btn"]').click();
+
+  // Wait until the new row appears (backend notifies via WebSocket so give it
+  // a generous timeout).
+  await expect(page.locator('tr[data-agent-id]')).toHaveCount(1, {
+    timeout: 15_000,
+  });
+
+  const id = await page.locator('tr[data-agent-id]').first().getAttribute('data-agent-id');
+  if (!id) throw new Error('Failed to obtain agent id after creation');
+  return id;
+}
+
 test.describe('Agent CRUD – dashboard interactions', () => {
   /**
    * Ensure a clean slate before every test so row-counts and IDs are
@@ -83,10 +109,8 @@ test.describe('Agent CRUD – dashboard interactions', () => {
   });
 
   test('Edit agent name and instructions', async ({ page }) => {
-    // Pick the first agent row and extract its id (data-agent-id attribute).
-    const firstRow = page.locator('tr[data-agent-id]').first();
-    const agentId = await firstRow.getAttribute('data-agent-id');
-    expect(agentId).not.toBeNull();
+    // Ensure we have at least one agent to edit (fresh DB after beforeEach).
+    const agentId = await ensureAgentExists(page);
 
     // Open modal by clicking the ✎-button (data-testid="edit-agent-{id}")
     await page.locator(`[data-testid="edit-agent-${agentId}"]`).click();
@@ -105,9 +129,23 @@ test.describe('Agent CRUD – dashboard interactions', () => {
     // Save → button id="save-agent".
     await page.locator('#save-agent').click();
 
-    // Modal auto-closes.  Wait until the first cell of that row reflects the
-    // updated name – allow up to 5 s for the WebSocket patch round-trip.
-    await expect(page.locator(`tr[data-agent-id="${agentId}"] td`).first()).toContainText('Edited Agent', { timeout: 5_000 });
+    // Wait for the PUT /api/agents/{id} request to finish so the database is
+    // updated before we assert.
+    await page.waitForResponse((resp) => {
+      return resp.url().includes(`/api/agents/${agentId}`) && resp.request().method() === 'PUT' && resp.status() === 200;
+    }, { timeout: 5_000 });
+
+    // Wait until the modal backdrop is hidden (UI closed).
+    await expect(page.locator('#agent-modal')).toBeHidden({ timeout: 5_000 });
+
+    // Reload dashboard view.
+    await page.reload();
+
+    // Confirm the dashboard shows the new name.  We don’t care which column
+    // contains the text – any cell within that <tr> qualifies.
+    await expect(
+      page.locator(`tr[data-agent-id="${agentId}"]`).locator('td', { hasText: 'Edited Agent' }),
+    ).toHaveCount(1, { timeout: 5_000 });
   });
 
   test('Delete agent with confirmation dialog', async ({ page }) => {
@@ -142,9 +180,8 @@ test.describe('Agent CRUD – dashboard interactions', () => {
   });
 
   test('Change agent model selection', async ({ page }) => {
-    // Assumes at least one agent exists
-    const firstRow = page.locator('tr[data-agent-id]').first();
-    const agentId = await firstRow.getAttribute('data-agent-id');
+    // Ensure agent exists before attempting to edit.
+    const agentId = await ensureAgentExists(page);
     await page.locator(`[data-testid="edit-agent-${agentId}"]`).click();
 
     await page.waitForSelector('#agent-modal', { state: 'visible' });
@@ -203,14 +240,22 @@ test.describe('Agent CRUD – dashboard interactions', () => {
     }
 
     await page.locator('#save-agent').click();
-    await expect(page.locator(`tr[data-agent-id="${agentId}"] td`).first()).toContainText('Full Config Agent', { timeout: 5_000 });
+
+    // Wait for modal close so backend processed the update.
+    await expect(page.locator('#agent-modal')).toBeHidden({ timeout: 5_000 });
+
+    // Reload dashboard to ensure we pick up any websocket or HTTP refresh.
+    await page.reload();
+
+    await expect(
+      page.locator(`tr[data-agent-id="${agentId}"]`).locator('td', { hasText: 'Full Config Agent' }),
+    ).toHaveCount(1, { timeout: 5_000 });
   });
 
   test('Validate required fields show errors', async ({ page }) => {
     // Open create modal by clicking Create without saving behind scenes – assume button toggles modal creation? Missing spec.
     // Fallback: open first agent edit modal and clear name then click save.
-    const firstRow = page.locator('tr[data-agent-id]').first();
-    const agentId = await firstRow.getAttribute('data-agent-id');
+    const agentId = await ensureAgentExists(page);
     await page.locator(`[data-testid="edit-agent-${agentId}"]`).click();
     await page.waitForSelector('#agent-modal', { state: 'visible' });
 
@@ -234,8 +279,8 @@ test.describe('Agent CRUD – dashboard interactions', () => {
   });
 
   test('Agent status toggle (active/inactive)', async ({ page }) => {
-    const firstRow = page.locator('tr[data-agent-id]').first();
-    const agentId = await firstRow.getAttribute('data-agent-id');
+    const agentId = await ensureAgentExists(page);
+    const firstRow = page.locator(`tr[data-agent-id="${agentId}"]`).first();
 
     // locate toggle button maybe data-testid="toggle-agent-{id}".
     const toggleBtn = page.locator(`[data-testid="toggle-agent-${agentId}"]`);

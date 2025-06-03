@@ -265,11 +265,28 @@ pub fn execute_network_command(cmd: Command) {
                 match ApiClient::update_agent(agent_id, &payload).await {
                     Ok(response) => {
                         web_sys::console::log_1(&format!("Agent update successful: {}", response).into());
+
+                        // 1. Notify the state layer that the update succeeded so it
+                        //    can refresh the agent list (or optimistic cache).
                         dispatch_global_message(*on_success);
+
+                        // 2. Close the configuration modal – this ensures the UI
+                        //    only disappears **after** the server responded, fixing
+                        //    race-conditions seen in Playwright tests and giving
+                        //    users clear confirmation the save completed.
+                        dispatch_global_message(Message::CloseAgentModal);
                     },
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to update agent {}: {:?}", agent_id, e).into());
                         dispatch_global_message(*on_error);
+
+                        // Re-enable the Save button so the user can retry.
+                        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                            if let Some(btn) = doc.get_element_by_id("save-agent") {
+                                btn.set_inner_html("Save");
+                                let _ = btn.remove_attribute("disabled");
+                            }
+                        }
                     }
                 }
             });
