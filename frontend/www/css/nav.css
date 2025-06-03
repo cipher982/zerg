@@ -1,0 +1,70 @@
+/* ------------------------------------------------------------------
+   Navigation & Header Styles – extracted from styles.css
+   ------------------------------------------------------------------ */
+
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: var(--text);
+    padding: 10px 20px;
+    box-shadow: var(--shadow-md);
+    z-index: 10;
+}
+
+.header h1 {
+    margin: 0;
+    font-weight: 300;
+}
+
+/* Main navigation tabs */
+.tabs-container {
+    position: fixed;
+    top: 60px;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, var(--secondary), var(--primary));
+    padding: 0 20px;
+    display: flex;
+    z-index: 10;
+}
+
+.tabs-container .tab-button {
+    background-color: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    border: none;
+    padding: 12px 20px;
+    margin: 0;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 3px solid transparent;
+}
+
+.tabs-container .tab-button:hover {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.tabs-container .tab-button.active {
+    color: white;
+    border-bottom: 3px solid white;
+    font-weight: 500;
+}
+
+.status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(135deg, var(--secondary), var(--primary));
+    padding: 5px 15px;
+    font-size: 12px;
+    color: var(--text);
+    border-top: 1px solid rgba(0,0,0,0.15);
+    display: flex;
+    justify-content: space-between;
+    z-index: 100;
+}

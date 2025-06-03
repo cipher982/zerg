@@ -5,6 +5,12 @@
 /* Inject design-token variables (colours, spacing, etc.) */
 @import url("tokens.css");
 @import url("layout.css");
+@import url("css/buttons.css");
+@import url("css/forms.css");
+@import url("css/nav.css");
+@import url("css/agent_shelf.css");
+@import url("css/toast.css");
+@import url("css/dashboard.css");
 
 /* Polished select box for modal-frequency selector (Agent Config Modal) */
 .modal-select {
@@ -1567,80 +1573,7 @@ button {
     padding: 10px 12px;
     font-size: 14px;
     border-radius: 4px;
-    border: 1px solid var(--border-color);
-    background-color: var(--bg-dark);
-    color: var(--text-primary);
-}
 
-.profile-input:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px rgba(100, 255, 218, 0.4);
-}
-
-.btn-primary {
-    align-self: flex-start;
-    background-color: var(--primary);
-    border: none;
-    padding: var(--spacing-sm) var(--spacing-lg);
-    font-size: 14px;
-    border-radius: var(--radius-md);
-    color: var(--dark);
-    cursor: pointer;
-    transition: background-color var(--transition-fast), transform var(--transition-fast);
-}
-
-.btn-primary:hover {
-    background-color: var(--secondary);
-    transform: translateY(-1px);
-}
-
-/* Secondary (neutral surface) */
-.btn,
-.btn-secondary {
-    background-color: var(--dark-card);
-    color: var(--text);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: var(--spacing-sm) var(--spacing-lg);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: background-color var(--transition-fast), transform var(--transition-fast);
-}
-
-.btn:hover,
-.btn-secondary:hover {
-    background-color: var(--dark-lighter);
-    transform: translateY(-1px);
-}
-
-
-
-/* Ghost button – transparent, coloured outline */
-.btn-ghost {
-    background: transparent;
-    color: var(--primary);
-    border: 1px solid var(--primary);
-    padding: var(--spacing-sm) var(--spacing-lg);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
-}
-
-.btn-ghost:hover {
-    background: rgba(100, 255, 218, 0.12);
-    transform: translateY(-1px);
-}
-
-/* Size modifiers */
-.btn-sm {
-    padding: var(--spacing-xs) var(--spacing-md);
-    font-size: 12px;
-}
-
-.btn-lg {
-    padding: var(--spacing-md) var(--spacing-xl);
-    font-size: 16px;
-}
 
 /* ------------------------------------------------------------------
    Utility Classes for Common Patterns (extracted from inline styles)
