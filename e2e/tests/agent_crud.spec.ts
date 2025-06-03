@@ -206,8 +206,8 @@ test.describe('Agent CRUD – dashboard interactions', () => {
 
     await page.locator('#save-agent').click();
 
-    // currently no clear UI indicator – we simply assert modal closed.
-    await expect(page.locator('#agent-modal')).toHaveCount(0);
+    // Modal should close (hidden attribute added by UI helper).
+    await expect(page.locator('#agent-modal')).toBeHidden({ timeout: 5_000 });
   });
 
   test('Create agent with all fields (instructions, model, temperature)', async ({ page }) => {
