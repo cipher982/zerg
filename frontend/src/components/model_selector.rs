@@ -57,16 +57,29 @@ pub fn fetch_models_from_backend(document: &Document) -> Result<(), JsValue> {
         if let Ok(response) = ApiClient::fetch_available_models().await {
             // Parse the response and update state
             if let Ok(models_json) = serde_json::from_str::<serde_json::Value>(&response) {
-                if let Some(models) = models_json.get("models").and_then(|m| m.as_array()) {
-                    let models: Vec<(String, String)> = models.iter()
-                        .filter_map(|m| m.as_str())
-                        .map(|m| (m.to_string(), m.to_string()))
+                if let Some(arr) = models_json.as_array() {
+                    let models: Vec<(String, String)> = arr
+                        .iter()
+                        .filter_map(|obj| {
+                            let id = obj.get("id").and_then(|v| v.as_str())?;
+                            let label = obj
+                                .get("display_name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or(id);
+                            Some((id.to_string(), label.to_string()))
+                        })
                         .collect();
                     
                     // Update state with available models
                     APP_STATE.with(|state| {
                         let mut state = state.borrow_mut();
-                        state.available_models = models;
+                        // Populate list and select first model if none selected yet.
+                        state.available_models = models.clone();
+                        if state.selected_model.is_empty() {
+                            if let Some((first_id, _)) = models.first() {
+                                state.selected_model = first_id.clone();
+                            }
+                        }
                     });
                     
                     // Update the dropdown with fetched models
