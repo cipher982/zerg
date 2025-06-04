@@ -6,7 +6,7 @@ pub use ws_manager::{init_dashboard_ws, cleanup_dashboard_ws};
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{Document, Element, HtmlElement};
+use web_sys::{Document, Element, HtmlElement, HtmlInputElement};
 use crate::state::APP_STATE;
 use crate::constants::{
     DEFAULT_AGENT_NAME, 
@@ -236,64 +236,89 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
 
 
     // -------------------------------------------------------------------
-    // Scope selector (My agents / All agents)
+    // Scope selector – fancy slider toggle (My ▸ All)
     // -------------------------------------------------------------------
     use crate::state::DashboardScope;
 
-    let scope_select = document.create_element("select")?;
-    scope_select.set_class_name("scope-select");
-    scope_select.set_attribute("id", "dashboard-scope-select")?;
-    scope_select.set_attribute(ATTR_DATA_TESTID, "dashboard-scope-select")?;
+    // <label class="scope-toggle"> <input type=checkbox …> <span class="slider"></span> </label>
+    let toggle_label = document.create_element("label")?;
+    toggle_label.set_class_name("scope-toggle");
 
-    // Option: My agents
-    let opt_my = document.create_element("option")?;
-    opt_my.set_attribute("value", "my")?;
-    opt_my.set_inner_html("My agents");
-    scope_select.append_child(&opt_my)?;
+    let toggle_input = document.create_element("input")?;
+    toggle_input.set_attribute("type", "checkbox")?;
+    toggle_input.set_attribute("id", "dashboard-scope-toggle")?;
+    toggle_input.set_attribute(ATTR_DATA_TESTID, "dashboard-scope-toggle")?;
 
-    // Option: All agents
-    let opt_all = document.create_element("option")?;
-    opt_all.set_attribute("value", "all")?;
-    opt_all.set_inner_html("All agents");
-    scope_select.append_child(&opt_all)?;
-
-    // Set initial selected value based on AppState
+    // Checked means "All agents"; unchecked means "My agents"
     let initial_scope = APP_STATE.with(|st| st.borrow().dashboard_scope);
-    let selected_value = match initial_scope {
-        DashboardScope::MyAgents => "my",
-        DashboardScope::AllAgents => "all",
+    if matches!(initial_scope, DashboardScope::AllAgents) {
+        toggle_input.set_attribute("checked", "checked")?;
+    }
+
+    // Slider visual span
+    let slider_span = document.create_element("span")?;
+    slider_span.set_class_name("slider");
+
+    // ---------------- Text label above toggle ----------------------
+    let text_label = document.create_element("span")?;
+    text_label.set_class_name("scope-text-label");
+    text_label.set_id("scope-text");
+    let initial_label = if matches!(initial_scope, DashboardScope::AllAgents) {
+        "All agents"
+    } else {
+        "My agents"
     };
-    let select_html = scope_select
-        .dyn_ref::<web_sys::HtmlSelectElement>()
-        .ok_or(JsValue::from_str("Failed to cast select"))?;
-    select_html.set_value(selected_value);
+    text_label.set_inner_html(initial_label);
+
+    // assemble
+    toggle_label.append_child(&toggle_input)?;
+    toggle_label.append_child(&slider_span)?;
+
+    // wrapper to stack text above toggle (column)
+    let wrapper = document.create_element("div")?;
+    wrapper.set_class_name("scope-wrapper");
+    wrapper.append_child(&text_label)?;
+    wrapper.append_child(&toggle_label)?;
 
     // Change handler
     let change_callback = Closure::wrap(Box::new(move |event: web_sys::Event| {
         if let Some(target) = event.target() {
-            if let Ok(select_el) = target.dyn_into::<web_sys::HtmlSelectElement>() {
-                let value = select_el.value();
-                let scope = if value == "all" {
+            if let Ok(input_el) = target.dyn_into::<web_sys::HtmlInputElement>() {
+                let checked = input_el.checked();
+                let scope = if checked {
                     DashboardScope::AllAgents
                 } else {
                     DashboardScope::MyAgents
                 };
+
+                // update text label
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    if let Some(lbl) = doc.get_element_by_id("scope-text") {
+                        let lbl_el = lbl.dyn_ref::<web_sys::HtmlElement>().unwrap();
+                        lbl_el.set_inner_html(if checked { "All agents" } else { "My agents" });
+                    }
+                }
+
                 crate::state::dispatch_global_message(crate::messages::Message::ToggleDashboardScope(scope));
             }
         }
     }) as Box<dyn FnMut(_)>);
 
-    select_html.add_event_listener_with_callback("change", change_callback.as_ref().unchecked_ref())?;
+    toggle_input
+        .dyn_ref::<web_sys::HtmlElement>()
+        .unwrap()
+        .add_event_listener_with_callback("change", change_callback.as_ref().unchecked_ref())?;
     change_callback.forget();
 
     // -------------------------------------------------------------------
-    // Finally, assemble header children
+    // Finally, attach the scope switch (temporarily disabled – UX TBD)
     // -------------------------------------------------------------------
-
-    header.append_child(&scope_select)?;
+#[allow(unused_variables)]
+    {
+        let _unused = &wrapper; // Keep tree for future use, but don’t render.
+    }
 
     // -------------------------------------------------------------------
-    
     // Button container
     let button_container = document.create_element("div")?;
     button_container.set_class_name("button-container");
