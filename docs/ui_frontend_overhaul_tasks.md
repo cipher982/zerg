@@ -43,6 +43,14 @@ This markdown file tracks the high-level work items for the upcoming visual over
 - [x] Introduce `layout.css` (or util classes) for common flex/grid patterns.
 - [x] Refactor canvas view to use modern `clamp()` sizing.
 - [x] Collapse agent shelf into off-canvas drawer on < 768 px viewports.
+- [x] Break up monolithic `styles.css` into modular CSS files (tokens, layout, util, buttons, forms, nav, agent_shelf, canvas, toast, dashboard, status, modal, MCP, etc.).
+
+### CSS Modularisation (side-quest)
+- [x] Created `frontend/www/css/` directory and migrated legacy blocks into focused modules.
+- [x] Updated `index.html` to link each module directly to avoid nested `@import` CSP issues.
+- [x] Restored all missing rules (dashboard header/search, scope-select, status chips, agent detail modal, MCP manager, utility helpers).
+- [x] Added legacy variables to `tokens.css` so historic code paths resolve correctly.
+- [x] Fixed `frontend/www/.gitignore` so new CSS files are tracked.
 
 ## Phase 4 – Delight Layer
 
