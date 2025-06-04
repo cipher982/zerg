@@ -93,6 +93,7 @@
 
 /* Action buttons in dashboard header */
 #create-agent-button,
+.create-agent-button,
 .create-agent-btn {
   background: var(--primary);
   color: var(--dark);
@@ -109,6 +110,7 @@
   background: var(--secondary);
 }
 
+/* Danger (reset db) button */
 .reset-db-btn {
   background: var(--error) !important;
   color: #fff;
@@ -116,7 +118,6 @@
   border-radius: var(--radius-sm);
   padding: var(--spacing-xs) var(--spacing-md);
   cursor: pointer;
-  margin-left: 10px;
   display: inline-flex; align-items: center; justify-content: center;
   transition: background 0.2s;
 }
@@ -146,9 +147,19 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;            /* Allow wrapping on very narrow viewports */
+  gap: var(--spacing-sm);
   margin-bottom: 20px;
   padding-bottom: 15px;
   border-bottom: 1px solid var(--border-color);
+}
+
+/* Container that groups the Create-Agent & Reset-DB buttons */
+.button-container {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 /* Search bar */
@@ -200,6 +211,11 @@
   outline: none;
   transition: all 0.2s ease;
   appearance: none;
+
+  /* Prevent the select from stretching to 100% width inherited from the
+     global .form-control rule (forms.css) */
+  width: auto;
+
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23bdc3c7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
   background-position: right 8px center;

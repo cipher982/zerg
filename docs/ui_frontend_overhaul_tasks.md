@@ -54,9 +54,9 @@ This markdown file tracks the high-level work items for the upcoming visual over
 
 ## Phase 4 – Delight Layer
 
-- [ ] Add particle background effect to login/landing screen.
-- [ ] Add micro-interactions (button scale, tab ripple, modal fade).
-- [ ] Integrate SVG icon set (Lucide/Feather) using `currentColor` for easy theming.
+- [x] Add particle background effect to login/landing screen.
+- [x] Add micro-interactions (button scale, tab ripple, modal fade).
+- [x] Integrate SVG icon set (Lucide/Feather) using `currentColor` for easy theming.
 
 ## Phase 5 – Documentation & Handoff
 

@@ -53,6 +53,27 @@
     transform: translateY(-1px);
 }
 
+/* --------------------------------------------------------- */
+/* Micro-interaction additions (Phase-4)                     */
+/* --------------------------------------------------------- */
+
+/* Slightly scale down on active press for tactile feedback */
+.btn:active,
+.btn-primary:active,
+.btn-secondary:active,
+.btn-ghost:active {
+    transform: scale(0.97);
+}
+
+/* Ensure buttons don’t jump when both translateY and scale are applied */
+.btn:hover:active,
+.btn-primary:hover:active,
+.btn-secondary:hover:active,
+.btn-ghost:hover:active {
+    transform: scale(0.97) translateY(-1px);
+}
+
+
 /* Size modifiers */
 .btn-sm {
     padding: var(--spacing-xs) var(--spacing-md);

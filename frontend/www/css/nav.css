@@ -54,6 +54,33 @@
     font-weight: 500;
 }
 
+/* --------------------------------------------------------- */
+/* Ripple micro-interaction for tabs (Phase-4)               */
+/* --------------------------------------------------------- */
+
+.tabs-container .tab-button {
+    position: relative;     /* Required for ripple */
+    overflow: hidden;       /* Clip ripple circle */
+}
+
+/* Ripple element created dynamically in JS */
+.ripple {
+    position: absolute;
+    border-radius: 50%;
+    transform: scale(0);
+    background: rgba(255, 255, 255, 0.3);
+    animation: ripple-effect 600ms ease-out;
+    pointer-events: none;
+}
+
+@keyframes ripple-effect {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+
 .status-bar {
     position: fixed;
     bottom: 0;
