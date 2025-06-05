@@ -60,6 +60,9 @@ pub fn setup_canvas(document: &Document) -> Result<(), JsValue> {
     // Setup animation loop for refreshing the canvas
     crate::ui::setup_animation_loop();
     
+    // Initialize the node palette
+    crate::components::node_palette::init_node_palette(document)?;
+    
     Ok(())
 }
 

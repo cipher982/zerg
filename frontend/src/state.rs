@@ -564,6 +564,8 @@ impl AppState {
             NodeType::ResponseOutput => "#9b59b6".to_string(), // Purple
             NodeType::AgentIdentity => "#2ecc71".to_string(), // Green
             NodeType::GenericNode => "#95a5a6".to_string(),  // Gray
+            NodeType::Tool { .. } => "#f59e0b".to_string(),  // Orange
+            NodeType::Trigger { .. } => "#10b981".to_string(), // Green
         };
         
         // Calculate approximate node size based on text content
@@ -1197,6 +1199,8 @@ impl AppState {
                 NodeType::ResponseOutput => "#9b59b6".to_string(), // Purple
                 NodeType::AgentIdentity => DEFAULT_AGENT_NODE_COLOR.to_string(),
                 NodeType::GenericNode => "#95a5a6".to_string(),  // Gray
+                NodeType::Tool { .. } => "#f59e0b".to_string(),  // Orange
+                NodeType::Trigger { .. } => "#10b981".to_string(), // Green
             },
             text,
             node_type,
