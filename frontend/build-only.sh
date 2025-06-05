@@ -43,7 +43,14 @@ if [[ -z "$TMPDIR_OVERRIDDEN" || ! -w "$TMPDIR_OVERRIDDEN" ]]; then
 fi
 
 API_BASE_URL="$API_BASE_URL" RUSTFLAGS="-C debuginfo=2" \
-  wasm-pack build --dev --target web --out-dir www
+  wasm-pack build --dev --target web --out-dir pkg
+
+# Copy the generated files to www directory
+echo "[build-only] 📦 copying WASM artifacts to www..." >&2
+cp pkg/agent_platform_frontend.js www/
+cp pkg/agent_platform_frontend_bg.wasm www/
+cp pkg/agent_platform_frontend.d.ts www/
+cp pkg/agent_platform_frontend_bg.wasm.d.ts www/
 
 # Ensure output dir exists (wasm-pack creates it but be safe)
 mkdir -p www

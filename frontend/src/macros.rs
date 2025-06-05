@@ -23,3 +23,21 @@ macro_rules! mut_borrow {
             .borrow_mut()
     };
 }
+
+/// Quick helper to embed CSS custom-properties (`var(--token)`) without
+/// sprinkling `format!("var(--{})", token)` everywhere in the Rust/Yew code.
+///
+/// ```rust,ignore
+/// let color = css_var!("primary");               // "var(--primary)"
+/// let spacing = css_var!(spacing_md);             // "var(--spacing_md)"
+/// ```
+#[macro_export]
+macro_rules! css_var {
+    ($name:expr) => {
+        format!("var(--{})", $name)
+    };
+    // Accept identifiers without quotes for ergonomic use
+    ($name:ident) => {
+        format!("var(--{})", stringify!($name))
+    };
+}

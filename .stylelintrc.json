@@ -1,0 +1,8 @@
+{
+  "extends": "stylelint-config-standard",
+  "rules": {
+    "color-named": "never",
+    "font-family-no-missing-generic-family-keyword": null,
+    "no-descending-specificity": null
+  }
+}
