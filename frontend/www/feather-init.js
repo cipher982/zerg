@@ -9,5 +9,11 @@ document.addEventListener('DOMContentLoaded', () => {
     window.feather.replace({
       'stroke-width': 1.5,
     });
+
+    // Auto-upgrade any icons injected later (e.g. via WASM)
+    const observer = new MutationObserver(() => {
+      window.feather.replace({ 'stroke-width': 1.5 });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 });

@@ -842,7 +842,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let run_btn = document.create_element("button")?;
     run_btn.set_attribute("type", "button")?;
     run_btn.set_class_name("action-btn run-btn");
-    run_btn.set_inner_html("▶");
+    run_btn.set_inner_html("<i data-feather=\"play\"></i>");
     run_btn.set_attribute("title", "Run Agent")?;
     run_btn.set_attribute("aria-label", "Run Agent")?;
     run_btn.set_attribute(ATTR_DATA_TESTID, &format!("run-agent-{}", agent.id))?;
@@ -906,7 +906,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let edit_btn = document.create_element("button")?;
     edit_btn.set_attribute("type", "button")?;
     edit_btn.set_class_name("action-btn edit-btn");
-    edit_btn.set_inner_html("✎");
+    edit_btn.set_inner_html("<i data-feather=\"edit-3\"></i>");
     edit_btn.set_attribute("title", "Edit Agent")?;
     edit_btn.set_attribute("aria-label", "Edit Agent")?;
     edit_btn.set_attribute(ATTR_DATA_TESTID, &format!("edit-agent-{}", agent.id))?;
@@ -933,7 +933,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let chat_btn = document.create_element("button")?;
     chat_btn.set_attribute("type", "button")?;
     chat_btn.set_class_name("action-btn chat-btn");
-    chat_btn.set_inner_html("💬");
+    chat_btn.set_inner_html("<i data-feather=\"message-circle\"></i>");
     chat_btn.set_attribute("title", "Chat with Agent")?;
     chat_btn.set_attribute("aria-label", "Chat with Agent")?;
     chat_btn.set_attribute(ATTR_DATA_TESTID, &format!("chat-agent-{}", agent.id))?;
@@ -960,7 +960,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let debug_btn = document.create_element("button")?;
     debug_btn.set_attribute("type", "button")?;
     debug_btn.set_class_name("action-btn debug-btn");
-    debug_btn.set_inner_html("⚙");
+    debug_btn.set_inner_html("<i data-feather=\"settings\"></i>");
     debug_btn.set_attribute("title", "Debug / Info")?;
     debug_btn.set_attribute("aria-label", "Debug / Info")?;
     debug_btn.set_attribute(ATTR_DATA_TESTID, &format!("debug-agent-{}", agent.id))?;
@@ -981,7 +981,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let delete_btn = document.create_element("button")?;
     delete_btn.set_attribute("type", "button")?;
     delete_btn.set_class_name("action-btn delete-btn");
-    delete_btn.set_inner_html("🗑️");
+    delete_btn.set_inner_html("<i data-feather=\"trash-2\"></i>");
     delete_btn.set_attribute("title", "Delete Agent")?;
     delete_btn.set_attribute("aria-label", "Delete Agent")?;
     delete_btn.set_attribute(ATTR_DATA_TESTID, &format!("delete-agent-{}", agent.id))?;
