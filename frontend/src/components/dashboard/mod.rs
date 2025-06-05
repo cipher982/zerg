@@ -960,7 +960,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let debug_btn = document.create_element("button")?;
     debug_btn.set_attribute("type", "button")?;
     debug_btn.set_class_name("action-btn debug-btn");
-    debug_btn.set_inner_html("🐞");
+    debug_btn.set_inner_html("⚙");
     debug_btn.set_attribute("title", "Debug / Info")?;
     debug_btn.set_attribute("aria-label", "Debug / Info")?;
     debug_btn.set_attribute(ATTR_DATA_TESTID, &format!("debug-agent-{}", agent.id))?;
