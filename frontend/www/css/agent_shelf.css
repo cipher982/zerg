@@ -84,14 +84,16 @@
 }
 
 /* Drag and drop */
+
+/* Harmonised drag ghost – token colours */
 .agent-pill.dragging {
-    opacity: 0.9;
-    background: linear-gradient(135deg, #4a5177 0%, #3e4466 100%);
-    box-shadow: var(--shadow-lg);
-    transform: scale(1.05) rotate(-2deg);
-    border: 2px dashed #7f8ec0;
-    cursor: grabbing;
-    z-index: 1000;
+  opacity: 0.92;
+  background: linear-gradient(135deg, var(--secondary) 0%, var(--primary) 100%);
+  box-shadow: var(--shadow-lg);
+  transform: scale(1.05) rotate(-2deg);
+  border: 2px dashed var(--primary);
+  cursor: grabbing;
+  z-index: 1000;
 }
 
 #canvas-container.canvas-drop-target {

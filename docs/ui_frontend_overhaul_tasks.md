@@ -11,7 +11,7 @@ This markdown file tracks the high-level work items for the upcoming visual over
 - [x] Create **`frontend/www/tokens.css`** with design-token variables (colours, spacing, radii, shadows, transitions).
 - [x] Import `tokens.css` at the top of **`frontend/www/styles.css`**.
 - [x] Replace hard-coded colour / spacing values in `styles.css` with `var(--token)` references (primary-heavy blue values swapped).
-- [ ] Add a tiny helper macro `css_var!()` (or similar) for ergonomic inline styles in the Rust/Yew code-base.
+- [x] Add a tiny helper macro `css_var!()` (or similar) for ergonomic inline styles in the Rust/Yew code-base.
 - [ ] Run `trunk build` (or existing build script) and visually verify there are no regressions. *(pending manual review)*
 
 ## Phase 1 – Quick-Win Theming
@@ -30,7 +30,7 @@ This markdown file tracks the high-level work items for the upcoming visual over
 
 ### Agent Pill & Shelf
 - [x] Apply `--radius-lg` and token-based shadows.
-- [ ] Harmonise drag-and-drop “ghost” styling with new palette.
+- [x] Harmonise drag-and-drop “ghost” styling with new palette.
 
 ### Modal & Form Elements
 - [x] Standardise spacing, typography and focus-ring colour.
@@ -63,13 +63,13 @@ This markdown file tracks the high-level work items for the upcoming visual over
 - [x] Generate Component Gallery page (`/dev_components.html`).
 - [x] Write `docs/design_system.md` explaining tokens, components, usage rules.
 - [x] Update root **README.md** with design-system playground link.
-- [ ] Establish visual-regression baseline screenshots and add to CI.
+- [x] Establish visual-regression baseline screenshots and add to CI.
 
 ## Tooling / Quality Gates (parallel tasks)
 
-- [ ] Add `stylelint` & `prettier-css` to **pre-commit** config.
-- [ ] Integrate `axe-playwright` for automated accessibility checks.
-- [ ] Configure visual-regression tests (Playwright + pixel-diff) for critical pages.
+- [x] Add `stylelint` & `prettier-css` to **pre-commit** config.
+- [x] Integrate `axe-playwright` for automated accessibility checks.
+- [x] Configure visual-regression tests (Playwright + pixel-diff) for critical pages.
 
 ---
 

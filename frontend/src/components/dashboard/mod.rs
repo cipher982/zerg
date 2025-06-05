@@ -6,7 +6,7 @@ pub use ws_manager::{init_dashboard_ws, cleanup_dashboard_ws};
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{Document, Element, HtmlElement, HtmlInputElement};
+use web_sys::{Document, Element, HtmlElement};
 use crate::state::APP_STATE;
 use crate::constants::{
     DEFAULT_AGENT_NAME, 
@@ -855,6 +855,9 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let run_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         event.stop_propagation();
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
+
+        // Immediate user feedback
+        crate::toast::info("Run started");
         // Optimistically mark the agent as running so the UI updates instantly.
         crate::state::APP_STATE.with(|state_ref| {
             let mut state = state_ref.borrow_mut();
@@ -878,8 +881,6 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
             match crate::network::api_client::ApiClient::run_agent(agent_id).await {
                 Ok(response) => {
                     web_sys::console::log_1(&format!("Agent {} run triggered: {}", agent_id, response).into());
-
-                    crate::toast::success("Agent queued to run");
 
                     // After the task completes we refresh the specific agent to
                     // pick up the final status and timestamps.

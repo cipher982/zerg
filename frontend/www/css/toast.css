@@ -33,6 +33,7 @@
 .toast-success { border-left-color: var(--success); }
 .toast-warning { border-left-color: var(--warning); }
 .toast-error   { border-left-color: var(--error);   }
+.toast-info    { border-left-color: var(--primary); }
 
 @keyframes toast-enter {
   from { opacity: 0; transform: translateX(100%); }
