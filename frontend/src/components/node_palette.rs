@@ -1,6 +1,6 @@
-use web_sys::{Document, Element, HtmlElement, MouseEvent, DragEvent};
+use web_sys::{Document, Element, MouseEvent, DragEvent};
 use wasm_bindgen::{JsCast, JsValue};
-use crate::models::{NodeType, TriggerType, TriggerConfig, ToolConfig, ToolVisibility, InputMapping};
+use crate::models::{NodeType, TriggerType, TriggerConfig, ToolConfig, ToolVisibility};
 use crate::state::{APP_STATE, AppState};
 use std::collections::HashMap;
 

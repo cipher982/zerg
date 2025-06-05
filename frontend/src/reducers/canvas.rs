@@ -22,10 +22,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 let viewport_height = if state.canvas_height > 0.0 { state.canvas_height } else { 600.0 };
                 let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 75.0;
                 let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0;
-                let node_id = state.add_node(text.clone(), x, y, *node_type);
+                let node_id = state.add_node(text.clone(), x, y, node_type.clone());
                 web_sys::console::log_1(&format!("Created visual node for agent: {}", node_id).into());
             } else {
-                let _ = state.add_node(text.clone(), *x, *y, *node_type);
+                let _ = state.add_node(text.clone(), *x, *y, node_type.clone());
             }
             state.state_modified = true;
             true
@@ -119,7 +119,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::AddCanvasNode { agent_id, x, y, node_type, text } => {
-            let node_id = state.add_node_with_agent(*agent_id, *x, *y, *node_type, text.clone());
+            let node_id = state.add_node_with_agent(*agent_id, *x, *y, node_type.clone(), text.clone());
             web_sys::console::log_1(&format!("Created new node: {}", node_id).into());
             state.state_modified = true;
             true
