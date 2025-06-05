@@ -559,7 +559,7 @@ impl AppState {
         web_sys::console::log_1(&format!("Creating node: id={}, type={:?}, text={}", id, node_type, text).into());
         
         // Determine color based on node type
-        let color = match node_type {
+        let color = match &node_type {
             NodeType::UserInput => "#3498db".to_string(),    // Blue
             NodeType::ResponseOutput => "#9b59b6".to_string(), // Purple
             NodeType::AgentIdentity => "#2ecc71".to_string(), // Green
@@ -586,7 +586,7 @@ impl AppState {
             height,
             color,
             parent_id: None, // Parent ID will be set separately if needed
-            node_type,
+            node_type: node_type.clone(),
             is_selected: false,
             is_dragging: false,
         };
