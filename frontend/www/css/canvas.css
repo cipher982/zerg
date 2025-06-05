@@ -2,21 +2,37 @@
 /*  Canvas view – layout and controls                                 */
 /* ------------------------------------------------------------------ */
 
+
+/* ------------------------------------------------------------------ */
+/* Root container – in the refactor each view got its *own* root id.    */
+/* We mirror the old #app-container styles for #canvas-root so the flex */
+/* behaviour (fill viewport, below header) is restored.                */
+/* ------------------------------------------------------------------ */
+
 #app-container {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  padding-top: 108px; /* header + tabs height */
+  padding-top: 108px; /* header + tabs */
   box-sizing: border-box;
   overflow: hidden;
 }
 
 #app-container.canvas-view {
-  display: flex;
   flex-direction: row;
+}
+
+#canvas-root {
+  display: flex;
+  flex-direction: column;
   height: 100vh;
-  padding-top: 108px;
+  padding-top: 108px; /* header (60) + tabs (48) */
   box-sizing: border-box;
+  overflow: hidden;
+}
+
+#canvas-root.canvas-view {
+  flex-direction: row;
 }
 
 #canvas-container {
@@ -24,9 +40,23 @@
   min-height: 0;
   display: flex;
   overflow: hidden;
-  background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+  /* Dark neutral surface – previously light grey created unwanted white box */
+  background: var(--dark-lighter);
   position: relative;
-  padding: clamp(8px, 2vw, 24px);
+  padding: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Main content wrapper (toolbar + canvas)                             */
+/* ------------------------------------------------------------------ */
+
+.main-content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Light grid overlay */
@@ -103,6 +133,6 @@
 
 /* Simple responsive tweak when shelf collapses (redundant with agent_shelf.css but harmless) */
 @media (max-width: 768px) {
-  #app-container.canvas-view { flex-direction: column; }
+  #canvas-root.canvas-view { flex-direction: column; }
   .main-content-area { min-width: 0; }
 }
