@@ -75,12 +75,96 @@ pub struct Trigger {
 }
 
 /// Type of node (e.g., AgentIdentity, UserInput, ResponseOutput)
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum NodeType {
     AgentIdentity,
     UserInput, 
     ResponseOutput,
     GenericNode,
+    Tool {
+        tool_name: String,
+        server_name: String,
+        config: ToolConfig,
+        visibility: ToolVisibility,
+    },
+    Trigger {
+        trigger_type: TriggerType,
+        config: TriggerConfig,
+    },
+}
+
+/// Configuration for tool nodes
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ToolConfig {
+    /// Static input parameters set by user
+    pub static_params: std::collections::HashMap<String, serde_json::Value>,
+    /// Input mappings from other nodes
+    pub input_mappings: std::collections::HashMap<String, InputMapping>,
+    /// Whether this tool should be executed automatically or require manual trigger
+    pub auto_execute: bool,
+}
+
+/// Represents how an input parameter gets its value
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum InputMapping {
+    /// Static value set by user
+    Static(serde_json::Value),
+    /// Value comes from output of another node
+    FromNode { 
+        node_id: String, 
+        output_key: String 
+    },
+}
+
+/// Tool visibility classification for hybrid approach
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum ToolVisibility {
+    /// Always appears as external I/O node (email readers, API calls, etc.)
+    AlwaysExternal,
+    /// User can choose to expose as node or keep internal to agent
+    OptionalExternal,
+    /// Always stays internal to agent (simple utilities)
+    AlwaysInternal,
+}
+
+/// Types of triggers that can start workflows
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum TriggerType {
+    Webhook,
+    Schedule,
+    Email,
+    Manual,
+}
+
+/// Configuration for trigger nodes
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TriggerConfig {
+    /// Trigger-specific configuration (webhook URL, cron expression, etc.)
+    pub params: std::collections::HashMap<String, serde_json::Value>,
+    /// Whether this trigger is currently active
+    pub enabled: bool,
+    /// Filter conditions for the trigger
+    pub filters: Vec<TriggerFilter>,
+}
+
+/// Filter conditions for triggers
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TriggerFilter {
+    pub field: String,
+    pub operator: FilterOperator,
+    pub value: serde_json::Value,
+}
+
+/// Filter operators for trigger conditions
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum FilterOperator {
+    Equals,
+    Contains,
+    StartsWith,
+    EndsWith,
+    GreaterThan,
+    LessThan,
+    Regex,
 }
 
 /// Message represents a thread entry between user and agent
@@ -484,4 +568,4 @@ pub struct ApiThreadMessageCreate {
 /// Extension methods for Node to provide backward compatibility with legacy code
 #[allow(dead_code)] // These methods are kept for backward compatibility
 impl CanvasNode {
-} 
+}

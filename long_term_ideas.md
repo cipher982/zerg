@@ -4,8 +4,8 @@ Document Purpose:
 Provides essential context, current status, roadmap, development guidelines, and future ideas
 for the Zerg project. Written for both human developers and AI coding assistants.
 
-Last Updated: 2025-05-24 (Comprehensively reviewed for actual implementation status and 
-immediate priorities.)
+Last Updated: 2025-06-05 (Updated to reflect major completed milestones: Authentication, 
+MCP Integration, User Personalization, and advanced Trigger system.)
 
 ----------------------------------------------------------------------------------------------
 
@@ -74,7 +74,9 @@ Condition, Input/Output nodes yet
 
 ### Cross-Cutting / Ops
 
-    * ❌ Multi-tenancy/Auth (JWT, workspaces, permissions)
+    * ✅ Multi-tenancy/Auth (JWT, Google Sign-In, user management, WebSocket auth)
+    * ✅ MCP Integration (Model Context Protocol server management, tool integration)
+    * ✅ User Personalization (avatars, profiles, preferences, Gmail integration)
     * ❌ Usage analytics/cost metering
     * ❌ Observability/admin dashboards/metrics
 
@@ -99,8 +101,8 @@ and deterministic tools.
                                         │
 ├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
 ────────────────────────────────────────┤
-│ M1: Triggers v1        │ 🟡 Partial  │ Backend HMAC/event/crud done. UI list/copy done. No
-full CRUD/creation modal. No canvas node. │
+│ M1: Triggers v1        │ 🟡 Nearly   │ Backend HMAC/event/CRUD/Gmail complete. UI list/copy 
+                         │   Complete  │ done. Missing: frontend create/delete modal only.
 ├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
 ────────────────────────────────────────┤
 │ M2: Workflow Engine    │ ❌          │ Canvas DAG → LangGraph, export/import, exec highlight
@@ -111,19 +113,27 @@ full CRUD/creation modal. No canvas node. │
                                         │
 ├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
 ────────────────────────────────────────┤
-│ M3b: Toolbox UI/Nodes  │ ❌          │ Tool/Trigger/Condition nodes in palette/canvas
+│ M3b: Toolbox UI/Nodes  │ 🟡 Partial  │ MCP tool integration working. Missing: canvas nodes
                                         │
 ├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
 ────────────────────────────────────────┤
-│ M4: Debugging UX       │ ✅ v1       │ Overview/raw shipped. Extend for threads/runs/stats
-next                                      │
+│ M4: Debugging UX       │ ✅ v2       │ Multi-tab debug modal, run history, agent telemetry
+                                        │
 ├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
 ────────────────────────────────────────┤
-│ M5: Multi-tenancy/Auth │ ❌          │ JWT/Google login, workspace isolation, permissions
+│ M5: Multi-tenancy/Auth │ ✅ Complete │ Google Sign-In, JWT, WebSocket auth, user management
                                         │
 ├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
 ────────────────────────────────────────┤
 │ M6: Observability/Cost │ ❌          │ Usage stats, metrics, admin dashboards
+                                        │
+├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
+────────────────────────────────────────┤
+│ M7: MCP Integration    │ ✅ Complete │ Server management, tool integration, frontend UI
+                                        │
+├────────────────────────┼─────────────┼───────────────────────────────────────────────────────
+────────────────────────────────────────┤
+│ M8: User Features      │ ✅ Complete │ Avatars, profiles, preferences, Gmail integration
                                         │
 └────────────────────────┴─────────────┴───────────────────────────────────────────────────────
 ────────────────────────────────────────┘
@@ -132,23 +142,21 @@ next                                      │
 
 ## 4. Current Epic Focus
 
-    * **Triggers:** Ship full frontend CRUD (create/delete/modal) + canvas "WebhookTrigger"
-node.
-    * **Toolbox/Canvas:** Enable Tool, Trigger, and Condition node placement and config UI.
-    * **Workflow:** Canvas export/import, backend workflow DAG creation, real runtime execution
- highlighting.
-    * **Infrastructure:** Start backend plumbing for multi-user auth, usage metering/analytics.
+    * **Workflow Engine (M2):** Canvas DAG → LangGraph execution, export/import, runtime highlighting.
+    * **Canvas Nodes:** Complete Tool, Trigger, and Condition node placement and config UI.
+    * **Result Panel:** Structured output display, export capabilities, automatic summaries.
+    * **Usage Analytics:** Cost metering, observability dashboards, admin tools.
 
 ----------------------------------------------------------------------------------------------
 
-### Immediate Priority Tasks (as of May 2025)
+### Immediate Priority Tasks (as of June 2025)
 
-    * [ ]  **Finish all front-end Triggers UI:** create/delete, modal, and fully round-trip
-CRUD.
-    * [ ]  **Add Tool, Trigger, Condition nodes to Canvas** – palette, config UI, basic flows.
-    * [ ]  **Implement Canvas JSON export/import and backend workflow DAG support.**
-    * [ ]  **Add “Result Panel” for structured outputs/export and summary to chat/canvas UI.**
-    * [ ]  **Begin multi-user auth groundwork and run usage metering.**
+    * [ ]  **Complete Workflow Engine (M2):** Canvas DAG → LangGraph execution pipeline.
+    * [ ]  **Finish Trigger UI:** Complete frontend create/delete modal (backend done).
+    * [ ]  **Add Canvas Node Palette:** Tool, Trigger, Condition nodes with config UI.
+    * [ ]  **Implement Canvas JSON export/import** and backend workflow DAG support.
+    * [ ]  **Add "Result Panel"** for structured outputs/export and summary to chat/canvas UI.
+    * [ ]  **Begin usage metering/analytics** – cost tracking, observability dashboards.
 
 ----------------------------------------------------------------------------------------------
 
@@ -212,13 +220,17 @@ orchestration).
     * **2025-04:** Cron/scheduling UI complete. Thread persistence unified.
     * **2025-05:**
         * Webhook event backend + HMAC shipped. Frontend trigger list/copy live.
-
         * Debug modal, decoupled node/agent logic completed.
-
         * Workflow engine & advanced canvas DAG plumbing not started.
-
         * Remaining critical: canvas node variety, CRUD for triggers, workflow
 persistence/export/import, groundwork for authentication and analytics.
+    * **2025-06:** **MAJOR MILESTONE COMPLETIONS:**
+        * ✅ **Authentication System (M5):** Google Sign-In, JWT tokens, WebSocket auth, user management fully implemented.
+        * ✅ **MCP Integration (M7):** Complete Model Context Protocol server management, tool integration, frontend UI.
+        * ✅ **User Personalization (M8):** Avatars, profiles, preferences, Gmail integration shipped.
+        * ✅ **Enhanced Debugging (M4 v2):** Multi-tab debug modal, run history, agent telemetry.
+        * 🟡 **Advanced Triggers (M1):** Backend completely done including Gmail integration. Frontend missing only create/delete modal.
+        * **Focus shifted to:** Workflow Engine (M2), Canvas export/import, Result Panel, usage analytics.
 
 ----------------------------------------------------------------------------------------------
 
@@ -238,8 +250,8 @@ Celery or redis offload in future            │
 header, but add UI for secret visibility      │
 ├───────────────────────────────────────────────────────┼────────────┼──────────┼──────────────
 ──────────────────────────────────────────┤
-│ Lack of auth on public deployments                    │ High       │ Critical │ Ship
-multi-tenancy/JWT before any external pilot       │
+│ Lack of auth on public deployments                    │ ✅ RESOLVED │ Critical │ Authentication
+system fully implemented and production-ready │
 ├───────────────────────────────────────────────────────┼────────────┼──────────┼──────────────
 ──────────────────────────────────────────┤
 │ LangGraph API surface changes (still very new)        │ Medium     │ Medium   │ Lock

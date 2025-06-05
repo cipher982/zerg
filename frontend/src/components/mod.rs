@@ -13,6 +13,7 @@ pub mod user_menu;
 pub mod modal;
 pub mod tab_bar;
 pub mod mcp_server_manager;
+pub mod node_palette;
 
 // utilities
 
