@@ -40,3 +40,22 @@ repos:
         entry: >-
           bash -c "grep -R --line-number --perl-regexp 'id=\"(?!agent-|workflow-|global-|dashboard-|canvas-|profile-|chat-|auth-|user-|modal-|node-|tabs-)\"' frontend/src | if read var; then echo '✖ Non-namespaced DOM id detected:'; echo \"$var\"; exit 1; fi"
         pass_filenames: false
+
+# ---------------------------------------------------------------------------
+# CSS lint & formatting hooks (local – use project’s Node deps; no external mirror)
+# ---------------------------------------------------------------------------
+
+  - repo: local
+    hooks:
+      - id: stylelint
+        name: stylelint (CSS)
+        language: node
+        entry: npx --no-install stylelint
+        types: [css, scss]
+        pass_filenames: true
+
+      - id: prettier
+        name: prettier (CSS/Markdown)
+        language: node
+        entry: npx --no-install prettier --write
+        types: [css, scss, markdown]
