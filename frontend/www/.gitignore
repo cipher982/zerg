@@ -1,1 +1,18 @@
-*
+# Rust/WASM build artifacts
+*.wasm
+*.wasm.d.ts
+agent_platform_frontend.js
+agent_platform_frontend.d.ts
+bootstrap.js
+index.js
+config.js
+
+# Build directories
+pkg/
+
+# Generated files
+README.md
+package.json
+
+# Development files
+dev_components.html
