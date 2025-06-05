@@ -335,6 +335,30 @@
 .actions-row { display: flex; gap: 8px; margin-top: var(--spacing-sm); }
 
 /* -------------------------------------------------------------
+   Action buttons inside the Agents table
+   ------------------------------------------------------------- */
+
+/* Keep them visually unobtrusive – transparent background, no forced fill
+   colours.  Icons (emoji/SVG) keep their native palette exactly like the
+   pre-refactor main branch. */
+
+.action-btn {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  color: inherit;          /* don’t override intrinsic icon colour */
+}
+
+.action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+
+/* -------------------------------------------------------------
    Agent Detail & Debug modal content
    ------------------------------------------------------------- */
 
