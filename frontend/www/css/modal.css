@@ -1,0 +1,50 @@
+/* ------------------------------------------------------------------ */
+/*  Basic modal component                                             */
+/* ------------------------------------------------------------------ */
+
+.modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: modal-fade var(--transition-normal);
+}
+
+.modal.hidden { display: none; }
+
+.modal-content {
+  background: var(--dark-card);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  width: min(95vw, 480px);
+  box-shadow: var(--shadow-lg);
+  animation: modal-pop var(--transition-normal);
+}
+
+@keyframes modal-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+
+.modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+  padding-top: var(--spacing-md);
+}
+
+/* --------------------------------------------------------- */
+/* Fade / scale entry animation (Phase-4 micro interaction)  */
+/* --------------------------------------------------------- */
+
+@keyframes modal-pop {
+  from { transform: scale(0.95); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
