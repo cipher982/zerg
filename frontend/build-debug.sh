@@ -18,7 +18,14 @@ echo "[build-debug] HELLO compiling WASM (debug)..."
 # Default API_BASE_URL if not provided via .env
 API_BASE_URL="${API_BASE_URL:-http://localhost:8001}"
 
-API_BASE_URL="$API_BASE_URL" RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir www
+API_BASE_URL="$API_BASE_URL" RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir pkg
+
+# Copy the generated files to www directory
+echo "[build-debug] copying WASM artifacts to www..."
+cp pkg/agent_platform_frontend.js www/
+cp pkg/agent_platform_frontend_bg.wasm www/
+cp pkg/agent_platform_frontend.d.ts www/
+cp pkg/agent_platform_frontend_bg.wasm.d.ts www/
 
 # -------------------------------------------------------------
 # Generate bootstrap.js expected by index.html
