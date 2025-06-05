@@ -60,9 +60,9 @@ This markdown file tracks the high-level work items for the upcoming visual over
 
 ## Phase 5 – Documentation & Handoff
 
-- [ ] Generate Storybook-style **Component Gallery** route under `/dev/components`.
-- [ ] Write `docs/design_system.md` explaining tokens, components, and usage rules.
-- [ ] Update root **README.md** with design-system section and contribution guide.
+- [x] Generate Component Gallery page (`/dev_components.html`).
+- [x] Write `docs/design_system.md` explaining tokens, components, usage rules.
+- [x] Update root **README.md** with design-system playground link.
 - [ ] Establish visual-regression baseline screenshots and add to CI.
 
 ## Tooling / Quality Gates (parallel tasks)
