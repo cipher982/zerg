@@ -686,4 +686,9 @@ hooks.
 *   PostgreSQL migration & async SQLAlchemy once multi-worker fan-out lands.
 
 -------------------------------------------------------------------------------
+### Design-System playground
+
+Running `trunk serve` exposes **http://localhost:8002/dev_components.html** – a gallery that previews every shared component (buttons, inputs, toasts …) with live CSS.  Use it while iterating on styles to catch visual bugs quickly.
+
+-------------------------------------------------------------------------------
 #EOF

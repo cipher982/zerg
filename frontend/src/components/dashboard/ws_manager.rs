@@ -103,12 +103,33 @@ impl DashboardWsManager {
                 Ok(WsMessage::RunUpdate { data: run }) => {
                     let run_struct: crate::models::ApiAgentRun = run.into();
                     let agent_id = run_struct.agent_id;
+
+                    // Capture status before we move run_struct into the message.
+                    let status_for_toast = run_struct.status.clone();
+
                     crate::state::dispatch_global_message(
                         crate::messages::Message::ReceiveRunUpdate {
                             agent_id,
                             run: run_struct,
                         },
                     );
+
+                    // Toast success/failure once we have a terminal status.
+                    match status_for_toast.as_str() {
+                        "success" => {
+                            let name = crate::state::APP_STATE.with(|s| {
+                                s.borrow().agents.get(&agent_id).map(|a| a.name.clone()).unwrap_or_else(|| "Agent".into())
+                            });
+                            crate::toast::success(&format!("{} finished", name));
+                        },
+                        "failed" | "error" => {
+                            let name = crate::state::APP_STATE.with(|s| {
+                                s.borrow().agents.get(&agent_id).map(|a| a.name.clone()).unwrap_or_else(|| "Agent".into())
+                            });
+                            crate::toast::error(&format!("{} failed", name));
+                        },
+                        _ => {}
+                    }
                     return; // handled
                 }
 
