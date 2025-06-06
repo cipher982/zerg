@@ -456,6 +456,9 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                         NodeType::Tool { .. } => {
                             dispatch_global_message(crate::messages::Message::ShowToolConfigModal { node_id });
                         }
+                        NodeType::Trigger { .. } => {
+                            dispatch_global_message(crate::messages::Message::ShowTriggerConfigModal { node_id });
+                        }
                         _ => {}
                     }
                 }

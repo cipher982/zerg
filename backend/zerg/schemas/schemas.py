@@ -272,3 +272,29 @@ class AgentRunOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ------------------------------------------------------------
+# Workflow schemas
+# ------------------------------------------------------------
+
+
+class WorkflowBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    canvas_data: Dict[str, Any]
+
+
+class WorkflowCreate(WorkflowBase):
+    pass
+
+
+class Workflow(WorkflowBase):
+    id: int
+    owner_id: int
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

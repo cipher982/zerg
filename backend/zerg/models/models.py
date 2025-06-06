@@ -384,3 +384,24 @@ class AgentRun(Base):
     # Relationships ------------------------------------------------------
     agent = relationship("Agent", back_populates="runs")
     thread = relationship("Thread", backref="runs")
+
+
+# ---------------------------------------------------------------------------
+# Workflow – visual workflow definition and persistence
+# ---------------------------------------------------------------------------
+
+
+class Workflow(Base):
+    __tablename__ = "workflows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    canvas_data = Column(MutableDict.as_mutable(JSON), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # ORM relationship to User
+    owner = relationship("User", backref="workflows")

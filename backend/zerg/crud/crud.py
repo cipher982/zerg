@@ -735,3 +735,21 @@ def get_canvas_layout(db: Session, user_id: Optional[int]):
         return None
 
     return db.query(CanvasLayout).filter_by(user_id=user_id, workspace=None).first()
+
+
+def create_workflow(
+    db: Session, *, owner_id: int, name: str, description: Optional[str] = None, canvas_data: Dict[str, Any]
+):
+    """Create a new workflow."""
+    from zerg.models.models import Workflow
+
+    db_workflow = Workflow(
+        owner_id=owner_id,
+        name=name,
+        description=description,
+        canvas_data=canvas_data,
+    )
+    db.add(db_workflow)
+    db.commit()
+    db.refresh(db_workflow)
+    return db_workflow

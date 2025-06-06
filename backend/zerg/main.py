@@ -56,6 +56,7 @@ from zerg.routers.threads import router as threads_router
 from zerg.routers.triggers import router as triggers_router
 from zerg.routers.users import router as users_router
 from zerg.routers.websocket import router as websocket_router
+from zerg.routers.workflows import router as workflows_router
 
 # Email trigger polling service (stub for now)
 # Background services ---------------------------------------------------------
@@ -196,6 +197,7 @@ app.include_router(admin_router, prefix=API_PREFIX)
 app.include_router(email_webhook_router, prefix=f"{API_PREFIX}")
 app.include_router(triggers_router, prefix=f"{API_PREFIX}")
 app.include_router(runs_router, prefix=f"{API_PREFIX}")
+app.include_router(workflows_router, prefix=f"{API_PREFIX}")
 app.include_router(auth_router, prefix=f"{API_PREFIX}")
 app.include_router(users_router, prefix=f"{API_PREFIX}")
 app.include_router(graph_router, prefix=f"{API_PREFIX}")

@@ -74,6 +74,15 @@ pub enum Message {
     ShowToolConfigModal {
         node_id: String,
     },
+    /// Open the trigger config modal for a trigger node
+    ShowTriggerConfigModal {
+        node_id: String,
+    },
+    /// Update the config for a trigger node on the canvas
+    UpdateTriggerNodeConfig {
+        node_id: String,
+        params: serde_json::Value,
+    },
     
 
     

@@ -90,6 +90,21 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             }
             true
         }
+        Message::ShowTriggerConfigModal { node_id } => {
+            if let Some(node) = state.nodes.get(node_id) {
+                if let NodeType::Trigger { .. } = &node.node_type {
+                    if let Some(window) = web_sys::window() {
+                        if let Some(document) = window.document() {
+                            let _ = crate::components::trigger_config_modal::TriggerConfigModal::open(
+                                &document,
+                                node,
+                            );
+                        }
+                    }
+                }
+            }
+            true
+        }
         Message::CanvasNodeClicked { node_id } => {
             if let Some(agent_id) = state.nodes.get(node_id).and_then(|n| n.agent_id) {
                 cmds.push(Command::SendMessage(Message::EditAgent(agent_id)));
