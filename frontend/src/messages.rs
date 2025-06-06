@@ -7,9 +7,15 @@ use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent, ApiAgentDet
 use crate::network::messages::AgentEventData;
 use std::collections::{HashMap, HashSet};
 
+use crate::models::ToolConfig;
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Suppress warnings about unused variants
 pub enum Message {
+    SaveToolConfig {
+        node_id: String,
+        config: ToolConfig,
+    },
     /// Enable or disable global keyboard shortcuts (“Power Mode”)
     SetPowerMode(bool),
     // View switching

@@ -8,6 +8,16 @@ use crate::models::NodeType;
 
 pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> bool {
     match msg {
+        Message::SaveToolConfig { node_id, config } => {
+            if let Some(node) = state.nodes.get_mut(node_id) {
+                if let crate::models::NodeType::Tool { config: node_config, .. } = &mut node.node_type {
+                    *node_config = config.clone();
+                    state.state_modified = true;
+                    state.mark_dirty();
+                }
+            }
+            true
+        }
         Message::UpdateNodePosition { node_id, x, y } => {
             state.update_node_position(node_id, *x, *y);
             if !state.is_dragging_agent {
@@ -58,7 +68,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::ShowToolConfigModal { node_id } => {
             if let Some(node) = state.nodes.get(node_id) {
-                if let NodeType::Tool { tool_name, server_name, .. } = &node.node_type {
+                if let NodeType::Tool { tool_name, server_name, config, .. } = &node.node_type {
                     let description = state.available_mcp_tools.values()
                         .flat_map(|tools| tools.iter())
                         .find(|t| &t.name == tool_name && &t.server_name == server_name)
@@ -69,8 +79,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         if let Some(document) = window.document() {
                             let _ = crate::components::tool_config_modal::ToolConfigModal::open(
                                 &document,
+                                node_id.clone(),
                                 &node.text,
                                 &description,
+                                config,
                             );
                         }
                     }
