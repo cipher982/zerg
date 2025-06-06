@@ -201,6 +201,10 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         
         // Based on the result, dispatch the appropriate message
         if let Some((node_id, offset_x, offset_y)) = clicked_result {
+            APP_STATE.with(|state| {
+                state.borrow_mut().clicked_node_id = Some(node_id.clone());
+            });
+
             // Check if this node is an agent type
             let is_agent = APP_STATE.with(|state| {
                 let state = state.borrow();
@@ -429,86 +433,49 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     let mouseup_handler = Closure::wrap(Box::new(move |event: MouseEvent| {
         let x = event.offset_x() as f64;
         let y = event.offset_y() as f64;
-        
-        // Check if we were dragging an agent node and if it was a click (not much movement)
-        let (was_dragging_agent, selected_node_id, was_click) = APP_STATE.with(|state| {
+
+        let (clicked_node_id, drag_start_x, drag_start_y) = APP_STATE.with(|state| {
             let state = state.borrow();
-            
-            let was_dragging_agent = state.is_dragging_agent;
-            let selected_node_id = state.selected_node_id.clone();
-            
-            // Determine if this was a click or drag by checking distance
-            let was_click = if was_dragging_agent {
-                let dx = x - state.drag_start_x;
-                let dy = y - state.drag_start_y;
-                let distance_squared = dx * dx + dy * dy;
-                
-                // If the mouse didn't move much, consider it a click (using a small threshold)
-                distance_squared < 25.0 // 5px threshold
-            } else {
-                false
-            };
-            
-            (was_dragging_agent, selected_node_id, was_click)
+            (state.clicked_node_id.clone(), state.drag_start_x, state.drag_start_y)
         });
-        
+
+        if let Some(node_id) = clicked_node_id {
+            let dx = x - drag_start_x;
+            let dy = y - drag_start_y;
+            let distance_squared = dx * dx + dy * dy;
+            if distance_squared < 25.0 { // It's a click
+                let node_type = APP_STATE.with(|state| {
+                    state.borrow().nodes.get(&node_id).map(|n| n.node_type.clone())
+                });
+
+                if let Some(node_type) = node_type {
+                    match node_type {
+                        NodeType::AgentIdentity => {
+                            dispatch_global_message(crate::messages::Message::CanvasNodeClicked { node_id });
+                        }
+                        NodeType::Tool { .. } => {
+                            dispatch_global_message(crate::messages::Message::ShowToolConfigModal { node_id });
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
         // Stop any dragging operation
         if APP_STATE.with(|state| { state.borrow().dragging.is_some() }) {
-            // We were dragging a node, stop dragging
-            let commands = APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.dispatch(crate::messages::Message::StopDragging)
-            });
-            
-            // Execute commands
-            for cmd in commands {
-                match cmd {
-                    Command::SendMessage(msg) => dispatch_global_message(msg),
-                    Command::NoOp => {},
-                    _ => {},  // Ignore other commands in this context
-                }
-            }
+            dispatch_global_message(crate::messages::Message::StopDragging);
         } else if APP_STATE.with(|state| { state.borrow().canvas_dragging }) {
-            // We were dragging the canvas, stop canvas drag
-            let commands = APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.dispatch(crate::messages::Message::StopCanvasDrag)
-            });
-            
-            // Execute commands
-            for cmd in commands {
-                match cmd {
-                    Command::SendMessage(msg) => dispatch_global_message(msg),
-                    Command::NoOp => {},
-                    _ => {},  // Ignore other commands in this context
-                }
-            }
+            dispatch_global_message(crate::messages::Message::StopCanvasDrag);
         }
-        
-        // Clear is_dragging_agent flag (this isn't part of any message yet)
+
+        // Reset clicked_node_id
         APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            state.is_dragging_agent = false;
+            state.borrow_mut().clicked_node_id = None;
         });
-        
+
         // Refresh the dashboard
         let _ = refresh_dashboard_after_change();
-        
-        // If this was a click on an agent node (not a drag), open the modal
-        if was_dragging_agent && was_click {
-            if let Some(node_id) = selected_node_id {
-                // Open the agent modal
-                let window = web_sys::window().expect("no global window exists");
-                let _document = window.document().expect("should have a document");
-
-                // Open the agent configuration modal via the global message
-                // system – this keeps all state mutations funnelled through
-                // `update()` and avoids direct `APP_STATE` access here.
-                // Notify via message – update.rs will resolve node→agent and
-                // open the modal.  No direct state access required here.
-                crate::state::dispatch_global_message(crate::messages::Message::CanvasNodeClicked { node_id });
-            }
-        }
     }) as Box<dyn FnMut(_)>);
     
     canvas_mouseup.add_event_listener_with_callback(

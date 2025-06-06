@@ -56,6 +56,28 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.state_modified = true;
             true
         }
+        Message::ShowToolConfigModal { node_id } => {
+            if let Some(node) = state.nodes.get(node_id) {
+                if let NodeType::Tool { tool_name, server_name, .. } = &node.node_type {
+                    let description = state.available_mcp_tools.values()
+                        .flat_map(|tools| tools.iter())
+                        .find(|t| &t.name == tool_name && &t.server_name == server_name)
+                        .and_then(|t| t.description.clone())
+                        .unwrap_or_else(|| "No description available.".to_string());
+
+                    if let Some(window) = web_sys::window() {
+                        if let Some(document) = window.document() {
+                            let _ = crate::components::tool_config_modal::ToolConfigModal::open(
+                                &document,
+                                &node.text,
+                                &description,
+                            );
+                        }
+                    }
+                }
+            }
+            true
+        }
         Message::CanvasNodeClicked { node_id } => {
             if let Some(agent_id) = state.nodes.get(node_id).and_then(|n| n.agent_id) {
                 cmds.push(Command::SendMessage(Message::EditAgent(agent_id)));
