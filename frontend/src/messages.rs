@@ -64,6 +64,10 @@ pub enum Message {
     CanvasNodeClicked {
         node_id: String,
     },
+
+    ShowToolConfigModal {
+        node_id: String,
+    },
     
 
     

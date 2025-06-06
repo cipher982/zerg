@@ -205,6 +205,8 @@ pub struct AppState {
     pub last_modified_ms: u64,
     // Currently selected node ID
     pub selected_node_id: Option<String>,
+    // Track node ID on mousedown to detect clicks on mouseup
+    pub clicked_node_id: Option<String>,
     // Flag to track if we're dragging an agent
     pub is_dragging_agent: bool,
     // Track the active view (Dashboard, Canvas, or ChatView)
@@ -411,6 +413,7 @@ impl AppState {
 
             last_modified_ms: 0,
             selected_node_id: None,
+            clicked_node_id: None,
             is_dragging_agent: false,
             active_view: ActiveView::Dashboard,
 
