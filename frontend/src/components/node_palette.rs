@@ -31,52 +31,10 @@ impl NodePalette {
         }
     }
 
-    /// Render the node palette UI
-    pub fn render(&self, document: &Document) -> Result<(), JsValue> {
-        // Create or get the palette container
-        let palette_container = if let Some(existing) = document.get_element_by_id("node-palette") {
-            existing
-        } else {
-            let container = document.create_element("div")?;
-            container.set_id("node-palette");
-            container.set_class_name("node-palette");
-            
-            // Add to the body or canvas container
-            if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
-                canvas_container.append_child(&container)?;
-            } else if let Some(body) = document.body() {
-                body.append_child(&container)?;
-            }
-            
-            container
-        };
-
-        // Set visibility based on is_open
-        let style = if self.is_open {
-            "display: block;"
-        } else {
-            "display: none;"
-        };
-
-        palette_container.set_attribute("style", &format!("
-            position: fixed;
-            left: 20px;
-            top: 100px;
-            width: 280px;
-            height: 500px;
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            z-index: 1000;
-            padding: 16px;
-            overflow-y: auto;
-            font-family: system-ui, -apple-system, sans-serif;
-            {}
-        ", style))?;
-
+    /// Render the node palette UI into a provided container (shelf)
+    pub fn render_into(&self, document: &Document, container: &Element) -> Result<(), JsValue> {
         // Clear existing content
-        palette_container.set_inner_html("");
+        container.set_inner_html("");
 
         // Add header
         let header = document.create_element("div")?;
@@ -86,7 +44,7 @@ impl NodePalette {
                 Node Palette
             </h3>
         ");
-        palette_container.append_child(&header)?;
+        container.append_child(&header)?;
 
         // Add search box
         let search_container = document.create_element("div")?;
@@ -107,7 +65,7 @@ impl NodePalette {
                 id='palette-search'
             />
         ", self.search_query));
-        palette_container.append_child(&search_container)?;
+        container.append_child(&search_container)?;
 
         // Get available palette nodes
         let nodes = self.get_palette_nodes();
@@ -122,7 +80,7 @@ impl NodePalette {
 
         // Render categories
         for (category_name, category_nodes) in categories.iter() {
-            self.render_category(document, &palette_container, category_name, category_nodes)?;
+            self.render_category(document, container, category_name, category_nodes)?;
         }
 
         Ok(())
@@ -418,8 +376,7 @@ impl NodePalette {
 
 /// Initialize the node palette and add it to the global state
 pub fn init_node_palette(document: &Document) -> Result<(), JsValue> {
-    // Add palette toggle button to the canvas UI
-    add_palette_toggle_button(document)?;
+    // No floating palette toggle button anymore
 
     // Initialize drag and drop handling for the canvas
     init_canvas_drop_handling(document)?;
@@ -427,77 +384,6 @@ pub fn init_node_palette(document: &Document) -> Result<(), JsValue> {
     Ok(())
 }
 
-/// Add a toggle button to show/hide the node palette
-fn add_palette_toggle_button(document: &Document) -> Result<(), JsValue> {
-    // Check if button already exists
-    if document.get_element_by_id("palette-toggle-btn").is_some() {
-        return Ok(());
-    }
-
-    let button = document.create_element("button")?;
-    button.set_id("palette-toggle-btn");
-    button.set_inner_html("🎨 Nodes");
-    button.set_attribute("style", "
-        position: fixed;
-        left: 20px;
-        top: 20px;
-        padding: 10px 16px;
-        background: #3b82f6;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        z-index: 1001;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        transition: all 0.2s ease;
-    ")?;
-
-    // Add click handler
-    let onclick = wasm_bindgen::closure::Closure::wrap(Box::new(move |_: MouseEvent| {
-        let document = web_sys::window().unwrap().document().unwrap();
-        let palette = NodePalette::new();
-        
-        // Toggle palette visibility
-        APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            
-            // Create a simple toggle by checking if palette is visible
-            if let Some(palette_elem) = document.get_element_by_id("node-palette") {
-                let is_visible = palette_elem.get_attribute("style")
-                    .map(|s| s.contains("display: block"))
-                    .unwrap_or(false);
-                
-                let mut palette = NodePalette::new();
-                palette.is_open = !is_visible;
-                
-                if let Err(e) = palette.render(&document) {
-                    web_sys::console::error_1(&format!("Error rendering palette: {:?}", e).into());
-                }
-            } else {
-                let mut palette = NodePalette::new();
-                palette.is_open = true;
-                
-                if let Err(e) = palette.render(&document) {
-                    web_sys::console::error_1(&format!("Error rendering palette: {:?}", e).into());
-                }
-            }
-        });
-    }) as Box<dyn FnMut(_)>);
-
-    button.add_event_listener_with_callback("click", onclick.as_ref().unchecked_ref())?;
-    onclick.forget();
-
-    // Add to canvas container or body
-    if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
-        canvas_container.append_child(&button)?;
-    } else if let Some(body) = document.body() {
-        body.append_child(&button)?;
-    }
-
-    Ok(())
-}
 
 /// Initialize drag and drop handling for the canvas
 fn init_canvas_drop_handling(document: &Document) -> Result<(), JsValue> {
@@ -540,22 +426,42 @@ fn init_canvas_drop_handling(document: &Document) -> Result<(), JsValue> {
 }
 
 /// Create a node on the canvas from a palette node
-fn create_node_from_palette(state: &mut AppState, palette_node: &PaletteNode, x: f64, y: f64) {
+pub fn create_node_from_palette(state: &mut AppState, palette_node: &PaletteNode, x: f64, y: f64) {
     // Transform canvas coordinates to world coordinates
     let world_x = x / state.zoom_level + state.viewport_x;
     let world_y = y / state.zoom_level + state.viewport_y;
-    
-    // Create the node
-    let node_id = state.add_node_with_agent(
-        None, // No agent initially
-        world_x,
-        world_y,
-        palette_node.node_type.clone(),
-        palette_node.name.clone(),
+
+    // Generate a unique node_id using timestamp and a random number
+    let node_id = format!(
+        "tool_{}_{}",
+        js_sys::Date::now() as u64,
+        js_sys::Math::random().to_string().replace(".", "")
     );
-    
+
+    // Clone the node_type and name for the new node
+    let node_type = palette_node.node_type.clone();
+    let name = palette_node.name.clone();
+
+    // Create the node directly in the state.nodes HashMap
+    use crate::models::Node;
+    let node = Node {
+        node_id: node_id.clone(),
+        agent_id: None,
+        x: world_x,
+        y: world_y,
+        width: 200.0,
+        height: 80.0,
+        color: "#f59e0b".to_string(),
+        parent_id: None,
+        text: name,
+        node_type,
+        is_selected: false,
+        is_dragging: false,
+    };
+    state.nodes.insert(node_id.clone(), node);
+
     web_sys::console::log_1(&format!("Created node {} at ({}, {})", node_id, world_x, world_y).into());
-    
+
     // Mark state as dirty for re-render
     state.mark_dirty();
 }

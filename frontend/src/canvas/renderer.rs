@@ -224,120 +224,108 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             context.restore();
         },
         NodeType::Tool { tool_name, server_name, config: _, visibility: _ } => {
-            // Draw a distinctive tool node with sharp corners and service branding
+            // Draw a card-style tool node (rounded rectangle, similar to agent)
             context.save();
-            
+
             // Shadow for depth
-            context.set_shadow_color("rgba(0, 0, 0, 0.1)");
-            context.set_shadow_blur(8.0);
+            context.set_shadow_color("rgba(0, 0, 0, 0.10)");
+            context.set_shadow_blur(16.0);
             context.set_shadow_offset_x(0.0);
-            context.set_shadow_offset_y(4.0);
-            
-            // Tool nodes have sharp rectangles (no rounded corners)
-            context.begin_path();
-            context.rect(node.x, node.y, node.width, node.height);
-            
-            // Service-specific colors
-            let (bg_color, accent_color, icon) = match server_name.as_str() {
-                "github" => ("#f6f8fa", "#24292f", "🐙"),
-                "slack" => ("#f8f9fa", "#4a154b", "💬"),
-                "linear" => ("#f6f7f9", "#5e6ad2", "📋"),
-                "gmail" => ("#fef7f0", "#ea4335", "📧"),
-                "http" => ("#f0f9ff", "#0ea5e9", "🌐"),
-                _ => ("#f8fafc", "#64748b", "🔧"),
-            };
-            
-            context.set_fill_style_str(bg_color);
+            context.set_shadow_offset_y(6.0);
+
+            // Card background
+            context.set_fill_style_str("#f8fafc");
+            shapes::draw_rounded_rect_path(context, node);
             context.fill();
-            
+
             // Remove shadow for other elements
             context.set_shadow_blur(0.0);
             context.set_shadow_offset_x(0.0);
             context.set_shadow_offset_y(0.0);
-            
-            // Accent border on top
+
+            // Accent bar (top)
             context.begin_path();
-            context.move_to(node.x, node.y);
-            context.line_to(node.x + node.width, node.y);
-            context.set_stroke_style_str(accent_color);
+            context.move_to(node.x, node.y + 6.0);
+            context.line_to(node.x + node.width, node.y + 6.0);
+            context.set_stroke_style_str("#38bdf8");
             context.set_line_width(4.0);
             context.stroke();
-            
+
             // Main border
-            context.begin_path();
-            context.rect(node.x, node.y, node.width, node.height);
-            context.set_stroke_style_str("#e2e8f0");
             context.set_line_width(1.0);
+            context.set_stroke_style_str("#e2e8f0");
+            shapes::draw_rounded_rect_path(context, node);
             context.stroke();
-            
+
             // Tool icon
-            context.set_font("16px system-ui, -apple-system, sans-serif");
+            let icon = match server_name.as_str() {
+                "github" => "🐙",
+                "slack" => "💬",
+                "linear" => "📋",
+                "gmail" => "📧",
+                "http" => "🌐",
+                _ => "🔧",
+            };
+            context.set_font("18px system-ui, -apple-system, sans-serif");
             context.set_text_align("left");
             context.set_text_baseline("middle");
-            context.set_fill_style_str(accent_color);
-            let _ = context.fill_text(icon, node.x + 12.0, node.y + 20.0);
-            
+            context.set_fill_style_str("#38bdf8");
+            let _ = context.fill_text(icon, node.x + 18.0, node.y + 32.0);
+
             // Tool name
-            context.set_font("600 14px system-ui, -apple-system, sans-serif");
+            context.set_font("600 16px system-ui, -apple-system, sans-serif");
             context.set_fill_style_str("#1e293b");
-            let _ = context.fill_text(tool_name, node.x + 35.0, node.y + 20.0);
-            
+            let _ = context.fill_text(tool_name, node.x + 48.0, node.y + 30.0);
+
             // Server name/badge
-            context.set_font("400 12px system-ui, -apple-system, sans-serif");
+            context.set_font("400 13px system-ui, -apple-system, sans-serif");
             context.set_fill_style_str("#64748b");
-            let _ = context.fill_text(server_name, node.x + 12.0, node.y + 40.0);
-            
+            let _ = context.fill_text(server_name, node.x + 48.0, node.y + 50.0);
+
             // Connection status indicator (top-right)
             let status_x = node.x + node.width - 20.0;
-            let status_y = node.y + 12.0;
+            let status_y = node.y + 18.0;
             context.begin_path();
-            let _ = context.arc(status_x, status_y, 4.0, 0.0, 2.0 * std::f64::consts::PI);
+            let _ = context.arc(status_x, status_y, 5.0, 0.0, 2.0 * std::f64::consts::PI);
             context.set_fill_style_str("#10b981"); // Green for connected - this would be dynamic
             context.fill();
-            
+
             context.restore();
         },
         NodeType::Trigger { trigger_type, config: _ } => {
-            // Draw a diamond-shaped trigger node
+            // Draw a card-style trigger node (rounded rectangle, green accent)
             context.save();
-            
+
             // Shadow for depth
-            context.set_shadow_color("rgba(0, 0, 0, 0.12)");
-            context.set_shadow_blur(12.0);
+            context.set_shadow_color("rgba(0, 0, 0, 0.10)");
+            context.set_shadow_blur(16.0);
             context.set_shadow_offset_x(0.0);
             context.set_shadow_offset_y(6.0);
-            
-            // Diamond shape
-            let center_x = node.x + node.width / 2.0;
-            let center_y = node.y + node.height / 2.0;
-            
-            context.begin_path();
-            context.move_to(center_x, node.y); // Top
-            context.line_to(node.x + node.width, center_y); // Right
-            context.line_to(center_x, node.y + node.height); // Bottom
-            context.line_to(node.x, center_y); // Left
-            context.close_path();
-            
-            // Gradient background - use solid color for now since create_linear_gradient might not be available
-            context.set_fill_style_str("#dcfce7");
+
+            // Card background
+            context.set_fill_style_str("#ecfdf5");
+            shapes::draw_rounded_rect_path(context, node);
             context.fill();
-            
+
             // Remove shadow for other elements
             context.set_shadow_blur(0.0);
             context.set_shadow_offset_x(0.0);
             context.set_shadow_offset_y(0.0);
-            
-            // Border
+
+            // Accent bar (top)
             context.begin_path();
-            context.move_to(center_x, node.y);
-            context.line_to(node.x + node.width, center_y);
-            context.line_to(center_x, node.y + node.height);
-            context.line_to(node.x, center_y);
-            context.close_path();
-            context.set_stroke_style_str("#16a34a");
-            context.set_line_width(2.0);
+            context.move_to(node.x, node.y + 6.0);
+            context.line_to(node.x + node.width, node.y + 6.0);
+            context.set_stroke_style_str("#10b981");
+            context.set_line_width(4.0);
             context.stroke();
-            
+
+            // Main border
+            context.set_line_width(1.0);
+            context.set_stroke_style_str("#d1fae5");
+            shapes::draw_rounded_rect_path(context, node);
+            context.stroke();
+
             // Trigger icon and type
             let (icon, type_text) = match trigger_type {
                 crate::models::TriggerType::Webhook => ("🔗", "Webhook"),
@@ -345,19 +333,32 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
                 crate::models::TriggerType::Email => ("📧", "Email"),
                 crate::models::TriggerType::Manual => ("👆", "Manual"),
             };
-            
+
             // Icon
             context.set_font("18px system-ui, -apple-system, sans-serif");
-            context.set_text_align("center");
+            context.set_text_align("left");
             context.set_text_baseline("middle");
-            context.set_fill_style_str("#059669");
-            let _ = context.fill_text(icon, center_x, center_y - 8.0);
-            
+            context.set_fill_style_str("#10b981");
+            let _ = context.fill_text(icon, node.x + 18.0, node.y + 32.0);
+
             // Type text
-            context.set_font("600 12px system-ui, -apple-system, sans-serif");
+            context.set_font("600 16px system-ui, -apple-system, sans-serif");
             context.set_fill_style_str("#065f46");
-            let _ = context.fill_text(type_text, center_x, center_y + 12.0);
-            
+            let _ = context.fill_text(type_text, node.x + 48.0, node.y + 30.0);
+
+            // Label
+            context.set_font("400 13px system-ui, -apple-system, sans-serif");
+            context.set_fill_style_str("#047857");
+            let _ = context.fill_text("Trigger", node.x + 48.0, node.y + 50.0);
+
+            // Status indicator (top-right)
+            let status_x = node.x + node.width - 20.0;
+            let status_y = node.y + 18.0;
+            context.begin_path();
+            let _ = context.arc(status_x, status_y, 5.0, 0.0, 2.0 * std::f64::consts::PI);
+            context.set_fill_style_str("#10b981");
+            context.fill();
+
             context.restore();
         },
         NodeType::GenericNode => {

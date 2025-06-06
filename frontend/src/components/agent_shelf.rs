@@ -138,5 +138,21 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
         }
     });
 
+    // Add node palette section header
+    let node_palette_header = document.create_element("div")?;
+    node_palette_header.set_class_name("agent-shelf-header");
+    node_palette_header.set_inner_html("Tools & Triggers");
+    shelf_el.append_child(&node_palette_header)?;
+
+    // Add node palette container
+    let node_palette_container = document.create_element("div")?;
+    node_palette_container.set_id("node-palette-shelf");
+    node_palette_container.set_class_name("node-palette-shelf");
+    shelf_el.append_child(&node_palette_container)?;
+
+    // Render the node palette into the shelf
+    let palette = crate::components::node_palette::NodePalette::new();
+    let _ = palette.render_into(document, &node_palette_container);
+
     Ok(())
 }
