@@ -21,11 +21,14 @@
 - [x] Build compiles successfully
 
 ### Next Steps
-- [ ] Tool configuration panel (basic)
-- [ ] Trigger configuration panel (basic)
-- [ ] Live execution feedback (Phase 2)
-- [ ] Workflow execution engine (Phase 2)
-- [ ] Templates, advanced UX (Phase 3+)
+- [x] Tool configuration modal opens (modal-based, not sidebar)
+- [x] Tool configuration modal: input mapping (static values), save/cancel, state update via message dispatch
+- [ ] Tool configuration modal: advanced input mapping (node outputs), validation, test logic (future)
+- [x] Agent configuration modal is robust
+- [x] Canvas drag/drop and rendering is stable
+- [ ] Trigger configuration modal: modal UI, parameter mapping
+- [ ] Workflow execution engine: backend + frontend, live feedback
+- [ ] Templates, advanced UX
 
 ---
 
@@ -36,6 +39,7 @@
 - The hybrid approach for tool visibility is in place, allowing both internal and explicit tool nodes.
 - The codebase changes (Rust/WASM frontend, state management, rendering, and palette) are consistent with the technical architecture and implementation roadmap in this PRD.
 - Compilation errors and warnings have been resolved; the system is ready for further development and testing.
+- The team has standardized on modal dialogs for all node configuration, ensuring a consistent and accessible UX. The sidebar approach was evaluated and rejected due to UX and technical drawbacks.
 
 ---
 
@@ -160,11 +164,14 @@ THEN I can:
 ```
 
 **Acceptance Criteria:**
-- [ ] Side panel with tool schema and documentation
-- [ ] Input mapping UI with dropdown of available node outputs
-- [ ] "Test Tool" button with live feedback and error handling
-- [ ] Form validation with clear error messages
-- [ ] Save/cancel with unsaved changes warning
+- [x] Modal opens for tool nodes (not sidebar)
+- [x] Minimal input mapping UI (static values, placeholder for node outputs)
+- [x] Save/cancel logic, state update via message dispatch
+- [ ] Advanced input mapping to outputs from previous nodes (future)
+- [ ] Test tool execution with sample data (future)
+- [ ] Execution history for this node (future)
+- [ ] Form validation with clear error messages (future)
+- [ ] Unsaved changes warning (future)
 
 ### Epic 2: Trigger Nodes on Canvas
 
@@ -289,6 +296,14 @@ THEN I see:
 - [ ] Template rating and usage statistics
 
 ---
+
+## Progress Summary (2025-06-06)
+
+- Tool configuration modal is now robust, minimal, and fully integrated with the state management system.
+- All state changes are handled via message dispatching, with no direct state mutation in UI code.
+- The modal is ready for incremental improvements (advanced mapping, validation, test, etc.).
+- Trigger modal, workflow execution, and templates remain as next major milestones.
+
 
 ## 4. Technical Architecture
 
@@ -540,11 +555,11 @@ class WorkflowNode(Base):
 **Goal**: Basic tool and trigger nodes on canvas
 
 #### Week 1: Tool Nodes
-- [ ] Extend NodeType enum for Tool nodes
-- [ ] Tool node rendering with basic styling
-- [ ] Tool palette with MCP integration
-- [ ] Drag-drop from palette to canvas
-- [ ] Tool configuration panel (basic)
+- [x] Extend NodeType enum for Tool nodes
+- [x] Tool node rendering with basic styling
+- [x] Tool palette with MCP integration
+- [x] Drag-drop from palette to canvas
+- [x] Tool configuration modal (basic, modal-based)
 
 #### Week 2: Trigger Nodes  
 - [ ] Complete trigger frontend modal (existing M1 milestone)
