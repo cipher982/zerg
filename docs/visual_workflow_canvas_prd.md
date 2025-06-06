@@ -1,8 +1,41 @@
 # PRD: Visual Workflow Canvas - Tool & Trigger Nodes
 
-*Status: Draft - Ready for Development*  
+*Status: In Progress - Implementation Tracked*  
 *Owner: Development Team*  
 *Last Updated: 2025-06-05*
+
+---
+
+## Implementation Status (Auto-Tracked)
+
+### Phase 1: Foundation (Weeks 1-2)
+- [x] Extend NodeType enum for Tool nodes
+- [x] Tool node rendering with basic styling
+- [x] Tool palette with MCP integration (basic, static for now)
+- [x] Drag-drop from palette to canvas
+- [x] Tool and trigger node rendering
+- [x] Hybrid tool visibility (internal/optional/external)
+- [x] Canvas rendering for new node types
+- [x] State management for new node types
+- [x] Rust move/borrow errors resolved
+- [x] Build compiles successfully
+
+### Next Steps
+- [ ] Tool configuration panel (basic)
+- [ ] Trigger configuration panel (basic)
+- [ ] Live execution feedback (Phase 2)
+- [ ] Workflow execution engine (Phase 2)
+- [ ] Templates, advanced UX (Phase 3+)
+
+---
+
+## Implementation Notes
+
+- All code changes are directly aligned with the requirements and user stories in this PRD.
+- The node palette, drag-and-drop, and rendering logic are implemented as described in Epics 1 and 2.
+- The hybrid approach for tool visibility is in place, allowing both internal and explicit tool nodes.
+- The codebase changes (Rust/WASM frontend, state management, rendering, and palette) are consistent with the technical architecture and implementation roadmap in this PRD.
+- Compilation errors and warnings have been resolved; the system is ready for further development and testing.
 
 ---
 

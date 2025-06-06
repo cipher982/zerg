@@ -683,7 +683,24 @@ fn setup_canvas_drag_drop(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
         
         // Get the data transfer object
         if let Some(dt) = event.data_transfer() {
-            // Get the agent data that was set during dragstart
+            // Try to get tool/node palette data first
+            if let Ok(node_json) = dt.get_data("application/json") {
+                if let Ok(palette_node) = serde_json::from_str::<crate::components::node_palette::PaletteNode>(&node_json) {
+                    // Get drop position
+                    let (zoom_level, viewport_x, viewport_y) = APP_STATE.with(|state| {
+                        let state = state.borrow();
+                        (state.zoom_level, state.viewport_x, state.viewport_y)
+                    });
+                    let world_x = x / zoom_level + viewport_x;
+                    let world_y = y / zoom_level + viewport_y;
+                    APP_STATE.with(|state| {
+                        let mut state = state.borrow_mut();
+                        crate::components::node_palette::create_node_from_palette(&mut state, &palette_node, x, y);
+                    });
+                    return;
+                }
+            }
+            // Fallback: Get the agent data that was set during dragstart
             if let Ok(data_str) = dt.get_data("text/plain") {
                 web_sys::console::log_1(&format!("Dropped agent data: {}", data_str).into());
                 
