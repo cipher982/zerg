@@ -403,7 +403,9 @@ impl AppState {
             viewport_x: 0.0,
             viewport_y: 0.0,
             zoom_level: 1.0,
-            auto_fit: true,
+            // Auto-fit disabled by default – users can still trigger a one-off
+            // "Find everything" action via the toolbar button.
+            auto_fit: false,
             latest_user_input_id: None,
             message_id_to_node_id: HashMap::new(),
             selected_model: String::new(),
