@@ -891,19 +891,60 @@ impl AppState {
 
     // Center the viewport on all nodes without changing auto-fit setting
     pub fn center_view(&mut self) {
-        // Store original auto-fit setting
-        let original_auto_fit = self.auto_fit;
-        
-        // Temporarily disable auto-fit if it's on
-        if original_auto_fit {
-            self.auto_fit = false;
+        // Calculate bounding box of all nodes first. If there are none, bail.
+        if self.nodes.is_empty() {
+            return;
         }
-        
-        // Use existing fit method to center the view - this is known to work well
-        self.fit_nodes_to_view();
-        
-        // Restore original auto-fit setting
-        self.auto_fit = original_auto_fit;
+
+        let mut min_x = f64::MAX;
+        let mut min_y = f64::MAX;
+        let mut max_x = f64::MIN;
+        let mut max_y = f64::MIN;
+
+        for (_, node) in &self.nodes {
+            min_x = f64::min(min_x, node.x);
+            min_y = f64::min(min_y, node.y);
+            max_x = f64::max(max_x, node.x + node.width);
+            max_y = f64::max(max_y, node.y + node.height);
+        }
+
+        // Canvas dimensions – fall back to stored width/height if not yet initialised.
+        let (canvas_w, canvas_h) = if let Some(canvas) = &self.canvas {
+            let window = web_sys::window().unwrap();
+            let dpr = window.device_pixel_ratio();
+            (canvas.width() as f64 / dpr, canvas.height() as f64 / dpr)
+        } else {
+            (self.canvas_width, self.canvas_height)
+        };
+
+        let padding = 80.0;
+        let required_w = (max_x - min_x) + padding;
+        let required_h = (max_y - min_y) + padding;
+
+        let width_ratio = canvas_w / required_w;
+        let height_ratio = canvas_h / required_h;
+        let mut target_zoom = f64::min(width_ratio, height_ratio);
+        let max_zoom = 1.0;
+        if target_zoom > max_zoom {
+            target_zoom = max_zoom;
+        }
+
+        // Desired centre point of nodes
+        let centre_x = min_x + (max_x - min_x) / 2.0;
+        let centre_y = min_y + (max_y - min_y) / 2.0;
+
+        let target_viewport_x = centre_x - (canvas_w / (2.0 * target_zoom));
+        let target_viewport_y = centre_y - (canvas_h / (2.0 * target_zoom));
+
+        // Animate from current → target
+        let (start_x, start_y, start_zoom) = (self.viewport_x, self.viewport_y, self.zoom_level);
+        self.animate_viewport(start_x, start_y, start_zoom, target_viewport_x, target_viewport_y, target_zoom);
+    }
+
+    /// Reset viewport to origin & 100% zoom with animation
+    pub fn reset_view(&mut self) {
+        let (start_x, start_y, start_zoom) = (self.viewport_x, self.viewport_y, self.zoom_level);
+        self.animate_viewport(start_x, start_y, start_zoom, 0.0, 0.0, 1.0);
     }
     
     #[allow(dead_code)]

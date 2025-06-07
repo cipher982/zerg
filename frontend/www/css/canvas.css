@@ -121,6 +121,48 @@
   border: 1px solid #ccc;
 }
 
+/* ------------------------------------------------------ */
+/*  Toolbar button + More-menu (Phase-2 UI polish)        */
+/* ------------------------------------------------------ */
+
+.toolbar-btn {
+  background: var(--surface2, #f4f4f4);
+  border: 1px solid var(--surface3, #ddd);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font: 500 13px/1 system-ui, sans-serif;
+  cursor: pointer;
+  transition: background 0.12s ease-in-out;
+}
+
+.toolbar-btn:hover {
+  background: var(--surface3, #eaeaea);
+}
+
+#more-menu summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 6px;
+  user-select: none;
+}
+
+#more-menu[open] {
+  position: relative;
+}
+
+#more-menu[open] button {
+  position: absolute;
+  top: 24px;
+  right: 0;
+  background: var(--surface2, #fff);
+  border: 1px solid var(--surface3, #ddd);
+  border-radius: 4px;
+  padding: 4px 8px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 /* Toggle switch */
 .toggle-container { display: inline-flex; align-items: center; margin-left: 10px; }
 .toggle-label { position: relative; display: inline-flex; align-items: center; cursor: pointer; user-select: none; }

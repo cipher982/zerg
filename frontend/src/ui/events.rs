@@ -21,6 +21,7 @@ pub fn setup_ui_event_handlers(document: &Document) -> Result<(), JsValue> {
     setup_auto_fit_button_handler(document)?;
     setup_center_view_handler(document)?;
     setup_clear_button_handler(document)?;
+    setup_keyboard_shortcuts()?;
     Ok(())
 }
 
@@ -70,6 +71,49 @@ fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
         btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
         cb.forget();
     }
+    Ok(())
+}
+
+/// Global keyboard shortcuts (F = fit to content, 0 = reset view)
+fn setup_keyboard_shortcuts() -> Result<(), JsValue> {
+    use web_sys::KeyboardEvent;
+
+    let window = web_sys::window().expect("no global window exists");
+
+    let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: KeyboardEvent| {
+        // Ignore if focus is in an input, textarea or content-editable element
+        if let Some(target) = e.target() {
+            if target.dyn_ref::<web_sys::HtmlInputElement>().is_some()
+                || target.dyn_ref::<web_sys::HtmlTextAreaElement>().is_some()
+            {
+                return;
+            }
+            if let Some(el) = target.dyn_ref::<web_sys::Element>() {
+                if el.has_attribute("contenteditable") {
+                    return;
+                }
+            }
+        }
+
+        match e.key().as_str() {
+            "f" | "F" => {
+                dispatch_global_message(Message::CenterView);
+                // Prevent default browser find shortcut when Ctrl+F not pressed
+                if !e.ctrl_key() && !e.meta_key() {
+                    e.prevent_default();
+                }
+            }
+            "0" => {
+                dispatch_global_message(Message::ResetView);
+                e.prevent_default();
+            }
+            _ => {}
+        }
+    }));
+
+    window.add_event_listener_with_callback("keydown", cb.as_ref().unchecked_ref())?;
+    cb.forget();
+
     Ok(())
 }
 
