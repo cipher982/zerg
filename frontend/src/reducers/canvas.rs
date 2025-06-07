@@ -151,6 +151,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 let zoom = state.zoom_level;
                 state.viewport_x -= dx / zoom;
                 state.viewport_y -= dy / zoom;
+                state.clamp_viewport();
                 state.drag_last_x = *current_x;
                 state.drag_last_y = *current_y;
                 state.state_modified = true;
@@ -166,8 +167,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::ZoomCanvas { new_zoom, viewport_x, viewport_y } => {
             state.zoom_level = *new_zoom;
+            state.clamp_zoom();
             state.viewport_x = *viewport_x;
             state.viewport_y = *viewport_y;
+            state.clamp_viewport();
             state.state_modified = true;
             state.mark_dirty();
             true

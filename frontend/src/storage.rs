@@ -332,15 +332,17 @@ pub fn save_state_to_api(app_state: &AppState) {
 
             let mut layout_nodes = std::collections::HashMap::new();
             for (id, node) in &st.nodes {
-                layout_nodes.insert(id.clone(), json!({ "x": node.x, "y": node.y }));
+                if node.x.is_finite() && node.y.is_finite() {
+                    layout_nodes.insert(id.clone(), json!({ "x": node.x, "y": node.y }));
+                }
             }
 
             let payload = json!({
                 "nodes": layout_nodes,
                 "viewport": {
-                    "x": st.viewport_x,
-                    "y": st.viewport_y,
-                    "zoom": st.zoom_level,
+                "x": if st.viewport_x.is_finite() { st.viewport_x } else { 0.0 },
+                "y": if st.viewport_y.is_finite() { st.viewport_y } else { 0.0 },
+                "zoom": if st.zoom_level.is_finite() { st.zoom_level } else { 1.0 },
                 }
             });
 
