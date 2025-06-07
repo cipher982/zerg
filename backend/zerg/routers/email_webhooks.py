@@ -23,6 +23,7 @@ the *"push to HTTPS"* option.  Validation is **always enabled** unless the
 `TESTING=1` environment variable is set (unit-tests run without real JWTs).
 """
 
+# typing helpers
 from __future__ import annotations
 
 import logging
@@ -96,6 +97,9 @@ async def _clamp_body_size(request: Request):  # noqa: D401 – dependency
 # ---------------------------------------------------------------------------
 # Helper – optional JWT validation
 # ---------------------------------------------------------------------------
+
+
+# Import Optional for 3.9-compatible type hints
 
 
 def _validate_google_jwt(auth_header: str | None):  # noqa: D401 – helper

@@ -5,15 +5,18 @@ an EventType.TRIGGER_FIRED event.  The SchedulerService listens for that event
 and executes the associated agent immediately.
 """
 
+# typing and forward-ref convenience
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import hmac
 import json
 import logging
 import time
-from typing import Dict  # Added List, Optional
-from typing import List  # Added List, Optional
-from typing import Optional  # Added List, Optional
+from typing import Dict
+from typing import List
+from typing import Optional
 
 # FastAPI helpers
 from fastapi import APIRouter

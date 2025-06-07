@@ -13,25 +13,25 @@
 ### 1.2. Workflow Execution Engine
 - [x] **Design and implement a workflow execution engine**
     - [x] Service/class to execute workflows node-by-node, resolving input/output dependencies.
-    - [ ] Support for Tool, Trigger, and Agent nodes (as per PRD and frontend models).
-    - [ ] Integrate with MCP tool execution and trigger firing.
-    - [ ] Handle errors, retries, and partial failures gracefully.
-    - [ ] Track execution state for each node (idle, queued, running, success, failed).
-    - [ ] Log execution details, errors, and data flow for debugging.
-    - [ ] Support for live feedback via WebSocket or polling.
-    - [ ] Support for manual and scheduled execution (trigger nodes).
+    - [x] Support for Tool, Trigger, and Agent nodes (as per PRD and frontend models).
+    - [x] Integrate with MCP tool execution and trigger firing.
+    - [x] Handle errors, retries, and partial failures gracefully.
+    - [x] Track execution state for each node (idle, queued, running, success, failed).
+    - [x] Log execution details, errors, and data flow for debugging.
+    - [x] Support for live feedback via WebSocket or polling.
+    - [x] Support for manual and scheduled execution (trigger nodes).
 
 ### 1.3. Workflow Execution Persistence & API
-- [ ] **Add models for execution tracking**
-    - [ ] `WorkflowExecution` (run instance, status, timestamps, error, log).
-    - [ ] `NodeExecutionState` (per-node status, output, error).
-- [ ] **API endpoints**
-    - [ ] Start workflow execution (manual or via trigger).
-    - [ ] Get execution status and logs (live and historical).
-    - [ ] List execution history for a workflow.
-    - [ ] Export execution data (JSON/CSV).
-- [ ] **Security & Permissions**
-    - [ ] Ensure only workflow owners can execute/view their workflows and logs.
+- [x] **Add models for execution tracking**
+    - [x] `WorkflowExecution` (run instance, status, timestamps, error, log).
+    - [x] `NodeExecutionState` (per-node status, output, error).
+- [x] **API endpoints**
+    - [x] Start workflow execution (manual or via trigger).
+    - [x] Get execution status and logs (live and historical).
+    - [x] List execution history for a workflow.
+    - [x] Export execution data (JSON/CSV).
+- [x] **Security & Permissions**
+    - [x] Ensure only workflow owners can execute/view their workflows and logs.
 
 ---
 
