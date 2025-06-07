@@ -51,3 +51,14 @@ The design direction is heavily inspired by the existing branding materials, foc
 -   [x] **Task:** Ensure the canvas continuously re-renders to prevent animation artifacts.
 -   [x] **Implementation:**
     -   Modified the `AnimationTick` handler in `frontend/src/reducers/canvas.rs` to always mark the canvas as dirty, ensuring a continuous render loop.
+
+### 6. Agent Configuration Modal UI/UX Polish
+
+-   [x] **Task:** Improve the aesthetics and usability of the agent configuration modal.
+-   [x] **Implementation:**
+    -   **Removed Close Button:** The redundant '×' button was removed from the modal header, as clicking the backdrop already provides a close mechanism. This was done in `frontend/src/components/agent_config_modal.rs`.
+    -   **Styled Tab Navigation:** The modal tabs ("Main", "Triggers", "Tools") were restyled for a cleaner, more modern look, with a distinct visual indicator for the active tab. The styles were added to `frontend/www/css/modal.css`.
+    -   **Unified Form Inputs:** Corrected inconsistent styling on dropdown/select elements to align with the standard text inputs defined in `frontend/www/css/forms.css`.
+    -   **Enhanced Save Button:** The "Save" button was updated to use the `.btn-primary` class from `frontend/www/css/buttons.css` for better visual hierarchy.
+    -   **Improved Readability:** Adjusted the color of the "No schedule set" text to improve contrast against the dark background.
+    -   **Stabilized Modal Height:** Set a `min-height` on the modal content area in `frontend/www/css/modal.css` to prevent the modal from resizing when switching between tabs, eliminating jarring layout shifts.
