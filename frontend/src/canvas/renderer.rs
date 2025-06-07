@@ -9,18 +9,20 @@ use std::collections::HashMap;
 // Removed redundant import of HtmlCanvasElement, it's already imported on line 1
 
 #[allow(dead_code)]
-pub fn draw_nodes(state: &AppState) {
+pub fn draw_nodes(state: &mut AppState) {
     if let (Some(canvas_el), Some(context)) = (&state.canvas, &state.context) {
         // Ensure canvas element itself has the background color set via style attribute
-        // This is a fallback/override if CSS isn't applying as expected.
-        // canvas_el is already &HtmlCanvasElement from the outer if let
-        let _ = canvas_el.style().set_property("background-color", CANVAS_BACKGROUND_COLOR);
+        let _ = canvas_el.style().set_property("background-color", "rgba(10, 10, 15, 1)");
 
-        // Fill canvas rendering context with background color first
-        context.save();
-        context.set_fill_style_str(CANVAS_BACKGROUND_COLOR);
+        // Fill canvas with a semi-transparent color for a trailing effect
+        context.set_fill_style_str("rgba(10, 10, 15, 0.1)");
         context.fill_rect(0.0, 0.0, canvas_el.width() as f64, canvas_el.height() as f64);
-        context.restore();
+
+        // Update and draw the particle system
+        if let Some(ps) = &mut state.particle_system {
+            ps.update();
+            ps.draw(context);
+        }
         
         // Get the device pixel ratio
         let window = web_sys::window().expect("no global window exists");
@@ -43,8 +45,8 @@ pub fn draw_nodes(state: &AppState) {
         draw_connections(state, &context);
         
         // Draw all nodes
-        for (_, node) in &state.nodes {
-            draw_node(&context, node, &state.agents);
+        for (_, node) in &state.nodes.clone() {
+            draw_node(&context, &node, &state.agents);
         }
         
         // Restore original context
@@ -111,13 +113,13 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             context.save();
             
             // Enhanced shadow for depth and luxury feel
-            context.set_shadow_color("rgba(0, 0, 0, 0.15)");
-            context.set_shadow_blur(20.0);
+            context.set_shadow_color("rgba(0, 0, 0, 0.25)");
+            context.set_shadow_blur(25.0);
             context.set_shadow_offset_x(0.0);
-            context.set_shadow_offset_y(8.0);
+            context.set_shadow_offset_y(10.0);
             
-            // Fill with clean white background
-            context.set_fill_style_str(NODE_FILL_AGENT_IDENTITY);
+            // Fill with the new card color from the design system
+            context.set_fill_style_str("#2d2d44"); // --dark-card
             shapes::draw_rounded_rect_path(context, node);
             context.fill();
             
@@ -146,35 +148,10 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
                 _ => (STATUS_IDLE_COLOR, STATUS_IDLE_BG, STATUS_IDLE_COLOR.to_string()),
             };
             
-            // Draw status indicator pill at top
-            let pill_height = 6.0;
-            let pill_margin = 12.0;
-            context.begin_path();
-            context.move_to(node.x + pill_margin + 3.0, node.y + 8.0);
-            context.line_to(node.x + node.width - pill_margin - 3.0, node.y + 8.0);
-            context.quadratic_curve_to(node.x + node.width - pill_margin, node.y + 8.0, node.x + node.width - pill_margin, node.y + 8.0 + 3.0);
-            context.line_to(node.x + node.width - pill_margin, node.y + 8.0 + pill_height - 3.0);
-            context.quadratic_curve_to(node.x + node.width - pill_margin, node.y + 8.0 + pill_height, node.x + node.width - pill_margin - 3.0, node.y + 8.0 + pill_height);
-            context.line_to(node.x + pill_margin + 3.0, node.y + 8.0 + pill_height);
-            context.quadratic_curve_to(node.x + pill_margin, node.y + 8.0 + pill_height, node.x + pill_margin, node.y + 8.0 + pill_height - 3.0);
-            context.line_to(node.x + pill_margin, node.y + 8.0 + 3.0);
-            context.quadratic_curve_to(node.x + pill_margin, node.y + 8.0, node.x + pill_margin + 3.0, node.y + 8.0);
-            context.close_path();
-            context.set_fill_style_str(&status_text);
-            context.fill();
-            
-            // Draw subtle border with status color
+            // Draw border with primary color
             context.set_line_width(1.0);
-            context.set_stroke_style_str(AGENT_BORDER_SUBTLE);
+            context.set_stroke_style_str("#64ffda"); // --primary
             shapes::draw_rounded_rect_path(context, node);
-            context.stroke();
-            
-            // Add status accent on left side
-            context.begin_path();
-            context.move_to(node.x + 3.0, node.y + 20.0);
-            context.line_to(node.x + 3.0, node.y + node.height - 20.0);
-            context.set_stroke_style_str(status_color);
-            context.set_line_width(3.0);
             context.stroke();
             
             // Draw modern status icon
@@ -202,7 +179,7 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             
             // Agent name with modern typography
             context.set_font("600 16px system-ui, -apple-system, sans-serif");
-            context.set_fill_style_str(AGENT_TEXT_PRIMARY);
+            context.set_fill_style_str("#ffffff"); // --text
             context.set_text_align("left");
             context.set_text_baseline("middle");
             let _ = context.fill_text(&agent_name, node.x + 50.0, node.y + 30.0);
@@ -210,16 +187,8 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             // Status text
             let status_text = status.as_deref().unwrap_or("idle");
             context.set_font("400 12px system-ui, -apple-system, sans-serif");
-            context.set_fill_style_str(AGENT_TEXT_SECONDARY);
+            context.set_fill_style_str("rgba(255, 255, 255, 0.7)"); // --text-secondary
             let _ = context.fill_text(&status_text.to_uppercase(), node.x + 50.0, node.y + 45.0);
-            
-            // Add subtle inner highlight
-            context.begin_path();
-            context.move_to(node.x + 15.0, node.y + 1.0);
-            context.line_to(node.x + node.width - 15.0, node.y + 1.0);
-            context.set_stroke_style_str("rgba(255, 255, 255, 0.8)");
-            context.set_line_width(1.0);
-            context.stroke();
             
             context.restore();
         },

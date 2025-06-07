@@ -16,7 +16,7 @@ use crate::models::{
 use crate::models::ApiAgentRun;
 
 use crate::models::ApiAgentDetails;
-use crate::canvas::renderer;
+use crate::canvas::{renderer, background::ParticleSystem};
 use crate::storage::ActiveView;
 use crate::network::{WsClientV2, TopicManager};
 use crate::messages::{Message, Command};
@@ -160,10 +160,12 @@ pub enum ConnectionStatus {
     Checking,
 }
 
-// Store global application state
+    // Store global application state
 pub struct AppState {
     /// If true, global keyboard shortcuts (power mode) are enabled
     pub power_mode: bool,
+    // Particle system for animated background
+    pub particle_system: Option<ParticleSystem>,
     // Agent domain data (business logic)
     pub agents: HashMap<u32, ApiAgent>,        // Backend agent data
     pub agents_on_canvas: HashSet<u32>,        // Track which agents are already placed on canvas
@@ -551,6 +553,7 @@ impl AppState {
             available_mcp_tools: HashMap::new(),
             mcp_connection_status: HashMap::new(),
             power_mode: false,
+            particle_system: None,
         }
     }
 
@@ -1428,7 +1431,7 @@ pub fn update_app_state_from_api(nodes: HashMap<String, Node>) -> Result<(), JsV
         if let Some(_canvas) = &app_state.canvas {
             if let Some(_context) = &app_state.context {
                 // Use the correct draw_nodes function instead of render_canvas
-                crate::canvas::renderer::draw_nodes(&app_state);
+                crate::canvas::renderer::draw_nodes(&mut *app_state);
             }
         }
     });

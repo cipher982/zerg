@@ -441,6 +441,15 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
     
     // Set up shared UI components
     ui::main::setup_ui(&document)?;
+
+    // Initialize the particle system for the canvas background
+    state::APP_STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        if state.canvas.is_some() {
+            let (width, height) = (state.canvas_width, state.canvas_height);
+            state.particle_system = Some(canvas::background::ParticleSystem::new(width, height, 50));
+        }
+    });
     
     // Show initial loading spinner
     if let Some(loading_spinner) = document.get_element_by_id("loading-spinner") {

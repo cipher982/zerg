@@ -276,8 +276,8 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 state.dirty = false;
                 cmds.push(Command::UpdateUI(Box::new(|| {
                     crate::state::APP_STATE.with(|state_rc| {
-                        let st = state_rc.borrow_mut();
-                        st.draw_nodes();
+                        let mut st = state_rc.borrow_mut();
+                        crate::canvas::renderer::draw_nodes(&mut st);
                         #[cfg(debug_assertions)] {
                             if let Some(ctx) = st.context.as_ref() {
                                 crate::utils::debug::draw_overlay(ctx, &st.debug_ring);
