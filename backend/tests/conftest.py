@@ -370,9 +370,30 @@ def db_session():
 
 
 @pytest.fixture
-def client(db_session):
+def client(db_session, auth_headers):
     """
-    Create a FastAPI TestClient with the test database dependency.
+    Create a FastAPI TestClient with the test database dependency and auth headers.
+    """
+
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(app, backend="asyncio") as client:
+        client.headers = auth_headers
+        yield client
+
+    app.dependency_overrides = {}
+
+
+@pytest.fixture
+def unauthenticated_client(db_session):
+    """
+    Create a FastAPI TestClient without authentication headers.
     """
 
     def override_get_db():

@@ -4,15 +4,15 @@
 
 ### 1.1. Workflow CRUD API
 - [x] **CRUD endpoints exist** (`/workflows`): create, read, update, delete (soft delete).
-- [ ] **Add automated tests for workflow CRUD**
-    - [ ] Unit tests for all endpoints (success, error, permissions).
-    - [ ] Test model constraints (unique, required fields, soft delete).
-    - [ ] Test edge cases (large canvas_data, concurrent edits).
-    - [ ] Regression tests for future schema changes.
+- [x] **Add automated tests for workflow CRUD**
+    - [x] Unit tests for all endpoints (success, error, permissions).
+    - [x] Test model constraints (unique, required fields, soft delete).
+    - [x] Test edge cases (large canvas_data, concurrent edits).
+    - [x] Regression tests for future schema changes.
 
 ### 1.2. Workflow Execution Engine
-- [ ] **Design and implement a workflow execution engine**
-    - [ ] Service/class to execute workflows node-by-node, resolving input/output dependencies.
+- [x] **Design and implement a workflow execution engine**
+    - [x] Service/class to execute workflows node-by-node, resolving input/output dependencies.
     - [ ] Support for Tool, Trigger, and Agent nodes (as per PRD and frontend models).
     - [ ] Integrate with MCP tool execution and trigger firing.
     - [ ] Handle errors, retries, and partial failures gracefully.

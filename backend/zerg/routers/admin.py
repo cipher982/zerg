@@ -2,7 +2,9 @@ import logging
 
 # FastAPI helpers
 from fastapi import APIRouter
+from fastapi import APIRouter as _AR
 from fastapi import Depends
+from fastapi import FastAPI as _FastAPI
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
@@ -48,9 +50,6 @@ async def reset_database():
 
         if engine is None:  # pragma: no cover – safety guard
             raise RuntimeError("Session factory returned no bound engine")
-
-        # Clear active connections to avoid SQLite locking issues.
-        engine.dispose()
 
         # Safer + faster for SQLite: disable FK checks, truncate every table,
         # then re-enable.  Avoids losing autoincrement counters that some
@@ -99,8 +98,6 @@ async def reset_database():
 # delegate to the main handler.
 # ---------------------------------------------------------------------------
 
-from fastapi import APIRouter as _AR
-
 _legacy_router = _AR(prefix="/admin")
 
 
@@ -110,7 +107,6 @@ async def _legacy_reset_database():  # noqa: D401 – thin wrapper
 
 
 # mount the legacy router without the global /api prefix
-from fastapi import FastAPI as _FastAPI
 
 
 def _mount_legacy(app: _FastAPI):  # noqa: D401 – helper

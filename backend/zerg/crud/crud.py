@@ -7,6 +7,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 
@@ -739,6 +740,19 @@ def create_workflow(
 ):
     """Create a new workflow."""
     from zerg.models.models import Workflow
+
+    # Check for existing active workflow with the same name for the same owner
+    existing_workflow = (
+        db.query(Workflow)
+        .filter(
+            Workflow.owner_id == owner_id,
+            Workflow.name == name,
+            Workflow.is_active.is_(True),
+        )
+        .first()
+    )
+    if existing_workflow:
+        raise HTTPException(status_code=409, detail="A workflow with this name already exists.")
 
     db_workflow = Workflow(
         owner_id=owner_id,
