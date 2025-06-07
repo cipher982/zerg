@@ -11,11 +11,7 @@ use std::collections::HashMap;
 #[allow(dead_code)]
 pub fn draw_nodes(state: &mut AppState) {
     if let (Some(canvas_el), Some(context)) = (&state.canvas, &state.context) {
-        // Ensure canvas element itself has the background color set via style attribute
-        let _ = canvas_el.style().set_property("background-color", "rgba(10, 10, 15, 1)");
-
-        // Fill canvas with a semi-transparent color for a trailing effect
-        context.set_fill_style_str("rgba(10, 10, 15, 0.1)");
+        context.set_fill_style_str("rgba(10, 10, 15, 1)");
         context.fill_rect(0.0, 0.0, canvas_el.width() as f64, canvas_el.height() as f64);
 
         // Update and draw the particle system
