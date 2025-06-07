@@ -30,6 +30,15 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use crate::update;
+
+// ---------------------------------------------------------------------------
+// Viewport constraints – keep values sane so we never generate Inf/NaN or
+// absurd world-space coordinates.
+// Default zoom == 1.0 so we allow ±50 %.
+// ---------------------------------------------------------------------------
+
+pub const MIN_ZOOM: f64 = 0.5; // 50 %
+pub const MAX_ZOOM: f64 = 1.5; // 150 %
 // Bring legacy helper trait into scope (methods formerly on CanvasNode)
 
 // ---------------------------------------------------------------------------
@@ -856,12 +865,15 @@ impl AppState {
             let width_ratio = canvas_width / effective_width;
             let height_ratio = canvas_height / effective_height;
             
-            // Use the smaller ratio to ensure everything fits
-            let new_zoom = f64::min(width_ratio, height_ratio);
-            
-            // Limit maximum zoom level to prevent excessive zooming
-            let max_zoom = 1.0; // Maximum zoom level (1.0 = 100%)
-            let new_zoom = f64::min(new_zoom, max_zoom);
+            // Use the smaller ratio to ensure everything fits, but clamp to a
+            // sensible range so we don't zoom to nearly-zero which would make
+            // subsequent coordinate conversions explode.
+            let mut new_zoom = f64::min(width_ratio, height_ratio);
+            if new_zoom > MAX_ZOOM {
+                new_zoom = MAX_ZOOM;
+            } else if new_zoom < MIN_ZOOM {
+                new_zoom = MIN_ZOOM;
+            }
             
             // Calculate the center of the nodes
             let center_x = min_x + (max_x - min_x) / 2.0;
@@ -873,8 +885,10 @@ impl AppState {
             
             // Update state
             self.zoom_level = new_zoom;
+            self.clamp_zoom();
             self.viewport_x = new_viewport_x;
             self.viewport_y = new_viewport_y;
+            self.clamp_viewport();
             
             // Schedule a redraw via RAF
             self.mark_dirty();
@@ -912,10 +926,23 @@ impl AppState {
         let (canvas_w, canvas_h) = if let Some(canvas) = &self.canvas {
             let window = web_sys::window().unwrap();
             let dpr = window.device_pixel_ratio();
-            (canvas.width() as f64 / dpr, canvas.height() as f64 / dpr)
+            let w = canvas.width() as f64 / dpr;
+            let h = canvas.height() as f64 / dpr;
+            // Fallback if not yet sized
+            if w < 1.0 || h < 1.0 {
+                (self.canvas_width.max(1.0), self.canvas_height.max(1.0))
+            } else {
+                (w, h)
+            }
         } else {
-            (self.canvas_width, self.canvas_height)
+            (self.canvas_width.max(1.0), self.canvas_height.max(1.0))
         };
+
+        // If still zero (unlikely) bail early to avoid invalid math
+        if canvas_w < 1.0 || canvas_h < 1.0 {
+            web_sys::console::warn_1(&"center_view aborted – canvas not yet sized".into());
+            return;
+        }
 
         let padding = 80.0;
         let required_w = (max_x - min_x) + padding;
@@ -924,9 +951,14 @@ impl AppState {
         let width_ratio = canvas_w / required_w;
         let height_ratio = canvas_h / required_h;
         let mut target_zoom = f64::min(width_ratio, height_ratio);
-        let max_zoom = 1.0;
-        if target_zoom > max_zoom {
-            target_zoom = max_zoom;
+
+        // Clamp zoom to a sensible range so that extremely small bounding
+        // boxes (or an un-initialised <canvas>) cannot drive the zoom towards
+        // zero which then explodes world-space coordinates on the next drag.
+        if target_zoom > MAX_ZOOM {
+            target_zoom = MAX_ZOOM;
+        } else if target_zoom < MIN_ZOOM {
+            target_zoom = MIN_ZOOM;
         }
 
         // Desired centre point of nodes
@@ -936,15 +968,35 @@ impl AppState {
         let target_viewport_x = centre_x - (canvas_w / (2.0 * target_zoom));
         let target_viewport_y = centre_y - (canvas_h / (2.0 * target_zoom));
 
-        // Animate from current → target
-        let (start_x, start_y, start_zoom) = (self.viewport_x, self.viewport_y, self.zoom_level);
-        self.animate_viewport(start_x, start_y, start_zoom, target_viewport_x, target_viewport_y, target_zoom);
+        // ------------------------------------------------------------------
+        // Apply viewport change immediately.
+        // ------------------------------------------------------------------
+        // The earlier animated version left `zoom_level` unchanged until the
+        // next RAF callback, which meant any user interaction that happened
+        // in that single frame (e.g. dropping a new node) still used the old
+        // (possibly tiny) zoom value and generated astronomically large
+        // coordinates.  We switch to an immediate update – the user barely
+        // notices the 250 ms animation anyway, but the correctness win is
+        // massive.
+
+        self.zoom_level  = target_zoom;
+        self.clamp_zoom();
+        self.viewport_x  = target_viewport_x;
+        self.viewport_y  = target_viewport_y;
+        self.clamp_viewport();
+
+        self.mark_dirty();
     }
 
     /// Reset viewport to origin & 100% zoom with animation
     pub fn reset_view(&mut self) {
-        let (start_x, start_y, start_zoom) = (self.viewport_x, self.viewport_y, self.zoom_level);
-        self.animate_viewport(start_x, start_y, start_zoom, 0.0, 0.0, 1.0);
+        // Immediate reset – avoid stale zoom during animation window.
+        self.zoom_level = 1.0;
+        self.clamp_zoom();
+        self.viewport_x = 0.0;
+        self.viewport_y = 0.0;
+        self.clamp_viewport();
+        self.mark_dirty();
     }
     
     #[allow(dead_code)]
@@ -1158,6 +1210,36 @@ impl AppState {
         }
         
         Ok(())
+    }
+
+    // -------------------------------------------------------------------
+    // SANITY HELPERS – must be called after *any* change to zoom/viewport.
+    // -------------------------------------------------------------------
+
+    /// Clamp `zoom_level` to the hard limits.
+    pub fn clamp_zoom(&mut self) {
+        self.zoom_level = self.zoom_level.clamp(MIN_ZOOM, MAX_ZOOM);
+    }
+
+    /// Clamp `viewport_x` / `viewport_y` so that the centre of the viewport
+    /// cannot move farther than half a canvas from the origin.  This keeps
+    /// panning within ±50 % of the default view.
+    pub fn clamp_viewport(&mut self) {
+        // Determine canvas dimensions (world units depend on zoom).
+        let (canvas_w, canvas_h) = if let Some(canvas) = &self.canvas {
+            let window = web_sys::window().unwrap();
+            let dpr = window.device_pixel_ratio();
+            (canvas.width() as f64 / dpr, canvas.height() as f64 / dpr)
+        } else {
+            (self.canvas_width.max(1.0), self.canvas_height.max(1.0))
+        };
+
+        // Half of the viewport size in world units.
+        let half_w = (canvas_w / self.zoom_level) * 0.5;
+        let half_h = (canvas_h / self.zoom_level) * 0.5;
+
+        self.viewport_x = self.viewport_x.clamp(-half_w, half_w);
+        self.viewport_y = self.viewport_y.clamp(-half_h, half_h);
     }
 
     pub fn resize_node_for_content(&mut self, node_id: &str) {

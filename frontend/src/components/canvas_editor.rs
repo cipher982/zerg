@@ -531,8 +531,9 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             let zoom_delta = if delta_y > 0.0 { 0.9 } else { 1.1 };
             let new_zoom = zoom_level * zoom_delta;
             
-            // Limit zoom to reasonable values
-            let new_zoom = f64::max(0.1, f64::min(new_zoom, 5.0));
+            // Clamp zoom to ±50 % around default
+            use crate::state::{MIN_ZOOM, MAX_ZOOM};
+            let new_zoom = new_zoom.clamp(MIN_ZOOM, MAX_ZOOM);
             
             // Calculate new viewport based on the zoom
             let new_viewport_x = world_x - x / new_zoom;

@@ -35,6 +35,16 @@ pub fn create_input_panel(document: &Document) -> Result<web_sys::Element, JsVal
     input_panel.append_child(&find_button)?;
     input_panel.append_child(&more_details)?;
 
+    // Attach click handler for find_button now that element exists (in case
+    // global event setup ran before the panel was created).
+    {
+        let cb = wasm_bindgen::closure::Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            crate::state::dispatch_global_message(crate::messages::Message::CenterView);
+        }));
+        find_button.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+
     Ok(input_panel)
 }
 
