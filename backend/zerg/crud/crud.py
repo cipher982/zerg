@@ -731,11 +731,7 @@ def get_canvas_layout(db: Session, user_id: Optional[int], workflow_id: Optional
     if user_id is None:
         return None
 
-    return (
-        db.query(CanvasLayout)
-        .filter_by(user_id=user_id, workflow_id=workflow_id)
-        .first()
-    )
+    return db.query(CanvasLayout).filter_by(user_id=user_id, workflow_id=workflow_id).first()
 
 
 def create_workflow(
@@ -755,6 +751,7 @@ def create_workflow(
     db.refresh(db_workflow)
     return db_workflow
 
+
 # -------------------------------------------------------------------
 # Workflow helpers – list / fetch by id (active only)
 # -------------------------------------------------------------------
@@ -771,13 +768,7 @@ def get_workflows(
 
     from zerg.models.models import Workflow as WorkflowModel
 
-    return (
-        db.query(WorkflowModel)
-        .filter_by(owner_id=owner_id, is_active=True)
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    return db.query(WorkflowModel).filter_by(owner_id=owner_id, is_active=True).offset(skip).limit(limit).all()
 
 
 def get_workflow(db: Session, workflow_id: int):
