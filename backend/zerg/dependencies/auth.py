@@ -77,6 +77,12 @@ def _get_strategy():  # noqa: D401 – internal helper
 def get_current_user(request: Request, db: Session = Depends(get_db)):
     """Return the authenticated *User* row or raise **401**."""
 
+    if "Authorization" not in request.headers and not AUTH_DISABLED:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return _get_strategy().get_current_user(request, db)
 
 

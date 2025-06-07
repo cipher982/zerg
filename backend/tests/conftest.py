@@ -579,6 +579,17 @@ def test_user(_dev_user):  # noqa: D401 – passthrough alias
 
 
 @pytest.fixture
+def other_user(db_session):
+    """Create a second, distinct user for isolation tests."""
+    from zerg.crud import crud as _crud
+
+    user = _crud.get_user_by_email(db_session, "other@local")
+    if user is None:
+        user = _crud.create_user(db_session, email="other@local", provider=None, role="USER")
+    return user
+
+
+@pytest.fixture
 def mock_langgraph_state_graph():
     """
     Mock the StateGraph class from LangGraph directly.
