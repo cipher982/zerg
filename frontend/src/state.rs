@@ -37,8 +37,9 @@ use crate::update;
 // Default zoom == 1.0 so we allow ±50 %.
 // ---------------------------------------------------------------------------
 
-pub const MIN_ZOOM: f64 = 0.5; // 50 %
-pub const MAX_ZOOM: f64 = 1.5; // 150 %
+// Zoom is currently disabled – hard-lock to 100 %.
+pub const MIN_ZOOM: f64 = 1.0;
+pub const MAX_ZOOM: f64 = 1.0;
 // Bring legacy helper trait into scope (methods formerly on CanvasNode)
 
 // ---------------------------------------------------------------------------
@@ -811,9 +812,23 @@ impl AppState {
         let box_width = max_x - min_x;
         let box_height = max_y - min_y;
         
-        // Get the canvas dimensions
-        let canvas_width = self.canvas_width;
-        let canvas_height = self.canvas_height;
+        // Ensure canvas exists and has valid dimensions
+        let (canvas_width, canvas_height) = match &self.canvas {
+            Some(canvas) => {
+                let dpr = web_sys::window().unwrap().device_pixel_ratio();
+                let w = canvas.width() as f64 / dpr;
+                let h = canvas.height() as f64 / dpr;
+                if w < 1.0 || h < 1.0 {
+                    web_sys::console::error_1(&"fit_nodes_to_view: canvas not yet sized".into());
+                    return;
+                }
+                (w, h)
+            }
+            None => {
+                web_sys::console::error_1(&"fit_nodes_to_view: no canvas available".into());
+                return;
+            }
+        };
         
         // Calculate zoom level to fit all nodes with padding
         let padding = 50.0; // Padding around the bounding box
@@ -922,27 +937,23 @@ impl AppState {
             max_y = f64::max(max_y, node.y + node.height);
         }
 
-        // Canvas dimensions – fall back to stored width/height if not yet initialised.
-        let (canvas_w, canvas_h) = if let Some(canvas) = &self.canvas {
-            let window = web_sys::window().unwrap();
-            let dpr = window.device_pixel_ratio();
-            let w = canvas.width() as f64 / dpr;
-            let h = canvas.height() as f64 / dpr;
-            // Fallback if not yet sized
-            if w < 1.0 || h < 1.0 {
-                (self.canvas_width.max(1.0), self.canvas_height.max(1.0))
-            } else {
+        // Canvas dimensions must be ready; otherwise bail loudly.
+        let (canvas_w, canvas_h) = match &self.canvas {
+            Some(canvas) => {
+                let dpr = web_sys::window().unwrap().device_pixel_ratio();
+                let w = canvas.width() as f64 / dpr;
+                let h = canvas.height() as f64 / dpr;
+                if w < 1.0 || h < 1.0 {
+                    web_sys::console::error_1(&"center_view: canvas not yet sized".into());
+                    return;
+                }
                 (w, h)
             }
-        } else {
-            (self.canvas_width.max(1.0), self.canvas_height.max(1.0))
+            None => {
+                web_sys::console::error_1(&"center_view: no canvas available".into());
+                return;
+            }
         };
-
-        // If still zero (unlikely) bail early to avoid invalid math
-        if canvas_w < 1.0 || canvas_h < 1.0 {
-            web_sys::console::warn_1(&"center_view aborted – canvas not yet sized".into());
-            return;
-        }
 
         let padding = 80.0;
         let required_w = (max_x - min_x) + padding;
@@ -983,7 +994,6 @@ impl AppState {
         self.clamp_zoom();
         self.viewport_x  = target_viewport_x;
         self.viewport_y  = target_viewport_y;
-        self.clamp_viewport();
 
         self.mark_dirty();
     }
@@ -995,7 +1005,6 @@ impl AppState {
         self.clamp_zoom();
         self.viewport_x = 0.0;
         self.viewport_y = 0.0;
-        self.clamp_viewport();
         self.mark_dirty();
     }
     
