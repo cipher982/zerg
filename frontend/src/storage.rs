@@ -330,19 +330,39 @@ pub fn save_state_to_api(app_state: &AppState) {
         crate::state::APP_STATE.with(|state_ref| {
             let st = state_ref.borrow();
 
+            // ------------------------------------------------------------------
+            // Validate state – bail out loudly on any invalid value instead of
+            // silently coercing.  This surfaces bugs early.
+            // ------------------------------------------------------------------
+
+            if !st.viewport_x.is_finite() || !st.viewport_y.is_finite() || !st.zoom_level.is_finite() {
+                web_sys::console::error_1(&format!(
+                    "Refusing to save: non-finite viewport detected (x={}, y={}, zoom={})",
+                    st.viewport_x, st.viewport_y, st.zoom_level
+                ).into());
+                return; // Abort save – developer must investigate
+            }
+
             let mut layout_nodes = std::collections::HashMap::new();
             for (id, node) in &st.nodes {
                 if node.x.is_finite() && node.y.is_finite() {
                     layout_nodes.insert(id.clone(), json!({ "x": node.x, "y": node.y }));
+                } else {
+                    web_sys::console::error_1(&format!(
+                        "Refusing to save: node '{}' has invalid position (x={}, y={})",
+                        id, node.x, node.y
+                    ).into());
+                    // Do NOT include the node; we still continue so that other
+                    // valid nodes/viewport can be persisted.
                 }
             }
 
             let payload = json!({
                 "nodes": layout_nodes,
                 "viewport": {
-                "x": if st.viewport_x.is_finite() { st.viewport_x } else { 0.0 },
-                "y": if st.viewport_y.is_finite() { st.viewport_y } else { 0.0 },
-                "zoom": if st.zoom_level.is_finite() { st.zoom_level } else { 1.0 },
+                    "x": st.viewport_x,
+                    "y": st.viewport_y,
+                    "zoom": st.zoom_level,
                 }
             });
 

@@ -7,7 +7,7 @@ pub fn create_input_panel(document: &Document) -> Result<web_sys::Element, JsVal
     // "Find everything" button (centres + zooms to fit content)
     let find_button = document.create_element("button")?;
     find_button.set_attribute("type", "button")?;
-    find_button.set_inner_html("Find Everything");
+    find_button.set_inner_html("Center View");
     // Match handler ID
     find_button.set_attribute("id", "center-view")?;
     find_button.set_attribute("class", "toolbar-btn")?;
