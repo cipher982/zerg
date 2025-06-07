@@ -444,6 +444,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::AddResponseNode { .. } |
         Message::ToggleAutoFit |
         Message::CenterView |
+        Message::ResetView |
         Message::ClearCanvas |
         Message::CanvasNodeClicked { .. } |
         Message::MarkCanvasDirty |

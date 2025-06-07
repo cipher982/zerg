@@ -214,6 +214,9 @@ fn try_load_layout_from_api() {
 
                 // Log full error to console for debugging.
                 web_sys::console::error_1(&format!("Remote layout fetch failed: {:?}", e).into());
+
+                // Attempt localStorage fallback when remote fetch fails
+                crate::storage::try_load_from_localstorage();
             }
             _ => {
                 // Got 204 – backend responded with "no content".  Inform the
@@ -222,16 +225,65 @@ fn try_load_layout_from_api() {
                     "Layout: no saved layout yet", "yellow");
 
                 web_sys::console::log_1(&"No remote canvas layout found (204)".into());
+
+                // Also try localStorage in this case
+                crate::storage::try_load_from_localstorage();
             }
         }
     });
 }
 
+// ---------------------------------------------------------------------------
+// LocalStorage helpers
+// ---------------------------------------------------------------------------
+
+/// Attempt to hydrate nodes + viewport from localStorage.  Does **not**
+/// overwrite existing nodes if any are already present.
+pub fn try_load_from_localstorage() {
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            // Bail if we already have nodes loaded
+            let has_nodes = crate::state::APP_STATE.with(|s| s.borrow().nodes.len() > 0);
+            if has_nodes {
+                return;
+            }
+
+            if let Ok(Some(nodes_str)) = storage.get_item("nodes") {
+                if let Ok(nodes_map) = serde_json::from_str::<std::collections::HashMap<String, crate::models::CanvasNode>>(&nodes_str) {
+                    crate::state::APP_STATE.with(|s| {
+                        let mut st = s.borrow_mut();
+                        st.nodes = nodes_map;
+                    });
+                }
+            }
+
+            if let Ok(Some(vp_str)) = storage.get_item("viewport") {
+                #[derive(serde::Deserialize)]
+                struct Vp { x: f64, y: f64, zoom: f64 }
+                if let Ok(vp) = serde_json::from_str::<Vp>(&vp_str) {
+                    crate::state::APP_STATE.with(|s| {
+                        let mut st = s.borrow_mut();
+                        st.viewport_x = vp.x;
+                        st.viewport_y = vp.y;
+                        st.zoom_level = vp.zoom;
+                    });
+                }
+            }
+
+            web_sys::console::log_1(&"Layout loaded from localStorage fallback".into());
+            update_layout_status("Layout: local offline copy", "orange");
+        }
+    }
+}
+
 /// Clear all stored data
 pub fn clear_storage() -> Result<(), JsValue> {
-    // No localStorage to clear, but we might want to add
-    // API endpoint calls to clear data in the future
-    
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            let _ = storage.remove_item("nodes");
+            let _ = storage.remove_item("viewport");
+        }
+    }
     Ok(())
 }
 
@@ -295,8 +347,16 @@ pub fn save_state_to_api(app_state: &AppState) {
                 match crate::network::ApiClient::patch_layout(&payload_str).await {
                     Ok(_) => update_layout_status("Layout: saved", "green"),
                     Err(e) => {
-                        update_layout_status("Layout: save failed", "red");
-                        web_sys::console::error_1(&format!("layout save failed: {:?}", e).into());
+                        update_layout_status("Layout: save failed – offline copy", "orange");
+                        web_sys::console::error_1(&format!("layout save failed: {:?}. Falling back to localStorage", e).into());
+
+                        // Fallback: persist to localStorage so user does not lose work
+                        if let Some(window) = web_sys::window() {
+                            if let Ok(Some(storage)) = window.local_storage() {
+                                let _ = storage.set_item("nodes", &payload["nodes"].to_string());
+                                let _ = storage.set_item("viewport", &payload["viewport"].to_string());
+                            }
+                        }
                     }
                 }
             });

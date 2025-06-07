@@ -55,6 +55,11 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.state_modified = true;
             true
         }
+        Message::ResetView => {
+            state.reset_view();
+            state.state_modified = true;
+            true
+        }
         Message::ClearCanvas => {
             state.nodes.clear();
             state.latest_user_input_id = None;

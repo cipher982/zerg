@@ -102,6 +102,7 @@ pub enum Message {
     // Canvas view controls
     ToggleAutoFit,                       // Toggle auto-fit functionality
     CenterView,                          // Center the canvas view
+    ResetView,                           // Reset zoom =100% and pan to origin
     ClearCanvas,                         // Clear all nodes from the canvas
     
     // Canvas zooming
