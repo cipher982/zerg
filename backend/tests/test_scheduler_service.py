@@ -1,8 +1,8 @@
 import logging
 
 import pytest
-from apscheduler.triggers.cron import CronTrigger
 
+from apscheduler.triggers.cron import CronTrigger
 from zerg.services.scheduler_service import SchedulerService
 
 
@@ -85,6 +85,8 @@ async def test_load_scheduled_agents(service, db_session):
     )
     db_session.add_all([a1, a2])
     db_session.commit()
+    agent_id = a1.id
+    db_session.close()
 
     # No jobs initially
     assert not service.scheduler.get_jobs()
@@ -94,7 +96,7 @@ async def test_load_scheduled_agents(service, db_session):
 
     jobs = service.scheduler.get_jobs()
     assert len(jobs) == 1
-    job = service.scheduler.get_job(f"agent_{a1.id}")
+    job = service.scheduler.get_job(f"agent_{agent_id}")
     assert job is not None
 
 

@@ -1,10 +1,8 @@
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from zerg.crud import crud
 from zerg.models.models import User
-from zerg.schemas.schemas import WorkflowCreate
 
 # Test data
 TEST_WORKFLOW_NAME = "Test Workflow"
@@ -40,17 +38,34 @@ def test_create_workflow_success(client: TestClient, test_user: User, db: Sessio
     assert "id" in data
 
 
-def test_create_workflow_unauthenticated(client: TestClient, auth_headers: dict):
+def test_create_workflow_unauthenticated(unauthenticated_client: TestClient, monkeypatch):
     """Test that unauthenticated users cannot create workflows."""
+    # Temporarily enable auth for this test
+    monkeypatch.setattr("zerg.dependencies.auth.AUTH_DISABLED", False)
+
     payload = {
         "name": "Unauthorized Workflow",
         "description": "This should not be created.",
         "canvas_data": {},
     }
-    # Remove auth header to simulate unauthenticated request
-    auth_headers.pop("Authorization", None)
-    response = client.post("/api/workflows/", headers=auth_headers, json=payload)
+    response = unauthenticated_client.post("/api/workflows/", json=payload)
     assert response.status_code == 401
+
+    # Restore the original value
+    monkeypatch.setattr("zerg.dependencies.auth.AUTH_DISABLED", True)
+
+
+def test_create_workflow_missing_fields(client: TestClient, auth_headers: dict):
+    """Test that creating a workflow with missing required fields fails."""
+    # Missing 'name'
+    payload = {"description": "This is a test."}
+    response = client.post("/api/workflows/", headers=auth_headers, json=payload)
+    assert response.status_code == 422  # Unprocessable Entity
+
+    # Missing 'description' (assuming it's required)
+    payload = {"name": "Test Workflow"}
+    response = client.post("/api/workflows/", headers=auth_headers, json=payload)
+    assert response.status_code == 422
 
 
 def test_read_workflows_success(client: TestClient, test_user: User, db: Session, auth_headers: dict):
@@ -84,7 +99,7 @@ def test_read_workflows_isolation(
 def test_rename_workflow_success(client: TestClient, test_user: User, db: Session, auth_headers: dict):
     """Test successfully renaming a workflow."""
     wf = create_test_workflow(db, test_user.id)
-    payload = {"name": "Updated Workflow Name", "description": "Updated description."}
+    payload = {"name": "Updated Workflow Name", "description": "Updated description.", "canvas_data": {}}
     response = client.patch(f"/api/workflows/{wf.id}", headers=auth_headers, json=payload)
     assert response.status_code == 200
     data = response.json()
@@ -95,7 +110,7 @@ def test_rename_workflow_success(client: TestClient, test_user: User, db: Sessio
 
 def test_rename_workflow_not_found(client: TestClient, test_user: User, auth_headers: dict):
     """Test renaming a workflow that does not exist."""
-    payload = {"name": "Doesn't Matter", "description": "Doesn't Matter"}
+    payload = {"name": "Doesn't Matter", "description": "Doesn't Matter", "canvas_data": {}}
     response = client.patch("/api/workflows/99999", headers=auth_headers, json=payload)
     assert response.status_code == 404
 
@@ -105,9 +120,9 @@ def test_rename_workflow_unauthorized(
 ):
     """Test that a user cannot rename a workflow they do not own."""
     wf = create_test_workflow(db, other_user.id)
-    payload = {"name": "Unauthorized Update", "description": "This should fail."}
+    payload = {"name": "Unauthorized Update", "description": "This should fail.", "canvas_data": {}}
     response = client.patch(f"/api/workflows/{wf.id}", headers=auth_headers, json=payload)
-    assert response.status_code == 404  # API returns 404 for not found or not owned
+    assert response.status_code == 404
 
 
 def test_delete_workflow_success(client: TestClient, test_user: User, db: Session, auth_headers: dict):
@@ -134,3 +149,94 @@ def test_delete_workflow_unauthorized(
     wf = create_test_workflow(db, other_user.id)
     response = client.delete(f"/api/workflows/{wf.id}", headers=auth_headers)
     assert response.status_code == 404
+
+
+def test_soft_delete_and_recreate(client: TestClient, test_user: User, db: Session, auth_headers: dict):
+    """Test that a soft-deleted workflow can be recreated with the same name."""
+    # 1. Create and delete a workflow
+    wf = create_test_workflow(db, test_user.id)
+    response = client.delete(f"/api/workflows/{wf.id}", headers=auth_headers)
+    assert response.status_code == 204
+
+    # 2. Verify it's inactive
+    db.refresh(wf)
+    assert wf.is_active is False
+
+    # 3. Recreate a workflow with the same name
+    payload = {
+        "name": TEST_WORKFLOW_NAME,
+        "description": "A new workflow with an old name.",
+        "canvas_data": {},
+    }
+    response = client.post("/api/workflows/", headers=auth_headers, json=payload)
+    assert response.status_code == 200
+    new_wf_data = response.json()
+    assert new_wf_data["name"] == TEST_WORKFLOW_NAME
+    assert new_wf_data["id"] != wf.id
+
+
+def test_duplicate_workflow_name_fails(client: TestClient, test_user: User, db: Session, auth_headers: dict):
+    """Test that creating a workflow with a duplicate name fails."""
+    # Create an initial workflow
+    create_test_workflow(db, test_user.id)
+
+    # Attempt to create another with the same name
+    payload = {
+        "name": TEST_WORKFLOW_NAME,
+        "description": "This should fail.",
+        "canvas_data": {},
+    }
+    response = client.post("/api/workflows/", headers=auth_headers, json=payload)
+    assert response.status_code == 409  # Conflict
+
+
+def test_create_workflow_with_large_canvas(client: TestClient, test_user: User, auth_headers: dict):
+    """Test creating a workflow with a large canvas_data payload."""
+    large_canvas = {
+        "nodes": [{"id": f"node_{i}", "type": "tool", "data": {}} for i in range(1000)],
+        "edges": [{"source": f"node_{i}", "target": f"node_{i+1}"} for i in range(999)],
+    }
+    payload = {
+        "name": "Large Canvas Workflow",
+        "description": "A workflow with a very large canvas.",
+        "canvas_data": large_canvas,
+    }
+    response = client.post("/api/workflows/", headers=auth_headers, json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == payload["name"]
+    assert len(data["canvas_data"]["nodes"]) == 1000
+
+
+def test_schema_evolution_robustness(client: TestClient, test_user: User, db: Session, auth_headers: dict):
+    """
+    Test that the API can handle records with missing fields.
+
+    This simulates a scenario where a field was removed from the model,
+    but old data still exists in the database.
+    """
+    from sqlalchemy import text
+
+    from zerg.models.models import Workflow
+
+    # 1. Create a standard workflow
+    wf = create_test_workflow(db, test_user.id)
+
+    # 2. Manually alter the data in the DB to simulate an old schema
+    #    For this test, let's pretend 'description' was removed.
+    db.execute(text(f"UPDATE {Workflow.__tablename__} SET description = NULL WHERE id = {wf.id}"))
+    db.commit()
+
+    # 3. Fetch the workflows and ensure it doesn't crash
+    response = client.get("/api/workflows/", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+
+    # 4. Find our modified workflow and check that description is None
+    found = False
+    for item in data:
+        if item["id"] == wf.id:
+            assert item["description"] is None
+            found = True
+            break
+    assert found, "Modified workflow not found in API response"

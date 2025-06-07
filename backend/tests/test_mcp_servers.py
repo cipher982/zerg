@@ -185,10 +185,16 @@ class TestMCPServers:
         assert isinstance(result["builtin"], list)
         assert isinstance(result["mcp"], dict)
 
-    def test_unauthorized_access(self, client, test_agent):
+    def test_unauthorized_access(self, unauthenticated_client, test_agent, monkeypatch):
         """Test accessing MCP endpoints without authentication."""
-        response = client.get(f"/api/agents/{test_agent.id}/mcp-servers/")
+        # Temporarily enable auth for this test
+        monkeypatch.setattr("zerg.dependencies.auth.AUTH_DISABLED", False)
+
+        response = unauthenticated_client.get(f"/api/agents/{test_agent.id}/mcp-servers/")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+        # Restore the original value
+        monkeypatch.setattr("zerg.dependencies.auth.AUTH_DISABLED", True)
 
     def test_access_other_users_agent(self, client, auth_headers, test_agent, db):
         """Test accessing another user's agent MCP servers."""
