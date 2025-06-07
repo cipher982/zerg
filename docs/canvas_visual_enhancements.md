@@ -34,8 +34,8 @@ The design direction is heavily inspired by the existing branding materials, foc
 
 ### 3. Integrate Rich Status Indicators
 
--   [ ] **Task:** Replace the plain "IDLE" text with rich, visual status indicators (Idle, Active, Success, Error).
--   [ ] **Implementation:**
+-   [x] **Task:** Replace the plain "IDLE" text with rich, visual status indicators (Idle, Active, Success, Error).
+-   [x] **Implementation:**
     -   The logic for status-specific colors and icons already exists within the `draw_node` function in `renderer.rs`.
     -   This logic will be enhanced to draw the new visual styles (e.g., pulsing rings, checkmarks) instead of the simple text and pill.
 
@@ -44,3 +44,10 @@ The design direction is heavily inspired by the existing branding materials, foc
 -   [ ] **Task:** Upgrade the static connection lines to be animated, showing the direction of data flow.
 -   [ ] **Implementation:**
     -   Modify the `draw_connections` function in `frontend/src/canvas/renderer.rs` to use an animated gradient for the stroke style.
+    -   **Note:** This was attempted but reverted due to `web-sys` API issues. This will be revisited in the future.
+
+### 5. Continuous Rendering
+
+-   [x] **Task:** Ensure the canvas continuously re-renders to prevent animation artifacts.
+-   [x] **Implementation:**
+    -   Modified the `AnimationTick` handler in `frontend/src/reducers/canvas.rs` to always mark the canvas as dirty, ensuring a continuous render loop.

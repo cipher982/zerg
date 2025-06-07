@@ -178,6 +178,7 @@ pub struct AppState {
     // Canvas and rendering related
     pub canvas: Option<HtmlCanvasElement>,
     pub context: Option<CanvasRenderingContext2d>,
+    pub connection_animation_offset: f64,
     pub input_text: String,
     pub dragging: Option<String>,
     pub drag_offset_x: f64,
@@ -400,6 +401,7 @@ impl AppState {
             current_workflow_id: None,
             canvas: None,
             context: None,
+            connection_animation_offset: 0.0,
             input_text: String::new(),
             dragging: None,
             drag_offset_x: 0.0,

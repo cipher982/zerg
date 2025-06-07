@@ -272,6 +272,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::AnimationTick => {
+            // Always mark dirty to keep animations running smoothly
+            state.mark_dirty();
+
             if state.dirty {
                 state.dirty = false;
                 cmds.push(Command::UpdateUI(Box::new(|| {
