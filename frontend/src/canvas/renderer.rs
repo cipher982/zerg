@@ -23,6 +23,12 @@ pub fn draw_nodes(state: &mut AppState) {
             ps.update();
             ps.draw(context);
         }
+
+        // Animate connection lines
+        state.connection_animation_offset += 0.5;
+        if state.connection_animation_offset > 100.0 {
+            state.connection_animation_offset = 0.0;
+        }
         
         // Get the device pixel ratio
         let window = web_sys::window().expect("no global window exists");
@@ -143,14 +149,15 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
                     (STATUS_PROCESSING_COLOR, STATUS_PROCESSING_BG, format!("rgba(59, 130, 246, {})", pulse))
                 },
                 Some("error") => (STATUS_ERROR_COLOR, STATUS_ERROR_BG, STATUS_ERROR_COLOR.to_string()),
+                Some("success") => (STATUS_SUCCESS_COLOR, STATUS_SUCCESS_BG, STATUS_SUCCESS_COLOR.to_string()),
                 Some("scheduled") => (STATUS_SCHEDULED_COLOR, STATUS_SCHEDULED_BG, STATUS_SCHEDULED_COLOR.to_string()),
                 Some("paused") => (STATUS_PAUSED_COLOR, STATUS_PAUSED_BG, STATUS_PAUSED_COLOR.to_string()),
                 _ => (STATUS_IDLE_COLOR, STATUS_IDLE_BG, STATUS_IDLE_COLOR.to_string()),
             };
             
-            // Draw border with primary color
-            context.set_line_width(1.0);
-            context.set_stroke_style_str("#64ffda"); // --primary
+            // Draw border with status color
+            context.set_line_width(2.0);
+            context.set_stroke_style_str(&status_text);
             shapes::draw_rounded_rect_path(context, node);
             context.stroke();
             
@@ -162,6 +169,7 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             let icon = match status.as_deref() {
                 Some("processing") | Some("running") => "⚡",
                 Some("error") => "⚠️",
+                Some("success") => "✅",
                 Some("scheduled") => "⏰",
                 Some("paused") => "⏸️",
                 _ => "🤖",
