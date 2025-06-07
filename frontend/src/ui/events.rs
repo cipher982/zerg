@@ -80,8 +80,10 @@ fn setup_keyboard_shortcuts() -> Result<(), JsValue> {
 
     let window = web_sys::window().expect("no global window exists");
 
+    let window_clone = window.clone();
+
     let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: KeyboardEvent| {
-        // Ignore if focus is in an input, textarea or content-editable element
+        // Ignore when typing in inputs
         if let Some(target) = e.target() {
             if target.dyn_ref::<web_sys::HtmlInputElement>().is_some()
                 || target.dyn_ref::<web_sys::HtmlTextAreaElement>().is_some()
@@ -96,6 +98,11 @@ fn setup_keyboard_shortcuts() -> Result<(), JsValue> {
         }
 
         match e.key().as_str() {
+            " " => {
+                if let Some(doc) = web_sys::window().unwrap().document() {
+                    let _ = doc.body().unwrap().class_list().add_1("space-pan");
+                }
+            }
             "f" | "F" => {
                 dispatch_global_message(Message::CenterView);
                 // Prevent default browser find shortcut when Ctrl+F not pressed
@@ -113,6 +120,18 @@ fn setup_keyboard_shortcuts() -> Result<(), JsValue> {
 
     window.add_event_listener_with_callback("keydown", cb.as_ref().unchecked_ref())?;
     cb.forget();
+
+    // Keyup – exit pan mode etc.
+    let cb_up = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: KeyboardEvent| {
+        if e.key() == " " {
+            if let Some(doc) = window_clone.document() {
+                let _ = doc.body().unwrap().class_list().remove_1("space-pan");
+            }
+        }
+    }));
+
+    window.add_event_listener_with_callback("keyup", cb_up.as_ref().unchecked_ref())?;
+    cb_up.forget();
 
     Ok(())
 }

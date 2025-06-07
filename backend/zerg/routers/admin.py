@@ -62,17 +62,22 @@ async def reset_database():
         # would otherwise return *stale* ORM objects after the truncate.
         close_all_sessions()
 
-        with engine.begin() as conn:
-            if engine.dialect.name == "sqlite":
-                conn.exec_driver_sql("PRAGMA foreign_keys = OFF;")
+        # Drop & recreate schema so **new columns** land automatically when
+        # models change during active dev work (e.g. `workflow_id`).  Safer
+        # than DELETE-rows because SQLite cannot ALTER TABLE with multiple
+        # columns easily.
 
-            for table in reversed(Base.metadata.sorted_tables):
-                conn.exec_driver_sql(f'DELETE FROM "{table.name}";')
+        from sqlalchemy.orm import close_all_sessions
 
-            if engine.dialect.name == "sqlite":
-                conn.exec_driver_sql("PRAGMA foreign_keys = ON;")
+        close_all_sessions()
 
-        logger.info("All tables truncated (worker-isolated)")
+        logger.info("Dropping all tables …")
+        Base.metadata.drop_all(bind=engine)
+
+        logger.info("Re-creating all tables …")
+        Base.metadata.create_all(bind=engine)
+
+        logger.info("Database schema reset (drop+create) complete")
 
         # Dispose again after recreation to release references held by
         # background threads.

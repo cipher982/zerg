@@ -129,8 +129,13 @@ impl ApiClient {
 
     /// Retrieve the persisted canvas layout for the authenticated user.
     /// Returns an **empty string** if the backend responded with 204.
-    pub async fn get_layout() -> Result<String, JsValue> {
-        let url = format!("{}/api/graph/layout", Self::api_base_url());
+    pub async fn get_layout(workflow_id: Option<u32>) -> Result<String, JsValue> {
+        let base = Self::api_base_url();
+        let url = if let Some(id) = workflow_id {
+            format!("{}/api/graph/layout?workflow_id={}", base, id)
+        } else {
+            format!("{}/api/graph/layout", base)
+        };
         Self::fetch_json(&url, "GET", None).await
     }
 
@@ -302,8 +307,13 @@ impl ApiClient {
     /// convert the successful `fetch_json` result (an empty string) into `()`
     /// so callers can use the function in a boolean-style `match` without
     /// caring about a body.
-    pub async fn patch_layout(payload_json: &str) -> Result<(), JsValue> {
-        let url = format!("{}/api/graph/layout", Self::api_base_url());
+    pub async fn patch_layout(payload_json: &str, workflow_id: Option<u32>) -> Result<(), JsValue> {
+        let base = Self::api_base_url();
+        let url = if let Some(id) = workflow_id {
+            format!("{}/api/graph/layout?workflow_id={}", base, id)
+        } else {
+            format!("{}/api/graph/layout", base)
+        };
         Self::fetch_json(&url, "PATCH", Some(payload_json))
             .await
             .map(|_| ())

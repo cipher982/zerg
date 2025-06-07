@@ -123,7 +123,10 @@ fn try_load_layout_from_api() {
     use crate::constants::{DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT, NODE_COLOR_GENERIC};
 
     spawn_local(async {
-        match crate::network::ApiClient::get_layout().await {
+        // Determine current workflow id once – avoid borrowing after await.
+        let wf_id = crate::state::APP_STATE.with(|s| s.borrow().current_workflow_id);
+
+        match crate::network::ApiClient::get_layout(wf_id.map(|v| v as u32)).await {
             Ok(body) if !body.is_empty() => {
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body) {
                     // ------------------------------------------------------------------
@@ -218,6 +221,9 @@ fn try_load_layout_from_api() {
                 // Attempt localStorage fallback when remote fetch fails
                 crate::storage::try_load_from_localstorage();
             }
+            // 204 No Content – no layout for this workflow yet.  **Do not**
+            // load the stale localStorage copy (if any) because the user
+            // explicitly reset the database or created a new workflow.
             _ => {
                 // Got 204 – backend responded with "no content".  Inform the
                 // user so they realise a first save is still required.
@@ -225,9 +231,6 @@ fn try_load_layout_from_api() {
                     "Layout: no saved layout yet", "yellow");
 
                 web_sys::console::log_1(&"No remote canvas layout found (204)".into());
-
-                // Also try localStorage in this case
-                crate::storage::try_load_from_localstorage();
             }
         }
     });
@@ -344,7 +347,8 @@ pub fn save_state_to_api(app_state: &AppState) {
             let payload_str = payload.to_string();
 
             spawn_local(async move {
-                match crate::network::ApiClient::patch_layout(&payload_str).await {
+                let wf_id = crate::state::APP_STATE.with(|s| s.borrow().current_workflow_id);
+                match crate::network::ApiClient::patch_layout(&payload_str, wf_id.map(|v| v as u32)).await {
                     Ok(_) => update_layout_status("Layout: saved", "green"),
                     Err(e) => {
                         update_layout_status("Layout: save failed – offline copy", "orange");

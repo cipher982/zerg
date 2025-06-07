@@ -169,10 +169,8 @@ class CanvasLayout(Base):
     # work easier and allows us to rely on an atomic *upsert* in the CRUD
     # helper.
     __table_args__ = (
-        # NOTE: SQLite supports the ON CONFLICT clause that references this
-        # UNIQUE constraint, enabling an atomic UPSERT in
-        # ``crud.upsert_canvas_layout``.
-        UniqueConstraint("user_id", "workspace", name="uix_user_workspace_layout"),
+        # Ensure a user has at most *one* layout per workflow.
+        UniqueConstraint("user_id", "workflow_id", name="uix_user_workflow_layout"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -190,6 +188,9 @@ class CanvasLayout(Base):
     # Reserved for a future multi-tenant feature where a user can switch
     # between different *workspaces*.
     workspace = Column(String, nullable=True)
+
+    # NEW – link layout to a specific **workflow**.  NULL = global / legacy.
+    workflow_id = Column(Integer, ForeignKey("workflows.id"), nullable=True)
 
     # Raw JSON blobs coming from the WASM frontend.
     nodes_json = Column(MutableDict.as_mutable(JSON), nullable=False)
@@ -209,6 +210,9 @@ class CanvasLayout(Base):
 
     # ORM relationship back to the owning user – one-to-one convenience.
     user = relationship("User", backref="canvas_layout", uselist=False)
+
+    # Backref to owning workflow (optional)
+    workflow = relationship("Workflow", backref="canvas_layouts", uselist=False)
 
 
 class AgentMessage(Base):

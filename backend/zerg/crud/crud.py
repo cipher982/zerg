@@ -684,6 +684,7 @@ def upsert_canvas_layout(
     user_id: Optional[int],
     nodes: dict,
     viewport: Optional[dict],
+    workflow_id: Optional[int] = None,
 ):
     """Insert **or** update the *canvas layout* for *(user_id, workspace=NULL)*.
 
@@ -699,23 +700,19 @@ def upsert_canvas_layout(
     if user_id is None:
         raise ValueError("upsert_canvas_layout: `user_id` must not be None, auth dependency failed?")
 
-    workspace_val = None  # Reserved for future multi-tenant feature
-
     stmt = (
         insert(CanvasLayout)
         .values(
             user_id=user_id,
-            workspace=workspace_val,
+            workflow_id=workflow_id,
             nodes_json=nodes,
             viewport=viewport,
         )
         .on_conflict_do_update(
-            index_elements=["user_id", "workspace"],
+            index_elements=["user_id", "workflow_id"],
             set_={
                 "nodes_json": nodes,
                 "viewport": viewport,
-                # Explicitly bump timestamp – SQLite will not evaluate the
-                # column default on an UPDATE.
                 "updated_at": func.now(),
             },
         )
@@ -728,13 +725,17 @@ def upsert_canvas_layout(
     return db.query(CanvasLayout).filter_by(user_id=user_id, workspace=None).first()
 
 
-def get_canvas_layout(db: Session, user_id: Optional[int]):
-    """Return the persisted canvas layout for *user_id* (or None)."""
+def get_canvas_layout(db: Session, user_id: Optional[int], workflow_id: Optional[int] = None):
+    """Return the persisted canvas layout for *(user_id, workflow_id)*."""
 
     if user_id is None:
         return None
 
-    return db.query(CanvasLayout).filter_by(user_id=user_id, workspace=None).first()
+    return (
+        db.query(CanvasLayout)
+        .filter_by(user_id=user_id, workflow_id=workflow_id)
+        .first()
+    )
 
 
 def create_workflow(
@@ -753,3 +754,33 @@ def create_workflow(
     db.commit()
     db.refresh(db_workflow)
     return db_workflow
+
+# -------------------------------------------------------------------
+# Workflow helpers – list / fetch by id (active only)
+# -------------------------------------------------------------------
+
+
+def get_workflows(
+    db: Session,
+    *,
+    owner_id: int,
+    skip: int = 0,
+    limit: int = 100,
+):
+    """Return active workflows owned by *owner_id*."""
+
+    from zerg.models.models import Workflow as WorkflowModel
+
+    return (
+        db.query(WorkflowModel)
+        .filter_by(owner_id=owner_id, is_active=True)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+def get_workflow(db: Session, workflow_id: int):
+    from zerg.models.models import Workflow as WorkflowModel
+
+    return db.query(WorkflowModel).filter_by(id=workflow_id).first()

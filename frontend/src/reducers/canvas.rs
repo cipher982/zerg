@@ -343,6 +343,16 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             let workflow_id = state.create_workflow(name.clone());
             web_sys::console::log_1(&format!("Created new workflow '{}' with ID: {}", name, workflow_id).into());
             state.state_modified = true;
+
+            // Refresh tab bar UI
+            cmds.push(Command::UpdateUI(Box::new(|| {
+                if let (Some(win),) = (web_sys::window(),) {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::workflow_switcher::refresh(&doc);
+                    }
+                }
+            })));
+
             true
         }
         Message::SelectWorkflow { workflow_id } => {
@@ -355,6 +365,15 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             }
             state.mark_dirty();
             state.state_modified = true;
+
+            cmds.push(Command::UpdateUI(Box::new(|| {
+                if let (Some(win),) = (web_sys::window(),) {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::workflow_switcher::refresh(&doc);
+                    }
+                }
+            })));
+
             true
         }
         Message::AddEdge { from_node_id, to_node_id, label } => {
