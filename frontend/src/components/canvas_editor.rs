@@ -493,6 +493,13 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     let canvas_wheel_inside = canvas_wheel.clone();
     
     let wheel_handler = Closure::wrap(Box::new(move |event: web_sys::WheelEvent| {
+        // ------------------------------------------------------------------
+        //  TEMP: disable interactive zoom entirely.  Remove the next three
+        //  lines to re-enable wheel-zoom behaviour.
+        // ------------------------------------------------------------------
+        return;
+
+        // (Dead code below until zoom is re-enabled.)
         // Check if auto-fit is enabled before doing anything
         let auto_fit_enabled = APP_STATE.with(|state| {
             let state = state.borrow();
