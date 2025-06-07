@@ -16,6 +16,7 @@ pub mod mcp_server_manager;
 pub mod node_palette;
 pub mod tool_config_modal;
 pub mod trigger_config_modal;
+pub mod workflow_switcher;
 
 // utilities
 

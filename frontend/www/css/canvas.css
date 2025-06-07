@@ -121,6 +121,56 @@
   border: 1px solid #ccc;
 }
 
+/* ------------------------------------------------------------------ */
+/* Workflow tab bar                                                   */
+/* ------------------------------------------------------------------ */
+
+#workflow-bar {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  background: var(--surface1, #fafafa);
+  border-bottom: 1px solid var(--surface3, #ddd);
+  padding: 0 8px;
+  overflow-x: auto;
+}
+
+.workflow-tab-list {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.workflow-tab-list .tab {
+  padding: 4px 10px;
+  margin-right: 4px;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  background: transparent;
+}
+
+.workflow-tab-list .tab:hover {
+  background: var(--surface2, #eee);
+}
+
+.workflow-tab-list .tab.active {
+  background: var(--surface2, #fff);
+  border: 1px solid var(--surface3, #ddd);
+  border-bottom: 1px solid var(--surface2, #fff);
+}
+
+.workflow-tab-list .plus-tab {
+  font-weight: bold;
+}
+
+/* Space-bar panning cursor override */
+body.space-pan #node-canvas {
+  cursor: grab !important;
+}
+
 /* ------------------------------------------------------ */
 /*  Toolbar button + More-menu (Phase-2 UI polish)        */
 /* ------------------------------------------------------ */
