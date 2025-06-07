@@ -2,6 +2,8 @@
 # Keep stdlib ``datetime`` for type annotations; runtime *now()* comes from
 # ``utc_now``.
 from datetime import datetime
+
+# Standard library typing helpers
 from typing import Any
 from typing import Dict
 from typing import List
@@ -36,6 +38,11 @@ from zerg.schemas.schemas import RunTrigger
 from zerg.utils.time import utc_now
 
 
+# Our minimum runtime is Python 3.12 so the PEP-604 ``T | None`` syntax is
+# available everywhere, but we still use ``Optional`` in a few places to keep
+# the signatures short when multiple union members would otherwise be
+# required.
+# Runtime targets Python ≥3.12 so PEP-604 union syntax is fine.
 def _validate_cron_or_raise(expr: str | None):
     """Raise ``ValueError`` if *expr* is not a valid crontab string."""
 
@@ -789,3 +796,15 @@ def get_workflow(db: Session, workflow_id: int):
     from zerg.models.models import Workflow as WorkflowModel
 
     return db.query(WorkflowModel).filter_by(id=workflow_id).first()
+
+
+def get_workflow_execution(db: Session, execution_id: int):
+    from zerg.models.models import WorkflowExecution
+
+    return db.query(WorkflowExecution).filter_by(id=execution_id).first()
+
+
+def get_workflow_executions(db: Session, workflow_id: int, skip: int = 0, limit: int = 100):
+    from zerg.models.models import WorkflowExecution
+
+    return db.query(WorkflowExecution).filter_by(workflow_id=workflow_id).offset(skip).limit(limit).all()

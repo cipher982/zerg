@@ -409,3 +409,37 @@ class Workflow(Base):
 
     # ORM relationship to User
     owner = relationship("User", backref="workflows")
+
+
+class WorkflowExecution(Base):
+    __tablename__ = "workflow_executions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workflow_id = Column(Integer, ForeignKey("workflows.id"), nullable=False, index=True)
+    status = Column(String, nullable=False, default="queued")  # queued, running, success, failed
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    error = Column(Text, nullable=True)
+    log = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # ORM relationships
+    workflow = relationship("Workflow", backref="executions")
+    node_states = relationship("NodeExecutionState", back_populates="workflow_execution", cascade="all, delete-orphan")
+
+
+class NodeExecutionState(Base):
+    __tablename__ = "node_execution_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workflow_execution_id = Column(Integer, ForeignKey("workflow_executions.id"), nullable=False, index=True)
+    node_id = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="idle")  # idle, queued, running, success, failed
+    output = Column(MutableDict.as_mutable(JSON), nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # ORM relationship
+    workflow_execution = relationship("WorkflowExecution", back_populates="node_states")

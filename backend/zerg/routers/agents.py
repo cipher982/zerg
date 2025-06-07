@@ -1,5 +1,9 @@
 """Agent routes module."""
 
+from __future__ import annotations
+
+# Target runtime is Python ≥3.12 – full PEP-604 union and other modern typing
+# niceties are available.  No legacy compatibility shims.
 import logging
 from typing import Any
 from typing import List
@@ -160,6 +164,7 @@ async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(
 # ---------------------------------------------------------------------------
 
 
+# Optional import for type hints
 @router.get("/{agent_id}/details", response_model=AgentDetails, response_model_exclude_none=True)
 def read_agent_details(
     agent_id: int,
