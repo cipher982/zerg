@@ -43,7 +43,8 @@ from zerg.utils.time import utc_now
 # the signatures short when multiple union members would otherwise be
 # required.
 # Runtime targets Python ≥3.12 so PEP-604 union syntax is fine.
-def _validate_cron_or_raise(expr: str | None):
+# Python <3.10 does not support PEP-604 union for `None` at *runtime* inside
+def _validate_cron_or_raise(expr: Optional[str]):
     """Raise ``ValueError`` if *expr* is not a valid crontab string."""
 
     if expr is None:
