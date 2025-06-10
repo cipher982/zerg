@@ -52,6 +52,33 @@ impl ApiClient {
         Self::fetch_json(&url, "GET", None).await
     }
 
+    // -------------------------------------------------------------------
+    // Workflow CRUD – new backend integration (July 2025)
+    // -------------------------------------------------------------------
+
+    /// Fetch all workflows for the **current** user (active only).
+    pub async fn get_workflows() -> Result<String, JsValue> {
+        let url = format!("{}/api/workflows", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    /// Create a new workflow – returns the JSON representation from backend.
+    pub async fn create_workflow(name: &str) -> Result<String, JsValue> {
+        // Minimal payload; description empty and canvas_data empty object
+        let body = format!(
+            "{{\"name\": \"{}\", \"description\": \"\", \"canvas_data\": {{}}}}",
+            name
+        );
+        let url = format!("{}/api/workflows/", Self::api_base_url());
+        Self::fetch_json(&url, "POST", Some(&body)).await
+    }
+
+    /// Soft-delete a workflow.
+    pub async fn delete_workflow(workflow_id: u32) -> Result<(), JsValue> {
+        let url = format!("{}/api/workflows/{}", Self::api_base_url(), workflow_id);
+        Self::fetch_json(&url, "DELETE", None).await.map(|_| ())
+    }
+
     // Get all agents
     pub async fn get_agents_scoped(scope: &str) -> Result<String, JsValue> {
         let url = format!("{}/api/agents?scope={}", Self::api_base_url(), scope);

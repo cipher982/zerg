@@ -98,6 +98,9 @@ pub enum Message {
         to_node_id: String,
         label: Option<String>,
     },
+
+    // Workflows fetched from backend
+    WorkflowsLoaded(Vec<crate::models::Workflow>),
     
     // Canvas view controls
     ToggleAutoFit,                       // Toggle auto-fit functionality
@@ -467,6 +470,9 @@ pub enum Command {
     /// Fetch messages for a thread
     FetchThreadMessages(u32), // thread_id
 
+    /// Fetch workflows (visual canvas definitions)
+    FetchWorkflows,
+
     // ---------------------------------------------------------------
     // Trigger-related side-effect commands (Phase A wiring only)
     // ---------------------------------------------------------------
@@ -537,6 +543,7 @@ pub enum Command {
 
     FetchAgents,                     // Command to fetch agents from API
 
+    /// Fetch visual workflows from backend
     /// Fetch detailed debug info for an agent
     FetchAgentDetails(u32), // agent_id
 

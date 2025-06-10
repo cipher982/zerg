@@ -70,6 +70,27 @@ pub fn execute_fetch_command(cmd: Command) {
             });
         },
 
+        // -----------------------------------------------------------
+        // Workflow helpers (new)
+        // -----------------------------------------------------------
+
+        Command::FetchWorkflows => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_workflows().await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<Vec<crate::models::ApiWorkflow>>(&json_str) {
+                            Ok(api_wfs) => {
+                                let workflows: Vec<crate::models::Workflow> = api_wfs.into_iter().map(|w| w.into()).collect();
+                                dispatch_global_message(Message::WorkflowsLoaded(workflows));
+                            },
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse workflows: {:?}", e).into()),
+                        }
+                    }
+                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch workflows: {:?}", e).into()),
+                }
+            });
+        },
+
         Command::FetchAgentDetails(agent_id) => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_agent_details(agent_id).await {

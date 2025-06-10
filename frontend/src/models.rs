@@ -224,6 +224,50 @@ pub struct Workflow {
     pub edges: Vec<Edge>,          // Edges connecting nodes in this workflow
 }
 
+// -----------------------------------------------------------------------------
+// Backend **Workflow** DTO (matches FastAPI schema) ---------------------------
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiWorkflow {
+    pub id: u32,
+    pub owner_id: u32,
+    pub name: String,
+    pub description: Option<String>,
+    #[serde(default)]
+    pub canvas_data: serde_json::Value,
+    #[serde(default)]
+    pub is_active: bool,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}
+
+impl From<ApiWorkflow> for Workflow {
+    fn from(api: ApiWorkflow) -> Self {
+        // canvas_data is expected to be an object with "nodes" and "edges" arrays.
+        let (nodes, edges) = if let Some(obj) = api.canvas_data.as_object() {
+            let nodes_val = obj.get("nodes").cloned().unwrap_or(serde_json::Value::Array(vec![]));
+            let edges_val = obj.get("edges").cloned().unwrap_or(serde_json::Value::Array(vec![]));
+
+            // Deserialize to Vec<CanvasNode> / Vec<Edge>; fall back to empty vec on error
+            let nodes: Vec<CanvasNode> = serde_json::from_value(nodes_val).unwrap_or_default();
+            let edges: Vec<Edge> = serde_json::from_value(edges_val).unwrap_or_default();
+            (nodes, edges)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+
+        Workflow {
+            id: api.id,
+            name: api.name,
+            nodes,
+            edges,
+        }
+    }
+}
+
 // API models that match the backend schema
 // These are used for API requests and responses
 
