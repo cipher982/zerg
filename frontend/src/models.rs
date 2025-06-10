@@ -184,7 +184,7 @@ pub struct Message {
 /// To keep the incremental refactor compilable we provide an interim type
 /// alias `pub type Node = CanvasNode;` – this will be removed once all
 /// call-sites migrate.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CanvasNode {
     pub node_id: String,           // Unique identifier for this node
     pub agent_id: Option<u32>,     // Optional reference to a backend agent
@@ -207,7 +207,7 @@ pub struct CanvasNode {
 pub type Node = CanvasNode;
 
 /// Edge represents a connection between two nodes in a workflow
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Edge {
     pub id: String,                // Unique identifier for this edge
     pub from_node_id: String,      // Source node ID
@@ -216,7 +216,7 @@ pub struct Edge {
 }
 
 /// Workflow represents a collection of nodes and edges that form a complete workflow
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Workflow {
     pub id: u32,                   // Unique identifier for this workflow
     pub name: String,              // Name of the workflow
