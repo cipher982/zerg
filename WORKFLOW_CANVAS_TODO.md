@@ -10,16 +10,25 @@
     - [x] Test edge cases (large canvas_data, concurrent edits).
     - [x] Regression tests for future schema changes.
 
-### 1.2. Workflow Execution Engine
-- [x] **Design and implement a workflow execution engine**
-    - [x] Service/class to execute workflows node-by-node, resolving input/output dependencies.
-    - [x] Support for Tool, Trigger, and Agent nodes (as per PRD and frontend models).
-    - [x] Integrate with MCP tool execution and trigger firing.
-    - [x] Handle errors, retries, and partial failures gracefully.
-    - [x] Track execution state for each node (idle, queued, running, success, failed).
-    - [x] Log execution details, errors, and data flow for debugging.
-    - [x] Support for live feedback via WebSocket or polling.
-    - [x] Support for manual and scheduled execution (trigger nodes).
+### 1.2. Workflow Execution Engine *(IN-PROGRESS)*
+> We now have DB models (`WorkflowExecution`, `NodeExecutionState`) **and** API routes
+> (`/api/workflow-executions/*`) but the actual engine that runs workflows is still
+> a stub (`backend/zerg/services/workflow_engine.py`).
+
+- [ ] **Design and implement a workflow execution engine**
+    - [ ] Service/class to execute workflows node-by-node, resolving input/output dependencies.
+    - [ ] Support for Tool, Trigger, and Agent nodes (as per PRD and frontend models).
+    - [ ] Integrate with MCP tool execution and trigger firing.
+    - [ ] Handle errors, retries, and partial failures gracefully.
+    - [ ] Track execution state for each node (idle, queued, running, success, failed).
+    - [ ] Log execution details, errors, and data flow for debugging.
+    - [ ] Support for live feedback via WebSocket or polling.
+    - [ ] Support for manual and scheduled execution (trigger nodes).
+
+    **✅ Already done** (so engine work can build on top):
+    - DB schema for execution tracking.
+    - CRUD helpers for execution rows.
+    - FastAPI routes to start an execution, query status/logs/history, and export data.
 
 ### 1.3. Workflow Execution Persistence & API
 - [x] **Add models for execution tracking**
@@ -33,6 +42,9 @@
 - [x] **Security & Permissions**
     - [x] Ensure only workflow owners can execute/view their workflows and logs.
 
+**Note:** Execution API endpoints are functional but will return minimal data
+until the engine in 1.2 is completed.
+
 ---
 
 ## 2. Frontend
@@ -45,6 +57,10 @@
     - [ ] (Optional) Provide a one-time migration/import for any existing localStorage workflows.
     - [ ] Handle API errors and show user-friendly messages.
     - [ ] Ensure all workflow state is synced across devices and sessions.
+
+    *Current status:* The front-end still persists workflows entirely in
+    `localStorage` (see `frontend/src/models.rs`).  No calls to the new
+    `/api/workflows` endpoints are made yet.
 
 ### 2.2. Canvas & Node System
 - [x] **Node system, palette, drag-and-drop, and modal-based config are robust.**
@@ -75,7 +91,8 @@
 
 ### 3.1. Testing & Quality
 - [ ] **Add e2e and integration tests**
-    - [ ] Test workflow CRUD and execution flows end-to-end.
+    - [x] Playwright canvas editor smoke tests added (`e2e/tests/canvas_workflows.spec.ts`).
+    - [ ] Test workflow CRUD and execution flows end-to-end (backend + front-end).
     - [ ] Test error handling, edge cases, and UI feedback.
     - [ ] Accessibility and performance tests for large workflows.
 
