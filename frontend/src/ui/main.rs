@@ -27,6 +27,16 @@ pub fn create_input_panel(document: &Document) -> Result<web_sys::Element, JsVal
     clear_btn.set_attribute("type", "button")?;
     clear_btn.set_inner_html("Clear Canvas");
     clear_btn.set_attribute("id", "clear-button")?;
+    clear_btn.set_attribute("class", "dropdown-btn")?;
+
+    // Add click handler for clear button
+    {
+        let cb = wasm_bindgen::closure::Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            crate::state::dispatch_global_message(crate::messages::Message::ClearCanvas);
+        }));
+        clear_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
 
     more_details.append_child(&clear_btn)?;
 
