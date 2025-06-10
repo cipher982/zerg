@@ -267,6 +267,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // If switching to Canvas, always fetch agents (will trigger shelf update when loaded)
             if view_clone_for_shelf == crate::storage::ActiveView::Canvas {
                 commands.push(Command::FetchAgents);
+                commands.push(Command::FetchWorkflows);
             }
         },
        
@@ -462,6 +463,27 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::AnimationTick |
         Message::CreateWorkflow { .. } |
         Message::SelectWorkflow { .. } |
+        Message::WorkflowsLoaded(workflows) => {
+            state.workflows.clear();
+            for wf in workflows {
+                state.workflows.insert(wf.id, wf);
+            }
+            // Ensure current_workflow_id is set
+            if state.current_workflow_id.is_none() {
+                if let Some(first_id) = state.workflows.keys().next().cloned() {
+                    state.current_workflow_id = Some(first_id);
+                }
+            }
+            // Trigger UI refresh of workflow switcher
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let (Some(win),) = (web_sys::window(),) {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::workflow_switcher::refresh(&doc);
+                    }
+                }
+            })));
+            true
+        }
         Message::AddEdge { .. } |
         Message::GenerateCanvasFromAgents => {
             // These are handled by the canvas reducer which returns early
