@@ -93,9 +93,18 @@ until the engine in 1.2 is completed.
               moment we persist to backend this is implicitly true as long as
               we re-fetch on app boot and after CRUD actions).
 
-    *Current status (Jul 2025)*: **Create** is wired up end-to-end (＋ tab →
-    backend → state refresh).  `rename/delete` helpers exist but UI triggers
+    *Current status (Jan 2025)*: **Create** is wired up end-to-end (＋ tab →
+    backend → state refresh). **Workflow tabs are now visible** in Canvas Editor
+    with proper dark theme styling. `rename/delete` helpers exist but UI triggers
     are not implemented yet, and LocalStorage migration still pending.
+
+### 2.1.1. Workflow Tab Bar UI *(COMPLETED)*
+- [x] **Fix workflow tab visibility issue**
+    - [x] Corrected DOM insertion logic to work with current canvas layout
+    - [x] Fixed view-specific initialization (tabs only appear on canvas, not dashboard)
+    - [x] Updated styling to match dark theme design system
+    - [x] Proper cleanup when switching away from canvas view
+    - [x] Responsive design with proper spacing and hover states
 
 ### 2.2. Canvas & Node System
 - [x] **Node system, palette, drag-and-drop, and modal-based config are robust.**
