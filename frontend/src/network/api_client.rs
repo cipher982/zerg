@@ -79,6 +79,20 @@ impl ApiClient {
         Self::fetch_json(&url, "DELETE", None).await.map(|_| ())
     }
 
+    /// Rename / update a workflow (PATCH).
+    pub async fn rename_workflow(
+        workflow_id: u32,
+        name: &str,
+        description: &str,
+    ) -> Result<String, JsValue> {
+        let url = format!("{}/api/workflows/{}", Self::api_base_url(), workflow_id);
+        let body = format!(
+            "{{\"name\": \"{}\", \"description\": \"{}\", \"canvas_data\": {{}}}}",
+            name, description
+        );
+        Self::fetch_json(&url, "PATCH", Some(&body)).await
+    }
+
     // Get all agents
     pub async fn get_agents_scoped(scope: &str) -> Result<String, JsValue> {
         let url = format!("{}/api/agents?scope={}", Self::api_base_url(), scope);
