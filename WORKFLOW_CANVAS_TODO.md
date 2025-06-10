@@ -52,34 +52,26 @@ until the engine in 1.2 is completed.
 ### 2.1. Workflow Persistence & API Integration
 - [ ] **Connect frontend to backend workflow CRUD API**
     - [x] Fetch workflows from backend on app load (tab-bar reflects server data).
-    - [ ] **Create – plus-tab (`＋`) hooks to `POST /api/workflows`**
-        - [ ] Build a `create_workflow()` helper in `network/api_client.rs` that
-              wraps the POST request and returns `Workflow`.
-        - [ ] In `components/workflow_tab_bar.rs` (or equivalent) change the
-              *new-tab* click handler to:
-              1. Generate a **temporary** optimistic tab (greyed-out spinner).
-              2. Call `create_workflow()` with default `name="Untitled"`, empty
-                 `canvas_data`, etc.
-              3. On success: replace the optimistic entry with the returned row
-                 and dispatch `Msg::WorkflowsLoaded(Vec<Workflow>)` **or** a
-                 more granular `Msg::WorkflowCreated(Workflow)`.
-              4. On failure: show a toast (`toast::error`) and roll back the
-                 optimistic tab.
+    - [x] **Create – plus-tab (`＋`) hooks to `POST /api/workflows`**
+        - [x] `create_workflow()` helper added to `network/api_client.rs`.
+        - [x] `workflow_switcher` now dispatches `Message::CreateWorkflow` which
+              triggers a `Command::CreateWorkflowApi` side-effect.
+        - [/] Optimistic UI (spinner/tab) & toast rollback still TBD.
 
     - [ ] **Rename – context-menu → `PATCH /api/workflows/{id}`**
         - [ ] Add a small *⋯* button on each tab that opens a dropdown with
               “Rename” and “Delete”.
         - [ ] For *Rename*: open a modal (reuse the existing `rename_thread`
               modal component) asking for *Name* + *Description*.
-        - [ ] On *Save* → call a new `rename_workflow()` helper that issues the
-              PATCH request.  Update the local state immediately after the
-              backend responds.
+        - [x] `rename_workflow()` helper implemented in `ApiClient`; command &
+              reducer wiring merged.
+        - [ ] UI work (modal + context menu) + error handling still pending.
 
     - [ ] **Delete – context-menu → `DELETE /api/workflows/{id}`**
         - [ ] Show confirmation dialog (`Are you sure? This does not delete
               runs or data, you can restore via Support in 30 days …`).
-        - [ ] On confirm → optimistically hide the tab, issue the DELETE.  If
-              backend fails, restore and toast error.
+        - [x] `delete_workflow()` helper + command/reducer integration done.
+        - [ ] UI context menu + optimistic hide & toast rollback pending.
 
     - [ ] **LocalStorage sunset & one-shot import**
         - [ ] When the app loads, *before* hitting the backend, check for the
@@ -101,11 +93,9 @@ until the engine in 1.2 is completed.
               moment we persist to backend this is implicitly true as long as
               we re-fetch on app boot and after CRUD actions).
 
-    *Current status (Jun 2025)*: Workflows are **fetched** from
-    `/api/workflows` on Canvas load and displayed in the tab-bar.  Creation,
-    rename, and delete still operate only in memory, and LocalStorage writes
-    remain; the sub-tasks above bring the canvas to full round-trip parity with
-    the backend.
+    *Current status (Jul 2025)*: **Create** is wired up end-to-end (＋ tab →
+    backend → state refresh).  `rename/delete` helpers exist but UI triggers
+    are not implemented yet, and LocalStorage migration still pending.
 
 ### 2.2. Canvas & Node System
 - [x] **Node system, palette, drag-and-drop, and modal-based config are robust.**
