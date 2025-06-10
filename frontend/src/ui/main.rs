@@ -54,9 +54,6 @@ pub fn setup_ui(document: &Document) -> Result<(), JsValue> {
     // Create agent modal component (shared between views)
     crate::components::agent_config_modal::AgentConfigModal::init(document)?;
 
-    // Workflow tab bar (initial render)
-    crate::components::workflow_switcher::init(document)?;
-
     // Ensure workflows are loaded on initial app startup – especially when
     // landing directly on the Canvas page without going through the view
     // toggle reducer.

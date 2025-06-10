@@ -128,11 +128,12 @@
 #workflow-bar {
   display: flex;
   align-items: center;
-  height: 32px;
-  background: var(--surface1, #fafafa);
-  border-bottom: 1px solid var(--surface3, #ddd);
-  padding: 0 8px;
+  height: 40px;
+  background: var(--dark-card);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 var(--spacing-md);
   overflow-x: auto;
+  flex-shrink: 0;
 }
 
 .workflow-tab-list {
@@ -140,30 +141,49 @@
   list-style: none;
   margin: 0;
   padding: 0;
+  align-items: center;
+  gap: var(--spacing-xs);
 }
 
 .workflow-tab-list .tab {
-  padding: 4px 10px;
-  margin-right: 4px;
-  border-radius: 4px 4px 0 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   user-select: none;
   font-size: 13px;
+  font-weight: 500;
   background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
 }
 
 .workflow-tab-list .tab:hover {
-  background: var(--surface2, #eee);
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .workflow-tab-list .tab.active {
-  background: var(--surface2, #fff);
-  border: 1px solid var(--surface3, #ddd);
-  border-bottom: 1px solid var(--surface2, #fff);
+  background: var(--bg-button);
+  color: var(--text);
+  border-color: var(--border-color);
 }
 
 .workflow-tab-list .plus-tab {
   font-weight: bold;
+  color: var(--primary);
+  font-size: 16px;
+  min-width: 32px;
+  justify-content: center;
+}
+
+.workflow-tab-list .plus-tab:hover {
+  background: rgba(100, 255, 218, 0.1);
+  color: var(--primary);
 }
 
 /* Space-bar panning cursor override */

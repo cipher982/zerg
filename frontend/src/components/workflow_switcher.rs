@@ -25,11 +25,17 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
 
     bar_el.append_child(&list_el)?;
 
-    // Insert bar right before canvas container
-    if let Some(root) = document.get_element_by_id("canvas-root") {
-        root.insert_before(&bar_el, root.first_child().as_ref())?;
+    // Insert bar into the main content area of the canvas layout
+    // Try multiple locations in order of preference
+    if let Some(main_content) = document.get_element_by_id("main-content-area") {
+        // Insert at the top of main content area, before input panel
+        main_content.insert_before(&bar_el, main_content.first_child().as_ref())?;
+    } else if let Some(app_container) = document.get_element_by_id("app-container") {
+        // Fallback: insert at top of app container (current canvas layout)
+        app_container.insert_before(&bar_el, app_container.first_child().as_ref())?;
     } else {
-        document.body().unwrap().append_child(&bar_el)?; // fallback
+        // Last resort fallback
+        document.body().unwrap().append_child(&bar_el)?;
     }
 
     refresh(document)?;
