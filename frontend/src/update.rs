@@ -440,30 +440,71 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         
         
         // Canvas-related messages are handled by the canvas reducer
-        Message::UpdateNodePosition { .. } |
-        Message::AddNode { .. } |
-        Message::AddResponseNode { .. } |
-        Message::ToggleAutoFit |
-        Message::CenterView |
-        Message::ResetView |
-        Message::ClearCanvas |
-        Message::CanvasNodeClicked { .. } |
-        Message::MarkCanvasDirty |
-        Message::StartDragging { .. } |
-        Message::StopDragging |
-        Message::StartCanvasDrag { .. } |
-        Message::UpdateCanvasDrag { .. } |
-        Message::StopCanvasDrag |
-        Message::ZoomCanvas { .. } |
-        Message::AddCanvasNode { .. } |
-        Message::DeleteNode { .. } |
-        Message::UpdateNodeText { .. } |
-        Message::CompleteNodeResponse { .. } |
-        Message::UpdateNodeStatus { .. } |
-        Message::AnimationTick |
-        Message::CreateWorkflow { .. } |
-        Message::SelectWorkflow { .. } => {
-            // these are handled below (or in canvas reducer).  No-op here.
+        Message::UpdateNodePosition { .. }
+        | Message::AddNode { .. }
+        | Message::AddResponseNode { .. }
+        | Message::ToggleAutoFit
+        | Message::CenterView
+        | Message::ResetView
+        | Message::ClearCanvas
+        | Message::CanvasNodeClicked { .. }
+        | Message::MarkCanvasDirty
+        | Message::StartDragging { .. }
+        | Message::StopDragging
+        | Message::StartCanvasDrag { .. }
+        | Message::UpdateCanvasDrag { .. }
+        | Message::StopCanvasDrag
+        | Message::ZoomCanvas { .. }
+        | Message::AddCanvasNode { .. }
+        | Message::DeleteNode { .. }
+        | Message::UpdateNodeText { .. }
+        | Message::CompleteNodeResponse { .. }
+        | Message::UpdateNodeStatus { .. }
+        | Message::AnimationTick => {
+            // Fire async command to backend
+            // These are handled elsewhere or in canvas reducer. No-op here.
+        }
+        Message::CreateWorkflow { name } => {
+            commands.push(Command::CreateWorkflowApi { name: name.clone() });
+        }
+        Message::SelectWorkflow { workflow_id } => {
+            state.current_workflow_id = Some(workflow_id);
+            needs_refresh = true;
+        }
+        Message::WorkflowCreated(wf) => {
+            // Remove any optimistic entry with same name or temp id (<=0)
+            let wf_id = wf.id;
+            state.workflows.retain(|_, v| v.id > 0 || v.name != wf.name);
+            state.workflows.insert(wf_id, wf);
+            state.current_workflow_id = Some(wf_id);
+            needs_refresh = true;
+            // UI update to refresh bar after new workflow added
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::refresh(&doc);
+                }
+            })));
+        }
+        Message::WorkflowDeleted { workflow_id } => {
+            state.workflows.remove(&workflow_id);
+            if state.current_workflow_id == Some(workflow_id) {
+                state.current_workflow_id = state.workflows.keys().next().cloned();
+            }
+            needs_refresh = true;
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::refresh(&doc);
+                }
+            })));
+        }
+        Message::WorkflowUpdated(wf) => {
+            state.workflows.insert(wf.id, wf.clone());
+            needs_refresh = true;
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::refresh(&doc);
+                }
+            })));
         }
         Message::WorkflowsLoaded(workflows) => {
             state.workflows.clear();
@@ -491,6 +532,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             unreachable!("Canvas messages should be handled by the canvas reducer")
         }
         
+        Message::InitializeParticleSystem { width, height } => {
+            state.particle_system = Some(crate::canvas::background::ParticleSystem::new(width, height, 50));
+            needs_refresh = true; // Particle system initialized, likely needs a redraw
+        },
+        Message::ClearParticleSystem => {
+            state.particle_system = None;
+            needs_refresh = true; // Particle system cleared, likely needs a redraw
+        },
         // Catch-all for any unhandled messages
         _ => {
             // Warn about unexpected messages so nothing silently fails
