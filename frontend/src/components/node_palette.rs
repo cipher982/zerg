@@ -40,7 +40,7 @@ impl NodePalette {
         let header = document.create_element("div")?;
         header.set_class_name("palette-header");
         header.set_inner_html("
-            <h3 style='margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: #1e293b;'>
+            <h3>
                 Node Palette
             </h3>
         ");
@@ -53,15 +53,7 @@ impl NodePalette {
                 type='text' 
                 placeholder='Search nodes...' 
                 value='{}' 
-                style='
-                    width: 100%; 
-                    padding: 8px 12px; 
-                    border: 1px solid #d1d5db; 
-                    border-radius: 6px; 
-                    margin-bottom: 16px;
-                    font-size: 14px;
-                    outline: none;
-                '
+                class='palette-search-input'
                 id='palette-search'
             />
         ", self.search_query));
@@ -98,14 +90,7 @@ impl NodePalette {
         let category_header = document.create_element("div")?;
         category_header.set_class_name("category-header");
         category_header.set_inner_html(&format!("
-            <h4 style='
-                margin: 0 0 8px 0; 
-                font-size: 14px; 
-                font-weight: 600; 
-                color: #64748b;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            '>
+            <h4 class='palette-category-header'>
                 {}
             </h4>
         ", category_name));
@@ -137,49 +122,16 @@ impl NodePalette {
         node_element.set_attribute("data-node-type", &node.id)?;
 
         // Style the node
-        node_element.set_attribute("style", "
-            display: flex;
-            align-items: center;
-            padding: 8px 12px;
-            margin-bottom: 4px;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            cursor: grab;
-            transition: all 0.2s ease;
-            background: #f8fafc;
-        ")?;
-
+        // Styles moved to CSS file
         // Add hover effects with event listeners
         let node_clone = node_element.clone();
         let onmouseenter = wasm_bindgen::closure::Closure::wrap(Box::new(move |_: MouseEvent| {
-            let _ = node_clone.set_attribute("style", "
-                display: flex;
-                align-items: center;
-                padding: 8px 12px;
-                margin-bottom: 4px;
-                border: 1px solid #3b82f6;
-                border-radius: 6px;
-                cursor: grab;
-                transition: all 0.2s ease;
-                background: #eff6ff;
-                transform: translateY(-1px);
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            ");
+            let _ = node_clone.set_class_name("palette-node hover"); // Apply hover class
         }) as Box<dyn FnMut(_)>);
 
         let node_clone2 = node_element.clone();
         let onmouseleave = wasm_bindgen::closure::Closure::wrap(Box::new(move |_: MouseEvent| {
-            let _ = node_clone2.set_attribute("style", "
-                display: flex;
-                align-items: center;
-                padding: 8px 12px;
-                margin-bottom: 4px;
-                border: 1px solid #e2e8f0;
-                border-radius: 6px;
-                cursor: grab;
-                transition: all 0.2s ease;
-                background: #f8fafc;
-            ");
+            let _ = node_clone2.set_class_name("palette-node"); // Remove hover class
         }) as Box<dyn FnMut(_)>);
 
         node_element.add_event_listener_with_callback("mouseenter", onmouseenter.as_ref().unchecked_ref())?;
@@ -191,10 +143,10 @@ impl NodePalette {
 
         // Node content
         node_element.set_inner_html(&format!("
-            <span style='font-size: 16px; margin-right: 8px;'>{}</span>
+            <span class='palette-node-icon'>{}</span>
             <div>
-                <div style='font-size: 14px; font-weight: 500; color: #1e293b;'>{}</div>
-                <div style='font-size: 12px; color: #64748b; margin-top: 2px;'>{}</div>
+                <div class='palette-node-name'>{}</div>
+                <div class='palette-node-description'>{}</div>
             </div>
         ", node.icon, node.name, node.description));
 

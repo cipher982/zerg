@@ -51,16 +51,17 @@ until the engine in 1.2 is completed.
 
 ### 2.1. Workflow Persistence & API Integration
 - [ ] **Connect frontend to backend workflow CRUD API**
-    - [ ] Fetch workflows from backend on app load.
+    - [x] Fetch workflows from backend on app load (tab-bar reflects server data).
     - [ ] Create/update/delete workflows via API (not localStorage).
     - [ ] Remove or minimize localStorage usage for workflows.
     - [ ] (Optional) Provide a one-time migration/import for any existing localStorage workflows.
     - [ ] Handle API errors and show user-friendly messages.
     - [ ] Ensure all workflow state is synced across devices and sessions.
 
-    *Current status:* The front-end still persists workflows entirely in
-    `localStorage` (see `frontend/src/models.rs`).  No calls to the new
-    `/api/workflows` endpoints are made yet.
+    *Current status:* Workflows are now **fetched** from `/api/workflows` on
+    Canvas load and displayed in the tab-bar.  Creation/rename/delete still
+    operate only in memory, and localStorage writes remain; wiring POST/PATCH/
+    DELETE is the next step.
 
 ### 2.2. Canvas & Node System
 - [x] **Node system, palette, drag-and-drop, and modal-based config are robust.**

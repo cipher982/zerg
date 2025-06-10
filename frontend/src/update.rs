@@ -462,7 +462,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::UpdateNodeStatus { .. } |
         Message::AnimationTick |
         Message::CreateWorkflow { .. } |
-        Message::SelectWorkflow { .. } |
+        Message::SelectWorkflow { .. } => {
+            // these are handled below (or in canvas reducer).  No-op here.
+        }
         Message::WorkflowsLoaded(workflows) => {
             state.workflows.clear();
             for wf in workflows {
@@ -482,7 +484,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     }
                 }
             })));
-            true
         }
         Message::AddEdge { .. } |
         Message::GenerateCanvasFromAgents => {
