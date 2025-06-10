@@ -93,6 +93,12 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     // Ensure canvas container is visible
     crate::dom_utils::show(&canvas_container);
     
+    // Initialize the particle system for the canvas background via message dispatch
+    crate::state::dispatch_global_message(crate::messages::Message::InitializeParticleSystem {
+        width: crate::state::APP_STATE.with(|state| state.borrow().canvas_width),
+        height: crate::state::APP_STATE.with(|state| state.borrow().canvas_height),
+    });
+
     web_sys::console::log_1(&"CANVAS: Setup canvas drawing (no state borrowed)".into());
 
     // ------------------------------------------------------------------
@@ -161,6 +167,9 @@ pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
         app_container.set_class_name("");
     }
     
+    // Clear the particle system when unmounting the canvas via message dispatch
+    crate::state::dispatch_global_message(crate::messages::Message::ClearParticleSystem);
+
     web_sys::console::log_1(&"CANVAS: Unmount complete".into());
     Ok(())
 }

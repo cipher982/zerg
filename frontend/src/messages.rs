@@ -101,6 +101,12 @@ pub enum Message {
 
     // Workflows fetched from backend
     WorkflowsLoaded(Vec<crate::models::Workflow>),
+    /// Workflow successfully created via backend
+    WorkflowCreated(crate::models::Workflow),
+    /// Workflow was deleted (soft delete)
+    WorkflowDeleted { workflow_id: u32 },
+    /// Workflow renamed / updated
+    WorkflowUpdated(crate::models::Workflow),
     
     // Canvas view controls
     ToggleAutoFit,                       // Toggle auto-fit functionality
@@ -453,6 +459,10 @@ pub enum Message {
         name: String,
         auth_token: String,
     },
+
+    // Particle System Messages
+    InitializeParticleSystem { width: f64, height: f64 },
+    ClearParticleSystem,
 }
 
 /// Commands represent side effects that should be executed after state updates.
@@ -472,6 +482,15 @@ pub enum Command {
 
     /// Fetch workflows (visual canvas definitions)
     FetchWorkflows,
+
+    // Workflow CRUD actions
+    CreateWorkflowApi { name: String },
+    DeleteWorkflowApi { workflow_id: u32 },
+    RenameWorkflowApi {
+        workflow_id: u32,
+        name: String,
+        description: String,
+    },
 
     // ---------------------------------------------------------------
     // Trigger-related side-effect commands (Phase A wiring only)
