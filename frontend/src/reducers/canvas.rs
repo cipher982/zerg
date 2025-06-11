@@ -231,13 +231,17 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::UpdateNodeStatus { node_id, status } => {
             if let Some(node) = state.nodes.get_mut(node_id) {
-                match status.as_str() {
-                    "idle" => node.color = "#ffecb3".to_string(),
-                    "processing" => node.color = "#b3e5fc".to_string(),
-                    "complete" => node.color = "#c8e6c9".to_string(),
-                    "error" => node.color = "#ffcdd2".to_string(),
-                    _ => node.color = "#ffecb3".to_string(),
-                }
+                use crate::models::NodeExecStatus;
+
+                let (color, exec_status) = match status.as_str() {
+                    "running" | "processing" => ("#fcd34d", NodeExecStatus::Running),   // amber-300
+                    "success" | "complete" => ("#86efac", NodeExecStatus::Success),     // green-300
+                    "failed" | "error" => ("#fca5a5", NodeExecStatus::Failed),        // red-300
+                    _ => ("#e0e7ff", NodeExecStatus::Idle),                               // indigo-100
+                };
+
+                node.color = color.to_string();
+                node.exec_status = Some(exec_status);
                 if let Some(agent_id) = node.agent_id {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
                         agent.status = Some(status.clone());

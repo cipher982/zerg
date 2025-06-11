@@ -609,6 +609,7 @@ impl AppState {
             node_type: node_type.clone(),
             is_selected: false,
             is_dragging: false,
+            exec_status: None,
         };
         
         web_sys::console::log_1(&format!("Node created with dimensions: {}x{} at position ({}, {})", 
@@ -690,6 +691,7 @@ impl AppState {
             text: response_text.clone(),
             node_type: NodeType::ResponseOutput,
             parent_id: Some(parent_id.to_string()),
+            exec_status: None,
             is_selected: false,
             is_dragging: false,
         };
@@ -1349,6 +1351,7 @@ impl AppState {
             parent_id: None,
             is_selected: false,
             is_dragging: false,
+            exec_status: None,
         };
 
         self.nodes.insert(node_id.clone(), node);
