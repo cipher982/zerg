@@ -29,10 +29,12 @@ async def start_workflow_execution(
     if not workflow or workflow.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    # This will eventually be a background task
-    await workflow_execution_engine.execute_workflow(workflow_id)
+    # Currently we await directly so the client receives the *execution_id*.
+    # Future background-task refactor will keep the response payload stable
+    # (i.e. still return the created execution id).
+    execution_id = await workflow_execution_engine.execute_workflow(workflow_id)
 
-    return {"message": "Workflow execution started"}
+    return {"execution_id": execution_id, "status": "running"}
 
 
 @router.get("/{execution_id}/status")
