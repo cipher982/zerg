@@ -10,25 +10,25 @@ from pydantic import BaseModel
 
 from zerg.schemas.schemas import Agent  # Use absolute import for Agent schema
 
-
 # ---------------------------------------------------------------------------
 # Envelope - Unified Wire Protocol
 # ---------------------------------------------------------------------------
 
+
 class Envelope(BaseModel):
     """Unified envelope for all WebSocket messages.
-    
+
     This provides a consistent wire format with versioning, topic routing,
     and request correlation support.
     """
-    
+
     v: int = 1  # Protocol version
     type: str  # Message type in SCREAMING_SNAKE format
     topic: str  # Topic string like "thread:123", "agent:456"
     req_id: Optional[str] = None  # Echoes client's message_id when applicable
     ts: int  # Timestamp in milliseconds since epoch, monotonic on server
     data: Dict[str, Any]  # Payload schema depends on type
-    
+
     @classmethod
     def create(
         cls,

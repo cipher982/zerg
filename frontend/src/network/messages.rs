@@ -179,37 +179,45 @@ pub struct ModelListMessage {
 /// Helper functions for creating messages
 pub mod builders {
     use super::*;
+    use crate::network::ws_schema::Envelope;
+    use serde_json::json;
+
+    fn create_envelope(message_type: &str, topic: &str, data: serde_json::Value) -> Envelope {
+        Envelope {
+            v: 1,
+            r#type: message_type.to_uppercase(),
+            topic: topic.to_string(),
+            req_id: Some(Uuid::new_v4().to_string()),
+            ts: js_sys::Date::now() as u64,
+            data,
+        }
+    }
     
-    pub fn create_ping() -> PingMessage {
-        PingMessage {
-            message_type: MessageType::Ping,
-            message_id: Some(Uuid::new_v4().to_string()),
-            timestamp: Some(js_sys::Date::now() as i64),
-        }
+    pub fn create_ping() -> Envelope {
+        create_envelope("PING", "system", json!({}))
     }
 
-    pub fn create_subscribe(topics: Vec<String>) -> SubscribeMessage {
-        SubscribeMessage {
-            message_type: MessageType::Subscribe,
-            message_id: Some(Uuid::new_v4().to_string()),
-            topics,
-        }
+    pub fn create_subscribe(topics: Vec<String>) -> Envelope {
+        create_envelope("SUBSCRIBE", "system", json!({ "topics": topics }))
     }
 
-    pub fn create_unsubscribe(topics: Vec<String>) -> UnsubscribeMessage {
-        UnsubscribeMessage {
-            message_type: MessageType::Unsubscribe,
-            message_id: Some(Uuid::new_v4().to_string()),
-            topics,
-        }
+    pub fn create_unsubscribe(topics: Vec<String>) -> Envelope {
+        create_envelope("UNSUBSCRIBE", "system", json!({ "topics": topics }))
     }
     
     #[allow(dead_code)]
-    pub fn create_models_request() -> BaseMessage {
-        BaseMessage {
-            message_type: MessageType::Models,
-            message_id: Some(Uuid::new_v4().to_string()),
-        }
+    pub fn create_models_request() -> Envelope {
+        create_envelope("MODELS", "system", json!({}))
+    }
+
+    #[allow(dead_code)]
+    pub fn create_send_message(thread_id: i32, content: &str) -> Envelope {
+        let topic = format!("thread:{}", thread_id);
+        create_envelope(
+            "SEND_MESSAGE",
+            &topic,
+            json!({ "content": content }),
+        )
     }
 }
 
@@ -306,4 +314,4 @@ mod tests {
          assert!(json.contains("\"message_id\":\"msg-1\""));
          assert!(json.contains("\"data\":{\"id\":789")); // Check nested data
     }
-} 
+}
