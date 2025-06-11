@@ -6,12 +6,22 @@
 //! needs – additional attributes sent by the backend are captured via Serde
 //! `flatten` so they do not break deserialisation when new fields appear.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Top-level WebSocket frame coming from the backend.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Envelope {
+    pub v: u8,
+    pub r#type: String,
+    pub topic: String,
+    pub req_id: Option<String>,
+    pub ts: u64,
+    pub data: Value,
+}
+
+/// Top-level WebSocket frame coming from the backend (legacy or fallback).
 ///
-/// The backend always uses `{ "type": ..., "data": {...} }`.
+/// The backend always uses `{ "type": ..., "data": {...} }` in v1, but v2 uses Envelope.
 #[derive(Debug, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum WsMessage {
