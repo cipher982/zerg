@@ -362,9 +362,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 
                 // Dispatch a message to update the UI instead of calling render directly
                 // This keeps the update flow consistent
-                state.pending_ui_updates = Some(Box::new(move || {
+                commands.push(Command::UpdateUI(Box::new(move || {
                     dispatch_global_message(Message::UpdateConversation(messages_clone_for_dispatch));
-                }));
+                })));
 
                 needs_refresh = false; // UI update handled by UpdateConversation
             } else {
@@ -394,10 +394,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             let title_to_update = current_title.clone();
             
             // Schedule UI update for after this function completes
-            state.pending_ui_updates = Some(Box::new(move || {
+            commands.push(Command::UpdateUI(Box::new(move || {
                 // Dispatch a message to update the thread title UI
                 dispatch_global_message(Message::UpdateThreadTitleUI(title_to_update));
-            }));
+            })));
         },
 
         // Agent Debug Modal

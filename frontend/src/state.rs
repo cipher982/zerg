@@ -250,8 +250,6 @@ pub struct AppState {
     /// replace the entry with `Some(id)` so tool_output bubbles can link to
     /// their parent.
     pub active_streams: HashMap<u32, Option<u32>>,
-    // Pending UI updates to avoid recursive borrow issues
-    pub pending_ui_updates: Option<Box<dyn FnOnce()>>,
     // --- WebSocket v2 and Topic Manager --- 
     pub ws_client: Rc<RefCell<WsClientV2>>,
     pub topic_manager: Rc<RefCell<TopicManager>>,
@@ -488,7 +486,6 @@ impl AppState {
             thread_messages: HashMap::new(),
             is_chat_loading: false,
             active_streams: HashMap::new(),
-            pending_ui_updates: None,
             ws_client: ws_client_rc,
             topic_manager: topic_manager_rc,
             streaming_threads: HashSet::new(),
@@ -1490,16 +1487,15 @@ pub fn update_node_id(old_id: &str, new_id: &str) {
 // Global helper function for dispatching messages with proper UI refresh handling
 pub fn dispatch_global_message(msg: crate::messages::Message) {
     // 1. Perform state updates and collect commands
-    let (commands, pending_updates, network_data) = APP_STATE.with(|state| {
+    let (commands, network_data) = APP_STATE.with(|state| {
         let mut state = state.borrow_mut();
         let commands = state.dispatch(msg);
         
-        // Take ownership of pending updates and network data
+        // Take ownership of pending network data
         // We'll gradually migrate these to commands
-        let updates = state.pending_ui_updates.take();
         let network = state.pending_network_call.take();
         
-        (commands, updates, network)
+        (commands, network)
     });
     
     // 2. Execute commands after state borrow is dropped
@@ -1546,12 +1542,7 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
         }
     }
     
-    // 3. Execute legacy side effects (these will be migrated to commands)
-    if let Some(updates) = pending_updates {
-        updates();
-    }
-    
-    // 4. Process legacy network calls (these will be migrated to commands)
+    // 3. Process legacy network calls (these will be migrated to commands)
     if let Some((text, message_id)) = network_data {
         // This only handles thread messages now
         if let Ok(thread_id) = message_id.parse::<u32>() {
