@@ -460,9 +460,38 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         | Message::UpdateNodeText { .. }
         | Message::CompleteNodeResponse { .. }
         | Message::UpdateNodeStatus { .. }
+        
         | Message::AnimationTick => {
             // Fire async command to backend
             // These are handled elsewhere or in canvas reducer. No-op here.
+        }
+
+        // -------------------------------------------------------------------
+        // SubscribeWorkflowExecution – create WS topic subscription
+        // -------------------------------------------------------------------
+        Message::SubscribeWorkflowExecution { execution_id } => {
+            let topic = format!("workflow_execution:{}", execution_id);
+            let topic_manager_rc = state.topic_manager.clone();
+
+            commands.push(Command::UpdateUI(Box::new(move || {
+                use std::cell::RefCell;
+                use std::rc::Rc;
+                let mut tm = topic_manager_rc.borrow_mut();
+
+                let handler: crate::network::topic_manager::TopicHandler = Rc::new(RefCell::new(move |payload: serde_json::Value| {
+                    use crate::network::ws_schema::WsMessage;
+                    if let Ok(parsed) = serde_json::from_value::<WsMessage>(payload) {
+                        if let WsMessage::NodeState { data } = parsed {
+                            crate::state::dispatch_global_message(Message::UpdateNodeStatus {
+                                node_id: data.node_id.clone(),
+                                status: data.status.clone(),
+                            });
+                        }
+                    }
+                }));
+
+                let _ = tm.subscribe(topic, handler);
+            })));
         }
         Message::CreateWorkflow { name } => {
             commands.push(Command::CreateWorkflowApi { name: name.clone() });
