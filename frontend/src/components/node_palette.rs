@@ -409,6 +409,7 @@ pub fn create_node_from_palette(state: &mut AppState, palette_node: &PaletteNode
         node_type,
         is_selected: false,
         is_dragging: false,
+        exec_status: None,
     };
     state.nodes.insert(node_id.clone(), node);
 

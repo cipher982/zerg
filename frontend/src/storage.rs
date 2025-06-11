@@ -178,6 +178,7 @@ fn try_load_layout_from_api() {
                                                 parent_id: None,
                                                 is_selected: false,
                                                 is_dragging: false,
+                                                exec_status: None,
                                             });
                                         }
                                     }

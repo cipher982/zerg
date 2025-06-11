@@ -198,6 +198,20 @@ pub struct CanvasNode {
     pub parent_id: Option<String>, // Optional parent node reference
     pub is_selected: bool,
     pub is_dragging: bool,
+
+    /// Live execution state coming from the WorkflowExecutionEngine.
+    /// None means the node has never been executed in the current run.
+    #[serde(skip, default)]
+    pub exec_status: Option<NodeExecStatus>,
+}
+
+/// Execution status emitted via WebSocket (running/success/failed).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NodeExecStatus {
+    Idle,
+    Running,
+    Success,
+    Failed,
 }
 
 // -----------------------------------------------------------------------------
