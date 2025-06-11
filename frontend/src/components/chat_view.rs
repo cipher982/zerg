@@ -404,19 +404,28 @@ pub fn update_thread_list_ui(
         }
         
         // Enable or disable chat input based on whether a thread is selected
-        // Ensure chat input is always enabled so automated E2E tests can
-        // interact even before a thread is selected.
         if let (Some(input), Some(button)) = (
             document.query_selector(".chat-input").ok().flatten(),
             document.query_selector(".send-button").ok().flatten(),
         ) {
-            if let Some(html_input) = input.dyn_ref::<web_sys::HtmlInputElement>() {
-                html_input.set_disabled(false);
-                html_input.set_placeholder("Type your message...");
-            }
-            if let Some(btn_el) = button.dyn_ref::<web_sys::HtmlElement>() {
-                btn_el.remove_attribute("disabled").ok();
-                btn_el.set_class_name("send-button");
+            if current_thread_id.is_none() {
+                if let Some(html_input) = input.dyn_ref::<web_sys::HtmlInputElement>() {
+                    html_input.set_disabled(true);
+                    html_input.set_placeholder("Select a thread to start chatting");
+                }
+                if let Some(btn_el) = button.dyn_ref::<web_sys::HtmlElement>() {
+                    btn_el.set_attribute("disabled", "true").ok();
+                    btn_el.set_class_name("send-button disabled");
+                }
+            } else {
+                if let Some(html_input) = input.dyn_ref::<web_sys::HtmlInputElement>() {
+                    html_input.set_disabled(false);
+                    html_input.set_placeholder("Type your message...");
+                }
+                if let Some(btn_el) = button.dyn_ref::<web_sys::HtmlElement>() {
+                    btn_el.remove_attribute("disabled").ok();
+                    btn_el.set_class_name("send-button");
+                }
             }
         }
     }
@@ -432,6 +441,13 @@ pub fn update_conversation_ui(
     messages: &[ApiThreadMessage],
     current_user: Option<&CurrentUser>,
 ) -> Result<(), JsValue> {
+    // DEBUG: Log message count and roles to help diagnose missing bubbles
+    let roles: Vec<String> = messages.iter().map(|m| m.role.clone()).collect();
+    web_sys::console::log_1(&format!(
+        "[DEBUG] update_conversation_ui: {} messages, roles: {:?}",
+        messages.len(),
+        roles
+    ).into());
     if let Some(messages_container) = document.query_selector(".messages-container").ok().flatten() {
         // Clear existing messages
         messages_container.set_inner_html("");
@@ -469,6 +485,13 @@ pub fn update_conversation_ui(
 
         // Display thread messages, but filter out system messages
         for message in sorted_messages.iter().filter(|m| m.role != "system" && m.role != "tool") {
+            // DEBUG: Log each message about to be rendered
+            web_sys::console::log_1(&format!(
+                "[DEBUG] Rendering message: role={}, content={:?}",
+                message.role,
+                message.content
+            ).into());
+
             // If this assistant bubble has **no textual content**, we skip
             // rendering the bubble itself.  Any tool messages that reference
             // this assistant via `parent_id` will be rendered directly in

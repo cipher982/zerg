@@ -6,6 +6,8 @@
 
 use crate::state::AppState;
 use crate::messages::{Message, Command};
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
 
 /// Returns `true` when the message was handled by the chat reducer.
 pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> bool {
@@ -49,7 +51,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             let threads_clone = threads.clone();
             let thread_messages_clone = thread_messages.clone();
 
-            state.pending_ui_updates = Some(Box::new(move || {
+            cmds.push(Command::UpdateUI(Box::new(move || {
                 if let Some(_document) = web_sys::window().expect("no global window exists").document() {
                     crate::state::dispatch_global_message(crate::messages::Message::UpdateThreadList(
                         threads_clone, current_thread_id, thread_messages_clone
@@ -58,7 +60,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(Vec::new()));
                     }
                 }
-            }));
+            })));
 
             // Send the delete request to the backend
             let thread_id_clone = *thread_id;
@@ -288,10 +290,15 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             }
             if state.current_thread_id == Some(*thread_id) {
                 if let Some(messages) = state.thread_messages.get(thread_id) {
+                    web_sys::console::log_1(&format!(
+                        "[DEBUG] Scheduling UI update after ReceiveStreamChunk for thread {} ({} messages)",
+                        thread_id,
+                        messages.len()
+                    ).into());
                     let messages_clone = messages.clone();
-                    state.pending_ui_updates = Some(Box::new(move || {
+                    cmds.push(Command::UpdateUI(Box::new(move || {
                         crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
-                    }));
+                    })));
                 }
             }
             true
@@ -312,9 +319,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 }
                 if state.current_thread_id == Some(*thread_id) {
                     let messages_clone = messages.clone();
-                    state.pending_ui_updates = Some(Box::new(move || {
+                    cmds.push(Command::UpdateUI(Box::new(move || {
                         crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
-                    }));
+                    })));
                 }
             }
             web_sys::console::log_1(&format!("Stream ended for thread {}.", thread_id).into());
@@ -336,9 +343,14 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             messages.push(message.clone());
             if state.current_thread_id == Some(thread_id) {
                 let messages_clone = messages.clone();
-                state.pending_ui_updates = Some(Box::new(move || {
-                    crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
-                }));
+                cmds.push(Command::UpdateUI(Box::new(move || {
+                    // Force UI update in next event loop tick to ensure repaint
+                    let closure = Closure::once_into_js(move || {
+                        crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
+                    });
+                    let _ = web_sys::window()
+                        .and_then(|w| w.set_timeout_with_callback_and_timeout_and_arguments_0(closure.as_ref().unchecked_ref(), 0).ok());
+                })));
             }
             let threads_data: Vec<crate::models::ApiThread> = state.threads.values().cloned().collect();
             let thread_messages_map = state.thread_messages.clone();
@@ -359,9 +371,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 }
                 if state.current_thread_id == Some(*thread_id) {
                     let title_clone = thread.title.clone();
-                    state.pending_ui_updates = Some(Box::new(move || {
+                    cmds.push(Command::UpdateUI(Box::new(move || {
                         crate::state::dispatch_global_message(crate::messages::Message::UpdateThreadTitleUI(title_clone));
-                    }));
+                    })));
                 }
             }
             true
@@ -376,9 +388,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             if let Some(active_thread_id) = state.current_thread_id {
                 let messages_clone_for_dispatch = messages.clone(); 
                 state.thread_messages.insert(active_thread_id, messages.clone());
-                state.pending_ui_updates = Some(Box::new(move || {
+                cmds.push(Command::UpdateUI(Box::new(move || {
                     crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone_for_dispatch));
-                }));
+                })));
             } else {
                 web_sys::console::warn_1(&"Received thread history but no active thread selected in state.".into());
             }
@@ -391,9 +403,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             if let Some(thread_id) = state.current_thread_id {
                 if let Some(messages) = state.thread_messages.get(&thread_id) {
                     let messages_clone = messages.clone();
-                    state.pending_ui_updates = Some(Box::new(move || {
+                    cmds.push(Command::UpdateUI(Box::new(move || {
                         crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
-                    }));
+                    })));
                 }
             }
             true
@@ -405,9 +417,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             if let Some(thread_id) = state.current_thread_id {
                 if let Some(messages) = state.thread_messages.get(&thread_id) {
                     let messages_clone = messages.clone();
-                    state.pending_ui_updates = Some(Box::new(move || {
+                    cmds.push(Command::UpdateUI(Box::new(move || {
                         crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
-                    }));
+                    })));
                 }
             }
             true
@@ -424,7 +436,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.is_chat_loading = true;
             state.current_agent_id = Some(*agent_id);
             let agent_id_for_effects = *agent_id;
-            state.pending_ui_updates = Some(Box::new(move || {
+            cmds.push(Command::UpdateUI(Box::new(move || {
                 if let Some(document) = web_sys::window().and_then(|w| w.document()) {
                     let _ = crate::components::chat_view::setup_chat_view(&document);
                     let _ = crate::components::chat_view::show_chat_view(&document, agent_id_for_effects);
@@ -448,7 +460,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         }
                     }
                 });
-            }));
+            })));
             true
         }
         crate::messages::Message::NavigateToThreadView(thread_id) => {
@@ -516,6 +528,22 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             for thread in threads {
                 if let Some(thread_id) = thread.id {
                     state.threads.insert(thread_id, thread.clone());
+                }
+            }
+
+            // Auto-select the first thread if none is selected and threads exist
+            if state.current_thread_id.is_none() && !state.threads.is_empty() {
+                // Sort threads by updated_at (newest first), fallback to created_at
+                let mut threads_vec: Vec<_> = state.threads.values().collect();
+                threads_vec.sort_by(|a, b| {
+                    let a_time = a.updated_at.as_ref().or(a.created_at.as_ref()).map(|s| s.as_str()).unwrap_or("");
+                    let b_time = b.updated_at.as_ref().or(b.created_at.as_ref()).map(|s| s.as_str()).unwrap_or("");
+                    b_time.cmp(a_time)
+                });
+                if let Some(first_thread) = threads_vec.first() {
+                    if let Some(first_thread_id) = first_thread.id {
+                        cmds.push(crate::messages::Command::SendMessage(crate::messages::Message::SelectThread(first_thread_id)));
+                    }
                 }
             }
             
