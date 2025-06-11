@@ -5,6 +5,7 @@ supporting subscription to agent and thread events.
 """
 
 import logging
+import os
 from typing import Any
 from typing import Dict
 from typing import List
@@ -14,9 +15,16 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from zerg.config import _truthy  # type: ignore  # pylint: disable=protected-access
+from zerg.config import get_settings
 from zerg.crud import crud
 from zerg.schemas.schemas import UserOut
 from zerg.schemas.ws_messages import AgentStateMessage
+
+# ---------------------------------------------------------------------------
+# Message & envelope helpers
+# ---------------------------------------------------------------------------
+from zerg.schemas.ws_messages import Envelope
 from zerg.schemas.ws_messages import ErrorMessage
 from zerg.schemas.ws_messages import MessageType
 from zerg.schemas.ws_messages import PingMessage
@@ -92,14 +100,40 @@ async def handle_ping(client_id: str, message: Dict[str, Any], _: Session) -> No
     """
     try:
         ping_msg = PingMessage(**message)
-        pong = PongMessage(
+
+        # Build the *raw* pong payload (same shape as before the envelope
+        # upgrade) so existing consumers that have not opted in to V2 still
+        # work unchanged.
+        pong_payload = PongMessage(
             type=MessageType.PONG,
             message_id=ping_msg.message_id,
             timestamp=ping_msg.timestamp,
-        )
-        await send_to_client(client_id, pong.model_dump())
+        ).model_dump()
+
+        # Recompute envelope flag on **every** ping so tests that mutate the
+        # environment mid-process pick up the change without clearing
+        # ``functools.lru_cache`` used by :pyfunc:`get_settings`.
+        _envelope_enabled = get_settings().ws_envelope_v2 or _truthy(os.getenv("WS_ENVELOPE_V2"))
+
+        if _envelope_enabled:
+            # Wrap in protocol-level envelope so the frontend can rely on the
+            # unified structure.  We treat all ping/pong traffic as a
+            # *system* message which is consistent with the existing
+            # heartbeat implementation in ``TopicConnectionManager``.
+            envelope = Envelope.create(
+                message_type="PONG",
+                topic="system",
+                data=pong_payload,
+                req_id=ping_msg.message_id,
+            )
+
+            await send_to_client(client_id, envelope.model_dump())
+        else:
+            # Legacy – send bare payload
+            await send_to_client(client_id, pong_payload)
+
     except Exception as e:
-        logger.error(f"Error handling ping: {str(e)}")
+        logger.error("Error handling ping: %s", e)
         await send_error(client_id, "Failed to process ping")
 
 

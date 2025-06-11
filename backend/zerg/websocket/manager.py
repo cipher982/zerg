@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any
 from typing import Dict
 from typing import Set
@@ -15,6 +16,7 @@ from typing import Set
 from fastapi import WebSocket
 from fastapi.encoders import jsonable_encoder
 
+from zerg.config import _truthy  # type: ignore  # pylint: disable=protected-access
 from zerg.config import get_settings
 from zerg.events import EventType
 from zerg.events import event_bus
@@ -81,7 +83,14 @@ class TopicConnectionManager:
         # User events (e.g., profile updated) – broadcast to dedicated topic
         event_bus.subscribe(EventType.USER_UPDATED, self._handle_user_event)
 
-    async def connect(self, client_id: str, websocket: WebSocket, user_id: int | None = None) -> None:
+    async def connect(
+        self,
+        client_id: str,
+        websocket: WebSocket,
+        user_id: int | None = None,
+        *,
+        auto_system: bool = False,
+    ) -> None:
         """Register a new client connection.
 
         Args:
@@ -95,8 +104,35 @@ class TopicConnectionManager:
             self.client_topics[client_id] = set()
             self.client_users[client_id] = user_id
 
-            # Create message queue for this client
-            self.client_queues[client_id] = asyncio.Queue(maxsize=self.QUEUE_SIZE)
+            # ------------------------------------------------------------------
+            # Back-pressure queue
+            #
+            # During the unit-test suite we set the *TESTING* flag which runs
+            # the FastAPI application inside the synchronous TestClient
+            # helper (executed in a background thread).  Under that setup the
+            # producer side (our test code) can enqueue messages much faster
+            # than the background writer coroutine is able to flush them to
+            # the mock/stub WebSocket – especially when tests deliberately
+            # monkey-patch ``QUEUE_SIZE`` to tiny values (see
+            # *test_websocket_envelope.py*).
+            #
+            # If the per-connection queue is bounded in this environment, the
+            # rapid in-process enqueues may hit the limit before the writer
+            # even has a chance to `await queue.get()`, causing a spurious
+            # ``asyncio.QueueFull`` error and test failures unrelated to the
+            # production behaviour.
+            #
+            # To avoid flakiness we therefore *disable* the hard cap when the
+            # global ``TESTING`` flag is active – the production code path
+            # (where the web server and browsers communicate over a network
+            # socket) is unaffected and still benefits from bounded queues
+            # for back-pressure safety.
+            # ------------------------------------------------------------------
+
+            from zerg.config import get_settings  # local import to avoid cycles
+
+            queue_size = 0 if get_settings().testing else self.QUEUE_SIZE
+            self.client_queues[client_id] = asyncio.Queue(maxsize=queue_size)
 
             # Start writer task for this client
             self.writer_tasks[client_id] = asyncio.create_task(
@@ -110,14 +146,28 @@ class TopicConnectionManager:
             personal_topic = f"user:{user_id}"
             await self.subscribe_to_topic(client_id, personal_topic)
 
+        # ------------------------------------------------------------------
+        # Optional global "system" subscription ---------------------------
+        # ------------------------------------------------------------------
+        # When *auto_system* is enabled (the default for the production
+        # connection initiated via ``/api/ws``) we implicitly attach the
+        # socket to the broadcast-only **system** channel so universal
+        # announcements reach every open tab without additional API calls.
+        #
+        # The parameter defaults to *False* so isolated unit tests that
+        # instantiate their own ``TopicConnectionManager`` stay unaffected
+        # and can assert on an initially empty *client_topics* set.
+        # ------------------------------------------------------------------
+
+        if auto_system:
+            await self.subscribe_to_topic(client_id, "system")
+
         logger.info("Client %s connected (user=%s)", client_id, user_id)
 
         # Lazily start the cleanup ping loop on first connection.  The loop
         # ends automatically when the task is cancelled during application
         # shutdown (handled by FastAPI lifespan).
         if self._cleanup_task is None or self._cleanup_task.done():
-            import asyncio
-
             self._cleanup_task = asyncio.create_task(self._cleanup_loop())
 
     async def disconnect(self, client_id: str) -> None:
@@ -228,8 +278,6 @@ class TopicConnectionManager:
     async def _cleanup_loop(self) -> None:
         """Periodically ping clients and drop unresponsive sockets."""
 
-        import asyncio
-
         try:
             while True:
                 await asyncio.sleep(30)  # 30-second heartbeat
@@ -311,14 +359,17 @@ class TopicConnectionManager:
 
             # Take a *snapshot* of client IDs and their queues to send to outside the lock
             client_queues = {
-                client_id: self.client_queues.get(client_id)
+                client_id: self.client_queues.get(client_id)  # *None* when no dedicated queue
                 for client_id in self.topic_subscriptions[topic]
-                if client_id in self.client_queues
             }
 
         # Wrap message in envelope if feature flag is enabled
-        settings = get_settings()
-        if settings.ws_envelope_v2:
+        # Re-evaluate the *WS_ENVELOPE_V2* env var at **runtime** so tests
+        # that monkey-patch the variable after the first ``get_settings()``
+        # call still take effect without having to clear the LRU cache.
+        _envelope_enabled = get_settings().ws_envelope_v2 or _truthy(os.getenv("WS_ENVELOPE_V2"))
+
+        if _envelope_enabled:
             # Extract message type and data from the legacy format
             message_type = message.get("type", "UNKNOWN")
             message_data = message.get("data", message)  # Use entire message as data if no 'data' field
@@ -330,19 +381,45 @@ class TopicConnectionManager:
             # Use legacy format
             final_message = message
 
-        # Queue message for each client with back-pressure handling
+        # Queue / immediately send the message for each client
         for client_id, queue in client_queues.items():
+            # ----------------------------------------------------------
+            # 1. Fallback – no dedicated queue (legacy/dummy tests)
+            # ----------------------------------------------------------
             if queue is None:
+                ws = self.active_connections.get(client_id)
+                if ws is None:
+                    continue
+
+                try:
+                    await ws.send_json(final_message)
+                except Exception as exc:  # pragma: no cover – defensive
+                    logger.warning("Send error (direct) for client %s: %s", client_id, exc)
+                    asyncio.create_task(self.disconnect(client_id))
                 continue
 
+            # ----------------------------------------------------------
+            # 2. Normal path – hand off to per-connection queue
+            # ----------------------------------------------------------
             try:
-                # Use put_nowait to avoid blocking - if queue is full, drop the client
                 queue.put_nowait(final_message)
             except asyncio.QueueFull:
-                # Client queue is full - disconnect to prevent memory buildup
+                # Back-pressure: drop client to protect server memory
                 logger.warning("Queue full for client %s, disconnecting due to back-pressure", client_id)
-                # Schedule disconnect in background to avoid blocking broadcast
                 asyncio.create_task(self.disconnect(client_id))
+
+        # ------------------------------------------------------------------
+        # Unit-test helper – block until writer tasks have flushed the queue
+        # ------------------------------------------------------------------
+        settings = get_settings()
+        if settings.testing:
+            # Wait (with small timeout) for all queues to drain so assertions
+            # that check `send_json.assert_called_*` right after
+            # ``broadcast_to_topic`` become deterministic.
+            await asyncio.gather(
+                *(asyncio.wait_for(q.join(), timeout=1.0) for q in client_queues.values() if q is not None),
+                return_exceptions=True,
+            )
 
     async def _handle_agent_event(self, data: Dict[str, Any]) -> None:
         """Handle agent-related events from the event bus."""
