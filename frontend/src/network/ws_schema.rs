@@ -63,6 +63,10 @@ pub enum WsMessage {
     #[serde(rename = "user_update")]
     UserUpdate { data: WsUserUpdate },
 
+    // Workflow canvas – per-node execution state
+    #[serde(rename = "node_state")]
+    NodeState { data: WsNodeState },
+
     #[serde(other)]
     Unknown,
 }
@@ -243,9 +247,31 @@ impl WsMessage {
             WsMessage::AssistantId(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::ThreadMessage { data } => Some(format!("thread:{}", data.thread_id)),
             WsMessage::UserUpdate { data } => Some(format!("user:{}", data.id)),
+            WsMessage::NodeState { data } => Some(format!("workflow_execution:{}", data.execution_id)),
             WsMessage::Unknown => None,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+//   Workflow Execution – node state payload
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct WsNodeState {
+    pub execution_id: u32,
+    pub node_id: String,
+    pub status: String, // running | success | failed
+
+    #[serde(default)]
+    pub output: Option<serde_json::Value>,
+
+    #[serde(default)]
+    pub error: Option<String>,
+
+    #[serde(flatten)]
+    #[allow(dead_code)]
+    pub extra: serde_json::Value,
 }
 
 // ---------------------------------------------------------------------------

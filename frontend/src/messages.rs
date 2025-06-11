@@ -201,6 +201,14 @@ pub enum Message {
         status: String,
     },
 
+    // -------------------------------------------------------------------
+    // Workflow execution streaming
+    // -------------------------------------------------------------------
+    /// Subscribe to execution progress for the given execution_id.
+    SubscribeWorkflowExecution {
+        execution_id: u32,
+    },
+
 
     // Toggle / change dashboard sort
     UpdateDashboardSort(crate::state::DashboardSortKey),
