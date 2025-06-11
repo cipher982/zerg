@@ -15,7 +15,8 @@
   height: 100vh;
   padding-top: 108px; /* header + tabs */
   box-sizing: border-box;
-  overflow: hidden;
+  /* Changed from hidden → visible to prevent popover clipping */
+  overflow: visible;
 }
 
 #app-container.canvas-view {
@@ -28,7 +29,8 @@
   height: 100vh;
   padding-top: 108px; /* header (60) + tabs (48) */
   box-sizing: border-box;
-  overflow: hidden;
+  /* Same change – avoid clipping dropdown */
+  overflow: visible;
 }
 
 #canvas-root.canvas-view {
@@ -75,7 +77,7 @@
   width: 100%;
   height: 100%;
   position: relative;
-  z-index: 1;
+  z-index: var(--z-canvas);
   background-color: #33334a !important;
 }
 
@@ -137,6 +139,9 @@
   padding: 0 var(--spacing-md);
   overflow-x: auto;
   flex-shrink: 0;
+  /* Sit above the canvas itself so dropdowns are never occluded */
+  position: relative;
+  z-index: var(--z-toolbar);
 }
 
 .workflow-tab-list {
@@ -295,15 +300,13 @@ body.space-pan #node-canvas {
 
 .dropdown-menu {
   position: absolute;
-  top: 32px;
-  right: 0;
   background: var(--dark-card);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 4px 0;
   min-width: 120px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 9999; /* Ensure always above canvas and other content */
+  z-index: var(--z-overlay);
   opacity: 0;
   transform: translateY(-4px);
   transition: all var(--transition-fast);

@@ -105,6 +105,9 @@ until the engine in 1.2 is completed.
     - [x] Updated styling to match dark theme design system
     - [x] Proper cleanup when switching away from canvas view
     - [x] Responsive design with proper spacing and hover states
+    - [x] Dropdown / context-menu now portals into `#overlay-root` to avoid
+          canvas clipping (July 2025).  Z-index tokens (`--z-toolbar`,
+          `--z-overlay`) replace hard-coded values.
 
 ### 2.2. Canvas & Node System
 - [x] **Node system, palette, drag-and-drop, and modal-based config are robust.**

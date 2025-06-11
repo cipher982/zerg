@@ -7,6 +7,7 @@ use web_sys::{Document};
 
 use crate::state::{APP_STATE, dispatch_global_message};
 use crate::messages::Message;
+use crate::dom_utils::mount_in_overlay;
 
 /// Call once on canvas view mount.  Renders the bar under the header.
 pub fn init(document: &Document) -> Result<(), JsValue> {
@@ -75,17 +76,40 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     dropdown_container.append_child(&dropdown_menu)?;
     actions_el.append_child(&dropdown_container)?;
 
-    // Dropdown toggle click handler
+    // Dropdown toggle click handler – opens the menu and positions it
     {
         let dropdown_menu_clone = dropdown_menu.clone();
         let dropdown_toggle_clone = dropdown_toggle.clone();
+        let doc_clone = document.clone();
+
         let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: web_sys::MouseEvent| {
             e.stop_propagation();
+
             let is_open = dropdown_menu_clone.class_list().contains("show");
+
             if is_open {
                 let _ = dropdown_menu_clone.class_list().remove_1("show");
                 let _ = dropdown_toggle_clone.class_list().remove_1("active");
             } else {
+                // Mount dropdown in #overlay-root portal
+                mount_in_overlay(&dropdown_menu_clone);
+
+                // Position the menu right-aligned to the toggle button
+                let bbox = dropdown_toggle_clone.get_bounding_client_rect();
+
+                // Scroll offsets
+                let win = web_sys::window().unwrap();
+                let scroll_x = win.scroll_x().unwrap_or(0.0);
+                let scroll_y = win.scroll_y().unwrap_or(0.0);
+
+                let top_px = bbox.bottom() + scroll_y;
+                let left_px = bbox.right() + scroll_x - dropdown_menu_clone.client_width() as f64;
+
+                if let Some(html_el) = dropdown_menu_clone.dyn_ref::<web_sys::HtmlElement>() {
+                    let _ = html_el.style().set_property("top", &format!("{}px", top_px));
+                    let _ = html_el.style().set_property("left", &format!("{}px", left_px));
+                }
+
                 let _ = dropdown_menu_clone.class_list().add_1("show");
                 let _ = dropdown_toggle_clone.class_list().add_1("active");
             }
@@ -98,10 +122,15 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
         let dropdown_menu_clone = dropdown_menu.clone();
         let dropdown_toggle_clone = dropdown_toggle.clone();
         let dropdown_container_clone = dropdown_container.clone();
+        let dropdown_menu_for_contains = dropdown_menu.clone();
         let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: web_sys::MouseEvent| {
             if let Some(target) = e.target() {
                 if let Ok(element) = target.dyn_into::<web_sys::Element>() {
-                    if !dropdown_container_clone.contains(Some(&element)) {
+                    // Close only if the click happened outside both the toggle
+                    // container *and* the menu itself (when it is appended to body)
+                    if !dropdown_container_clone.contains(Some(&element))
+                        && !dropdown_menu_for_contains.contains(Some(&element))
+                    {
                         let _ = dropdown_menu_clone.class_list().remove_1("show");
                         let _ = dropdown_toggle_clone.class_list().remove_1("active");
                     }

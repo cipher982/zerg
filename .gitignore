@@ -186,3 +186,4 @@ e2e/test-results
 .clinerules
 *.pw_tmp*
 *.db
+frontend/tmp/*
