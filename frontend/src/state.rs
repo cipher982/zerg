@@ -431,7 +431,7 @@ impl AppState {
             selected_node_id: None,
             clicked_node_id: None,
             is_dragging_agent: false,
-            active_view: ActiveView::Dashboard,
+            active_view: ActiveView::ChatView,
 
             dashboard_scope: {
                 // Read persisted dashboard scope from localStorage (if any)
