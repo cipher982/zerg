@@ -5,6 +5,8 @@ use std::rc::Rc;
 use js_sys::Array;
 use serde_json::Value;
 use std::any::Any;
+use std::future::Future;
+use std::pin::Pin;
 
 use super::messages::builders;
 
@@ -277,42 +279,19 @@ impl WsClientV2 {
             // Only handle text messages
             if let Ok(text) = event.data().dyn_into::<js_sys::JsString>() {
                 if let Some(msg_str) = text.as_string() {
-                    match serde_json::from_str::<Value>(&msg_str) {
-                        Ok(parsed_value) => {
-                            // Inspect the message type field
-                            let msg_type = parsed_value
-                                .get("type")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("");
-
-                            match msg_type {
-                                "pong" => {
-                                    // Keep-alive frame, ignore
-                                    return;
-                                }
-                                "error" => {
-                                    web_sys::console::error_1(
-                                        &format!("WebSocket error: {:?}", parsed_value).into()
-                                    );
-                                    return;
-                                }
-                                _ => {
-                                    // Forward all other messages to topic manager via callback
-                                    if let Some(callback_rc) = &on_message_cb_clone {
-                                        (callback_rc.borrow_mut())(parsed_value);
-                                    }
-                                }
-                            }
+                    if let Ok(parsed_value) = serde_json::from_str::<Value>(&msg_str) {
+                        // Forward all messages to topic manager via callback
+                        if let Some(callback_rc) = &on_message_cb_clone {
+                            (callback_rc.borrow_mut())(parsed_value);
                         }
-                        Err(e) => {
-                            web_sys::console::error_1(
-                                &format!(
-                                    "Failed to parse incoming WebSocket message as JSON: {}, Error: {:?}",
-                                    msg_str, e
-                                )
-                                .into()
-                            );
-                        }
+                    } else {
+                        web_sys::console::error_1(
+                            &format!(
+                                "Failed to parse incoming WebSocket message as JSON: {}",
+                                msg_str
+                            )
+                            .into()
+                        );
                     }
                 }
             } else {
@@ -424,7 +403,7 @@ impl WsClientV2 {
     }
 
     /// Close the WebSocket connection gracefully.
-    pub fn close(&mut self) -> Result<(), JsValue> {
+    pub async fn close(&mut self) -> Result<(), JsValue> {
         web_sys::console::log_1(&"Closing WebSocket connection...".into());
         // Clear ping interval
         self.clear_ping_interval();
@@ -433,7 +412,7 @@ impl WsClientV2 {
         *self.state.borrow_mut() = ConnectionState::Disconnected;
 
         if let Some(ws) = self.websocket.take() { // Use take to remove it
-             match ws.close() {
+             match ws.close_with_code(1000) {
                 Ok(_) => web_sys::console::log_1(&"WebSocket close command sent.".into()),
                 Err(e) => web_sys::console::error_1(&format!("Error sending close command: {:?}", e).into()),
             }
@@ -458,7 +437,16 @@ impl IWsClient for WsClientV2 {
     }
 
     fn close(&mut self) -> Result<(), JsValue> {
-        self.close()
+        web_sys::console::log_1(&"Closing WebSocket connection...".into());
+        self.clear_ping_interval();
+        *self.state.borrow_mut() = ConnectionState::Disconnected;
+        if let Some(ws) = self.websocket.take() {
+            match ws.close_with_code(1000) {
+                Ok(_) => web_sys::console::log_1(&"WebSocket close command sent.".into()),
+                Err(e) => web_sys::console::error_1(&format!("Error sending close command: {:?}", e).into()),
+            }
+        }
+        Ok(())
     }
 
     fn set_on_connect(&mut self, callback: Box<dyn FnMut() + 'static>) {
@@ -605,4 +593,4 @@ pub fn send_thread_message(text: &str, message_id: String) {
     } else {
         web_sys::console::error_1(&"Cannot send message: No websocket connection or no agent selected".into());
     }
-} 
+}

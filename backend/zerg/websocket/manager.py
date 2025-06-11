@@ -28,7 +28,7 @@ class TopicConnectionManager:
 
     # Constants for back-pressure handling
     SEND_TIMEOUT = 1.0  # Timeout for individual send operations
-    QUEUE_SIZE = 100    # Maximum queue size per connection
+    QUEUE_SIZE = 100  # Maximum queue size per connection
 
     def __init__(self):
         """Initialize an empty topic-based connection manager."""
@@ -94,10 +94,10 @@ class TopicConnectionManager:
             self.active_connections[client_id] = websocket
             self.client_topics[client_id] = set()
             self.client_users[client_id] = user_id
-            
+
             # Create message queue for this client
             self.client_queues[client_id] = asyncio.Queue(maxsize=self.QUEUE_SIZE)
-            
+
             # Start writer task for this client
             self.writer_tasks[client_id] = asyncio.create_task(
                 self._writer(client_id, websocket, self.client_queues[client_id])
@@ -132,13 +132,13 @@ class TopicConnectionManager:
                 self.client_users.pop(client_id, None)
                 # Remove from active connections
                 del self.active_connections[client_id]
-                
+
                 # Cancel and clean up writer task
                 if client_id in self.writer_tasks:
                     writer_task = self.writer_tasks.pop(client_id)
                     if not writer_task.done():
                         writer_task.cancel()
-                
+
                 # Clean up message queue
                 if client_id in self.client_queues:
                     del self.client_queues[client_id]
@@ -199,13 +199,10 @@ class TopicConnectionManager:
             while True:
                 # Wait for a message to send
                 payload = await queue.get()
-                
+
                 try:
                     # Send with timeout to prevent hanging on slow clients
-                    await asyncio.wait_for(
-                        websocket.send_json(payload), 
-                        timeout=self.SEND_TIMEOUT
-                    )
+                    await asyncio.wait_for(websocket.send_json(payload), timeout=self.SEND_TIMEOUT)
                 except asyncio.TimeoutError:
                     logger.warning("Send timeout for client %s, disconnecting", client_id)
                     await self.disconnect(client_id)
@@ -217,7 +214,7 @@ class TopicConnectionManager:
                 finally:
                     # Mark task as done regardless of success/failure
                     queue.task_done()
-                    
+
         except asyncio.CancelledError:
             logger.debug("Writer task for client %s cancelled", client_id)
         except Exception as e:
@@ -243,7 +240,7 @@ class TopicConnectionManager:
                     ping_envelope = Envelope.create(
                         message_type="PING",
                         topic="system",  # System-level ping doesn't belong to a specific topic
-                        data={}
+                        data={},
                     )
                     ping_message = ping_envelope.model_dump()
                 else:
@@ -257,7 +254,7 @@ class TopicConnectionManager:
                 for client_id, queue in client_queues.items():
                     if queue is None:
                         continue
-                        
+
                     try:
                         queue.put_nowait(ping_message)
                     except asyncio.QueueFull:
@@ -267,7 +264,7 @@ class TopicConnectionManager:
                     except Exception:
                         # Queue might be closed if client disconnected
                         pass
-                        
+
         except asyncio.CancelledError:  # graceful shutdown
             logger.info("TopicConnectionManager cleanup task cancelled")
 
@@ -284,13 +281,13 @@ class TopicConnectionManager:
                 await self._cleanup_task
             except Exception:  # pragma: no cover – swallowed
                 pass
-                
+
         # Cancel all writer tasks and close websockets
         async with self._lock:
             for task in self.writer_tasks.values():
                 if not task.done():
                     task.cancel()
-                    
+
             for ws in self.active_connections.values():
                 try:
                     await ws.close()
@@ -325,13 +322,9 @@ class TopicConnectionManager:
             # Extract message type and data from the legacy format
             message_type = message.get("type", "UNKNOWN")
             message_data = message.get("data", message)  # Use entire message as data if no 'data' field
-            
+
             # Create envelope
-            envelope = Envelope.create(
-                message_type=message_type,
-                topic=topic,
-                data=message_data
-            )
+            envelope = Envelope.create(message_type=message_type, topic=topic, data=message_data)
             final_message = envelope.model_dump()
         else:
             # Use legacy format
@@ -341,7 +334,7 @@ class TopicConnectionManager:
         for client_id, queue in client_queues.items():
             if queue is None:
                 continue
-                
+
             try:
                 # Use put_nowait to avoid blocking - if queue is full, drop the client
                 queue.put_nowait(final_message)

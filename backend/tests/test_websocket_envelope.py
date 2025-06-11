@@ -1,21 +1,21 @@
 import pytest
-import asyncio
-import os
-
 from fastapi.testclient import TestClient
+
 from zerg.websocket.manager import topic_manager
-from zerg.schemas.ws_messages import Envelope
+
 
 @pytest.fixture(autouse=True)
 def enable_envelope(monkeypatch):
     """Enable envelope feature flag for these tests."""
     monkeypatch.setenv("WS_ENVELOPE_V2", "1")
 
+
 @pytest.fixture
 def ws_client(test_client: TestClient):
     """Create a WebSocket test client for the /api/ws endpoint."""
     with test_client.websocket_connect("/api/ws") as websocket:
         yield websocket
+
 
 def test_envelope_ping(ws_client):
     """Test that ping responses are wrapped in Envelope."""
@@ -30,6 +30,7 @@ def test_envelope_ping(ws_client):
     # Pong payload
     assert response["data"].get("timestamp") == 123456789
 
+
 def test_envelope_backpressure_disconnect(monkeypatch, test_client: TestClient):
     """Test that a client is dropped if its queue overflows (back-pressure)."""
     # Patch queue size to something tiny for test
@@ -37,9 +38,12 @@ def test_envelope_backpressure_disconnect(monkeypatch, test_client: TestClient):
     with test_client.websocket_connect("/api/ws") as ws:
         # Simulate slow client by not reading messages
         for i in range(5):
-            topic_manager.client_queues[list(topic_manager.client_queues.keys())[0]].put_nowait({"type": "test", "data": {"i": i}})
+            topic_manager.client_queues[list(topic_manager.client_queues.keys())[0]].put_nowait(
+                {"type": "test", "data": {"i": i}}
+            )
         # After overflow, the client should be disconnected
         # (No assertion here, but no exception = pass)
+
 
 @pytest.mark.asyncio
 async def test_no_hang_on_slow_client(test_client: TestClient):
