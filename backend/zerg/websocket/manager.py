@@ -15,8 +15,10 @@ from typing import Set
 from fastapi import WebSocket
 from fastapi.encoders import jsonable_encoder
 
+from zerg.config import get_settings
 from zerg.events import EventType
 from zerg.events import event_bus
+from zerg.schemas.ws_messages import Envelope
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +26,18 @@ logger = logging.getLogger(__name__)
 class TopicConnectionManager:
     """Manages WebSocket connections with topic-based subscriptions."""
 
+    # Constants for back-pressure handling
+    SEND_TIMEOUT = 1.0  # Timeout for individual send operations
+    QUEUE_SIZE = 100    # Maximum queue size per connection
+
     def __init__(self):
         """Initialize an empty topic-based connection manager."""
         # Map of client_id to WebSocket connection (guarded by `_lock`)
         self.active_connections: Dict[str, WebSocket] = {}
+        # Map of client_id to message queue (guarded by `_lock`)
+        self.client_queues: Dict[str, asyncio.Queue] = {}
+        # Map of client_id to writer task (guarded by `_lock`)
+        self.writer_tasks: Dict[str, asyncio.Task] = {}
         # Map of topic to set of subscribed client_ids (guarded by `_lock`)
         self.topic_subscriptions: Dict[str, Set[str]] = {}
         # Map of client_id to set of subscribed topics (guarded by `_lock`)
@@ -42,7 +52,7 @@ class TopicConnectionManager:
         self._lock: asyncio.Lock = asyncio.Lock()
 
         # Background task that proactively cleans up dead sockets so topics
-        # don’t accumulate zombie client IDs when a browser tab crashes but
+        # don't accumulate zombie client IDs when a browser tab crashes but
         # no further messages are broadcast on the subscribed topic.
         self._cleanup_task: asyncio.Task | None = None
 
@@ -84,6 +94,14 @@ class TopicConnectionManager:
             self.active_connections[client_id] = websocket
             self.client_topics[client_id] = set()
             self.client_users[client_id] = user_id
+            
+            # Create message queue for this client
+            self.client_queues[client_id] = asyncio.Queue(maxsize=self.QUEUE_SIZE)
+            
+            # Start writer task for this client
+            self.writer_tasks[client_id] = asyncio.create_task(
+                self._writer(client_id, websocket, self.client_queues[client_id])
+            )
 
         # Auto-subscribe the socket to its personal topic so profile updates
         # propagate across tabs/devices without requiring an explicit
@@ -114,6 +132,16 @@ class TopicConnectionManager:
                 self.client_users.pop(client_id, None)
                 # Remove from active connections
                 del self.active_connections[client_id]
+                
+                # Cancel and clean up writer task
+                if client_id in self.writer_tasks:
+                    writer_task = self.writer_tasks.pop(client_id)
+                    if not writer_task.done():
+                        writer_task.cancel()
+                
+                # Clean up message queue
+                if client_id in self.client_queues:
+                    del self.client_queues[client_id]
 
                 # Remove from all topic subscriptions
                 if client_id in self.client_topics:
@@ -162,6 +190,41 @@ class TopicConnectionManager:
         logger.info("Client %s unsubscribed from topic %s", client_id, topic)
 
     # ------------------------------------------------------------------
+    # Queue-based writer for back-pressure safety
+    # ------------------------------------------------------------------
+
+    async def _writer(self, client_id: str, websocket: WebSocket, queue: asyncio.Queue) -> None:
+        """Writer task that processes messages from the queue with timeout and back-pressure handling."""
+        try:
+            while True:
+                # Wait for a message to send
+                payload = await queue.get()
+                
+                try:
+                    # Send with timeout to prevent hanging on slow clients
+                    await asyncio.wait_for(
+                        websocket.send_json(payload), 
+                        timeout=self.SEND_TIMEOUT
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning("Send timeout for client %s, disconnecting", client_id)
+                    await self.disconnect(client_id)
+                    return
+                except Exception as e:
+                    logger.warning("Send error for client %s: %s, disconnecting", client_id, e)
+                    await self.disconnect(client_id)
+                    return
+                finally:
+                    # Mark task as done regardless of success/failure
+                    queue.task_done()
+                    
+        except asyncio.CancelledError:
+            logger.debug("Writer task for client %s cancelled", client_id)
+        except Exception as e:
+            logger.error("Unexpected error in writer task for client %s: %s", client_id, e)
+            await self.disconnect(client_id)
+
+    # ------------------------------------------------------------------
     # Cleanup helpers
     # ------------------------------------------------------------------
 
@@ -174,19 +237,37 @@ class TopicConnectionManager:
             while True:
                 await asyncio.sleep(30)  # 30-second heartbeat
 
+                # Create ping message (envelope format if feature flag enabled)
+                settings = get_settings()
+                if settings.ws_envelope_v2:
+                    ping_envelope = Envelope.create(
+                        message_type="PING",
+                        topic="system",  # System-level ping doesn't belong to a specific topic
+                        data={}
+                    )
+                    ping_message = ping_envelope.model_dump()
+                else:
+                    ping_message = {"type": "ping"}
+
+                # Get client queues snapshot
                 async with self._lock:
-                    client_ids = list(self.active_connections.keys())
+                    client_queues = dict(self.client_queues)
 
-                for cid in client_ids:
-                    ws = self.active_connections.get(cid)
-                    if ws is None:
+                # Queue ping for each client
+                for client_id, queue in client_queues.items():
+                    if queue is None:
                         continue
-
+                        
                     try:
-                        await ws.send_json({"type": "ping"})
+                        queue.put_nowait(ping_message)
+                    except asyncio.QueueFull:
+                        # Client queue is full - disconnect due to back-pressure
+                        logger.warning("Ping queue full for client %s, disconnecting", client_id)
+                        asyncio.create_task(self.disconnect(client_id))
                     except Exception:
-                        # Treat as dead – disconnect will clean maps
-                        await self.disconnect(cid)
+                        # Queue might be closed if client disconnected
+                        pass
+                        
         except asyncio.CancelledError:  # graceful shutdown
             logger.info("TopicConnectionManager cleanup task cancelled")
 
@@ -203,19 +284,25 @@ class TopicConnectionManager:
                 await self._cleanup_task
             except Exception:  # pragma: no cover – swallowed
                 pass
-        # Close active websockets
-        for ws in list(self.active_connections.values()):
-            try:
-                await ws.close()
-            except Exception:
-                pass
+                
+        # Cancel all writer tasks and close websockets
+        async with self._lock:
+            for task in self.writer_tasks.values():
+                if not task.done():
+                    task.cancel()
+                    
+            for ws in self.active_connections.values():
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
 
     async def broadcast_to_topic(self, topic: str, message: Dict[str, Any]) -> None:
         """Broadcast a message to all clients subscribed to a topic.
 
         Args:
             topic: The topic to broadcast to
-            message: The message to broadcast
+            message: The message to broadcast (will be wrapped in envelope if feature flag enabled)
         """
         # If there are no active subscribers we silently skip to avoid log
         # spam – this situation is perfectly normal when scheduled agents or
@@ -225,38 +312,44 @@ class TopicConnectionManager:
                 logger.debug("broadcast_to_topic: no subscribers for topic %s", topic)
                 return
 
-            # Take a *snapshot* of client IDs to send to outside the lock so
-            # that slow network I/O does not block other state mutations.
-            client_ids = set(self.topic_subscriptions[topic])
+            # Take a *snapshot* of client IDs and their queues to send to outside the lock
+            client_queues = {
+                client_id: self.client_queues.get(client_id)
+                for client_id in self.topic_subscriptions[topic]
+                if client_id in self.client_queues
+            }
 
-        disconnected_clients: list[str] = []
+        # Wrap message in envelope if feature flag is enabled
+        settings = get_settings()
+        if settings.ws_envelope_v2:
+            # Extract message type and data from the legacy format
+            message_type = message.get("type", "UNKNOWN")
+            message_data = message.get("data", message)  # Use entire message as data if no 'data' field
+            
+            # Create envelope
+            envelope = Envelope.create(
+                message_type=message_type,
+                topic=topic,
+                data=message_data
+            )
+            final_message = envelope.model_dump()
+        else:
+            # Use legacy format
+            final_message = message
 
-        for client_id in client_ids:
-            if client_id not in self.active_connections:
-                disconnected_clients.append(client_id)
+        # Queue message for each client with back-pressure handling
+        for client_id, queue in client_queues.items():
+            if queue is None:
                 continue
-
+                
             try:
-                await self.active_connections[client_id].send_json(message)
-            except Exception:
-                disconnected_clients.append(client_id)
-
-        # Clean up stale connections under the lock
-        async with self._lock:
-            for client_id in disconnected_clients:
-                self.active_connections.pop(client_id, None)
-                self.client_users.pop(client_id, None)
-
-                # Remove subscription mapping
-                if topic in self.topic_subscriptions:
-                    self.topic_subscriptions[topic].discard(client_id)
-                    if not self.topic_subscriptions[topic]:
-                        del self.topic_subscriptions[topic]
-
-                if client_id in self.client_topics:
-                    self.client_topics[client_id].discard(topic)
-                    if not self.client_topics[client_id]:
-                        del self.client_topics[client_id]
+                # Use put_nowait to avoid blocking - if queue is full, drop the client
+                queue.put_nowait(final_message)
+            except asyncio.QueueFull:
+                # Client queue is full - disconnect to prevent memory buildup
+                logger.warning("Queue full for client %s, disconnecting due to back-pressure", client_id)
+                # Schedule disconnect in background to avoid blocking broadcast
+                asyncio.create_task(self.disconnect(client_id))
 
     async def _handle_agent_event(self, data: Dict[str, Any]) -> None:
         """Handle agent-related events from the event bus."""
