@@ -65,6 +65,9 @@ class TopicConnectionManager:
         event_bus.subscribe(EventType.RUN_CREATED, self._handle_run_event)
         event_bus.subscribe(EventType.RUN_UPDATED, self._handle_run_event)
 
+        # Workflow execution – node progress
+        event_bus.subscribe(EventType.NODE_STATE_CHANGED, self._handle_node_state_event)
+
         # User events (e.g., profile updated) – broadcast to dedicated topic
         event_bus.subscribe(EventType.USER_UPDATED, self._handle_user_event)
 
@@ -294,6 +297,21 @@ class TopicConnectionManager:
         topic = f"user:{user_id}"
         serialized_data = jsonable_encoder(data)
         await self.broadcast_to_topic(topic, {"type": "user_update", "data": serialized_data})
+
+    # ------------------------------------------------------------------
+    # Workflow execution node updates
+    # ------------------------------------------------------------------
+
+    async def _handle_node_state_event(self, data: Dict[str, Any]) -> None:
+        """Broadcast per-node state changes during workflow execution."""
+
+        execution_id = data.get("execution_id")
+        if execution_id is None:
+            return
+
+        topic = f"workflow_execution:{execution_id}"
+        serialized_data = jsonable_encoder(data)
+        await self.broadcast_to_topic(topic, {"type": "node_state", "data": serialized_data})
 
 
 # Create a global instance of the new connection manager

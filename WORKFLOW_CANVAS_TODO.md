@@ -22,7 +22,7 @@
     - [/] Handle errors, retries, and partial failures gracefully – **basic try/except added**; retries TBD.
     - [x] Track execution state for each node (idle, queued, running, success, failed) – stored in `node_execution_states` table.
     - [x] Log execution details, errors, and data flow for debugging – simple text log persisted on `WorkflowExecution`.
-    - [/] Support for live feedback via WebSocket or polling – **status endpoint operational**, WS broadcast next.
+    - [/] Support for live feedback via WebSocket – **backend broadcast implemented**, front-end subscription & UI pending.
     - [ ] Support for manual and scheduled execution (trigger nodes).
 
     **✅ Already done** (so engine work can build on top):
