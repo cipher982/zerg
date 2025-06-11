@@ -27,7 +27,8 @@ NEVER CALL 'python' or 'pytest' directly – use the provided helper scripts OR 
 11. [WebSocket Close Codes](#websocket-close-codes)  
 12. [MCP Tool Integration](#mcp-tool-integration)  
 13. [Frontend Dev Tips](#frontend-dev-tips)  
-14. [Extending / Road-map](#extending--road-map)
+14. [Development Environment & Sandboxing](#development-environment--sandboxing)  
+15. [Extending / Road-map](#extending--road-map)
 
 -------------------------------------------------------------------------------
 ## Overview
@@ -158,6 +159,143 @@ GOOGLE_CLIENT_ID="…apps.googleusercontent.com"
 JWT_SECRET="change-me"
 TRIGGER_SIGNING_SECRET="hex-string"   # only if you use triggers
 ```
+
+-------------------------------------------------------------------------------
+## Runtime Configuration & Feature Flags
+
+The backend loads configuration via `zerg.config.get_settings()` – a tiny
+dataclass-based helper that replaces the heavier Pydantic dependency.
+
+Search order (first match wins):
+
+1. Variables already in the process environment (Docker, CI, etc.)
+2. `<repo-root>/.env`   (current canonical location)
+3. `<repo-root>/backend/.env`   (legacy path kept for backwards-compat)
+
+### Required secrets (production)
+
+| Variable | Purpose |
+|----------|---------|
+| `OPENAI_API_KEY` | Mandatory for *all* LLM calls – startup aborts if absent (unless `TESTING=1`). |
+| `JWT_SECRET` | HS256 signing key for authentication tokens |
+| `TRIGGER_SIGNING_SECRET` | HMAC secret validated by `/api/triggers/{id}/events` |
+
+### Feature flags (truthy = `1`, `true`, `yes`, `on`)
+
+| Flag | Behaviour |
+|------|-----------|
+| `AUTH_DISABLED` | Bypass Google/JWT auth (local dev & unit tests) |
+| `LLM_TOKEN_STREAM` | Stream per-token `assistant_token` WS chunks for live typing effect |
+| `E2E_LOG_SUPPRESS` | Mute debug logs during Playwright runs |
+| `DEV_ADMIN` | Spawn an implicit *admin* user (do **not** use in prod) |
+
+Tips:
+
+* Always read flags via `get_settings()` *inside* functions – tests mutate
+  `os.environ` at runtime.
+* Import API path constants from `zerg.constants` instead of hard-coding
+  strings like `"/api/agents"`.
+
+-------------------------------------------------------------------------------
+## WebSocket Close Codes
+
+| Code | Meaning | Suggested client action |
+|------|---------|-------------------------|
+| **4401** | Auth/JWT invalid | Show login overlay, clear token |
+| **4408** | Heart-beat timeout (>30 s without pong) | Reconnect with back-off |
+
+`WsClientV2` responds to pings automatically; external clients must echo a
+`pong` within 30 seconds to avoid a 4408 close.
+
+-------------------------------------------------------------------------------
+## MCP Tool Integration
+
+Agents can load tools from external **Model-Context-Protocol (MCP)** servers.
+
+Add to the agent’s JSON `config` field:
+
+```jsonc
+{
+  "mcp_servers": [
+    {
+      "name": "corp-tools",
+      "url":  "https://tools.acme.com",
+      "auth_token": "${ACME_TOKEN}",
+      "allowed_tools": ["db_*", "send_email"]
+    }
+  ]
+}
+```
+
+`AgentRunner` fetches the manifest lazily; per-process cache prevents
+duplicate requests. Wild-cards in `allowed_tools` do simple prefix matching.
+
+-------------------------------------------------------------------------------
+## Frontend Dev Tips
+
+• Run `./frontend/build-debug.sh` to enable the translucent **debug overlay** –
+  every `debug_log!(…)` call appears in-page (mobile friendly).
+
+• Useful macros:
+  * `mut_borrow!(cell)` – ergonomic `RefCell` mutable borrow.
+  * `css_var!(primary)` – returns `"var(--primary)"` at compile-time.
+
+• Dashboard shortcuts: `Ctrl/⌘+K` search, `N` new agent, `R` run row, arrow
+  keys to move selection, `Enter` to expand.
+
+• Toggle token streaming quickly:
+
+```bash
+export LLM_TOKEN_STREAM=1
+uv run python -m uvicorn zerg.main:app --reload
+```
+
+The UI gracefully falls back to message-level streaming when the flag is off.
+
+-------------------------------------------------------------------------------
+
+## Development Environment & Sandboxing
+
+Working inside this repository feels like a normal local-dev setup, **but AI
+agents (and human contributors!) must respect a few hard rules to avoid
+shooting themselves in the foot**:
+
+1. **Always execute Python through `uv` or the helper scripts.**  The host
+   machine ships with system Python 3.9 which *does not* have our
+   dependencies compiled for it.  Running `python foo.py` directly will place
+   you in that wrong interpreter, the code will error out, and the agent will
+   waste cycles trying to “fix” nonexistent compatibility issues.  Correct
+   invocations:
+
+   ```bash
+   uv run python -m uvicorn zerg.main:app --reload    
+   backend/run_backend_tests.sh                      
+   make dev # (be careful, this will start the backend/frontend services, and they dont exit)
+   cargo check # (for the frontend)
+   ```
+
+2. **Do NOT start the backend server inside long-running agent tasks.**  The
+   dev server is meant for manual testing; in an automated context it never
+   exits and the agent process will hang indefinitely.  Use the test runner
+   scripts or targeted `'uv run pytest'` instead.
+
+3. **No ad-hoc fall-backs, shims or version hacks.**  We control the entire
+   stack (Python 3.12, Rust 1.76+, Node 18).  If something appears broken,
+   assume a genuine bug in the code rather than missing dependencies and fix
+   it at the source.
+
+4. **Never call raw `pytest`.**  Use `backend/run_backend_tests.sh` (it
+   pre-creates isolated temp DBs, sets env vars and loads plugins).  Same for
+   front-end and e2e scripts.
+
+5. **File-system is sandboxed** – the workspace is a git checkout that can be
+   rolled back.  Feel free to `apply_patch`, run tests, even nuke the local
+   DB files; nothing touches the host system.
+
+Keeping these guard-rails in mind prevents an entire class of misleading error
+messages and infinite-loop behaviours when AI agents interact with the repo.
+
+-------------------------------------------------------------------------------
 
 ### Avoiding Borrowing Issues
 
