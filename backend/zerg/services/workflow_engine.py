@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime
 from datetime import timezone
 from typing import Any
@@ -35,6 +36,8 @@ from typing import Dict
 from sqlalchemy.orm import Session
 
 from zerg.database import get_session_factory
+from zerg.events import EventType
+from zerg.events import event_bus
 from zerg.models.models import NodeExecutionState
 from zerg.models.models import Workflow
 from zerg.models.models import WorkflowExecution
@@ -124,11 +127,18 @@ class WorkflowExecutionEngine:
             db.commit()
             db.refresh(node_state)
 
+            # Emit *running* event
+            self._publish_node_event(
+                execution_id=execution.id,
+                node_id=node_id,
+                status="running",
+                output=None,
+                error=None,
+            )
+
             try:
                 # Placeholder execution – replace with real logic later
-                # We still want a *tiny* sleep so tests see the status change
-                # and developers can watch the UI progress.
-                asyncio.run(asyncio.sleep(0.005))  # type: ignore[arg-type]
+                time.sleep(0.005)
 
                 # Mock output so the front-end has something to display.
                 output: Dict[str, Any] = {"result": f"{node_type}_executed"}
@@ -137,6 +147,15 @@ class WorkflowExecutionEngine:
                 node_state.output = output
                 db.commit()
 
+                # Emit *success* event
+                self._publish_node_event(
+                    execution_id=execution.id,
+                    node_id=node_id,
+                    status="success",
+                    output=output,
+                    error=None,
+                )
+
                 log_lines.append(f"Node {node_id} ({node_type}) executed – OK")
 
             except Exception as exc:  # pylint: disable=broad-except
@@ -144,6 +163,15 @@ class WorkflowExecutionEngine:
                 node_state.status = "failed"
                 node_state.error = str(exc)
                 db.commit()
+
+                # Emit *failed* event *before* marking execution failed so UI sees red immediately
+                self._publish_node_event(
+                    execution_id=execution.id,
+                    node_id=node_id,
+                    status="failed",
+                    output=None,
+                    error=str(exc),
+                )
 
                 # -- mark parent execution failed ------------------------
                 execution.status = "failed"
@@ -163,6 +191,39 @@ class WorkflowExecutionEngine:
         db.commit()
 
         return execution.id
+
+    # ------------------------------------------------------------------
+    # Event helper
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _publish_node_event(
+        *,
+        execution_id: int,
+        node_id: str,
+        status: str,
+        output: Dict[str, Any] | None,
+        error: str | None,
+    ) -> None:
+        """Publish NODE_STATE_CHANGED via the global event bus (sync helper)."""
+
+        payload = {
+            "execution_id": execution_id,
+            "node_id": node_id,
+            "status": status,
+            "output": output,
+            "error": error,
+            "event_type": EventType.NODE_STATE_CHANGED,
+        }
+
+        # Run publish in a fresh event loop inside the worker thread.
+        try:
+            asyncio.run(event_bus.publish(EventType.NODE_STATE_CHANGED, payload))
+        except RuntimeError:
+            # In case we're already inside a running loop (unlikely in thread)
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(event_bus.publish(EventType.NODE_STATE_CHANGED, payload))
+            loop.close()
 
 
 # ---------------------------------------------------------------------------
