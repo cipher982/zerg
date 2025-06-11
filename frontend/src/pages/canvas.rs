@@ -49,23 +49,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
         content
     };
     
-    // Create input panel (toolbar) if needed
-    web_sys::console::log_1(&"CANVAS: Creating/finding input panel".into());
-    let input_panel = if let Some(panel) = document.get_element_by_id("canvas-input-panel") {
-        panel
-    } else {
-        crate::ui::main::create_input_panel(document)?
-    };
-    
-    // Add input panel to main content if not already there
-    if input_panel.parent_node().map_or(true, |p| p.node_name() != "DIV" || 
-           p.dyn_ref::<Element>().map_or(true, |e| e.id() != "main-content-area")) {
-        web_sys::console::log_1(&"CANVAS: Appending input panel to main content".into());
-        main_content.append_child(&input_panel)?;
-    }
-    
-    // Make sure input panel is visible
-    crate::dom_utils::show(&input_panel);
+    // Removed: input panel (toolbar) creation and mounting; controls are now in workflow bar
     
     // Create canvas container if needed
     web_sys::console::log_1(&"CANVAS: Creating/finding canvas container".into());

@@ -23,7 +23,97 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     let list_el = document.create_element("ul")?;
     list_el.set_attribute("class", "workflow-tab-list")?;
 
+    // Toolbar actions container (right side)
+    let actions_el = document.create_element("div")?;
+    actions_el.set_attribute("class", "toolbar-actions")?;
+
+    // Center view button
+    let center_btn = document.create_element("button")?;
+    center_btn.set_attribute("type", "button")?;
+    center_btn.set_inner_html("⌖");
+    center_btn.set_attribute("class", "toolbar-btn")?;
+    center_btn.set_attribute("title", "Center View")?;
+    {
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            dispatch_global_message(Message::CenterView);
+        }));
+        center_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+    actions_el.append_child(&center_btn)?;
+
+    // Dropdown menu (⋮)
+    let dropdown_container = document.create_element("div")?;
+    dropdown_container.set_attribute("class", "dropdown-container")?;
+
+    let dropdown_toggle = document.create_element("button")?;
+    dropdown_toggle.set_attribute("type", "button")?;
+    dropdown_toggle.set_inner_html("⋮");
+    dropdown_toggle.set_attribute("class", "dropdown-toggle")?;
+    dropdown_toggle.set_attribute("title", "More Options")?;
+
+    let dropdown_menu = document.create_element("div")?;
+    dropdown_menu.set_attribute("class", "dropdown-menu")?;
+
+    let clear_btn = document.create_element("button")?;
+    clear_btn.set_attribute("type", "button")?;
+    clear_btn.set_inner_html("Clear Canvas");
+    clear_btn.set_attribute("class", "dropdown-item danger")?;
+    {
+        let dropdown_menu_clone = dropdown_menu.clone();
+        let dropdown_toggle_clone = dropdown_toggle.clone();
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            let _ = dropdown_menu_clone.class_list().remove_1("show");
+            let _ = dropdown_toggle_clone.class_list().remove_1("active");
+            dispatch_global_message(Message::ClearCanvas);
+        }));
+        clear_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+    dropdown_menu.append_child(&clear_btn)?;
+    dropdown_container.append_child(&dropdown_toggle)?;
+    dropdown_container.append_child(&dropdown_menu)?;
+    actions_el.append_child(&dropdown_container)?;
+
+    // Dropdown toggle click handler
+    {
+        let dropdown_menu_clone = dropdown_menu.clone();
+        let dropdown_toggle_clone = dropdown_toggle.clone();
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: web_sys::MouseEvent| {
+            e.stop_propagation();
+            let is_open = dropdown_menu_clone.class_list().contains("show");
+            if is_open {
+                let _ = dropdown_menu_clone.class_list().remove_1("show");
+                let _ = dropdown_toggle_clone.class_list().remove_1("active");
+            } else {
+                let _ = dropdown_menu_clone.class_list().add_1("show");
+                let _ = dropdown_toggle_clone.class_list().add_1("active");
+            }
+        }));
+        dropdown_toggle.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+    // Document click handler to close dropdown when clicking outside
+    {
+        let dropdown_menu_clone = dropdown_menu.clone();
+        let dropdown_toggle_clone = dropdown_toggle.clone();
+        let dropdown_container_clone = dropdown_container.clone();
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: web_sys::MouseEvent| {
+            if let Some(target) = e.target() {
+                if let Ok(element) = target.dyn_into::<web_sys::Element>() {
+                    if !dropdown_container_clone.contains(Some(&element)) {
+                        let _ = dropdown_menu_clone.class_list().remove_1("show");
+                        let _ = dropdown_toggle_clone.class_list().remove_1("active");
+                    }
+                }
+            }
+        }));
+        document.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+
     bar_el.append_child(&list_el)?;
+    bar_el.append_child(&actions_el);
 
     // Insert bar into the main content area of the canvas layout
     // Try multiple locations in order of preference
