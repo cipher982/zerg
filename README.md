@@ -23,7 +23,11 @@ NEVER CALL 'python' or 'pytest' directly – use the provided helper scripts OR 
 7. [Frontend State Management](#frontend-state-management)  
 8. [Directory Layout](#directory-layout)  
 9. [Testing](#testing)  
-10. [Extending / Road-map](#extending--road-map)
+10. [Runtime Configuration & Feature Flags](#runtime-configuration--feature-flags)  
+11. [WebSocket Close Codes](#websocket-close-codes)  
+12. [MCP Tool Integration](#mcp-tool-integration)  
+13. [Frontend Dev Tips](#frontend-dev-tips)  
+14. [Extending / Road-map](#extending--road-map)
 
 -------------------------------------------------------------------------------
 ## Overview

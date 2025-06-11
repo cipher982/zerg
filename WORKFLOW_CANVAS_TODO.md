@@ -16,13 +16,13 @@
 > a stub (`backend/zerg/services/workflow_engine.py`).
 
 - [ ] **Design and implement a workflow execution engine**
-    - [ ] Service/class to execute workflows node-by-node, resolving input/output dependencies.
-    - [ ] Support for Tool, Trigger, and Agent nodes (as per PRD and frontend models).
+    - [x] Service/class to execute workflows node-by-node, resolving input/output dependencies **(implemented – `WorkflowExecutionEngine`)**
+    - [/] Support for Tool, Trigger, and Agent nodes – **placeholder executions merged**; real integration still pending.
     - [ ] Integrate with MCP tool execution and trigger firing.
-    - [ ] Handle errors, retries, and partial failures gracefully.
-    - [ ] Track execution state for each node (idle, queued, running, success, failed).
-    - [ ] Log execution details, errors, and data flow for debugging.
-    - [ ] Support for live feedback via WebSocket or polling.
+    - [/] Handle errors, retries, and partial failures gracefully – **basic try/except added**; retries TBD.
+    - [x] Track execution state for each node (idle, queued, running, success, failed) – stored in `node_execution_states` table.
+    - [x] Log execution details, errors, and data flow for debugging – simple text log persisted on `WorkflowExecution`.
+    - [/] Support for live feedback via WebSocket or polling – **status endpoint operational**, WS broadcast next.
     - [ ] Support for manual and scheduled execution (trigger nodes).
 
     **✅ Already done** (so engine work can build on top):
