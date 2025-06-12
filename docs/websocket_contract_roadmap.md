@@ -9,36 +9,36 @@ brings immediate value and leaves the codebase in a green state.
 ## Phase 1 — AsyncAPI spec & code-generation
 
 ### 1.1  Draft `asyncapi/chat.yml`  (✅ once merged)
-* [ ] Describe global info (`title`, `version`, etc.)
-* [ ] Channels
-  * [ ] `system`   – control frames (subscribe / unsubscribe / error / …)
-  * [ ] `thread/{thread_id}`   – history, stream_start/stream_chunk/stream_end
-  * [ ] `agent/{agent_id}`    – agent_event
-* [ ] Components / schemas for every payload type
-* [ ] Example messages for each operation (used by docs & Pact later)
+* [x] Describe global info (`title`, `version`, etc.)
+* [x] Channels
+  * [x] `system`   – control frames (subscribe / unsubscribe / error / …)
+  * [x] `thread/{thread_id}`   – history, stream_start/stream_chunk/stream_end
+  * [x] `agent/{agent_id}`    – agent_event
+* [ ] Components / schemas for every payload type *(subset drafted – will iterate)*
+* [ ] Example messages for each operation *(one example included; more to add)*
 
 ### 1.2  Validation in CI
-* [ ] Add `npx asyncapi validate asyncapi/chat.yml` to **pre-commit hook**
+* [x] Add `npx asyncapi validate asyncapi/chat.yml` to **pre-commit hook**
 * [ ] Same command runs in `make test` so CI fails on invalid spec
 
 ### 1.3  Code-generation targets
-* [ ] Backend (Rust):
+* [x] Backend (Rust):
   * output dir `backend/zerg/ws_schema/` (temporary, not part of git)
   * command: `asyncapi-generator -o … asyncapi-rust`
-* [ ] Frontend (TypeScript → wasm-bindgen):
+* [x] Frontend (TypeScript → wasm-bindgen):
   * output dir `frontend/generated/`
   * command: `npx @asyncapi/typescript-codegen …`
-* [ ] Script `scripts/regen-ws-code.sh` invoked by `make regen-ws-code`
+* [x] Script `scripts/regen-ws-code.sh` invoked by `make regen-ws-code`
 * [ ] CI check: `git diff --exit-code` after regen to enforce “spec updated _and_ code regenerated” rule
 
 ----------------------------------------------------------------------
 ## Phase 2 — Runtime payload validation
 
 ### 2.1  Backend
-* [ ] Enable `schemars::JsonSchema` on generated structs
-* [ ] Middleware in WS handler:
-  * validate each inbound JSON against schema
-  * on failure → send `{type:"error", code:"INVALID_PAYLOAD"}` and close with code 1002
+* [ ] Enable `schemars::JsonSchema` on generated structs *(pending code-gen availability)*
+* [x] Central validation in WS handler:
+  * pydantic schema map validates every inbound payload
+  * on failure sends `{type:"error", code:"INVALID_PAYLOAD"}` (close logic later)
 
 ### 2.2  Frontend
 * [ ] Bundle JSON Schema (compiled from AsyncAPI) via `ajv8` wasm-pack feature
