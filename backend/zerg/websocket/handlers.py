@@ -13,6 +13,7 @@ from typing import Optional
 
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from zerg.config import _truthy  # type: ignore  # pylint: disable=protected-access
@@ -337,6 +338,22 @@ MESSAGE_HANDLERS = {
     "send_message": None,  # populated below
 }
 
+# ---------------------------------------------------------------------------
+# Runtime inbound payload validation (Phase 2 groundwork)
+# ---------------------------------------------------------------------------
+
+# Mapping of *client → server* message types to their strict Pydantic models.
+# We validate the incoming JSON before it reaches individual handlers so that
+# malformed payloads are rejected consistently in one place.
+
+_INBOUND_SCHEMA_MAP: Dict[str, type[BaseModel]] = {
+    "ping": PingMessage,
+    "subscribe": SubscribeMessage,
+    "unsubscribe": UnsubscribeMessage,
+    "subscribe_thread": SubscribeThreadMessage,
+    "send_message": SendMessageRequest,
+}
+
 
 # ---------------------------------------------------------------------------
 # Dedicated helpers for chat‑centric message types introduced in
@@ -425,10 +442,35 @@ async def dispatch_message(client_id: str, message: Dict[str, Any], db: Session)
     """
     try:
         message_type = message.get("type")
-        if message_type in MESSAGE_HANDLERS:
-            await MESSAGE_HANDLERS[message_type](client_id, message, db)
-        else:
+        # ------------------------------------------------------------------
+        # 1) Fast-fail on completely unknown "type" field.
+        # ------------------------------------------------------------------
+        if message_type not in MESSAGE_HANDLERS:
             await send_error(client_id, f"Unknown message type: {message_type}")
+            return
+
+        # ------------------------------------------------------------------
+        # 2) Schema validation using Pydantic models defined in
+        #    ``_INBOUND_SCHEMA_MAP``.  We do **not** trust handlers to repeat
+        #    validation – doing it centrally prevents duplicate effort and
+        #    guarantees identical error semantics across all message types.
+        # ------------------------------------------------------------------
+
+        model_cls = _INBOUND_SCHEMA_MAP.get(message_type)
+        if model_cls is not None:
+            try:
+                # Pydantic v2 – ``model_validate`` is the zero-copy validator.
+                model_cls.model_validate(message)
+            except ValidationError as exc:
+                logger.debug("Schema validation failed for %s: %s", message_type, exc)
+                await send_error(client_id, "INVALID_PAYLOAD", message.get("message_id"))
+                # Draft spec says we should close with 1002 on protocol error;
+                # we delegate the actual close to TopicConnectionManager which
+                # will detect the explicit ``error`` frame and terminate.
+                return
+
+        # If validation passed (or no schema yet), forward to handler.
+        await MESSAGE_HANDLERS[message_type](client_id, message, db)
     except Exception as e:
         logger.error(f"Error dispatching message: {str(e)}")
         await send_error(client_id, "Failed to process message")

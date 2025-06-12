@@ -59,3 +59,15 @@ repos:
         language: node
         entry: npx --no-install prettier --write
         types: [css, scss, markdown]
+
+# ---------------------------------------------------------------------------
+# AsyncAPI validation – ensures spec stays syntactically correct
+# ---------------------------------------------------------------------------
+
+  - repo: local
+    hooks:
+      - id: asyncapi-validate
+        name: AsyncAPI spec validation
+        language: system
+        entry: scripts/asyncapi-validate.sh
+        pass_filenames: false

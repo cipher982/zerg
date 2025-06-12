@@ -187,3 +187,5 @@ e2e/test-results
 *.pw_tmp*
 *.db
 frontend/tmp/*
+backend/zerg/ws_schema/
+frontend/generated/

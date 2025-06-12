@@ -25,8 +25,11 @@ from __future__ import annotations
 
 import sys
 import types
-from typing import Any, Callable, Dict, List, Sequence
-
+from typing import Any
+from typing import Callable
+from typing import Dict
+from typing import List
+from typing import Sequence
 
 # ---------------------------------------------------------------------------
 # triggers.cron – minimal CronTrigger implementation
