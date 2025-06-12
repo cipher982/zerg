@@ -82,16 +82,3 @@ brings immediate value and leaves the codebase in a green state.
 * [ ] Auto-publish interactive AsyncAPI docs to GitHub Pages
 * [ ] Mock server for local-dev (`asyncapi mock`) – front-end can boot without backend
 
-----------------------------------------------------------------------
-**Owners**
-
-| Phase | Lead | Reviewers |
-|-------|------|-----------|
-| 1     | @backend-core | @frontend-core |
-| 2     | @backend-core | @frontend-core |
-| 3     | @qa | @backend-core, @frontend-core |
-| 4     | @infra-experiments | @backend-core |
-| 5     | @frontend-core | — |
-
-----------------------------------------------------------------------
-© 2025 Zerg AI
