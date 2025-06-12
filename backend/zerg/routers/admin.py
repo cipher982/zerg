@@ -55,20 +55,32 @@ async def reset_database():
         # then re-enable.  Avoids losing autoincrement counters that some
         # tests rely on for deterministic IDs.
 
-        from sqlalchemy.orm import close_all_sessions
-
-        # Close any open Sessions first to avoid lingering identity maps that
-        # would otherwise return *stale* ORM objects after the truncate.
-        close_all_sessions()
+        # ------------------------------------------------------------------
+        # SQLAlchemy's *global* ``close_all_sessions()`` helper invalidates
+        # **every** Session that exists in the current process – even the
+        # ones that belong to a *different* Playwright worker using another
+        # database file.  When multiple E2E workers run in parallel this
+        # leads to race-conditions where an ongoing request suddenly loses
+        # its Session mid-flight and subsequent ORM access explodes with
+        # ``InvalidRequestError: Instance … is not persistent within this
+        # Session``.
+        #
+        # Because each Playwright worker is already fully isolated via its
+        # *own* SQLite engine (handled by WorkerDBMiddleware &
+        # zerg.database) it is safe – and *necessary* – to avoid closing
+        # foreign Sessions.  Instead we:
+        #   1. Dispose the *current* worker’s engine after we are done.  This
+        #      releases connections that *belong to this engine only*.
+        #   2. Rely on the fact that every incoming HTTP request obtains a
+        #      **fresh** Session, so no stale identity maps can leak across
+        #      requests.
+        #
+        # Hence: **do not** call ``close_all_sessions()`` here.
 
         # Drop & recreate schema so **new columns** land automatically when
         # models change during active dev work (e.g. `workflow_id`).  Safer
         # than DELETE-rows because SQLite cannot ALTER TABLE with multiple
         # columns easily.
-
-        from sqlalchemy.orm import close_all_sessions
-
-        close_all_sessions()
 
         logger.info("Dropping all tables …")
         Base.metadata.drop_all(bind=engine)
