@@ -172,8 +172,34 @@ impl TopicManager {
 
         // Attempt to parse as a v2 Envelope first
         if let Ok(envelope) = serde_json::from_value::<Envelope>(message.clone()) {
-            // v2 path: route based on envelope topic
-            self.dispatch_to_topic_handlers(&envelope.topic, envelope.data);
+            // v2 path: need to transform Envelope → legacy flat shape that
+            // downstream handlers (`ChatViewWsManager`, dashboard managers…)
+            // still expect: `{ "type": "…", <payload-fields…> }`.
+            // Move every key from `envelope.data` to the root object and add
+            // the `type` attribute from the envelope itself so the existing
+            // `WsMessage` enum can deserialize successfully.
+
+            use serde_json::{json, Value};
+
+            let mut merged = match envelope.data {
+                Value::Object(map) => map,
+                other => {
+                    // In the unlikely case `data` is not an object pass the
+                    // original envelope for debugging – downstream will log
+                    // an error for unmatched shape.
+                    self.dispatch_to_topic_handlers(&envelope.topic, json!({
+                        "type": envelope.r#type,
+                        "data": other,
+                    }));
+                    return;
+                }
+            };
+
+            // Insert the `type` discriminator (always lower-case to match
+            // `WsMessage` discriminators and avoid a huge alias list).
+            merged.insert("type".to_string(), Value::String(envelope.r#type.to_lowercase()));
+
+            self.dispatch_to_topic_handlers(&envelope.topic, Value::Object(merged));
         } else {
             // Fallback to v1 parsing
             use crate::network::ws_schema::WsMessage;

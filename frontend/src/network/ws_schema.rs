@@ -32,7 +32,13 @@ pub enum WsMessage {
     // *event_type* labels emitted by the backend event bus ("agent_updated",
     // "agent_created", "agent_deleted" ...).  They all carry the same payload
     // shape so we don’t distinguish further on the frontend.
-    #[serde(rename = "agent_event", alias = "agent_state", alias = "agent_created", alias = "agent_updated", alias = "agent_deleted")]
+    #[serde(
+        rename = "agent_event",
+        alias = "agent_state",
+        alias = "agent_created",
+        alias = "agent_updated",
+        alias = "agent_deleted"
+    )]
     AgentEvent { data: WsAgentEvent },
 
     // Thread lifecycle updates share payload structure – expose a single

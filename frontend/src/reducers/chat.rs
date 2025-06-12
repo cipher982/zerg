@@ -344,12 +344,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             if state.current_thread_id == Some(thread_id) {
                 let messages_clone = messages.clone();
                 cmds.push(Command::UpdateUI(Box::new(move || {
-                    // Force UI update in next event loop tick to ensure repaint
-                    let closure = Closure::once_into_js(move || {
-                        crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
-                    });
-                    let _ = web_sys::window()
-                        .and_then(|w| w.set_timeout_with_callback_and_timeout_and_arguments_0(closure.as_ref().unchecked_ref(), 0).ok());
+                    crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
                 })));
             }
             let threads_data: Vec<crate::models::ApiThread> = state.threads.values().cloned().collect();
