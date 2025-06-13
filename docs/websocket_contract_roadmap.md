@@ -48,10 +48,15 @@ brings immediate value and leaves the codebase in a green state.
 * [x] Heart-beat watchdog – server pings every 30 s, disconnects after 60 s without *pong* (code **4408**)
 
 ### 2.2  Frontend
-* [ ] Bundle JSON Schema (compiled from AsyncAPI) via `ajv8` wasm-pack feature
-* [x] Lightweight envelope check in `WsClientV2` (prevents malformed frames)
-* [x] Auto-reply with `pong` when server sends `ping`
-* [ ] Full JSON Schema validation + UI toast / badge colouring for 1002 / 4401 / 4408
+* [x] Full JSON-Schema validation of incoming frames via Rust `jsonschema` crate *(Jun 2025 switch from planned `ajv8` to all-Rust solution; 0.17, draft-2020-12)*
+* [x] Lightweight envelope sanity-check removed (superseded by full schema) – still O(µs) overhead.
+* [x] Auto-reply with `pong` when server sends `ping`.
+* [x] Toast notifications for close codes **1002** and **4408**.
+* [ ] WS badge colour-coding (amber/red) still pending.
+
+> Note: original plan mentioned *ajv8*; we decided to keep the stack Rust-only to
+> reduce JS-WASM boundary complexity and bundle size.  The docs and CI scripts
+> have been updated accordingly.
 
 ----------------------------------------------------------------------
 ## Phase 3 — Consumer-driven contract tests (Pact V4)
@@ -98,10 +103,8 @@ brings immediate value and leaves the codebase in a green state.
 ----------------------------------------------------------------------
 ### Next immediate steps
 
-1. Bundle compiled JSON Schema into the WASM build, validate incoming frames
-   with `ajv8`, and surface protocol errors via toast – completes Phase 2.
-2. Add `WsBadge` colour coding + toast mapping for 1002 / 4401 / 4408.
-3. Capture a Pact contract from the frontend happy-path to kick-off Phase 3.
+1. Implement `WsBadge` colour coding for **4401 / 1002 / 4408**.
+2. Capture a Pact contract from the frontend happy-path to kick-off Phase 3.
 
 ----------------------------------------------------------------------
 ### Nice-to-have / stretch

@@ -154,6 +154,7 @@ mod pages;
 mod scheduling;
 mod utils;
 mod toast;
+mod schema_validation;
 
 // ---------------------------------------------------------------------------
 // Global keyboard shortcuts
