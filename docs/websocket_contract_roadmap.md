@@ -61,18 +61,20 @@ brings immediate value and leaves the codebase in a green state.
 ----------------------------------------------------------------------
 ## Phase 3 — Consumer-driven contract tests (Pact V4)
 
-### 3.1  Front-end (consumer)
-* [ ] Use `pact-web` to capture a happy-path interaction:
-  * subscribe → expect thread_history
-  * send_message → expect stream_start/chunk/end
-* [ ] Commit generated `.json` pact file to `contracts/`
+### 3.1  Front-end (consumer)  — *pure Rust/WASM*
+* [ ] WASM test (`frontend/contract_capture.rs`) opens an in-memory mock `WsClientV2` and
+  records two interactions:
+  * subscribe_thread  → expect **ThreadHistory**
+  * send_message      → expect **stream_start / stream_chunk / stream_end**
+* [ ] Serialises to Pact V4 JSON and writes `contracts/frontend-v1.json` (committed).
 
-### 3.2  Back-end (provider)
-* [ ] Add `pact_consumer` + WebSocket plugin to dev-dependencies
-* [ ] Provider test spins up FastAPI app & verifies all contracts in `contracts/`
+### 3.2  Back-end (provider)  — *Python pact-verifier*
+* [ ] Lightweight PyPI dep `pact_verifier` added to `backend/pyproject.toml` (dev-extra).
+* [ ] New pytest `test_pact_contracts.py` boots FastAPI via TestClient and verifies every JSON in `contracts/`.
 
 ### 3.3  CI integration
-* [ ] `make pact-verify` target run in backend test job
+* [ ] `make pact-capture`  – runs the WASM test and updates contract JSON (fails if diff).
+* [ ] `make pact-verify`  – runs during backend job, executes the provider verification test.
 
 ----------------------------------------------------------------------
 ## Phase 4 — Property-based fuzzing
@@ -103,8 +105,7 @@ brings immediate value and leaves the codebase in a green state.
 ----------------------------------------------------------------------
 ### Next immediate steps
 
-1. Implement `WsBadge` colour coding for **4401 / 1002 / 4408**.
-2. Capture a Pact contract from the frontend happy-path to kick-off Phase 3.
+1. Capture the first Pact contract JSON via `make pact-capture` (Phase-3 start).
 
 ----------------------------------------------------------------------
 ### Nice-to-have / stretch
