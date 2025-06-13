@@ -1,4 +1,3 @@
-
 """Provider-side Pact verification.
 
 The test discovers every JSON file in the top-level ``contracts/`` directory
@@ -11,7 +10,6 @@ the dev requirements.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
