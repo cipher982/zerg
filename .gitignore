@@ -189,3 +189,4 @@ e2e/test-results
 frontend/tmp/*
 backend/zerg/ws_schema/
 frontend/generated/
+node_modules/
