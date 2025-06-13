@@ -21,6 +21,12 @@ channels:
     messages:
       SystemMessage:
         $ref: '#/components/messages/SystemMessage'
+      Ping:
+        $ref: '#/components/messages/Ping'
+      Pong:
+        $ref: '#/components/messages/Pong'
+      Error:
+        $ref: '#/components/messages/Error'
 
   ThreadChannel:
     address: thread/{thread_id}
@@ -38,6 +44,8 @@ channels:
         $ref: '#/components/messages/StreamChunk'
       StreamEnd:
         $ref: '#/components/messages/StreamEnd'
+      ThreadHistory:
+        $ref: '#/components/messages/ThreadHistory'
 
   AgentChannel:
     address: agent/{agent_id}
@@ -62,6 +70,24 @@ components:
       payload:
         $ref: '#/components/schemas/Envelope'
 
+    Ping:
+      name: Ping
+      summary: Heart-beat ping sent by server; clients must reply with Pong.
+      payload:
+        $ref: '#/components/schemas/Ping'
+
+    Pong:
+      name: Pong
+      summary: Heart-beat response; echoes `ping_id` received in Ping.
+      payload:
+        $ref: '#/components/schemas/Pong'
+
+    Error:
+      name: Error
+      summary: Protocol or application level error.
+      payload:
+        $ref: '#/components/schemas/Error'
+
     ThreadClientMessage:
       name: ThreadClientMessage
       summary: Client-sent message into a thread.
@@ -82,6 +108,11 @@ components:
       name: StreamEnd
       payload:
         $ref: '#/components/schemas/StreamEnd'
+
+    ThreadHistory:
+      name: ThreadHistory
+      payload:
+        $ref: '#/components/schemas/ThreadHistory'
 
     AgentEvent:
       name: AgentEvent
@@ -117,6 +148,9 @@ components:
           const: stream_start
         thread_id:
           type: integer
+      examples:
+        - type: stream_start
+          thread_id: 42
 
     StreamEnd:
       type: object
@@ -126,6 +160,9 @@ components:
           const: stream_end
         thread_id:
           type: integer
+      examples:
+        - type: stream_end
+          thread_id: 42
 
     StreamChunk:
       type: object
@@ -146,6 +183,15 @@ components:
         tool_call_id:
           type: string
           nullable: true
+      examples:
+        - type: stream_chunk
+          thread_id: 42
+          content: "Hello"
+          chunk_type: assistant_token
+        - type: stream_chunk
+          thread_id: 42
+          content: "Complete sentence."
+          chunk_type: assistant_message
 
     AgentEvent:
       type: object
@@ -156,6 +202,83 @@ components:
         data:
           type: object
           additionalProperties: true
+      examples:
+        - type: agent_event
+          data:
+            status: "RUNNING"
+            run_id: "run_123"
+
+    # Heart-beat ping / pong ----------------------------------------------
+
+    Ping:
+      type: object
+      required: [type, ping_id]
+      properties:
+        type:
+          const: ping
+        ping_id:
+          type: string
+      examples:
+        - type: ping
+          ping_id: "abc123"
+
+    Pong:
+      type: object
+      required: [type, ping_id]
+      properties:
+        type:
+          const: pong
+        ping_id:
+          type: string
+      examples:
+        - type: pong
+          ping_id: "abc123"
+
+    # Error frame ----------------------------------------------------------
+
+    Error:
+      type: object
+      required: [type, code, message]
+      properties:
+        type:
+          const: error
+        code:
+          type: integer
+        message:
+          type: string
+        details:
+          type: object
+          nullable: true
+      examples:
+        - type: error
+          code: 1002
+          message: "INVALID_PAYLOAD"
+
+    # Thread history -------------------------------------------------------
+
+    ThreadHistory:
+      type: object
+      required: [type, thread_id, messages]
+      properties:
+        type:
+          const: thread_history
+        thread_id:
+          type: integer
+        messages:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      examples:
+        - type: thread_history
+          thread_id: 42
+          messages:
+            - id: 1
+              role: user
+              content: "Hello!"
+            - id: 2
+              role: assistant
+              content: "Hi, how can I help?"
 
 # examples moved or removed (AsyncAPI 3 does not support components.examples)
 
@@ -180,7 +303,7 @@ operations:
     action: receive
     channel: { $ref: '#/channels/ThreadChannel' }
     messages:
-      - $ref: '#/channels/ThreadChannel/messages/StreamStart'  # using StreamStart as placeholder
+      - $ref: '#/channels/ThreadChannel/messages/ThreadHistory'
 
   ReceiveThreadStream:
     action: receive
@@ -195,5 +318,23 @@ operations:
     channel: { $ref: '#/channels/AgentChannel' }
     messages:
       - $ref: '#/channels/AgentChannel/messages/AgentEvent'
+
+  ReceivePing:
+    action: receive
+    channel: { $ref: '#/channels/SystemChannel' }
+    messages:
+      - $ref: '#/channels/SystemChannel/messages/Ping'
+
+  SendPong:
+    action: send
+    channel: { $ref: '#/channels/SystemChannel' }
+    messages:
+      - $ref: '#/channels/SystemChannel/messages/Pong'
+
+  ReceiveError:
+    action: receive
+    channel: { $ref: '#/channels/SystemChannel' }
+    messages:
+      - $ref: '#/channels/SystemChannel/messages/Error'
 
 # End of file

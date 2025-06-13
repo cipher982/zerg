@@ -14,8 +14,10 @@ brings immediate value and leaves the codebase in a green state.
   * [x] `system`   – control frames (subscribe / unsubscribe / error / …)
   * [x] `thread/{thread_id}`   – history, stream_start/stream_chunk/stream_end
   * [x] `agent/{agent_id}`    – agent_event
-* [ ] Components / schemas for every payload type *(subset drafted – will iterate)*
-* [ ] Example messages for each operation *(token + ping examples in spec; add the rest)*
+* [x] Components / schemas for every payload type (Ping, Pong, Error,
+      ThreadHistory added)
+* [x] Example messages for each operation (covering ping/pong, stream,
+      agent_event, etc.)
 
 ### 1.2  Validation in CI
 * [x] Add `npx @asyncapi/cli validate asyncapi/chat.yml` (with legacy fallback) to **pre-commit hook**
