@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use js_sys::Array;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 
 // Track packet counter for activity indicator
 thread_local! {
@@ -13,6 +14,25 @@ pub fn update_connection_status(status: &str, color: &str) {
             if let Some(status_element) = document.get_element_by_id("global-status") {
                 status_element.set_class_name(color);
                 status_element.set_inner_html(&format!("Status: {}", status));
+            }
+
+            // Update the coloured badge if present.  We set the *inline*
+            // background colour so the indicator works without relying on a
+            // global stylesheet (useful for our wasm-pack tests).
+            if let Some(badge_el) = document.get_element_by_id("ws-badge") {
+                // Map semantic colour names to HEX codes (fallback to the
+                // provided string verbatim so callers can pass CSS colours).
+                let hex = match color {
+                    "green" => "#2ecc71",
+                    "yellow" => "#f1c40f",
+                    "red" => "#e74c3c",
+                    other => other,
+                };
+
+                // Only attempt to set style when element is HtmlElement.
+                if let Some(html_el) = badge_el.dyn_ref::<web_sys::HtmlElement>() {
+                    let _ = html_el.style().set_property("background", hex);
+                }
             }
         }
     }

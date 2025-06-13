@@ -35,6 +35,25 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
 
     status_bar.append_child(&status)?;
 
+    // -------------------------------------------------------------------
+    // WebSocket connection badge (small coloured circle)
+    // -------------------------------------------------------------------
+    // A minimal visual indicator that changes colour based on the current
+    // WebSocket connection state – green (connected), yellow (connecting),
+    // red (disconnected / error).  Inline styles are used so the badge works
+    // even without the full CSS bundle during local-dev or unit tests.
+
+    let ws_badge = document.create_element("span")?;
+    ws_badge.set_id("ws-badge");
+    ws_badge.set_attribute(
+        "style",
+        "display:inline-block;width:10px;height:10px;border-radius:50%;\
+         background:#f1c40f;margin-right:6px;vertical-align:middle;",
+    )?;
+
+    // Prepend badge before the textual status so they appear side-by-side.
+    status_bar.insert_before(&ws_badge, Some(&status))?;
+
     // API packet counter (hidden LED / counter that flashes on WS packets).
     let api_status = document.create_element("div")?;
     api_status.set_id("global-api-status");

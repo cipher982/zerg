@@ -52,7 +52,7 @@ brings immediate value and leaves the codebase in a green state.
 * [x] Lightweight envelope sanity-check removed (superseded by full schema) – still O(µs) overhead.
 * [x] Auto-reply with `pong` when server sends `ping`.
 * [x] Toast notifications for close codes **1002** and **4408**.
-* [ ] WS badge colour-coding (amber/red) still pending.
+* [x] WS badge colour-coding (green/amber/red) implemented – inline `<span id="ws-badge">` driven by `ui_updates::update_connection_status()`.
 
 > Note: original plan mentioned *ajv8*; we decided to keep the stack Rust-only to
 > reduce JS-WASM boundary complexity and bundle size.  The docs and CI scripts
@@ -84,8 +84,8 @@ brings immediate value and leaves the codebase in a green state.
 ----------------------------------------------------------------------
 ## Phase 5 — Fail-fast UX polish
 
-* [ ] Ping watchdog on frontend: if no frame for (`ping_interval × 2`) → force reconnect
-* [ ] Error toast & WS badge colour coding for close codes 1002, 4401, 4408
+* [x] Ping watchdog on frontend: if no frame for (`ping_interval × 2`) → force reconnect (implemented in `WsClientV2`).
+* [x] Error toast & WS badge colour coding for close codes 1002, 4401, 4408 (toasts landed earlier; badge colours now update).
 
 ----------------------------------------------------------------------
 ### Lessons learned so far (Jul 2025)
