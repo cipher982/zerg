@@ -32,8 +32,24 @@ n_tmp() {
   echo "$tmp"
 }
 
+# ---------------------------------------------------------------------------
+# 1. Validate spec – favour already-installed binary to avoid npx delay
+# ---------------------------------------------------------------------------
+
 set +e
 VALID_OUT=$(n_tmp)
+
+# Fast path: global or project-local binary
+if command -v asyncapi >/dev/null 2>&1; then
+  asyncapi validate "$SPEC_FILE" >"$VALID_OUT" 2>&1
+  VALID_EXIT=$?
+else
+  if [ -x "node_modules/.bin/asyncapi" ]; then
+    node_modules/.bin/asyncapi validate "$SPEC_FILE" >"$VALID_OUT" 2>&1
+    VALID_EXIT=$?
+  else
+    # Fallback to npx (no-install first, then install as last resort)
+
 # Prefer modern CLI package name; fall back to legacy.
 _run_with_timeout() {
   local seconds="$1"; shift
@@ -44,12 +60,24 @@ _run_with_timeout() {
   fi
 }
 
-_run_with_timeout 20 npx --yes @asyncapi/cli validate "$SPEC_FILE" >"$VALID_OUT" 2>&1
-if [[ $? -ne 0 ]]; then
-  # Retry with legacy binary name for developers that still have it cached.
-  _run_with_timeout 20 npx --yes asyncapi validate "$SPEC_FILE" >>"$VALID_OUT" 2>&1
-fi
-VALID_EXIT=$?
+# Helper defined inside the else clause to avoid duplication
+    _run_with_timeout() {
+      local seconds="$1"; shift
+      if command -v timeout >/dev/null 2>&1; then
+        timeout "$seconds" "$@"
+      else
+        "$@"
+      fi
+    }
+
+    _run_with_timeout 15 npx --no-install @asyncapi/cli validate "$SPEC_FILE" >"$VALID_OUT" 2>&1
+    if [[ $? -ne 0 ]]; then
+      _run_with_timeout 15 npx --no-install asyncapi validate "$SPEC_FILE" >>"$VALID_OUT" 2>&1
+    fi
+
+    VALID_EXIT=$?
+  fi  # end local binary not found branch
+fi  # end global binary not found branch
 set -e
 
 if [[ $VALID_EXIT -ne 0 ]]; then

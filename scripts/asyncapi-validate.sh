@@ -31,7 +31,20 @@ tmp_file() {
 
 TMP=$(tmp_file)
 set +e
-# Use new CLI; fall back to legacy if unavailable.
+# Fast path: use already-installed binary to avoid npx startup cost.
+if command -v asyncapi >/dev/null 2>&1; then
+  if asyncapi validate "$SPEC"; then
+    echo "✅ AsyncAPI spec valid (global binary)."; exit 0; fi
+fi
+
+# Or a project-local install under node_modules/.bin
+if [ -x "node_modules/.bin/asyncapi" ]; then
+  if node_modules/.bin/asyncapi validate "$SPEC"; then
+    echo "✅ AsyncAPI spec valid (local install)."; exit 0; fi
+fi
+
+# Fallback: use npx, but *first* try --no-install to skip registry check.
+
 _run_with_timeout() {
   local seconds="$1"; shift
   if command -v timeout >/dev/null 2>&1; then
@@ -41,16 +54,20 @@ _run_with_timeout() {
   fi
 }
 
-if ! _run_with_timeout 20 npx --yes @asyncapi/cli validate "$SPEC" >"$TMP" 2>&1; then
-  _run_with_timeout 20 npx --yes asyncapi validate "$SPEC" >"$TMP" 2>&1
+# Try without installation first; if that fails we fall back to the network (may be slow)
+if ! _run_with_timeout 15 npx --no-install @asyncapi/cli validate "$SPEC" >"$TMP" 2>&1; then
+  if ! _run_with_timeout 15 npx --no-install asyncapi validate "$SPEC" >>"$TMP" 2>&1; then
+    # Last resort – allow install (slow) to keep CI green when cache cold
+    _run_with_timeout 40 npx --yes @asyncapi/cli validate "$SPEC" >>"$TMP" 2>&1
+  fi
 fi
 STATUS=$?
 set -e
 
 if [[ $STATUS -eq 0 ]]; then
-  echo "✅ AsyncAPI spec valid."
-  rm -f "$TMP"
-  exit 0
+echo "✅ AsyncAPI spec valid."
+rm -f "$TMP"
+exit 0
 fi
 
 # Detect network-related failure messages and downgrade to warning.
