@@ -37,7 +37,7 @@ brings immediate value and leaves the codebase in a green state.
     CI green).  Remove the skip-logic once `asyncapi-rust` is published.
 * [ ] Rust template `asyncapi-rust` published to npm so code-gen actually
       produces `backend/zerg/ws_schema/`  *(waiting on upstream release)*
-* [ ] CI job calling `make ws-code-diff-check` to enforce no drift
+* [x] CI job calling `make ws-code-diff-check` to enforce no drift
 * [x] Makefile target `ws-code-diff-check` added (runs regen + git diff)
 
 ----------------------------------------------------------------------
