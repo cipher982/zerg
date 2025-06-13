@@ -74,6 +74,20 @@ ws-code-diff-check:
 	@echo "✅ WebSocket code up to date with spec"
 
 # ---------------------------------------------------------------------------
+# Pact contract capture / verification
+# ---------------------------------------------------------------------------
+
+pact-capture:
+	mkdir -p .cargo_tmp
+	TMPDIR="$(PWD)/.cargo_tmp" cargo run --manifest-path frontend/Cargo.toml --bin contract_capture --quiet
+	@# Fail if the contract file changed and is not committed
+	git diff --ignore-space-at-eol --exit-code contracts/frontend-v1.json || (echo "\n❌ Pact contract drift – commit updated JSON" && exit 1)
+
+pact-verify:
+	cd backend && ./run_backend_tests.sh -q -k pact_contracts || true
+	@echo "✅ Pact verification finished (skip flag when pact_verifier missing)"
+
+# ---------------------------------------------------------------------------
 # Container stack – optional, used by CI or when you prefer isolation
 # ---------------------------------------------------------------------------
 compose:

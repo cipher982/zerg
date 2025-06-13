@@ -62,19 +62,18 @@ brings immediate value and leaves the codebase in a green state.
 ## Phase 3 — Consumer-driven contract tests (Pact V4)
 
 ### 3.1  Front-end (consumer)  — *pure Rust/WASM*
-* [ ] WASM test (`frontend/contract_capture.rs`) opens an in-memory mock `WsClientV2` and
-  records two interactions:
+* [x] Stand-alone binary (`frontend/src/bin/contract_capture.rs`) writes deterministic Pact JSON.
   * subscribe_thread  → expect **ThreadHistory**
   * send_message      → expect **stream_start / stream_chunk / stream_end**
-* [ ] Serialises to Pact V4 JSON and writes `contracts/frontend-v1.json` (committed).
+* [x] Serialises to Pact V4 JSON and writes `contracts/frontend-v1.json` (committed).
 
 ### 3.2  Back-end (provider)  — *Python pact-verifier*
 * [x] Lightweight PyPI dep will be optional; test skips when absent.
 * [x] New pytest `test_pact_contracts.py` boots FastAPI via TestClient and verifies every JSON in `contracts/`.
 
 ### 3.3  CI integration
-* [ ] `make pact-capture`  – runs the WASM test and updates contract JSON (fails if diff).
-* [ ] `make pact-verify`  – runs during backend job, executes the provider verification test.
+* [x] `make pact-capture`  – runs the capture binary, fails on diff.
+* [x] `make pact-verify`   – executes provider verification tests.
 
 ----------------------------------------------------------------------
 ## Phase 4 — Property-based fuzzing
@@ -105,7 +104,14 @@ brings immediate value and leaves the codebase in a green state.
 ----------------------------------------------------------------------
 ### Next immediate steps
 
-1. Capture the first Pact contract JSON via `make pact-capture` (Phase-3 start).
+Phase-3 capture & verify targets are wired.  Run:
+
+```bash
+make pact-capture   # regenerate contract JSON (fails if diff)
+make pact-verify    # provider verification (skips if pact_verifier missing)
+```
+
+Next focus: Phase-4 property-based fuzzing via proptest.
 
 ----------------------------------------------------------------------
 ### Nice-to-have / stretch

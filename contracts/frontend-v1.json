@@ -1,28 +1,24 @@
-
 {
   "consumer": {
     "name": "agent-frontend"
-  },
-  "provider": {
-    "name": "zerg-backend"
   },
   "interactions": [
     {
       "description": "subscribe_thread → receive thread_history",
       "request": {
-        "type": "websocket",
-        "subtype": "text",
         "body": {
-          "type": "subscribe_thread",
+          "message_id": "test-1",
           "thread_id": 1,
-          "message_id": "test-1"
-        }
+          "type": "subscribe_thread"
+        },
+        "subtype": "text",
+        "type": "websocket"
       },
       "response": {
         "body": {
-          "type": "thread_history",
+          "messages": [],
           "thread_id": 1,
-          "messages": []
+          "type": "thread_history"
         }
       }
     }
@@ -31,5 +27,8 @@
     "pactSpecification": {
       "version": "4.0"
     }
+  },
+  "provider": {
+    "name": "zerg-backend"
   }
 }
