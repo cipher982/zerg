@@ -29,15 +29,18 @@ channels:
         $ref: '#/components/messages/Error'
 
   ThreadChannel:
-    address: thread/{thread_id}
+    # NOTE: Runtime topics use a colon delimiter ("thread:42").  We align the
+    # AsyncAPI *address* to that real-world format so generated SDKs match the
+    # actual subscription strings.
+    address: thread:{thread_id}
     description: History, streaming responses and user messages for a thread.
     parameters:
       thread_id:
         description: Numeric identifier of the thread.
         examples: ["42"]
     messages:
-      ThreadClientMessage:
-        $ref: '#/components/messages/ThreadClientMessage'
+      SendMessage:
+        $ref: '#/components/messages/SendMessage'
       StreamStart:
         $ref: '#/components/messages/StreamStart'
       StreamChunk:
@@ -48,7 +51,7 @@ channels:
         $ref: '#/components/messages/ThreadHistory'
 
   AgentChannel:
-    address: agent/{agent_id}
+    address: agent:{agent_id}
     description: Live agent status / events.
     parameters:
       agent_id:
@@ -72,7 +75,7 @@ components:
 
     Ping:
       name: Ping
-      summary: Heart-beat ping sent by server; clients must reply with Pong.
+      summary: Heart-beat ping sent by **server**; clients must reply with Pong.
       payload:
         $ref: '#/components/schemas/Ping'
 
@@ -88,11 +91,11 @@ components:
       payload:
         $ref: '#/components/schemas/Error'
 
-    ThreadClientMessage:
-      name: ThreadClientMessage
-      summary: Client-sent message into a thread.
+    SendMessage:
+      name: SendMessage
+      summary: Client-sent chat message for a thread.
       payload:
-        $ref: '#/components/schemas/Envelope'
+        $ref: '#/components/schemas/SendMessage'
 
     StreamStart:
       name: StreamStart
@@ -280,6 +283,30 @@ components:
               role: assistant
               content: "Hi, how can I help?"
 
+    # ------------------------------------------------------------------
+    #  Client → Server  send_message  -----------------------------------
+    # ------------------------------------------------------------------
+
+    SendMessage:
+      type: object
+      required: [type, thread_id, content]
+      properties:
+        type:
+          const: send_message
+        thread_id:
+          type: integer
+        content:
+          type: string
+        metadata:
+          type: object
+          nullable: true
+      examples:
+        - type: send_message
+          thread_id: 42
+          content: "Hello, world!"
+          metadata:
+            tone: friendly
+
 # examples moved or removed (AsyncAPI 3 does not support components.examples)
 
 # ---------------------------------------------------------------------------
@@ -297,7 +324,7 @@ operations:
     action: send
     channel: { $ref: '#/channels/ThreadChannel' }
     messages:
-      - $ref: '#/channels/ThreadChannel/messages/ThreadClientMessage'
+      - $ref: '#/channels/ThreadChannel/messages/SendMessage'
 
   ReceiveThreadHistory:
     action: receive
