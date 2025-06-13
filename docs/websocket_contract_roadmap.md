@@ -27,18 +27,17 @@ brings immediate value and leaves the codebase in a green state.
 ### 1.3  Code-generation targets
 * [x] Backend (Rust):
   * output dir `backend/zerg/ws_schema/` (temporary, not part of git)
-  * command: `asyncapi-generator -o … asyncapi-rust`
+  * command: uses `asyncapi-rust-ws-template` (community-maintained, see npm/github: kanekoshoyu/asyncapi-rust-ws-template)
+  * template can be overridden via `ASYNCAPI_RUST_TEMPLATE` env var for vendoring or pinning.
 * [x] Frontend (TypeScript → wasm-bindgen):
   * output dir `frontend/generated/`
-  * command: `npx @asyncapi/typescript-codegen …`
+  * command: uses `modelina` for TypeScript model generation.
 * [x] Script `scripts/regen-ws-code.sh` invoked by `make regen-ws-code`
-  * script now exits **gracefully** when the Rust template is not yet
-    available on npm or the network is offline (prints a ⚠️  warning, but keeps
-    CI green).  Remove the skip-logic once `asyncapi-rust` is published.
-* [ ] Rust template `asyncapi-rust` published to npm so code-gen actually
-      produces `backend/zerg/ws_schema/`  *(waiting on upstream release)*
+  * script is robust to template/network issues, supports parameterization, and is documented.
+* [x] Node version pinned via `.nvmrc` (Node 20).
 * [x] CI job calling `make ws-code-diff-check` to enforce no drift
 * [x] Makefile target `ws-code-diff-check` added (runs regen + git diff)
+* [x] Lessons learned: prefer HTTPS for git/npm, pin tool versions, and document all changes.
 
 ----------------------------------------------------------------------
 ## Phase 2 — Runtime payload validation
@@ -90,4 +89,3 @@ brings immediate value and leaves the codebase in a green state.
 
 * [ ] Auto-publish interactive AsyncAPI docs to GitHub Pages
 * [ ] Mock server for local-dev (`asyncapi mock`) – front-end can boot without backend
-
