@@ -272,15 +272,29 @@ impl WsClientV2 {
         ws.set_onclose(Some(onclose_closure.as_ref().unchecked_ref()));
         onclose_closure.forget();
 
-        // Set up message handler: parse JSON once, handle control frames, then forward to topic manager
+        // Clone WebSocket so the closure that may call `close_with_code` does not
+        // move ownership of the *original* socket (we still need it afterwards
+        // to attach the handler and potentially other callbacks).
+        let ws_for_close = ws.clone();
+
+        // Set up message handler: parse JSON once, validate envelope, then forward to topic manager
         let onmessage_closure = Closure::wrap(Box::new(move |event: MessageEvent| {
             // Only handle text messages
             if let Ok(text) = event.data().dyn_into::<js_sys::JsString>() {
                 if let Some(msg_str) = text.as_string() {
                     if let Ok(parsed_value) = serde_json::from_str::<Value>(&msg_str) {
-                        // Forward all messages to topic manager via callback
-                        if let Some(callback_rc) = &on_message_cb_clone {
-                            (callback_rc.borrow_mut())(parsed_value);
+                        // ------------------------------------------------------------------
+                        // Phase-2: Runtime schema validation (lightweight)
+                        // ------------------------------------------------------------------
+                        if validate_envelope(&parsed_value) {
+                            if let Some(callback_rc) = &on_message_cb_clone {
+                                (callback_rc.borrow_mut())(parsed_value);
+                            }
+                        } else {
+                            web_sys::console::error_1(&"Protocol error – invalid envelope".into());
+                                // Close to trigger reconnect (matches backend 1002 logic).  We ignore
+                                // failures since the socket may already be closed by the server.
+                                let _ = ws_for_close.close_with_code(1002);
                         }
                     } else {
                         web_sys::console::error_1(
@@ -418,6 +432,40 @@ impl WsClientV2 {
         // Note: The onclose handler will likely fire after this, potentially calling on_disconnect again.
         Ok(())
     }
+}
+
+/// Minimal validation that an incoming frame matches the *Envelope* shape.
+/// This is **not** a full JSON-Schema check (that will be generated once the
+/// AsyncAPI toolchain works in CI).  It simply guards against blatantly
+/// malformed payloads so we can fail-fast and close the connection –
+/// mirroring the backend 1002 close code behaviour.
+fn validate_envelope(value: &Value) -> bool {
+    // Must be an object with the expected top-level keys.
+    let obj = match value.as_object() {
+        Some(map) => map,
+        None => return false,
+    };
+
+    // v (integer)
+    match obj.get("v").and_then(|v| v.as_i64()) {
+        Some(1) => {}
+        _ => return false,
+    }
+
+    // type (string) & topic (string)
+    if !obj.get("type").map_or(false, |t| t.is_string()) {
+        return false;
+    }
+    if !obj.get("topic").map_or(false, |t| t.is_string()) {
+        return false;
+    }
+
+    // data (must exist) – we don't inspect further yet.
+    if !obj.contains_key("data") {
+        return false;
+    }
+
+    true
 }
 
 // Implement IWsClient trait for WsClientV2
