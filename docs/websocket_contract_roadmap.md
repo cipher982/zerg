@@ -29,20 +29,27 @@ brings immediate value and leaves the codebase in a green state.
   * output dir `frontend/generated/`
   * command: `npx @asyncapi/typescript-codegen …`
 * [x] Script `scripts/regen-ws-code.sh` invoked by `make regen-ws-code`
-* [ ] CI check: `git diff --exit-code` after regen to enforce “spec updated _and_ code regenerated” rule *(todo)*
+  * script now exits **gracefully** when the Rust template is not yet
+    available on npm or the network is offline (prints a ⚠️  warning, but keeps
+    CI green).  Remove the skip-logic once `asyncapi-rust` is published.
+* [ ] Rust template `asyncapi-rust` published to npm so code-gen actually
+      produces `backend/zerg/ws_schema/`  *(waiting on upstream release)*
+* [ ] CI check: `git diff --exit-code` after regen to enforce “spec updated _and_ code generated” rule *(todo)*
 
 ----------------------------------------------------------------------
 ## Phase 2 — Runtime payload validation
 
 ### 2.1  Backend
-* [ ] Enable `schemars::JsonSchema` on generated structs *(pending code-gen availability)*
+* [ ] Enable `schemars::JsonSchema` on generated structs *(blocked until Rust
+      structs exist – see Phase 1.3 template note)*
 * [x] Central validation in WS handler:
   * pydantic schema map validates every inbound payload
   * on failure sends `{type:"error", error:"INVALID_PAYLOAD"}` then closes with **1002**
 
 ### 2.2  Frontend
 * [ ] Bundle JSON Schema (compiled from AsyncAPI) via `ajv8` wasm-pack feature
-* [x] Lightweight shape check in ws_client_v2 (prevents obvious malformed frames, closes with 1002)
+* [x] Lightweight shape check in ws_client_v2 (prevents obvious malformed
+      frames, closes with 1002)
 * [ ] Full schema validation + UI toast / badge colouring
 
 ----------------------------------------------------------------------
