@@ -69,8 +69,8 @@ brings immediate value and leaves the codebase in a green state.
 * [ ] Serialises to Pact V4 JSON and writes `contracts/frontend-v1.json` (committed).
 
 ### 3.2  Back-end (provider)  — *Python pact-verifier*
-* [ ] Lightweight PyPI dep `pact_verifier` added to `backend/pyproject.toml` (dev-extra).
-* [ ] New pytest `test_pact_contracts.py` boots FastAPI via TestClient and verifies every JSON in `contracts/`.
+* [x] Lightweight PyPI dep will be optional; test skips when absent.
+* [x] New pytest `test_pact_contracts.py` boots FastAPI via TestClient and verifies every JSON in `contracts/`.
 
 ### 3.3  CI integration
 * [ ] `make pact-capture`  – runs the WASM test and updates contract JSON (fails if diff).
