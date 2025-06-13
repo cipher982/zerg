@@ -6,6 +6,8 @@ use js_sys::Array;
 use serde_json::Value;
 use std::any::Any;
 
+use crate::schema_validation;
+
 use super::messages::builders;
 
 /// Trait defining the WebSocket client interface
@@ -249,6 +251,10 @@ impl WsClientV2 {
                     // 4401: unauthenticated, 4003: forbidden – logout and show banner.
                     crate::network::ui_updates::show_auth_error_banner();
                     let _ = crate::utils::logout();
+                } else if code == 1002 {
+                    crate::toast::error("Protocol error – socket closed (1002)");
+                } else if code == 4408 {
+                    crate::toast::error("Heartbeat timeout – reconnecting… (4408)");
                 }
             }
 
@@ -288,7 +294,7 @@ impl WsClientV2 {
                         // ------------------------------------------------------------------
                         // Phase-2: Runtime schema validation (lightweight)
                         // ------------------------------------------------------------------
-                        if validate_envelope(&parsed_value) {
+                        if schema_validation::validate_envelope(&parsed_value) {
                             // ------------------------------------------------------------------
                             // Automatic Pong reply – server-initiated heart-beat
                             // ------------------------------------------------------------------
@@ -468,34 +474,9 @@ impl WsClientV2 {
 /// AsyncAPI toolchain works in CI).  It simply guards against blatantly
 /// malformed payloads so we can fail-fast and close the connection –
 /// mirroring the backend 1002 close code behaviour.
-fn validate_envelope(value: &Value) -> bool {
-    // Must be an object with the expected top-level keys.
-    let obj = match value.as_object() {
-        Some(map) => map,
-        None => return false,
-    };
-
-    // v (integer)
-    match obj.get("v").and_then(|v| v.as_i64()) {
-        Some(1) => {}
-        _ => return false,
-    }
-
-    // type (string) & topic (string)
-    if !obj.get("type").map_or(false, |t| t.is_string()) {
-        return false;
-    }
-    if !obj.get("topic").map_or(false, |t| t.is_string()) {
-        return false;
-    }
-
-    // data (must exist) – we don't inspect further yet.
-    if !obj.contains_key("data") {
-        return false;
-    }
-
-    true
-}
+// The inline `validate_envelope()` helper has been superseded by the
+// full JSON-Schema based check in `crate::schema_validation`.
+// (Function removed.)
 
 // Implement IWsClient trait for WsClientV2
 impl IWsClient for WsClientV2 {
