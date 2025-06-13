@@ -5,6 +5,7 @@ Everything else (code-gen, validation, tests, CI gates) grows out of that one
 file.  The tasks below are grouped in successive, *mergeable* phases; each
 brings immediate value and leaves the codebase in a green state.
 
+
 ----------------------------------------------------------------------
 ## Phase 1 — AsyncAPI spec & code-generation
 
