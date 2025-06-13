@@ -48,7 +48,12 @@ stop:
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Tests (+ AsyncAPI spec validation)
+# ---------------------------------------------------------------------------
+
 test:
+	./scripts/validate-asyncapi.sh
 	cd backend  && ./run_backend_tests.sh
 	cd frontend && ./run_frontend_tests.sh
 
@@ -61,6 +66,12 @@ e2e:
 
 regen-ws-code:
 	./scripts/regen-ws-code.sh
+
+# Verify that running regen-ws-code would not result in uncommitted changes.
+ws-code-diff-check:
+	./scripts/regen-ws-code.sh
+	git diff --exit-code
+	@echo "✅ WebSocket code up to date with spec"
 
 # ---------------------------------------------------------------------------
 # Container stack – optional, used by CI or when you prefer isolation

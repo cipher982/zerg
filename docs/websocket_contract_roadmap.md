@@ -19,7 +19,8 @@ brings immediate value and leaves the codebase in a green state.
 
 ### 1.2  Validation in CI
 * [x] Add `npx @asyncapi/cli validate asyncapi/chat.yml` (with legacy fallback) to **pre-commit hook**
-* [ ] Same command runs in `make test` so CI fails on invalid spec *(todo)*
+* [x] `scripts/validate-asyncapi.sh` runs as first step of `make test` so CI
+      fails on invalid spec.
 
 ### 1.3  Code-generation targets
 * [x] Backend (Rust):
@@ -34,7 +35,8 @@ brings immediate value and leaves the codebase in a green state.
     CI green).  Remove the skip-logic once `asyncapi-rust` is published.
 * [ ] Rust template `asyncapi-rust` published to npm so code-gen actually
       produces `backend/zerg/ws_schema/`  *(waiting on upstream release)*
-* [ ] CI check: `git diff --exit-code` after regen to enforce “spec updated _and_ code generated” rule *(todo)*
+* [ ] CI job calling `make ws-code-diff-check` to enforce no drift
+* [x] Makefile target `ws-code-diff-check` added (runs regen + git diff)
 
 ----------------------------------------------------------------------
 ## Phase 2 — Runtime payload validation
