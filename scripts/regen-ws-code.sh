@@ -102,7 +102,12 @@ rm -rf "$BACKEND_OUT.tmp" && mkdir -p "$BACKEND_OUT.tmp"
 # development and CI remain green.
 
 set +e  # temporarily allow failures
-npx --yes @asyncapi/generator "$SPEC_FILE" asyncapi-rust -o "$BACKEND_OUT.tmp" 2>"$BACKEND_OUT.tmp.log"
+TEMPLATE=${ASYNCAPI_RUST_TEMPLATE:-asyncapi-rust-ws-template}
+./node_modules/.bin/asyncapi generate fromTemplate \
+  "$SPEC_FILE" \
+  "$TEMPLATE" \
+  -p exchange=zerg \
+  -o "$BACKEND_OUT.tmp" 2>"$BACKEND_OUT.tmp.log"
 GEN_EXIT=$?
 set -e
 
@@ -131,7 +136,7 @@ FRONTEND_OUT="frontend/generated"
 rm -rf "$FRONTEND_OUT.tmp" && mkdir -p "$FRONTEND_OUT.tmp"
 
 set +e
-npx --yes @asyncapi/typescript-codegen --input "$SPEC_FILE" --output "$FRONTEND_OUT.tmp" 2>"$FRONTEND_OUT.tmp.log"
+./node_modules/.bin/modelina generate typescript "$SPEC_FILE" -o "$FRONTEND_OUT.tmp"
 TS_EXIT=$?
 set -e
 
