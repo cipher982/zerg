@@ -15,11 +15,11 @@ brings immediate value and leaves the codebase in a green state.
   * [x] `thread/{thread_id}`   – history, stream_start/stream_chunk/stream_end
   * [x] `agent/{agent_id}`    – agent_event
 * [ ] Components / schemas for every payload type *(subset drafted – will iterate)*
-* [ ] Example messages for each operation *(one example included; more to add)*
+* [ ] Example messages for each operation *(token + ping examples in spec; add the rest)*
 
 ### 1.2  Validation in CI
 * [x] Add `npx @asyncapi/cli validate asyncapi/chat.yml` (with legacy fallback) to **pre-commit hook**
-* [ ] Same command runs in `make test` so CI fails on invalid spec
+* [ ] Same command runs in `make test` so CI fails on invalid spec *(todo)*
 
 ### 1.3  Code-generation targets
 * [x] Backend (Rust):
@@ -29,7 +29,7 @@ brings immediate value and leaves the codebase in a green state.
   * output dir `frontend/generated/`
   * command: `npx @asyncapi/typescript-codegen …`
 * [x] Script `scripts/regen-ws-code.sh` invoked by `make regen-ws-code`
-* [ ] CI check: `git diff --exit-code` after regen to enforce “spec updated _and_ code regenerated” rule
+* [ ] CI check: `git diff --exit-code` after regen to enforce “spec updated _and_ code regenerated” rule *(todo)*
 
 ----------------------------------------------------------------------
 ## Phase 2 — Runtime payload validation
@@ -38,14 +38,12 @@ brings immediate value and leaves the codebase in a green state.
 * [ ] Enable `schemars::JsonSchema` on generated structs *(pending code-gen availability)*
 * [x] Central validation in WS handler:
   * pydantic schema map validates every inbound payload
-  * on failure sends `{type:"error", code:"INVALID_PAYLOAD"}` (close logic later)
+  * on failure sends `{type:"error", error:"INVALID_PAYLOAD"}` then closes with **1002**
 
 ### 2.2  Frontend
 * [ ] Bundle JSON Schema (compiled from AsyncAPI) via `ajv8` wasm-pack feature
-* [ ] Validate every incoming frame; on error:
-  * toast “Protocol error – reconnecting”
-  * badge turns red
-  * force `ws.close()` to trigger reconnect
+* [x] Lightweight shape check in ws_client_v2 (prevents obvious malformed frames, closes with 1002)
+* [ ] Full schema validation + UI toast / badge colouring
 
 ----------------------------------------------------------------------
 ## Phase 3 — Consumer-driven contract tests (Pact V4)

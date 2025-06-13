@@ -75,7 +75,13 @@ async def send_to_client(client_id: str, message: Dict[str, Any]) -> bool:
         return False
 
 
-async def send_error(client_id: str, error_msg: str, message_id: Optional[str] = None) -> None:
+async def send_error(
+    client_id: str,
+    error_msg: str,
+    message_id: Optional[str] = None,
+    *,
+    close_code: int | None = None,
+) -> None:
     """Send an error message to a client.
 
     Args:
@@ -89,6 +95,15 @@ async def send_error(client_id: str, error_msg: str, message_id: Optional[str] =
         message_id=message_id,
     )
     await send_to_client(client_id, error.model_dump())
+
+    # Optionally close the socket with a specific WebSocket close code.  We
+    # perform the close *after* sending the error frame so the client learns
+    # the reason before the connection drops.
+    if close_code is not None and client_id in topic_manager.active_connections:
+        try:
+            await topic_manager.active_connections[client_id].close(code=close_code)
+        except Exception:  # noqa: BLE001 – ignore errors during close
+            pass
 
 
 async def handle_ping(client_id: str, message: Dict[str, Any], _: Session) -> None:
@@ -463,10 +478,13 @@ async def dispatch_message(client_id: str, message: Dict[str, Any], db: Session)
                 model_cls.model_validate(message)
             except ValidationError as exc:
                 logger.debug("Schema validation failed for %s: %s", message_type, exc)
-                await send_error(client_id, "INVALID_PAYLOAD", message.get("message_id"))
+                await send_error(
+                    client_id,
+                    "INVALID_PAYLOAD",
+                    message.get("message_id"),
+                    close_code=1002,
+                )
                 # Draft spec says we should close with 1002 on protocol error;
-                # we delegate the actual close to TopicConnectionManager which
-                # will detect the explicit ``error`` frame and terminate.
                 return
 
         # If validation passed (or no schema yet), forward to handler.
