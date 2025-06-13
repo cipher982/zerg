@@ -91,8 +91,16 @@ async def reset_database():
         logger.info("Database schema reset (drop+create) complete")
 
         # Dispose again after recreation to release references held by
-        # background threads.
-        engine.dispose()
+        # background threads.  However, **skip** this step when the backend
+        # runs inside the unit-test environment (``TESTING=1``) because
+        # test fixtures may still hold an *open* SQLAlchemy ``Session`` that
+        # shares the same Engine/connection.  Calling ``engine.dispose()``
+        # would invalidate those connections and subsequent calls like
+        # ``Session.close()`` trigger a *ProgrammingError: Cannot operate on
+        # a closed database* exception which breaks the tear-down phase.
+
+        if not settings.testing:  # avoid invalidating live connections in tests
+            engine.dispose()
 
         return {"message": "Database reset successfully"}
     except Exception as e:
