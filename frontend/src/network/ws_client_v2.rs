@@ -53,7 +53,9 @@ pub struct WsConfig {
     pub initial_backoff_ms: u32,
     /// Maximum backoff delay in milliseconds
     pub max_backoff_ms: u32,
-    /// Ping interval in milliseconds (None to disable)
+    /// Ping interval in milliseconds when *client*-initiated heart-beat is
+    /// required.  Our server now sends the periodic `ping`, so by default we
+    /// turn the client-side timer **off**.
     pub ping_interval_ms: Option<u32>,
 }
 
@@ -71,7 +73,7 @@ impl Default for WsConfig {
             max_reconnect_attempts: None,
             initial_backoff_ms: 1000,
             max_backoff_ms: 30000,
-            ping_interval_ms: Some(30000), // 30-second ping interval
+            ping_interval_ms: None, // server → ping, client replies with pong
         }
     }
 }
@@ -287,6 +289,33 @@ impl WsClientV2 {
                         // Phase-2: Runtime schema validation (lightweight)
                         // ------------------------------------------------------------------
                         if validate_envelope(&parsed_value) {
+                            // ------------------------------------------------------------------
+                            // Automatic Pong reply – server-initiated heart-beat
+                            // ------------------------------------------------------------------
+                            if let Some(ty) = parsed_value
+                                .get("type")
+                                .and_then(|v| v.as_str())
+                            {
+                                if ty.eq_ignore_ascii_case("PING") {
+                                    // Extract ping_id if present under data.ping_id (enveloped) OR
+                                    // at root for legacy format.
+                                    let ping_id = parsed_value
+                                        .get("data")
+                                        .and_then(|d| d.get("ping_id"))
+                                        .and_then(|v| v.as_str())
+                                        .or_else(|| parsed_value.get("ping_id").and_then(|v| v.as_str()));
+
+                                    let mut pong_obj = serde_json::json!({"type": "pong"});
+                                    if let Some(pid) = ping_id {
+                                        pong_obj["ping_id"] = serde_json::Value::String(pid.to_string());
+                                    }
+
+                                    if let Ok(pong_str) = serde_json::to_string(&pong_obj) {
+                                        let _ = ws_for_close.send_with_str(&pong_str);
+                                    }
+                                }
+                            }
+
                             if let Some(callback_rc) = &on_message_cb_clone {
                                 (callback_rc.borrow_mut())(parsed_value);
                             }

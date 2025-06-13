@@ -153,6 +153,25 @@ async def handle_ping(client_id: str, message: Dict[str, Any], _: Session) -> No
         await send_error(client_id, "Failed to process ping")
 
 
+# ---------------------------------------------------------------------------
+# Heart-beat response (client → pong)
+# ---------------------------------------------------------------------------
+
+
+async def handle_pong(client_id: str, message: Dict[str, Any], _: Session) -> None:  # noqa: D401
+    """Handle *pong* frames sent by clients.
+
+    Simply updates the TopicConnectionManager watchdog so the connection is
+    considered alive. No response is sent back to the client.
+    """
+
+    try:
+        # Validate schema (already done centrally) then record pong.
+        topic_manager.record_pong(client_id)
+    except Exception as exc:
+        logger.debug("Failed to record pong from %s: %s", client_id, exc)
+
+
 # Topic subscription handlers for different topic types
 async def _subscribe_thread(client_id: str, thread_id: int, message_id: str, db: Session) -> None:
     """Subscribe to a thread and send initial history.
@@ -346,6 +365,7 @@ async def handle_unsubscribe(client_id: str, message: Dict[str, Any], _: Session
 # Message handler dispatcher
 MESSAGE_HANDLERS = {
     "ping": handle_ping,
+    "pong": handle_pong,
     "subscribe": handle_subscribe,
     "unsubscribe": handle_unsubscribe,
     # Thread‑specific handlers used by higher‑level chat API
@@ -363,6 +383,7 @@ MESSAGE_HANDLERS = {
 
 _INBOUND_SCHEMA_MAP: Dict[str, type[BaseModel]] = {
     "ping": PingMessage,
+    "pong": PongMessage,
     "subscribe": SubscribeMessage,
     "unsubscribe": UnsubscribeMessage,
     "subscribe_thread": SubscribeThreadMessage,

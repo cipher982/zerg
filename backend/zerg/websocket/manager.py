@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from typing import Any
 from typing import Dict
 from typing import Set
@@ -46,6 +47,10 @@ class TopicConnectionManager:
         self.client_topics: Dict[str, Set[str]] = {}
         # Map client_id -> authenticated user_id (optional, guarded by `_lock`)
         self.client_users: Dict[str, int | None] = {}
+
+        # Track last *pong* we received from each client.  Used by the
+        # heartbeat watchdog to drop zombie connections (4408 close code).
+        self._last_pong: Dict[str, float] = {}
 
         # Protect shared maps from concurrent mutation – a single lock is
         # sufficient given the low contention and keeps the implementation
@@ -103,6 +108,12 @@ class TopicConnectionManager:
             self.active_connections[client_id] = websocket
             self.client_topics[client_id] = set()
             self.client_users[client_id] = user_id
+            # Initialise last-pong timestamp so the watchdog countdown starts
+            # from *now* (client gets one full interval before needing to
+            # reply).
+            import time
+
+            self._last_pong[client_id] = time.time()
 
             # ------------------------------------------------------------------
             # Back-pressure queue
@@ -206,6 +217,19 @@ class TopicConnectionManager:
 
                 logger.info("Client %s disconnected", client_id)
 
+            # Remove heartbeat entry even if socket already cleaned (needs to
+            # happen outside inner conditional to catch cases where the
+            # connection record has been cleared by another path).
+            self._last_pong.pop(client_id, None)
+
+    # ------------------------------------------------------------------
+    # Heart-beat helpers – client must respond with *pong*
+    # ------------------------------------------------------------------
+
+    def record_pong(self, client_id: str) -> None:
+        """Update last-pong timestamp for the given client."""
+        self._last_pong[client_id] = time.time()
+
     async def subscribe_to_topic(self, client_id: str, topic: str) -> None:
         """Subscribe a client to a topic.
 
@@ -298,7 +322,9 @@ class TopicConnectionManager:
                 async with self._lock:
                     client_queues = dict(self.client_queues)
 
-                # Queue ping for each client
+                # ------------------------------------------------------------------
+                # 1) Queue ping for each client
+                # ------------------------------------------------------------------
                 for client_id, queue in client_queues.items():
                     if queue is None:
                         continue
@@ -312,6 +338,25 @@ class TopicConnectionManager:
                     except Exception:
                         # Queue might be closed if client disconnected
                         pass
+
+                # ------------------------------------------------------------------
+                # 2) Drop connections that have not replied with *pong*
+                # ------------------------------------------------------------------
+                now = time.time()
+                async with self._lock:
+                    stale = [cid for cid, ts in self._last_pong.items() if now - ts > 60]
+
+                for cid in stale:
+                    logger.warning("Client %s timed out (no pong), closing", cid)
+                    # Close with 4408 (policy from docs) then disconnect.
+                    try:
+                        ws = self.active_connections.get(cid)
+                        if ws is not None:
+                            await ws.close(code=4408, reason="Heartbeat timeout")
+                    except Exception:  # noqa: BLE001
+                        pass
+
+                    await self.disconnect(cid)
 
         except asyncio.CancelledError:  # graceful shutdown
             logger.info("TopicConnectionManager cleanup task cancelled")
