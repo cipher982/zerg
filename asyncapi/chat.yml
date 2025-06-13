@@ -1,38 +1,95 @@
 asyncapi: 3.0.0
 
-# ---------------------------------------------------------------------------
-# Zerg Chat Contract – AsyncAPI 3.0  (Phase-1 draft)
-# ---------------------------------------------------------------------------
-#  • Captures the structure of *enveloped* WebSocket frames used by Zerg.
-#  • Only a subset of messages is modelled so far (system, thread, agent).
-#  • Most payload objects are imported 1-to-1 from backend/zerg/schemas/ws_messages.py.
-#  • Additional examples & exhaustive schemas will follow in Phase-2.
-# ---------------------------------------------------------------------------
-
 info:
   title: Zerg WebSocket Protocol
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    Draft – internal use only.
-
-servers:
-  local:
-    host: localhost:8001
-    protocol: ws
-    description: Local development FastAPI server.
-  production:
-    host: ws.zerg.ai
-    protocol: wss
-    description: Production cluster entry-point.
+    Refactored to **AsyncAPI 3.0** semantics.  Channels now only declare the
+    address + parameters; all publish/subscribe semantics live in the
+    *operations* section.
 
 defaultContentType: application/json
 
 # ---------------------------------------------------------------------------
-# Core envelope
+# Channels – pure transport details (no more publish/subscribe keys)
+# ---------------------------------------------------------------------------
+
+channels:
+  SystemChannel:
+    address: system
+    description: Global control frames (ping/pong, error, etc.)
+    messages:
+      SystemMessage:
+        $ref: '#/components/messages/SystemMessage'
+
+  ThreadChannel:
+    address: thread/{thread_id}
+    description: History, streaming responses and user messages for a thread.
+    parameters:
+      thread_id:
+        description: Numeric identifier of the thread.
+        examples: ["42"]
+    messages:
+      ThreadClientMessage:
+        $ref: '#/components/messages/ThreadClientMessage'
+      StreamStart:
+        $ref: '#/components/messages/StreamStart'
+      StreamChunk:
+        $ref: '#/components/messages/StreamChunk'
+      StreamEnd:
+        $ref: '#/components/messages/StreamEnd'
+
+  AgentChannel:
+    address: agent/{agent_id}
+    description: Live agent status / events.
+    parameters:
+      agent_id:
+        description: Numeric identifier of the agent.
+        examples: ["17"]
+    messages:
+      AgentEvent:
+        $ref: '#/components/messages/AgentEvent'
+
+# ---------------------------------------------------------------------------
+# Components – messages & examples
 # ---------------------------------------------------------------------------
 
 components:
+  messages:
+    SystemMessage:
+      name: SystemMessage
+      summary: Control frame.
+      payload:
+        $ref: '#/components/schemas/Envelope'
+
+    ThreadClientMessage:
+      name: ThreadClientMessage
+      summary: Client-sent message into a thread.
+      payload:
+        $ref: '#/components/schemas/Envelope'
+
+    StreamStart:
+      name: StreamStart
+      payload:
+        $ref: '#/components/schemas/StreamStart'
+
+    StreamChunk:
+      name: StreamChunk
+      payload:
+        $ref: '#/components/schemas/StreamChunk'
+
+    StreamEnd:
+      name: StreamEnd
+      payload:
+        $ref: '#/components/schemas/StreamEnd'
+
+    AgentEvent:
+      name: AgentEvent
+      payload:
+        $ref: '#/components/schemas/AgentEvent'
+
   schemas:
+    # Envelope and other schemas copied from previous draft -----------------
     Envelope:
       type: object
       required: [v, type, topic, ts, data]
@@ -40,87 +97,17 @@ components:
         v:
           type: integer
           const: 1
-          description: Protocol version (currently always **1**).
         type:
-          $ref: '#/components/schemas/MessageType'
+          type: string
         topic:
           type: string
-          description: Topic such as `thread:42` or `agent:17`.
+        ts:
+          type: integer
         req_id:
           type: string
           nullable: true
-        ts:
-          type: integer
-          description: Milliseconds since Unix epoch (generated server-side).
         data:
-          description: Message payload – structure depends on **type**.
-          oneOf:
-            - $ref: '#/components/schemas/SystemMessage'
-            - $ref: '#/components/schemas/ThreadHistory'
-            - $ref: '#/components/schemas/StreamChunk'
-            - $ref: '#/components/schemas/StreamStart'
-            - $ref: '#/components/schemas/StreamEnd'
-            - $ref: '#/components/schemas/AgentEvent'
-
-    # ---------------------------------------------------------------------
-    # Enumerations
-    # ---------------------------------------------------------------------
-
-    MessageType:
-      type: string
-      description: |
-        Canonical message types (lower-case snake case in production).  
-        Only the ones referenced in this Phase-1 draft are listed; the rest
-        will be added as the spec matures.
-      enum:
-        - ping
-        - pong
-        - error
-        - subscribe_thread
-        - thread_history
-        - stream_start
-        - stream_chunk
-        - stream_end
-        - agent_event
-
-    ChunkType:
-      type: string
-      enum:
-        - assistant_token
-        - assistant_message
-        - tool_output
-
-    # ---------------------------------------------------------------------
-    # Payload objects (data field of envelope)
-    # ---------------------------------------------------------------------
-
-    SystemMessage:
-      type: object
-      required: [type]
-      properties:
-        type:
-          enum: [ping, pong, error]
-        error:
-          type: string
-          nullable: true
-        details:
           type: object
-          additionalProperties: true
-          nullable: true
-
-    ThreadHistory:
-      type: object
-      required: [type, thread_id, messages]
-      properties:
-        type:
-          const: thread_history
-        thread_id:
-          type: integer
-        messages:
-          type: array
-          items:
-            type: object
-            description: Raw DB message rows – see REST schema.
 
     StreamStart:
       type: object
@@ -151,7 +138,8 @@ components:
         content:
           type: string
         chunk_type:
-          $ref: '#/components/schemas/ChunkType'
+          type: string
+          enum: [assistant_token, assistant_message, tool_output]
         tool_name:
           type: string
           nullable: true
@@ -169,71 +157,43 @@ components:
           type: object
           additionalProperties: true
 
-# ---------------------------------------------------------------------------
-# Channels
-# ---------------------------------------------------------------------------
-
-channels:
-  system:
-    subscribe:
-      message:
-        name: SystemMessage
-        payload:
-          $ref: '#/components/schemas/Envelope'
-
-  thread/{thread_id}:
-    parameters:
-      thread_id:
-        schema:
-          type: integer
-    publish:
-      message:
-        name: ThreadClientMessage
-        payload:
-          $ref: '#/components/schemas/Envelope'
-    subscribe:
-      message:
-        name: ThreadServerMessage
-        payload:
-          $ref: '#/components/schemas/Envelope'
-
-  agent/{agent_id}:
-    parameters:
-      agent_id:
-        schema:
-          type: integer
-    subscribe:
-      message:
-        name: AgentEventMessage
-        payload:
-          $ref: '#/components/schemas/Envelope'
+# examples moved or removed (AsyncAPI 3 does not support components.examples)
 
 # ---------------------------------------------------------------------------
-# Examples – a single happy-path interaction (more coming Phase-2)
+# Operations – send vs receive semantics (replace v2 publish/subscribe)
 # ---------------------------------------------------------------------------
 
-examples:
-  ping:
-    summary: Client ping frame
-    value:
-      v: 1
-      type: ping
-      topic: system
-      ts: 1710000000000
-      data:
-        type: ping
+operations:
+  ReceiveSystem:
+    action: receive
+    channel: { $ref: '#/channels/SystemChannel' }
+    messages:
+      - $ref: '#/channels/SystemChannel/messages/SystemMessage'
 
-  stream_chunk_token:
-    summary: Assistant token chunk
-    value:
-      v: 1
-      type: stream_chunk
-      topic: thread:42
-      ts: 1710000000123
-      data:
-        type: stream_chunk
-        thread_id: 42
-        content: "Hello"
-        chunk_type: assistant_token
+  SendThreadMessage:
+    action: send
+    channel: { $ref: '#/channels/ThreadChannel' }
+    messages:
+      - $ref: '#/channels/ThreadChannel/messages/ThreadClientMessage'
+
+  ReceiveThreadHistory:
+    action: receive
+    channel: { $ref: '#/channels/ThreadChannel' }
+    messages:
+      - $ref: '#/channels/ThreadChannel/messages/StreamStart'  # using StreamStart as placeholder
+
+  ReceiveThreadStream:
+    action: receive
+    channel: { $ref: '#/channels/ThreadChannel' }
+    messages:
+      - $ref: '#/channels/ThreadChannel/messages/StreamStart'
+      - $ref: '#/channels/ThreadChannel/messages/StreamChunk'
+      - $ref: '#/channels/ThreadChannel/messages/StreamEnd'
+
+  ReceiveAgentEvent:
+    action: receive
+    channel: { $ref: '#/channels/AgentChannel' }
+    messages:
+      - $ref: '#/channels/AgentChannel/messages/AgentEvent'
 
 # End of file
