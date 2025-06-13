@@ -35,7 +35,7 @@ def test_envelope_backpressure_disconnect(monkeypatch, test_client: TestClient):
     """Test that a client is dropped if its queue overflows (back-pressure)."""
     # Patch queue size to something tiny for test
     monkeypatch.setattr(topic_manager, "QUEUE_SIZE", 2)
-    with test_client.websocket_connect("/api/ws") as ws:
+    with test_client.websocket_connect("/api/ws"):
         # Simulate slow client by not reading messages
         for i in range(5):
             topic_manager.client_queues[list(topic_manager.client_queues.keys())[0]].put_nowait(
@@ -49,12 +49,15 @@ def test_envelope_backpressure_disconnect(monkeypatch, test_client: TestClient):
 async def test_no_hang_on_slow_client(test_client: TestClient):
     """Test that a slow client does not block other clients (no hang)."""
     # Connect two clients
-    with test_client.websocket_connect("/api/ws") as ws1, test_client.websocket_connect("/api/ws") as ws2:
-        # Simulate ws1 not reading, ws2 reading
+    with test_client.websocket_connect("/api/ws") as _slow_client, test_client.websocket_connect(
+        "/api/ws"
+    ) as fast_client:
+        # Simulate slow client by not reading from _slow_client
         for i in range(3):
             await topic_manager.broadcast_to_topic("system", {"type": "test", "data": {"i": i}})
-        # ws2 should still be able to receive messages
+
+        # fast_client should still be able to receive messages
         for _ in range(3):
-            msg = ws2.receive_json()
+            msg = fast_client.receive_json()
             assert msg["v"] == 1
             assert msg["type"] == "TEST"

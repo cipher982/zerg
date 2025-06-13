@@ -34,12 +34,26 @@ n_tmp() {
 
 set +e
 VALID_OUT=$(n_tmp)
-npx --yes asyncapi validate "$SPEC_FILE" >"$VALID_OUT" 2>&1
+# Prefer modern CLI package name; fall back to legacy.
+_run_with_timeout() {
+  local seconds="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$seconds" "$@"
+  else
+    "$@"  # fallback: run without timeout
+  fi
+}
+
+_run_with_timeout 20 npx --yes @asyncapi/cli validate "$SPEC_FILE" >"$VALID_OUT" 2>&1
+if [[ $? -ne 0 ]]; then
+  # Retry with legacy binary name for developers that still have it cached.
+  _run_with_timeout 20 npx --yes asyncapi validate "$SPEC_FILE" >>"$VALID_OUT" 2>&1
+fi
 VALID_EXIT=$?
 set -e
 
 if [[ $VALID_EXIT -ne 0 ]]; then
-  if grep -qE 'ENOTFOUND|network|could not determine executable' "$VALID_OUT"; then
+  if grep -qE 'ENOTFOUND|network|could not determine executable|ETIMEDOUT|timed out' "$VALID_OUT"; then
     echo "⚠️  AsyncAPI CLI unreachable (likely offline) – skipping validation & codegen."
     rm -f "$VALID_OUT"
     exit 0

@@ -18,7 +18,7 @@ brings immediate value and leaves the codebase in a green state.
 * [ ] Example messages for each operation *(one example included; more to add)*
 
 ### 1.2  Validation in CI
-* [x] Add `npx asyncapi validate asyncapi/chat.yml` to **pre-commit hook**
+* [x] Add `npx @asyncapi/cli validate asyncapi/chat.yml` (with legacy fallback) to **pre-commit hook**
 * [ ] Same command runs in `make test` so CI fails on invalid spec
 
 ### 1.3  Code-generation targets
