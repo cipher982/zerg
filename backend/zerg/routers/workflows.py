@@ -11,6 +11,9 @@ from zerg.crud import crud
 from zerg.database import get_db
 from zerg.dependencies.auth import get_current_user
 from zerg.models.models import User
+
+# Canvas layout helper models reused from graph router to avoid duplication.
+from zerg.routers.graph_layout import LayoutUpdate
 from zerg.schemas.schemas import Workflow
 from zerg.schemas.schemas import WorkflowBase
 from zerg.schemas.schemas import WorkflowCreate
@@ -89,3 +92,60 @@ def delete_workflow(
     wf.is_active = False
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ---------------------------------------------------------------------------
+# Canvas layout scoped to a *specific* workflow (Phase-B)
+# ---------------------------------------------------------------------------
+
+
+@router.put("/{workflow_id}/layout", status_code=status.HTTP_204_NO_CONTENT)
+def put_workflow_layout(
+    *,
+    db: Session = Depends(get_db),
+    workflow_id: int,
+    payload: LayoutUpdate,
+    current_user: User = Depends(get_current_user),
+):
+    """Persist the canvas layout for **workflow_id** owned by *current_user*.
+
+    The endpoint completely replaces the stored layout – callers should send
+    the full `nodes` + `viewport` payload (same schema as `/api/graph/layout`).
+    """
+
+    wf = crud.get_workflow(db, workflow_id)
+    if wf is None or wf.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="workflow not found")
+
+    nodes_dict = {k: v.dict() for k, v in payload.nodes.items()}
+    viewport_dict = payload.viewport.dict() if payload.viewport is not None else None
+
+    crud.upsert_canvas_layout(
+        db,
+        current_user.id,
+        nodes_dict,
+        viewport_dict,
+        workflow_id,
+    )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{workflow_id}/layout")
+def get_workflow_layout(
+    *,
+    db: Session = Depends(get_db),
+    workflow_id: int,
+    current_user: User = Depends(get_current_user),
+):
+    """Return the stored canvas layout for the workflow or **204** when empty."""
+
+    wf = crud.get_workflow(db, workflow_id)
+    if wf is None or wf.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="workflow not found")
+
+    layout = crud.get_canvas_layout(db, current_user.id, workflow_id)
+    if layout is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    return {"nodes": layout.nodes_json, "viewport": layout.viewport}

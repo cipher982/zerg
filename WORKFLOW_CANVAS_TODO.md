@@ -104,7 +104,7 @@ engine; payload shape is considered **beta** until DAG support lands.
     - [x] **LocalStorage migration** – legacy key `zerg_workflows_v1` has been
           fully removed from the code-base; no import flow required for new
           users.  Focus shifts to persisting the remaining *layout* data:
-          - [ ] Add `/api/workflows/{id}/layout` (GET/PUT) – viewport & node positions
+          - [x] Add `/api/workflows/{id}/layout` (GET/PUT) – viewport & node positions *(backend merged Aug-14-2025)*
           - [ ] Front-end save/load helpers; drop LS fallback once API is live
 
     - [ ] **Error handling & UX**
@@ -201,3 +201,131 @@ engine; payload shape is considered **beta** until DAG support lands.
 4. Persist canvas layout to backend and remove LocalStorage fallback.
 5. Template gallery & onboarding docs.
 6. Clean-up tech-debt & multi-device edge-cases.
+
+---
+
+## 6. Deeper-Dive Task Break-downs *(added Aug-2025)*
+
+The high-level checklist above has served well for sprint-level planning, but
+as the project moves toward **Workflow GA (v1.0)** we need more granular
+engineering tasks so individual contributors can pick up work without a large
+handover.  The sections below expand on the remaining unticked items ‑ each
+bullet is intended to become its own GitHub issue (labelled **`workflow-v1`**)
+once refined in triage.
+
+### 6.1 Backend – Real Node Execution
+
+> Goal: replace stubbed/mock node outputs with real functional logic and make
+> the engine production-ready for diverse node types.
+
+1. **Agent Node**
+   • Invoke **`AgentRunner`** directly with the node's `agent_id`.  
+   • Map upstream outputs → `user_message` for the agent.  
+   • Persist the resulting assistant/tool messages back onto the **current
+     workflow execution** rather than the canonical chat thread (avoid
+     pollution).
+
+2. **Tool Node**
+   • Resolve tool reference: first search **MCP servers** in the workflow’s
+     `mcp_servers[]`, then fall back to built-in tools.  
+   • Stream tool output via `node_log` frames in addition to emitting the
+     final `NodeState` (status=success, output=…).  
+   • Add timeout setting (config param, default 120 s) – engine marks node as
+     failed if exceeded and moves to error policy handler.
+
+3. **Trigger Node**
+   • Distinguish between *event* triggers (Gmail, HTTP webhook) and *time*
+     triggers (CRON).  
+   • For event-based triggers: verify HMAC signature exactly like
+     `/api/triggers/{id}/events` endpoint.  
+   • For time-based: schedule an APScheduler job that creates a new
+     **WorkflowExecution** with `triggered_by="schedule"`.
+
+4. **Shared Concerns**
+   • **Retry policy** (see 6.2) applies to all failing nodes.  
+   • **Idempotency** – engine must detect duplicate trigger events by
+     `event_id` dedupe column.
+
+Deliverables: green pytest suite for
+`tests/test_workflow_execution_engine.py::test_real_node_execution` (currently
+`xfail`), open-API docs updated, two new Pact interactions (success & error).
+
+### 6.2 Backend – Error Handling & Retry Policy
+
+1. **Policy DSL**
+   • JSON field on Workflow: `{ "retries": {"default": 2, "backoff": "exp" } }`
+     (backoff=`linear|exp|none`).  
+   • Override per-node via node config panel.
+
+2. **Engine Implementation**
+   • Wrap each node `run()` in `try/except` catching `Exception` *and*
+     asyncio-cancellation.  
+   • Increment attempt counter, sleep according to back-off, then retry.
+   • Emit `node_log` line `RETRY n/…` and update `NodeState` → `retrying`.
+
+3. **User Cancellation**
+   • Expose `/api/workflow_executions/{id}/cancel` (PATCH + body `{reason}`)  
+   • Engine cooperatively checks a cancellation flag before starting the next
+     node.
+
+4. **Tests**
+   • Unit tests for back-off timing (monkeypatch `asyncio.sleep`).  
+   • Integration test with three-failure tool that succeeds on 3rd attempt.
+
+### 6.3 Front-end – Execution History & Inspection
+
+1. **Run Sidebar**
+   • New right-hand drawer listing last 20 executions (status pill + started
+     time).  
+   • Clicking an item replays node states on the canvas *without* subscribing
+     to the live WS channel.
+
+2. **Diff Viewer** (stretch)
+   • Visual diff between two executions: highlights nodes with differing
+     outputs or statuses.
+
+3. **API Wiring**
+   • `GET /api/workflows/{id}/executions?limit=20`  
+   • `GET /api/workflow_executions/{id}` for detailed state.
+
+### 6.4 Front-end – Node Config Polishing
+
+1. **Trigger Modal**
+   • Form schema auto-generated from backend JSON schema fetched via
+     `/api/triggers/schemas`.  
+   • Live validation errors, “Test Trigger” button that fires a dummy event.
+
+2. **Tool Modal**
+   • Parameter mapping UI: dropdowns populated by upstream node outputs.  
+   • Autocomplete for JSONPath expressions (`$.body.subject`).
+
+3. **Common**
+   • Internationalization stub (extract all hard-coded strings).
+
+### 6.5 Performance – Large Workflow Optimisations
+
+1. **Front-end**
+   • Virtualised canvas layer: only render nodes inside viewport ±margin.  
+   • Debounce WS `NodeState` updates – coalesce updates arriving <16 ms apart.
+
+2. **Back-end**
+   • Chunk `node_log` frames >2 kB into 512 B pieces to avoid websocket
+     congestion.
+
+### 6.6 Collaboration *(post-v1 but specced now)*
+
+1. **Presence Service** – simple Redis pub/sub broadcasting `{workflow_id,
+   user_id, cursor}` packets.
+2. **Front-end cursors** – coloured ghost cursors with user initials.
+
+---
+
+## 7. Open Questions / Parking Lot
+
+• **Node Versioning** – do we snapshot node code at execution start or always
+  run latest?  Affects reproducibility.
+• **Secrets Management** – workflow may reference secrets; plan for masked UI
+  fields and secure storage.
+• **Cost Tracking** – attribute OpenAI / tool costs per node; backend already
+  stores `metrics` JSON but UI is TBD.
+

@@ -731,7 +731,7 @@ def upsert_canvas_layout(
     db.commit()
 
     # Return the *current* row so callers can inspect the stored payload.
-    return db.query(CanvasLayout).filter_by(user_id=user_id, workspace=None).first()
+    return db.query(CanvasLayout).filter_by(user_id=user_id, workflow_id=workflow_id).first()
 
 
 def get_canvas_layout(db: Session, user_id: Optional[int], workflow_id: Optional[int] = None):
