@@ -19,8 +19,8 @@ Upcoming additions required for the Workflow Canvas work:
 • `ExecutionFinished` – marks the overall run completion  
 • `NodeLog` (optional) – streamed `stdout/stderr` lines for the log drawer
 
-Until these messages are in the spec **no code emitting or consuming them may
-be merged**.
+All three messages are now in the spec and the generated SDKs / Pact files are
+committed (Jul-14-2025).  ✅ **Protocol alignment complete**.
 
 ## 1. Backend
 
@@ -45,6 +45,7 @@ below tracks what is left for **v1** (anything unticked blocks GA):
 - [ ] Error handling & configurable retries (basic try/except exists ‑ needs
   policy & back-off strategy)
 - [x] WebSocket broadcast (`node_state` envelope)
+- [x] WebSocket broadcast (`execution_finished`, `node_log`) events
 - [ ] Front-end subscription & visualisation (see section 2.3)
 - [ ] DAG traversal & parallel branches
 - [ ] Manual vs scheduled runs (APScheduler hook via Trigger nodes)
@@ -148,6 +149,7 @@ engine; payload shape is considered **beta** until DAG support lands.
     - [ ] Glow animation on *connections* while a node is running.
     - [ ] **Log drawer** (collapsible, 25 vh) that streams `node_log` frames.
         * Backend must emit `node_log` envelope; see Section 0 below.*
+        * Backend emitter implemented (Jul-14-2025) – front-end still needs UI.*
     - [ ] Display execution history and allow inspection of past runs.
     - [ ] Manual & scheduled execution triggers from the UI.
 
@@ -193,7 +195,7 @@ engine; payload shape is considered **beta** until DAG support lands.
 
 ## 5. Milestone Roadmap (Suggested Order)
 
-**0. Protocol alignment** – Add `workflow_execution:{id}` channel + `NodeState`, `ExecutionFinished`, `NodeLog` messages to `asyncapi/chat.yml`; regenerate SDK code & pact files. *(Blocks everything below so CI stays green.)*
+**0. Protocol alignment (DONE Jul-14-2025)** – `workflow_execution:{id}` channel + `NodeState`, `ExecutionFinished`, `NodeLog` messages added to `asyncapi/chat.yml`; SDKs regenerated & Pact contracts updated.
 
 1. Front-end: Execution **UX polish** (button states, connection glow, log drawer).
 2. Back-end: Real node execution (Tool / Agent / Trigger) + retry policy.

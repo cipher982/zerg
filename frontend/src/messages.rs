@@ -201,6 +201,21 @@ pub enum Message {
         status: String,
     },
 
+    /// Workflow execution finished (success or failed)
+    ExecutionFinished {
+        execution_id: u32,
+        status: String,
+        error: Option<String>,
+    },
+
+    /// Append a single stdout/stderr line to the log drawer
+    AppendExecutionLog {
+        execution_id: u32,
+        node_id: String,
+        stream: String,
+        text: String,
+    },
+
     /// User clicked Run – initiate backend execution and subscribe to progress.
     StartWorkflowExecution {
         workflow_id: u32,

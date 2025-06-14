@@ -83,6 +83,14 @@ pub enum WsMessage {
     #[serde(rename = "node_state")]
     NodeState { data: WsNodeState },
 
+    // Workflow execution is done – emitted once per run.
+    #[serde(rename = "execution_finished")]
+    ExecutionFinished { data: WsExecutionFinished },
+
+    // Single stdout/stderr line from a running node.
+    #[serde(rename = "node_log")]
+    NodeLog { data: WsNodeLog },
+
     #[serde(other)]
     Unknown,
 }
@@ -264,6 +272,8 @@ impl WsMessage {
             WsMessage::ThreadMessage { data } => Some(format!("thread:{}", data.thread_id)),
             WsMessage::UserUpdate { data } => Some(format!("user:{}", data.id)),
             WsMessage::NodeState { data } => Some(format!("workflow_execution:{}", data.execution_id)),
+            WsMessage::ExecutionFinished { data } => Some(format!("workflow_execution:{}", data.execution_id)),
+            WsMessage::NodeLog { data } => Some(format!("workflow_execution:{}", data.execution_id)),
             WsMessage::Unknown => None,
         }
     }
@@ -284,6 +294,37 @@ pub struct WsNodeState {
 
     #[serde(default)]
     pub error: Option<String>,
+
+    #[serde(flatten)]
+    #[allow(dead_code)]
+    pub extra: serde_json::Value,
+}
+
+/// Payload emitted once per workflow execution when all nodes finished (either
+/// success or failed).
+#[derive(Debug, Deserialize, Clone)]
+pub struct WsExecutionFinished {
+    pub execution_id: u32,
+    pub status: String, // success | failed
+
+    #[serde(default)]
+    pub error: Option<String>,
+
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
+
+    #[serde(flatten)]
+    #[allow(dead_code)]
+    pub extra: serde_json::Value,
+}
+
+/// Single log line produced by a node (stdout/stderr).
+#[derive(Debug, Deserialize, Clone)]
+pub struct WsNodeLog {
+    pub execution_id: u32,
+    pub node_id: String,
+    pub stream: String, // stdout | stderr
+    pub text: String,
 
     #[serde(flatten)]
     #[allow(dead_code)]

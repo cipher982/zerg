@@ -179,6 +179,14 @@ class WorkflowExecutionEngine:
                 execution.finished_at = datetime.now(timezone.utc)
                 execution.log = "\n".join(log_lines)
                 db.commit()
+
+                # Emit execution_finished (failed)
+                self._publish_execution_finished(
+                    execution_id=execution.id,
+                    status="failed",
+                    error=str(exc),
+                    duration_ms=self._duration_ms(execution),
+                )
                 logger.exception("[WorkflowEngine] node execution failed – node_id=%s", node_id)
                 return execution.id
 
@@ -189,6 +197,14 @@ class WorkflowExecutionEngine:
         execution.finished_at = datetime.now(timezone.utc)
         execution.log = "\n".join(log_lines)
         db.commit()
+
+        # Emit execution_finished (success)
+        self._publish_execution_finished(
+            execution_id=execution.id,
+            status="success",
+            error=None,
+            duration_ms=self._duration_ms(execution),
+        )
 
         return execution.id
 
@@ -224,6 +240,42 @@ class WorkflowExecutionEngine:
             loop = asyncio.new_event_loop()
             loop.run_until_complete(event_bus.publish(EventType.NODE_STATE_CHANGED, payload))
             loop.close()
+
+    # ------------------------------------------------------------------
+    # Execution finished helper
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _publish_execution_finished(
+        *,
+        execution_id: int,
+        status: str,
+        error: str | None,
+        duration_ms: int | None,
+    ) -> None:
+        """Publish EXECUTION_FINISHED event for listeners (WebSocket)."""
+
+        payload = {
+            "execution_id": execution_id,
+            "status": status,
+            "error": error,
+            "duration_ms": duration_ms,
+            "event_type": EventType.EXECUTION_FINISHED,
+        }
+
+        try:
+            asyncio.run(event_bus.publish(EventType.EXECUTION_FINISHED, payload))
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(event_bus.publish(EventType.EXECUTION_FINISHED, payload))
+            loop.close()
+
+    @staticmethod
+    def _duration_ms(execution: WorkflowExecution) -> int | None:
+        if execution.started_at and execution.finished_at:
+            delta = execution.finished_at - execution.started_at
+            return int(delta.total_seconds() * 1000)
+        return None
 
 
 # ---------------------------------------------------------------------------
