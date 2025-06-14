@@ -146,7 +146,8 @@ engine; payload shape is considered **beta** until DAG support lands.
     - [x] Glow animation on *connections* while a node is running – implemented Jul-14-2025.  Animated dashed line with soft blue glow indicates active execution.
     - [x] **Log drawer** (collapsible, 25 vh) streaming live `node_log` frames – backend & initial UI merged (toggle via 📜 button).
         * Backend emitter implemented (Jul-14-2025) – front-end still needs UI.*
-    - [ ] Display execution history and allow inspection of past runs.
+    - [x] Display execution history – 🕒 sidebar lists last runs, click selects (Aug-2025).  
+      [ ] Detailed node-state replay still pending.
     - [ ] Manual & scheduled execution triggers from the UI.
 
 ### 2.4. Templates & Examples
@@ -274,10 +275,11 @@ Deliverables: green pytest suite for
 ### 6.3 Front-end – Execution History & Inspection
 
 1. **Run Sidebar**
-   • New right-hand drawer listing last 20 executions (status pill + started
-     time).  
-   • Clicking an item replays node states on the canvas *without* subscribing
-     to the live WS channel.
+   ✅ Implemented Aug-2025 – *Execution Sidebar*:  
+   • 🕒 toolbar button toggles drawer.  
+   • Fetches `/api/workflow-executions/history/{workflow_id}?limit=20`.  
+   • Lists status pill + id; click selects (replay TBD).  
+   • Real-time refresh manual trigger; auto-refresh backlog planned.
 
 2. **Diff Viewer** (stretch)
    • Visual diff between two executions: highlights nodes with differing
