@@ -1,5 +1,5 @@
 use web_sys::{CanvasRenderingContext2d};
-use crate::models::{Node, NodeType, ApiAgent};
+use crate::models::{Node, NodeType, ApiAgent, NodeExecStatus};
 use crate::state::AppState;
 use crate::constants::*;
 use super::shapes;
@@ -86,12 +86,45 @@ fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
                     control_x2, control_y2,
                     end_x, end_y
                 );
-                
-                // Style and stroke the path
-                context.set_stroke_style_str("#95a5a6");
-                context.set_line_width(2.0);
+
+                // ------------------------------------------------------------------
+                //   Glow / animation when either endpoint node is currently running
+                // ------------------------------------------------------------------
+
+                let parent_running = parent.exec_status == Some(NodeExecStatus::Running);
+                let child_running = node.exec_status == Some(NodeExecStatus::Running);
+
+                let glow_active = parent_running || child_running;
+
+                // Backup original context state so we can restore after drawing
+                context.save();
+
+                if glow_active {
+                    // Use a bright accent colour taken from the design system
+                    context.set_stroke_style_str("#1fb6ff"); // --primary-accent
+                    context.set_line_width(3.0);
+
+                    // Soft outer glow
+                    context.set_shadow_color("rgba(31, 182, 255, 0.8)");
+                    context.set_shadow_blur(8.0);
+
+                    // Animated dashed line conveys progress along the edge
+                    let dash_arr = js_sys::Array::new();
+                    dash_arr.push(&10_f64.into());
+                    dash_arr.push(&6_f64.into());
+                    let _ = context.set_line_dash(&dash_arr);
+                    context.set_line_dash_offset(state.connection_animation_offset);
+                } else {
+                    // Default subdued connection style
+                    context.set_stroke_style_str("#95a5a6");
+                    context.set_line_width(2.0);
+                }
+
                 context.stroke();
-                
+
+                // Restore context so arrow inherits default style
+                context.restore();
+
                 // Optional: Add an arrow at the end pointing down
                 shapes::draw_arrow(context, end_x, end_y, 0.0, -1.0);
             }
