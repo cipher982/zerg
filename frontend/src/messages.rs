@@ -201,6 +201,11 @@ pub enum Message {
         status: String,
     },
 
+    /// User clicked Run – initiate backend execution and subscribe to progress.
+    StartWorkflowExecution {
+        workflow_id: u32,
+    },
+
     // -------------------------------------------------------------------
     // Workflow execution streaming
     // -------------------------------------------------------------------
@@ -499,6 +504,10 @@ pub enum Command {
         name: String,
         description: String,
     },
+
+    // ---------------- Workflow execution -----------------------------
+    /// POST /workflow-executions/{workflow_id}/start
+    StartWorkflowExecutionApi { workflow_id: u32 },
 
     // ---------------------------------------------------------------
     // Trigger-related side-effect commands (Phase A wiring only)

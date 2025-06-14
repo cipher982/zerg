@@ -28,6 +28,31 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     let actions_el = document.create_element("div")?;
     actions_el.set_attribute("class", "toolbar-actions")?;
 
+    // --------------------------------------------------------------------
+    // Run (▶︎) button – trigger workflow execution
+    // --------------------------------------------------------------------
+    let run_btn = document.create_element("button")?;
+    run_btn.set_attribute("type", "button")?;
+    run_btn.set_inner_html("▶︎");
+    run_btn.set_attribute("class", "toolbar-btn")?;
+    run_btn.set_attribute("id", "run-workflow-btn")?;
+    run_btn.set_attribute("title", "Run Workflow (⌘/Ctrl + R)")?;
+
+    {
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            // Read current workflow id at click time (avoid stale capture)
+            if let Some(current_id) = APP_STATE.with(|st| st.borrow().current_workflow_id) {
+                dispatch_global_message(Message::StartWorkflowExecution { workflow_id: current_id });
+            } else {
+                web_sys::console::warn_1(&"No workflow selected – cannot run".into());
+            }
+        }));
+        run_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+
+    actions_el.append_child(&run_btn)?;
+
     // Center view button
     let center_btn = document.create_element("button")?;
     center_btn.set_attribute("type", "button")?;

@@ -137,6 +137,31 @@ pub fn execute_fetch_command(cmd: Command) {
             });
         }
 
+        // -----------------------------------------------------------
+        // Start workflow execution – call backend and then subscribe
+        // -----------------------------------------------------------
+        Command::StartWorkflowExecutionApi { workflow_id } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::start_workflow_execution(workflow_id).await {
+                    Ok(json_str) => {
+                        // Expected response: { "execution_id": 123, "status": "running" }
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                            if let Some(exec_id_val) = val.get("execution_id") {
+                                if let Some(exec_id_u64) = exec_id_val.as_u64() {
+                                    let exec_id = exec_id_u64 as u32;
+                                    crate::state::dispatch_global_message(crate::messages::Message::SubscribeWorkflowExecution { execution_id: exec_id });
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to start workflow execution: {:?}", e).into());
+                        // Optionally: dispatch toast / error message here
+                    }
+                }
+            });
+        }
+
         Command::FetchAgentDetails(agent_id) => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_agent_details(agent_id).await {
