@@ -1,6 +1,11 @@
+from datetime import datetime
+
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Response
+from pydantic import BaseModel
+from pydantic import Field
 from sqlalchemy.orm import Session
 
 from zerg.crud import crud
@@ -14,6 +19,15 @@ router = APIRouter(
     tags=["workflow-executions"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+
+
+class CancelPayload(BaseModel):
+    reason: str = Field(..., max_length=500)
 
 
 @router.post("/{workflow_id}/start")
@@ -95,3 +109,59 @@ def export_execution_data(
     if not execution or execution.workflow.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Execution not found")
     return execution
+
+
+# ---------------------------------------------------------------------------
+# Cancellation endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/{execution_id}/cancel", status_code=204)
+def cancel_execution(
+    *,
+    execution_id: int,
+    payload: CancelPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mark a running workflow execution as *cancelled*.
+
+    The engine cooperatively checks the updated status before starting each
+    new node and exits early. If the execution already finished the endpoint
+    returns 409.
+    """
+
+    execution = crud.get_workflow_execution(db, execution_id)
+    if execution is None or execution.workflow.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    if execution.status in {"success", "failed", "cancelled"}:
+        raise HTTPException(status_code=409, detail="Execution already finished")
+
+    execution.status = "cancelled"
+    execution.cancel_reason = payload.reason
+    execution.finished_at = datetime.utcnow()
+    db.commit()
+
+    # Emit EXECUTION_FINISHED event with cancelled status so UI updates
+    import asyncio
+
+    from zerg.events import EventType  # local import to avoid cycles
+    from zerg.events import event_bus  # local import to avoid cycles
+
+    payload_dict = {
+        "execution_id": execution.id,
+        "status": "cancelled",
+        "error": payload.reason,
+        "duration_ms": None,
+        "event_type": EventType.EXECUTION_FINISHED,
+    }
+
+    try:
+        asyncio.run(event_bus.publish(EventType.EXECUTION_FINISHED, payload_dict))
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(event_bus.publish(EventType.EXECUTION_FINISHED, payload_dict))
+        loop.close()
+
+    return Response(status_code=204)

@@ -114,6 +114,21 @@ class WorkflowExecutionEngine:
         nodes: list[Dict[str, Any]] = canvas.get("nodes", [])
 
         for idx, node in enumerate(nodes):
+            # Respect cancellation requested by user (status set to "cancelled").
+            db.refresh(execution)
+            if execution.status == "cancelled":
+                log_lines.append("Execution cancelled by user – stopping before node %s" % idx)
+                execution.finished_at = datetime.now(timezone.utc)
+                execution.log = "\n".join(log_lines)
+                db.commit()
+
+                self._publish_execution_finished(
+                    execution_id=execution.id,
+                    status="cancelled",
+                    error=getattr(execution, "cancel_reason", "cancelled"),
+                    duration_ms=self._duration_ms(execution),
+                )
+                return execution.id
             node_id: str = str(node.get("id", f"idx_{idx}"))
             node_type: str = str(node.get("type", "unknown"))
 
@@ -232,14 +247,33 @@ class WorkflowExecutionEngine:
             # End while
 
         # ------------------------------------------------------------------
-        # 3) Success path – mark execution done
+        # 3) Success path – but honour user cancellation that may have been set
+        #    after the last node finished processing.
         # ------------------------------------------------------------------
+
+        db.refresh(execution)
+
+        if execution.status == "cancelled":
+            # User cancelled while last node was running – respect it.
+            execution.finished_at = datetime.now(timezone.utc)
+            execution.log = "\n".join(log_lines)
+            db.commit()
+
+            self._publish_execution_finished(
+                execution_id=execution.id,
+                status="cancelled",
+                error=getattr(execution, "cancel_reason", None),
+                duration_ms=self._duration_ms(execution),
+            )
+            logger.info("[WorkflowEngine] execution %s cancelled after last node", execution.id)
+            return execution.id
+
+        # Otherwise mark success
         execution.status = "success"
         execution.finished_at = datetime.now(timezone.utc)
         execution.log = "\n".join(log_lines)
         db.commit()
 
-        # Emit execution_finished (success)
         self._publish_execution_finished(
             execution_id=execution.id,
             status="success",
