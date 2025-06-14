@@ -1,5 +1,27 @@
 # Visual Workflow Canvas: Detailed Task List & Roadmap
 
+## 0. WebSocket Protocol Alignment  *(pre-requisite for all realtime work)*
+
+The WebSocket contract is now the single source-of-truth, driven by
+`asyncapi/chat.yml` and enforced by CI via code-generation & Pact tests.
+Any new realtime payload *must* follow this flow:
+
+1. Extend **`asyncapi/chat.yml`** – add the channel and message schemas.
+2. `make regen-ws-code` – regenerate Rust & TS SDKs and commit the diff.
+3. `make pact-capture && make pact-verify` – update consumer contract and
+   ensure the provider passes.
+4. Only then implement backend emitters and frontend handlers.
+
+Upcoming additions required for the Workflow Canvas work:
+
+• `workflow_execution:{execution_id}` channel
+• `NodeState`  – live per-node status updates  
+• `ExecutionFinished` – marks the overall run completion  
+• `NodeLog` (optional) – streamed `stdout/stderr` lines for the log drawer
+
+Until these messages are in the spec **no code emitting or consuming them may
+be merged**.
+
 ## 1. Backend
 
 ### 1.1. Workflow CRUD API
@@ -10,19 +32,22 @@
     - [x] Test edge cases (large canvas_data, concurrent edits).
     - [x] Regression tests for future schema changes.
 
-### 1.2. Workflow Execution Engine *(v0 COMPLETE – further milestones)*
-The first production-quality engine landed (`backend/zerg/services/workflow_engine.py`).
-It executes nodes **linearly**, persists results, and streams per-node updates
-via WebSocket.  The checklist now tracks what is left for v1:
+### 1.2. Workflow Execution Engine *(v0 COMPLETE — upcoming milestones)*
+The first production-quality engine shipped in
+`backend/zerg/services/workflow_engine.py`. It executes nodes **linearly**,
+persists results, and streams per-node updates over WebSocket. The checklist
+below tracks what is left for **v1** (anything unticked blocks GA):
 
 - [x] Linear execution engine + DB persistence
-- [/] Real execution for Tool / Trigger / Agent nodes (currently mock output)
-- [ ] MCP tool integration & trigger firing
-- [/] Error handling & configurable retries (basic try/except exists)
-- [x] WebSocket broadcast (`NODE_STATE_CHANGED` events)
+- [ ] Real execution for Tool / Trigger / Agent nodes (currently mock output)
+- [ ] MCP tool integration & trigger firing *(moved from “partial” → clearly
+  **todo** so risk tracking is accurate)*
+- [ ] Error handling & configurable retries (basic try/except exists ‑ needs
+  policy & back-off strategy)
+- [x] WebSocket broadcast (`node_state` envelope)
 - [ ] Front-end subscription & visualisation (see section 2.3)
 - [ ] DAG traversal & parallel branches
-- [ ] Manual vs. scheduled runs (APScheduler hook via Trigger nodes)
+- [ ] Manual vs scheduled runs (APScheduler hook via Trigger nodes)
 
     **✅ Already done** (so engine work can build on top):
     - DB schema for execution tracking.
@@ -47,6 +72,11 @@ engine; payload shape is considered **beta** until DAG support lands.
 ---
 
 ## 2. Frontend
+
+> **Protocol prerequisite** — The WebSocket contract is now validated against
+> `asyncapi/chat.yml` at every CI run.  Before adding or changing frontend
+> features that depend on new realtime payloads you **must first** extend the
+> AsyncAPI spec (and regenerate SDKs + Pact files) so the build stays green.
 
 ### 2.1. Workflow Persistence & API Integration
 - [ ] **Connect frontend to backend workflow CRUD API**
@@ -92,7 +122,7 @@ engine; payload shape is considered **beta** until DAG support lands.
     with proper dark theme styling. `rename/delete` helpers exist but UI triggers
     are not implemented yet, and LocalStorage migration still pending.
 
-### 2.1.1. Workflow Tab Bar UI *(COMPLETED)*
+### 2.1a. Workflow Tab Bar UI *(COMPLETED — kept for changelog)*
 - [x] **Fix workflow tab visibility issue**
     - [x] Corrected DOM insertion logic to work with current canvas layout
     - [x] Fixed view-specific initialization (tabs only appear on canvas, not dashboard)
@@ -111,13 +141,15 @@ engine; payload shape is considered **beta** until DAG support lands.
     - [ ] Node resizing and layout improvements for complex workflows.
     - [ ] Accessibility and keyboard navigation for all canvas features.
 
-### 2.3. Workflow Execution UI
-- [ ] **Add UI for workflow execution feedback**
-    - [ ] Show live node execution state (highlighting, progress, error/success icons).
-    - [ ] Animate data flow along connections during execution.
-    - [ ] Display execution logs and errors in a side panel or modal.
-    - [ ] Show execution history and allow users to inspect past runs.
-    - [ ] Support for manual and scheduled execution triggers from the UI.
+### 2.3. Workflow Execution UI & UX polish
+- [ ] **Add rich execution feedback**
+    - [x] Highlight nodes on **running / success / failed** (colour-coded).
+    - [ ] Spinner / pulse states on the ▶︎ *Run* button (start → running → ok/error).
+    - [ ] Glow animation on *connections* while a node is running.
+    - [ ] **Log drawer** (collapsible, 25 vh) that streams `node_log` frames.
+        * Backend must emit `node_log` envelope; see Section 0 below.*
+    - [ ] Display execution history and allow inspection of past runs.
+    - [ ] Manual & scheduled execution triggers from the UI.
 
 ### 2.4. Templates & Examples
 - [ ] **Template gallery and onboarding**
@@ -151,18 +183,21 @@ engine; payload shape is considered **beta** until DAG support lands.
 
 ## 4. Risks & Mitigations
 
-- **LocalStorage (canvas layout only)**: Workflows themselves are on the backend; the remaining risk is unsaved viewport/node positions.  Mitigation: land `/layout` endpoint and phase-out LS fallback.
-- **No backend tests**: Increases risk of regressions. Mitigation: Add comprehensive tests.
-- **No execution engine**: Workflows can't run. Mitigation: Prioritize backend execution logic.
-- **No frontend-backend sync**: Users can't collaborate or use multiple devices. Mitigation: Connect frontend to backend API.
+- **LocalStorage (canvas layout only)** – Workflows themselves live on the backend; the only client-side risk left is unsaved viewport/node positions.  **Mitigation**: land `/layout` endpoint (section 2.1) and then delete the LS fallback.
+- **WebSocket contract drift** – AsyncAPI 3 spec is enforced at CI; adding new messages (NodeState, NodeLog, ExecutionFinished) without updating the spec will break the build.  **Mitigation**: update `asyncapi/chat.yml` *before* backend emits anything new and run `make regen-ws-code`.
+- **Missing backend tests** – Increases regression risk.  **Mitigation**: extend existing pytest suite for new execution & log endpoints.
+- **Incomplete execution engine** – Without real node execution, workflows provide little value.  **Mitigation**: prioritise section 1.2 work.
+- **Frontend–backend state drift** – Users cannot collaborate across devices unless canvas layout & execution state are fully server-backed.  **Mitigation**: finish 2.1 (layout persistence) and ensure re-fetch on app boot.
 
 ---
 
 ## 5. Milestone Roadmap (Suggested Order)
 
-1. Front-end: Execution visualisation & WS subscription (node highlighting, logs).
-2. Backend: Real node execution (Tool / Agent / Trigger) + retries.
+**0. Protocol alignment** – Add `workflow_execution:{id}` channel + `NodeState`, `ExecutionFinished`, `NodeLog` messages to `asyncapi/chat.yml`; regenerate SDK code & pact files. *(Blocks everything below so CI stays green.)*
+
+1. Front-end: Execution **UX polish** (button states, connection glow, log drawer).
+2. Back-end: Real node execution (Tool / Agent / Trigger) + retry policy.
 3. Front-end: Workflow tab context-menu (rename / delete) & error toasts.
-4. Persist canvas layout to backend and delete LS fallback.
+4. Persist canvas layout to backend and remove LocalStorage fallback.
 5. Template gallery & onboarding docs.
-6. Clean-up tech debt & multi-device edge-cases.
+6. Clean-up tech-debt & multi-device edge-cases.
