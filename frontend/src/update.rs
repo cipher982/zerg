@@ -556,6 +556,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::SelectWorkflow { workflow_id } => {
             state.current_workflow_id = Some(workflow_id);
             needs_refresh = true;
+
+            // Refresh run button & log drawer in UI
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
+                    let _ = crate::components::log_drawer::refresh(&doc);
+                }
+            })));
         }
         Message::WorkflowCreated(wf) => {
             // Remove any optimistic entry with same name or temp id (<=0)
@@ -572,15 +580,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             })));
         }
 
-        Message::ExecutionFinished { .. } | Message::AppendExecutionLog { .. } => {
-            // After state updated above we need to refresh run button and log drawer
-            commands.push(Command::UpdateUI(Box::new(|| {
-                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
-                    let _ = crate::components::log_drawer::refresh(&doc);
-                }
-            })));
-        }
+        // (ExecutionFinished & AppendExecutionLog handled in dedicated arms
+        // below.  Any UI refresh logic is appended there to avoid duplicate
+        // pattern matches that caused unreachable-pattern warnings.)
         Message::WorkflowDeleted { workflow_id } => {
             state.workflows.remove(&workflow_id);
             if state.current_workflow_id == Some(workflow_id) {
@@ -634,6 +636,13 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     needs_refresh = true;
                 }
             }
+
+            // Live append means drawer needs repaint if open
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::log_drawer::refresh(&doc);
+                }
+            })));
         }
 
         // UI toggle for log drawer

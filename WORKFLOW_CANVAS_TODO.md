@@ -146,7 +146,7 @@ engine; payload shape is considered **beta** until DAG support lands.
 - [ ] **Add rich execution feedback**
     - [x] Highlight nodes on **running / success / failed** (colour-coded).
     - [x] Spinner / pulse states on the ▶︎ *Run* button (start → running → ok/error) – **implemented Jul-14-2025**.
-    - [ ] Glow animation on *connections* while a node is running.
+    - [x] Glow animation on *connections* while a node is running – implemented Jul-14-2025.  Animated dashed line with soft blue glow indicates active execution.
     - [x] **Log drawer** (collapsible, 25 vh) streaming live `node_log` frames – backend & initial UI merged (toggle via 📜 button).
         * Backend emitter implemented (Jul-14-2025) – front-end still needs UI.*
     - [ ] Display execution history and allow inspection of past runs.
@@ -179,6 +179,7 @@ engine; payload shape is considered **beta** until DAG support lands.
 - [x] **Purge legacy LocalStorage workflow code** (`zerg_workflows_v1`) – helpers and key removed.
 - [ ] Remove LocalStorage fallback for **canvas layout** once new endpoint ships (see 2.1).
 - [ ] Refactor any code that assumes single-user or single-device usage (e.g. cached JWT, hard-coded `user_id=1`).
+- [x] Remove `unreachable-pattern` warnings in `update.rs` – cleaned up duplicate match arms (Jul-14-2025).
 
 ---
 
