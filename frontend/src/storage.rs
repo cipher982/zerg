@@ -48,25 +48,14 @@ pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
     // Save changes to API
     save_state_to_api(app_state);
     
-    // Save the original node data
+    // NOTE: Persisting node positions & viewport to localStorage has been
+    // removed now that the `/api/graph/layout` endpoint is fully live.  Any
+    // save error bubbles up via `update_layout_status()` so developers can
+    // diagnose backend or network issues immediately instead of silently
+    // falling back to stale client-side data.
+
     let window = web_sys::window().expect("no global window exists");
     let local_storage = window.local_storage()?.expect("no local storage exists");
-    
-    // Convert nodes to a JSON string
-    let nodes_str = to_string(&app_state.nodes).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    
-    // Save to localStorage
-    local_storage.set_item("nodes", &nodes_str)?;
-    
-    // Save viewport position and zoom
-    let viewport_data = ViewportData {
-        x: app_state.viewport_x,
-        y: app_state.viewport_y,
-        zoom: app_state.zoom_level,
-    };
-    
-    let viewport_str = to_string(&viewport_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    local_storage.set_item("viewport", &viewport_str)?;
     
     // Save active view
     let active_view_str = to_string(&app_state.active_view).map_err(|e| JsValue::from_str(&e.to_string()))?;
@@ -219,8 +208,7 @@ fn try_load_layout_from_api() {
                 // Log full error to console for debugging.
                 web_sys::console::error_1(&format!("Remote layout fetch failed: {:?}", e).into());
 
-                // Attempt localStorage fallback when remote fetch fails
-                crate::storage::try_load_from_localstorage();
+                // No localStorage fallback – surface error to developer instead
             }
             // 204 No Content – no layout for this workflow yet.  **Do not**
             // load the stale localStorage copy (if any) because the user
@@ -374,16 +362,8 @@ pub fn save_state_to_api(app_state: &AppState) {
                 match crate::network::ApiClient::patch_layout(&payload_str, wf_id.map(|v| v as u32)).await {
                     Ok(_) => update_layout_status("Layout: saved", "green"),
                     Err(e) => {
-                        update_layout_status("Layout: save failed – offline copy", "orange");
-                        web_sys::console::error_1(&format!("layout save failed: {:?}. Falling back to localStorage", e).into());
-
-                        // Fallback: persist to localStorage so user does not lose work
-                        if let Some(window) = web_sys::window() {
-                            if let Ok(Some(storage)) = window.local_storage() {
-                                let _ = storage.set_item("nodes", &payload["nodes"].to_string());
-                                let _ = storage.set_item("viewport", &payload["viewport"].to_string());
-                            }
-                        }
+                        update_layout_status("Layout: save failed", "red");
+                        web_sys::console::error_1(&format!("layout save failed: {:?}", e).into());
                     }
                 }
             });

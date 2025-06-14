@@ -46,7 +46,7 @@ below tracks what is left for **v1** (anything unticked blocks GA):
   policy & back-off strategy)
 - [x] WebSocket broadcast (`node_state` envelope)
 - [x] WebSocket broadcast (`execution_finished`, `node_log`) events
-- [ ] Front-end subscription & visualisation (see section 2.3)
+    - [x] Front-end subscription & visualisation (see section 2.3)
 - [ ] DAG traversal & parallel branches
 - [ ] Manual vs scheduled runs (APScheduler hook via Trigger nodes)
 
@@ -88,15 +88,14 @@ engine; payload shape is considered **beta** until DAG support lands.
               triggers a `Command::CreateWorkflowApi` side-effect.
         - [/] Optimistic UI (spinner/tab) & toast rollback still TBD.
 
-    - [ ] **Rename – context-menu → `PATCH /api/workflows/{id}`**
-        - [ ] Add a small *⋯* button on each tab that opens a dropdown with
-              “Rename” and “Delete”.
+    - [x] **Rename – context-menu → `PATCH /api/workflows/{id}`**
+        - [x] *Rename* action accessible via toolbar dropdown (⋮) – prompts for name & description.
         - [x] For *Rename*: context-menu action prompts for *Name* & *Description*, dispatches API call (Jul-14-2025).
         - [x] `rename_workflow()` helper implemented in `ApiClient`; command &
               reducer wiring merged.
         - [x] UI finished – item lives in ⋯ dropdown; optimistic UI handled by reducer.
 
-    - [ ] **Delete – context-menu → `DELETE /api/workflows/{id}`**
+    - [x] **Delete – context-menu → `DELETE /api/workflows/{id}`**
         - [x] Confirmation dialog added; calls `DELETE /api/workflows/{id}`. (Jul-14-2025)
         - [x] `delete_workflow()` helper + command/reducer integration done.
         - [x] UI context menu wired.
@@ -105,7 +104,7 @@ engine; payload shape is considered **beta** until DAG support lands.
           fully removed from the code-base; no import flow required for new
           users.  Focus shifts to persisting the remaining *layout* data:
           - [x] Add `/api/workflows/{id}/layout` (GET/PUT) – viewport & node positions *(backend merged Aug-14-2025)*
-          - [ ] Front-end save/load helpers; drop LS fallback once API is live
+          - [x] Front-end save/load helpers; dropped LS fallback now that backend endpoint is live (Aug-2025)
 
     - [ ] **Error handling & UX**
         - [ ] Normalize backend error toasts (409 duplicate, 422 validation,
@@ -175,7 +174,7 @@ engine; payload shape is considered **beta** until DAG support lands.
 
 ### 3.3. Remove Technical Debt
 - [x] **Purge legacy LocalStorage workflow code** (`zerg_workflows_v1`) – helpers and key removed.
-- [ ] Remove LocalStorage fallback for **canvas layout** once new endpoint ships (see 2.1).
+- [x] Remove LocalStorage fallback for **canvas layout** now that `/api/graph/layout` is live.
 - [ ] Refactor any code that assumes single-user or single-device usage (e.g. cached JWT, hard-coded `user_id=1`).
 - [x] Remove `unreachable-pattern` warnings in `update.rs` – cleaned up duplicate match arms (Jul-14-2025).
 
