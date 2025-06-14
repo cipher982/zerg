@@ -10,20 +10,19 @@
     - [x] Test edge cases (large canvas_data, concurrent edits).
     - [x] Regression tests for future schema changes.
 
-### 1.2. Workflow Execution Engine *(IN-PROGRESS)*
-> We now have DB models (`WorkflowExecution`, `NodeExecutionState`) **and** API routes
-> (`/api/workflow-executions/*`) but the actual engine that runs workflows is still
-> a stub (`backend/zerg/services/workflow_engine.py`).
+### 1.2. Workflow Execution Engine *(v0 COMPLETE – further milestones)*
+The first production-quality engine landed (`backend/zerg/services/workflow_engine.py`).
+It executes nodes **linearly**, persists results, and streams per-node updates
+via WebSocket.  The checklist now tracks what is left for v1:
 
-- [ ] **Design and implement a workflow execution engine**
-    - [x] Service/class to execute workflows node-by-node, resolving input/output dependencies **(implemented – `WorkflowExecutionEngine`)**
-    - [/] Support for Tool, Trigger, and Agent nodes – **placeholder executions merged**; real integration still pending.
-    - [ ] Integrate with MCP tool execution and trigger firing.
-    - [/] Handle errors, retries, and partial failures gracefully – **basic try/except added**; retries TBD.
-    - [x] Track execution state for each node (idle, queued, running, success, failed) – stored in `node_execution_states` table.
-    - [x] Log execution details, errors, and data flow for debugging – simple text log persisted on `WorkflowExecution`.
-    - [/] Support for live feedback via WebSocket – **backend broadcast implemented**, front-end subscription & UI pending.
-    - [ ] Support for manual and scheduled execution (trigger nodes).
+- [x] Linear execution engine + DB persistence
+- [/] Real execution for Tool / Trigger / Agent nodes (currently mock output)
+- [ ] MCP tool integration & trigger firing
+- [/] Error handling & configurable retries (basic try/except exists)
+- [x] WebSocket broadcast (`NODE_STATE_CHANGED` events)
+- [ ] Front-end subscription & visualisation (see section 2.3)
+- [ ] DAG traversal & parallel branches
+- [ ] Manual vs. scheduled runs (APScheduler hook via Trigger nodes)
 
     **✅ Already done** (so engine work can build on top):
     - DB schema for execution tracking.
@@ -42,8 +41,8 @@
 - [x] **Security & Permissions**
     - [x] Ensure only workflow owners can execute/view their workflows and logs.
 
-**Note:** Execution API endpoints are functional but will return minimal data
-until the engine in 1.2 is completed.
+**Note:** Endpoints now stream real-time node data produced by the linear
+engine; payload shape is considered **beta** until DAG support lands.
 
 ---
 
@@ -73,16 +72,11 @@ until the engine in 1.2 is completed.
         - [x] `delete_workflow()` helper + command/reducer integration done.
         - [ ] UI context menu + optimistic hide & toast rollback pending.
 
-    - [ ] **LocalStorage sunset & one-shot import**
-        - [ ] When the app loads, *before* hitting the backend, check for the
-              old `localStorage["zerg_workflows_v1"]` key.
-        - [ ] If present:
-              1. Parse JSON and iterate workflows.
-              2. POST each to `/api/workflows` (fire-and-forget).
-              3. After **all** succeed (or timeout), delete the LS key so we
-                 never import again.
-        - [ ] Remove **all remaining reads/writes** to that key throughout the
-              codebase (grep `zerg_workflows_v1`).
+    - [x] **LocalStorage migration** – legacy key `zerg_workflows_v1` has been
+          fully removed from the code-base; no import flow required for new
+          users.  Focus shifts to persisting the remaining *layout* data:
+          - [ ] Add `/api/workflows/{id}/layout` (GET/PUT) – viewport & node positions
+          - [ ] Front-end save/load helpers; drop LS fallback once API is live
 
     - [ ] **Error handling & UX**
         - [ ] Normalize backend error toasts (409 duplicate, 422 validation,
@@ -149,23 +143,15 @@ until the engine in 1.2 is completed.
 - [ ] **Update onboarding and help docs** to reflect new workflow persistence and execution features.
 
 ### 3.3. Remove Technical Debt
-- [ ] **Remove legacy LocalStorage code** once backend integration is complete.
-    - [ ] Grep for `zerg_workflows_v1` and generic `localStorage` helpers inside
-          `frontend/src/` – particularly `canvas`, `state.rs`, and old helper
-          modules.
-    - [ ] Delete `load_workflows_from_local_storage()` and
-          `save_workflows_to_local_storage()` (or mark them deprecated during
-          the migration PR, then remove in the following release).
-    - [ ] Replace with an *import only* helper that warns (console + toast) if
-          we still detect the stale key after the migration – indicates a user
-          had import errors.
-- [ ] Refactor any code that assumes single-user or single-device usage.
+- [x] **Purge legacy LocalStorage workflow code** (`zerg_workflows_v1`) – helpers and key removed.
+- [ ] Remove LocalStorage fallback for **canvas layout** once new endpoint ships (see 2.1).
+- [ ] Refactor any code that assumes single-user or single-device usage (e.g. cached JWT, hard-coded `user_id=1`).
 
 ---
 
 ## 4. Risks & Mitigations
 
-- **LocalStorage usage**: Causes data loss, sync issues, and migration pain. Mitigation: Move to backend ASAP.
+- **LocalStorage (canvas layout only)**: Workflows themselves are on the backend; the remaining risk is unsaved viewport/node positions.  Mitigation: land `/layout` endpoint and phase-out LS fallback.
 - **No backend tests**: Increases risk of regressions. Mitigation: Add comprehensive tests.
 - **No execution engine**: Workflows can't run. Mitigation: Prioritize backend execution logic.
 - **No frontend-backend sync**: Users can't collaborate or use multiple devices. Mitigation: Connect frontend to backend API.
@@ -174,9 +160,9 @@ until the engine in 1.2 is completed.
 
 ## 5. Milestone Roadmap (Suggested Order)
 
-1. Backend: Add tests for workflow CRUD.
-2. Frontend: Connect to backend workflow API, remove localStorage.
-3. Backend: Implement workflow execution engine and API.
-4. Frontend: Add execution feedback UI.
-5. Templates, onboarding, and documentation.
-6. Remove technical debt and legacy code.
+1. Front-end: Execution visualisation & WS subscription (node highlighting, logs).
+2. Backend: Real node execution (Tool / Agent / Trigger) + retries.
+3. Front-end: Workflow tab context-menu (rename / delete) & error toasts.
+4. Persist canvas layout to backend and delete LS fallback.
+5. Template gallery & onboarding docs.
+6. Clean-up tech debt & multi-device edge-cases.
