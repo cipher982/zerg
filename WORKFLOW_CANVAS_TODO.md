@@ -260,7 +260,7 @@ Deliverables: green pytest suite for
    • Wrap each node `run()` in `try/except` catching `Exception` *and*
      asyncio-cancellation.  
    • Increment attempt counter, sleep according to back-off, then retry.
-   • Emit `node_log` line `RETRY n/…` and update `NodeState` → `retrying`.
+   • Emit `node_log` line `RETRY n/…` and update `NodeState` → `retrying` – ✅ **Implemented Aug-2025**
 
 3. **User Cancellation**  ✅ **DONE (Aug-2025)**
    • `/api/workflow_executions/{id}/cancel` (PATCH + body `{reason}`) implemented.  

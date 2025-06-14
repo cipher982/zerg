@@ -103,6 +103,14 @@ class WorkflowExecutionEngine:
         )
         db.add(execution)
         db.commit()
+
+        # Final summary line
+        self._publish_node_log(
+            execution_id=execution.id,
+            node_id="workflow",
+            stream="stdout",
+            text="Workflow execution completed successfully",
+        )
         db.refresh(execution)
 
         log_lines: list[str] = []
@@ -189,6 +197,14 @@ class WorkflowExecutionEngine:
                     )
 
                     log_lines.append(f"Node {node_id} ({node_type}) executed – OK (attempt {attempt})")
+
+                    # Stream success line so the UI log drawer updates instantly
+                    self._publish_node_log(
+                        execution_id=execution.id,
+                        node_id=node_id,
+                        stream="stdout",
+                        text=f"Node {node_id} succeeded (attempt {attempt})",
+                    )
                     break  # success
 
                 except Exception as exc:  # noqa: BLE001 – placeholder for broad errors
@@ -205,6 +221,14 @@ class WorkflowExecutionEngine:
                             status="retrying",
                             output=None,
                             error=str(exc),
+                        )
+
+                        # Live retry log line
+                        self._publish_node_log(
+                            execution_id=execution.id,
+                            node_id=node_id,
+                            stream="stdout",
+                            text=f"RETRY {attempt + 1}/{max_retries}: {exc}",
                         )
 
                         # sleep back-off (blocking since we are in worker thread)
@@ -241,6 +265,14 @@ class WorkflowExecutionEngine:
                         error=str(exc),
                         duration_ms=self._duration_ms(execution),
                     )
+                    # Also send failure line to log stream
+                    self._publish_node_log(
+                        execution_id=execution.id,
+                        node_id=node_id,
+                        stream="stderr",
+                        text=f"Node {node_id} failed after {attempt + 1} attempt(s): {exc}",
+                    )
+
                     logger.exception("[WorkflowEngine] node execution failed – node_id=%s", node_id)
                     return execution.id
 
@@ -343,6 +375,35 @@ class WorkflowExecutionEngine:
         except RuntimeError:
             loop = asyncio.new_event_loop()
             loop.run_until_complete(event_bus.publish(EventType.EXECUTION_FINISHED, payload))
+            loop.close()
+
+    # ------------------------------------------------------------------
+    # Node log helper – stream stdout/stderr lines
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _publish_node_log(
+        *,
+        execution_id: int,
+        node_id: str,
+        stream: str,
+        text: str,
+    ) -> None:
+        """Publish NODE_LOG event carrying a single log line."""
+
+        payload = {
+            "execution_id": execution_id,
+            "node_id": node_id,
+            "stream": stream,
+            "text": text,
+            "event_type": EventType.NODE_LOG,
+        }
+
+        try:
+            asyncio.run(event_bus.publish(EventType.NODE_LOG, payload))
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(event_bus.publish(EventType.NODE_LOG, payload))
             loop.close()
 
     @staticmethod
