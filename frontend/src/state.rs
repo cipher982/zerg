@@ -1561,6 +1561,7 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::FetchAgentRuns(_) |
             cmd @ Command::FetchAgentDetails(_) => crate::command_executors::execute_fetch_command(cmd),
             cmd @ Command::FetchWorkflows => crate::command_executors::execute_fetch_command(cmd),
+            cmd @ Command::FetchExecutionHistory { .. } => crate::command_executors::execute_fetch_command(cmd),
             cmd @ Command::CreateWorkflowApi { .. } |
             cmd @ Command::DeleteWorkflowApi { .. } |
             cmd @ Command::RenameWorkflowApi { .. } |
