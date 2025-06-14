@@ -85,6 +85,10 @@ class TopicConnectionManager:
         # Workflow execution – node progress
         event_bus.subscribe(EventType.NODE_STATE_CHANGED, self._handle_node_state_event)
 
+        # Workflow execution – finished & logs
+        event_bus.subscribe(EventType.EXECUTION_FINISHED, self._handle_execution_finished)
+        event_bus.subscribe(EventType.NODE_LOG, self._handle_node_log)
+
         # User events (e.g., profile updated) – broadcast to dedicated topic
         event_bus.subscribe(EventType.USER_UPDATED, self._handle_user_event)
 
@@ -520,6 +524,28 @@ class TopicConnectionManager:
         topic = f"workflow_execution:{execution_id}"
         serialized_data = jsonable_encoder(data)
         await self.broadcast_to_topic(topic, {"type": "node_state", "data": serialized_data})
+
+    # ------------------------------------------------------------------
+    # Execution finished
+    # ------------------------------------------------------------------
+
+    async def _handle_execution_finished(self, data: Dict[str, Any]) -> None:
+        exec_id = data.get("execution_id")
+        if exec_id is None:
+            return
+        topic = f"workflow_execution:{exec_id}"
+        await self.broadcast_to_topic(topic, {"type": "execution_finished", "data": jsonable_encoder(data)})
+
+    # ------------------------------------------------------------------
+    # Node log streaming
+    # ------------------------------------------------------------------
+
+    async def _handle_node_log(self, data: Dict[str, Any]) -> None:
+        exec_id = data.get("execution_id")
+        if exec_id is None:
+            return
+        topic = f"workflow_execution:{exec_id}"
+        await self.broadcast_to_topic(topic, {"type": "node_log", "data": jsonable_encoder(data)})
 
 
 # Create a global instance of the new connection manager

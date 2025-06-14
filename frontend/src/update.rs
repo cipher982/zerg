@@ -460,6 +460,8 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         | Message::UpdateNodeText { .. }
         | Message::CompleteNodeResponse { .. }
         | Message::UpdateNodeStatus { .. }
+        | Message::ExecutionFinished { .. }
+        | Message::AppendExecutionLog { .. }
         
         | Message::AnimationTick => {
             // Fire async command to backend
@@ -481,11 +483,29 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 let handler: crate::network::topic_manager::TopicHandler = Rc::new(RefCell::new(move |payload: serde_json::Value| {
                     use crate::network::ws_schema::WsMessage;
                     if let Ok(parsed) = serde_json::from_value::<WsMessage>(payload) {
-                        if let WsMessage::NodeState { data } = parsed {
-                            crate::state::dispatch_global_message(Message::UpdateNodeStatus {
-                                node_id: data.node_id.clone(),
-                                status: data.status.clone(),
-                            });
+                        match parsed {
+                            WsMessage::NodeState { data } => {
+                                crate::state::dispatch_global_message(Message::UpdateNodeStatus {
+                                    node_id: data.node_id.clone(),
+                                    status: data.status.clone(),
+                                });
+                            }
+                            WsMessage::ExecutionFinished { data } => {
+                                crate::state::dispatch_global_message(Message::ExecutionFinished {
+                                    execution_id: data.execution_id,
+                                    status: data.status.clone(),
+                                    error: data.error.clone(),
+                                });
+                            }
+                            WsMessage::NodeLog { data } => {
+                                crate::state::dispatch_global_message(Message::AppendExecutionLog {
+                                    execution_id: data.execution_id,
+                                    node_id: data.node_id.clone(),
+                                    stream: data.stream.clone(),
+                                    text: data.text.clone(),
+                                });
+                            }
+                            _ => {}
                         }
                     }
                 }));

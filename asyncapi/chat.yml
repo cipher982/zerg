@@ -61,6 +61,25 @@ channels:
       AgentEvent:
         $ref: '#/components/messages/AgentEvent'
 
+  # ---------------------------------------------------------------------
+  #  New: Workflow execution status & logs (visual workflow canvas)
+  # ---------------------------------------------------------------------
+
+  WorkflowExecutionChannel:
+    address: workflow_execution:{execution_id}
+    description: Live per-node updates, finish event and logs for a workflow execution.
+    parameters:
+      execution_id:
+        description: Numeric identifier of the execution run.
+        examples: ["123"]
+    messages:
+      NodeState:
+        $ref: '#/components/messages/NodeState'
+      ExecutionFinished:
+        $ref: '#/components/messages/ExecutionFinished'
+      NodeLog:
+        $ref: '#/components/messages/NodeLog'
+
 # ---------------------------------------------------------------------------
 # Components – messages & examples
 # ---------------------------------------------------------------------------
@@ -121,6 +140,28 @@ components:
       name: AgentEvent
       payload:
         $ref: '#/components/schemas/AgentEvent'
+
+    # ------------------------------------------------------------------
+    #  Workflow execution messages
+    # ------------------------------------------------------------------
+
+    NodeState:
+      name: NodeState
+      summary: Per-node live status update during workflow execution.
+      payload:
+        $ref: '#/components/schemas/NodeState'
+
+    ExecutionFinished:
+      name: ExecutionFinished
+      summary: Emitted once when the entire workflow run finishes.
+      payload:
+        $ref: '#/components/schemas/ExecutionFinished'
+
+    NodeLog:
+      name: NodeLog
+      summary: Single stdout/stderr line emitted by a node while running.
+      payload:
+        $ref: '#/components/schemas/NodeLog'
 
   schemas:
     # Envelope and other schemas copied from previous draft -----------------
@@ -210,6 +251,80 @@ components:
           data:
             status: "RUNNING"
             run_id: "run_123"
+
+    # ------------------------------------------------------------------
+    #  Workflow execution schemas
+    # ------------------------------------------------------------------
+
+    NodeState:
+      type: object
+      required: [type, execution_id, node_id, status]
+      properties:
+        type:
+          const: node_state
+        execution_id:
+          type: integer
+        node_id:
+          type: string
+        status:
+          type: string
+          enum: [running, success, failed]
+        output:
+          type: object
+          nullable: true
+        error:
+          type: string
+          nullable: true
+      examples:
+        - type: node_state
+          execution_id: 123
+          node_id: "uid-7"
+          status: running
+
+    ExecutionFinished:
+      type: object
+      required: [type, execution_id, status]
+      properties:
+        type:
+          const: execution_finished
+        execution_id:
+          type: integer
+        status:
+          type: string
+          enum: [success, failed]
+        error:
+          type: string
+          nullable: true
+        duration_ms:
+          type: integer
+          nullable: true
+      examples:
+        - type: execution_finished
+          execution_id: 123
+          status: success
+          duration_ms: 8421
+
+    NodeLog:
+      type: object
+      required: [type, execution_id, node_id, stream, text]
+      properties:
+        type:
+          const: node_log
+        execution_id:
+          type: integer
+        node_id:
+          type: string
+        stream:
+          type: string
+          enum: [stdout, stderr]
+        text:
+          type: string
+      examples:
+        - type: node_log
+          execution_id: 123
+          node_id: "uid-7"
+          stream: stdout
+          text: "Connecting to database…"
 
     # Heart-beat ping / pong ----------------------------------------------
 
@@ -345,6 +460,28 @@ operations:
     channel: { $ref: '#/channels/AgentChannel' }
     messages:
       - $ref: '#/channels/AgentChannel/messages/AgentEvent'
+
+  # -------------------------------------------------------------------
+  #  Workflow execution operations
+  # -------------------------------------------------------------------
+
+  ReceiveNodeState:
+    action: receive
+    channel: { $ref: '#/channels/WorkflowExecutionChannel' }
+    messages:
+      - $ref: '#/channels/WorkflowExecutionChannel/messages/NodeState'
+
+  ReceiveExecutionFinished:
+    action: receive
+    channel: { $ref: '#/channels/WorkflowExecutionChannel' }
+    messages:
+      - $ref: '#/channels/WorkflowExecutionChannel/messages/ExecutionFinished'
+
+  ReceiveNodeLog:
+    action: receive
+    channel: { $ref: '#/channels/WorkflowExecutionChannel' }
+    messages:
+      - $ref: '#/channels/WorkflowExecutionChannel/messages/NodeLog'
 
   ReceivePing:
     action: receive
