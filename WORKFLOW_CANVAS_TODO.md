@@ -145,10 +145,9 @@ engine; payload shape is considered **beta** until DAG support lands.
 ### 2.3. Workflow Execution UI & UX polish
 - [ ] **Add rich execution feedback**
     - [x] Highlight nodes on **running / success / failed** (colour-coded).
-    - [ ] Spinner / pulse states on the ▶︎ *Run* button (start → running → ok/error).
+    - [x] Spinner / pulse states on the ▶︎ *Run* button (start → running → ok/error) – **implemented Jul-14-2025**.
     - [ ] Glow animation on *connections* while a node is running.
-    - [ ] **Log drawer** (collapsible, 25 vh) that streams `node_log` frames.
-        * Backend must emit `node_log` envelope; see Section 0 below.*
+    - [x] **Log drawer** (collapsible, 25 vh) streaming live `node_log` frames – backend & initial UI merged (toggle via 📜 button).
         * Backend emitter implemented (Jul-14-2025) – front-end still needs UI.*
     - [ ] Display execution history and allow inspection of past runs.
     - [ ] Manual & scheduled execution triggers from the UI.
