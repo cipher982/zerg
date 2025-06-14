@@ -493,6 +493,13 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 let _ = tm.subscribe(topic, handler);
             })));
         }
+
+        // -------------------------------------------------------------------
+        // Start workflow execution – triggers API call command
+        // -------------------------------------------------------------------
+        Message::StartWorkflowExecution { workflow_id } => {
+            commands.push(Command::StartWorkflowExecutionApi { workflow_id });
+        }
         Message::CreateWorkflow { name } => {
             commands.push(Command::CreateWorkflowApi { name: name.clone() });
         }

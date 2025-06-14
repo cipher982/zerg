@@ -114,6 +114,16 @@ fn setup_keyboard_shortcuts() -> Result<(), JsValue> {
                 dispatch_global_message(Message::ResetView);
                 e.prevent_default();
             }
+            "r" | "R" => {
+                // Cmd/Ctrl + R triggers browser refresh; intercept only when
+                // *not* pressed with meta/ctrl to avoid hijacking.
+                if !e.meta_key() && !e.ctrl_key() {
+                    if let Some(current_id) = crate::state::APP_STATE.with(|st| st.borrow().current_workflow_id) {
+                        dispatch_global_message(Message::StartWorkflowExecution { workflow_id: current_id });
+                    }
+                    e.prevent_default();
+                }
+            }
             _ => {}
         }
     }));

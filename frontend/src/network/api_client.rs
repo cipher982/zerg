@@ -93,6 +93,23 @@ impl ApiClient {
         Self::fetch_json(&url, "PATCH", Some(&body)).await
     }
 
+    // -------------------------------------------------------------------
+    // Workflow execution – run & status
+    // -------------------------------------------------------------------
+
+    /// Start an execution for the given workflow ID.  Returns the JSON
+    /// response from the backend which contains at least
+    /// `{ "execution_id": <u32>, "status": "running" }`.
+    pub async fn start_workflow_execution(workflow_id: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/{}/start",
+            Self::api_base_url(),
+            workflow_id
+        );
+
+        Self::fetch_json(&url, "POST", None).await
+    }
+
     // Get all agents
     pub async fn get_agents_scoped(scope: &str) -> Result<String, JsValue> {
         let url = format!("{}/api/agents?scope={}", Self::api_base_url(), scope);
