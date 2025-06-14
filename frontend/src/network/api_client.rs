@@ -33,6 +33,17 @@ impl ApiClient {
         super::get_api_base_url().expect("API base URL must be set (no fallback allowed)")
     }
 
+    // -------------------------------------------------------------------
+    // Workflow execution history
+    // -------------------------------------------------------------------
+
+    pub async fn get_execution_history(workflow_id: u32, limit: u32) -> Result<String, JsValue> {
+        let base = Self::api_base_url();
+        // Backend currently ignores limit param but we include for forward-compat
+        let url = format!("{}/api/workflow-executions/history/{}?limit={}", base, workflow_id, limit);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
     // ---------------- Agent Runs ----------------
 
     /// Fetch most recent runs for an agent (limit parameter default 20)

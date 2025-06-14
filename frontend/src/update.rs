@@ -65,6 +65,56 @@ pub fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>
             if let Some(el) = &main_c { show(el); }
             if let Some(btn) = &main_t { set_active(btn); }
         }
+
+        // -------------------------------------------------------------------
+        // Execution history drawer
+        // -------------------------------------------------------------------
+
+        // Execution history drawer ----------------------------
+        Message::ToggleExecutionHistory => {
+            state.exec_history_open = !state.exec_history_open;
+            needs_refresh = true;
+
+            // Trigger load when opening
+            if state.exec_history_open {
+                if let Some(wf_id) = state.current_workflow_id {
+                    wasm_bindgen_futures::spawn_local(async move {
+                        match crate::network::ApiClient::get_execution_history(wf_id as u32, 20).await {
+                            Ok(body) => {
+                                if let Ok(vec) = serde_json::from_str::<Vec<crate::models::ExecutionSummary>>(&body) {
+                                    crate::state::dispatch_global_message(Message::ExecutionHistoryLoaded(vec));
+                                }
+                            }
+                            Err(e) => web_sys::console::error_1(&format!("execution history fetch error: {:?}", e).into()),
+                        }
+                    });
+                }
+            }
+
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::execution_sidebar::refresh(&doc);
+                }
+            })));
+        }
+
+        Message::ExecutionHistoryLoaded(history) => {
+            state.executions = history;
+            needs_refresh = true;
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::execution_sidebar::refresh(&doc);
+                }
+            })));
+        }
+
+        Message::SelectExecution { execution_id } => {
+            state.current_execution = Some(crate::state::ExecutionStatus {
+                execution_id,
+                status: crate::state::ExecPhase::Running,
+            });
+            needs_refresh = true;
+        }
         AgentConfigTab::History => {
             if let Some(el) = &hist_c { show(el); }
             if let Some(btn) = &hist_t { set_active(btn); }

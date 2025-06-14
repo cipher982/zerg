@@ -231,6 +231,10 @@ pub struct AppState {
 
     pub current_execution: Option<ExecutionStatus>,
     pub execution_logs: Vec<ExecutionLog>,
+
+    // Execution history sidebar
+    pub exec_history_open: bool,
+    pub executions: Vec<crate::models::ExecutionSummary>,
     pub logs_open: bool,
 
     // (duplicate fields removed)
@@ -591,6 +595,8 @@ impl AppState {
 
             current_execution: None,
             execution_logs: Vec::new(),
+            exec_history_open: false,
+            executions: Vec::new(),
             logs_open: false,
         }
     }
