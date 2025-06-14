@@ -553,6 +553,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::CreateWorkflow { name } => {
             commands.push(Command::CreateWorkflowApi { name: name.clone() });
         }
+
+        Message::RenameWorkflow { workflow_id, name, description } => {
+            commands.push(Command::RenameWorkflowApi { workflow_id, name: name.clone(), description: description.clone() });
+        }
+
+        Message::DeleteWorkflow { workflow_id } => {
+            commands.push(Command::DeleteWorkflowApi { workflow_id });
+        }
         Message::SelectWorkflow { workflow_id } => {
             state.current_workflow_id = Some(workflow_id);
             needs_refresh = true;
@@ -608,6 +616,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // -------------------------------------------------------------------
         // Live workflow execution updates
         // -------------------------------------------------------------------
+
         Message::ExecutionFinished { execution_id, status, error } => {
             if let Some(exec) = &mut state.current_execution {
                 if exec.execution_id == 0 || exec.execution_id == execution_id {
