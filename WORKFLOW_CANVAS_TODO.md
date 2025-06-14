@@ -263,10 +263,10 @@ Deliverables: green pytest suite for
    • Increment attempt counter, sleep according to back-off, then retry.
    • Emit `node_log` line `RETRY n/…` and update `NodeState` → `retrying`.
 
-3. **User Cancellation**
-   • Expose `/api/workflow_executions/{id}/cancel` (PATCH + body `{reason}`)  
-   • Engine cooperatively checks a cancellation flag before starting the next
-     node.
+3. **User Cancellation**  ✅ **DONE (Aug-2025)**
+   • `/api/workflow_executions/{id}/cancel` (PATCH + body `{reason}`) implemented.  
+   • Engine now cooperatively checks a cancellation flag before each node and just before
+     marking success, exiting early when requested.
 
 4. **Tests**
    • Unit tests for back-off timing (monkeypatch `asyncio.sleep`).  
