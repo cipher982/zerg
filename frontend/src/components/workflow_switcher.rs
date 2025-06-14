@@ -2,6 +2,7 @@
 //! create new ones.  First iteration – no rename or delete yet.
 
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{Document};
 
@@ -125,6 +126,86 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
         cb.forget();
     }
     dropdown_menu.append_child(&clear_btn)?;
+
+    // --------------------------------------------------------------
+    // Rename workflow action
+    // --------------------------------------------------------------
+    let rename_btn = document.create_element("button")?;
+    rename_btn.set_attribute("type", "button")?;
+    rename_btn.set_inner_html("Rename Workflow");
+    rename_btn.set_attribute("class", "dropdown-item")?;
+    {
+        let dropdown_menu_clone = dropdown_menu.clone();
+        let dropdown_toggle_clone = dropdown_toggle.clone();
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            // Close dropdown
+            let _ = dropdown_menu_clone.class_list().remove_1("show");
+            let _ = dropdown_toggle_clone.class_list().remove_1("active");
+
+            // Ask for new name & description
+            let win = web_sys::window().unwrap();
+            let new_name_opt = win.prompt_with_message("New workflow name?").unwrap_or(None);
+            if let Some(new_name) = new_name_opt {
+                let new_name = new_name.trim();
+                if !new_name.is_empty() {
+                    let desc_opt = win.prompt_with_message("Description (optional)").unwrap_or(None);
+                    let description = desc_opt.unwrap_or_default();
+                    // Dispatch rename command
+                    crate::state::APP_STATE.with(|st| {
+                        if let Some(current_id) = st.borrow().current_workflow_id {
+                    crate::state::dispatch_global_message(
+                        crate::messages::Message::RenameWorkflow {
+                            workflow_id: current_id,
+                            name: new_name.to_string(),
+                            description: description.clone(),
+                        }
+                    );
+                        } else {
+                            web_sys::console::warn_1(&"No workflow selected to rename".into());
+                        }
+                    });
+                }
+            }
+        }));
+        rename_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+    dropdown_menu.append_child(&rename_btn)?;
+
+    // --------------------------------------------------------------
+    // Delete workflow action
+    // --------------------------------------------------------------
+    let delete_btn = document.create_element("button")?;
+    delete_btn.set_attribute("type", "button")?;
+    delete_btn.set_inner_html("Delete Workflow");
+    delete_btn.set_attribute("class", "dropdown-item danger")?;
+    {
+        let dropdown_menu_clone = dropdown_menu.clone();
+        let dropdown_toggle_clone = dropdown_toggle.clone();
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            // Close dropdown
+            let _ = dropdown_menu_clone.class_list().remove_1("show");
+            let _ = dropdown_toggle_clone.class_list().remove_1("active");
+
+            let confirm = web_sys::window().unwrap().confirm_with_message("Are you sure you want to delete this workflow? This can be restored by support within 30 days.").unwrap_or(false);
+            if !confirm {
+                return;
+            }
+
+            crate::state::APP_STATE.with(|st| {
+                if let Some(current_id) = st.borrow().current_workflow_id {
+                    crate::state::dispatch_global_message(
+                        crate::messages::Message::DeleteWorkflow { workflow_id: current_id }
+                    );
+                } else {
+                    web_sys::console::warn_1(&"No workflow selected to delete".into());
+                }
+            });
+        }));
+        delete_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+    dropdown_menu.append_child(&delete_btn)?;
     dropdown_container.append_child(&dropdown_toggle)?;
     dropdown_container.append_child(&dropdown_menu)?;
     actions_el.append_child(&dropdown_container)?;

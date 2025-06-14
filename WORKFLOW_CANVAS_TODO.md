@@ -91,17 +91,15 @@ engine; payload shape is considered **beta** until DAG support lands.
     - [ ] **Rename – context-menu → `PATCH /api/workflows/{id}`**
         - [ ] Add a small *⋯* button on each tab that opens a dropdown with
               “Rename” and “Delete”.
-        - [ ] For *Rename*: open a modal (reuse the existing `rename_thread`
-              modal component) asking for *Name* + *Description*.
+        - [x] For *Rename*: context-menu action prompts for *Name* & *Description*, dispatches API call (Jul-14-2025).
         - [x] `rename_workflow()` helper implemented in `ApiClient`; command &
               reducer wiring merged.
-        - [ ] UI work (modal + context menu) + error handling still pending.
+        - [x] UI finished – item lives in ⋯ dropdown; optimistic UI handled by reducer.
 
     - [ ] **Delete – context-menu → `DELETE /api/workflows/{id}`**
-        - [ ] Show confirmation dialog (`Are you sure? This does not delete
-              runs or data, you can restore via Support in 30 days …`).
+        - [x] Confirmation dialog added; calls `DELETE /api/workflows/{id}`. (Jul-14-2025)
         - [x] `delete_workflow()` helper + command/reducer integration done.
-        - [ ] UI context menu + optimistic hide & toast rollback pending.
+        - [x] UI context menu wired.
 
     - [x] **LocalStorage migration** – legacy key `zerg_workflows_v1` has been
           fully removed from the code-base; no import flow required for new

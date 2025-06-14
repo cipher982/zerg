@@ -99,6 +99,16 @@ pub enum Message {
         label: Option<String>,
     },
 
+    // Workflow rename/delete actions coming from UI
+    RenameWorkflow {
+        workflow_id: u32,
+        name: String,
+        description: String,
+    },
+    DeleteWorkflow {
+        workflow_id: u32,
+    },
+
     // Workflows fetched from backend
     WorkflowsLoaded(Vec<crate::models::Workflow>),
     /// Workflow successfully created via backend
