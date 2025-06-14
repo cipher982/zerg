@@ -216,6 +216,9 @@ pub enum Message {
         text: String,
     },
 
+    /// Toggle the collapsible execution log drawer
+    ToggleLogDrawer,
+
     /// User clicked Run – initiate backend execution and subscribe to progress.
     StartWorkflowExecution {
         workflow_id: u32,

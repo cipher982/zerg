@@ -519,6 +519,12 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
                 let _ = tm.subscribe(topic, handler);
             })));
+
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
+                }
+            })));
         }
 
         // -------------------------------------------------------------------
@@ -531,6 +537,18 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             });
             state.execution_logs.clear();
             commands.push(Command::StartWorkflowExecutionApi { workflow_id });
+
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
+                }
+            })));
+
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::log_drawer::refresh(&doc);
+                }
+            })));
         }
         Message::CreateWorkflow { name } => {
             commands.push(Command::CreateWorkflowApi { name: name.clone() });
@@ -550,6 +568,16 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
                     let _ = crate::components::workflow_switcher::refresh(&doc);
+                }
+            })));
+        }
+
+        Message::ExecutionFinished { .. } | Message::AppendExecutionLog { .. } => {
+            // After state updated above we need to refresh run button and log drawer
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
+                    let _ = crate::components::log_drawer::refresh(&doc);
                 }
             })));
         }
@@ -606,6 +634,17 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     needs_refresh = true;
                 }
             }
+        }
+
+        // UI toggle for log drawer
+        Message::ToggleLogDrawer => {
+            state.logs_open = !state.logs_open;
+            needs_refresh = true;
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::log_drawer::refresh(&doc);
+                }
+            })));
         }
         Message::WorkflowsLoaded(workflows) => {
             state.workflows.clear();

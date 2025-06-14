@@ -21,6 +21,19 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     bar_el.set_attribute("id", "workflow-bar")?;
     bar_el.set_attribute("class", "workflow-bar")?;
 
+    // Inject run-button CSS once
+    if document.get_element_by_id("run-btn-style").is_none() {
+        let style_el = document.create_element("style")?;
+        style_el.set_attribute("id", "run-btn-style")?;
+        style_el.set_text_content(Some(r#"
+.run-btn.running{pointer-events:none;animation:spin 1s linear infinite;}
+.run-btn.success{color:#6bff92;}
+.run-btn.failed{color:#ff4e4e;}
+@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+"#));
+        document.body().unwrap().append_child(&style_el)?;
+    }
+
     let list_el = document.create_element("ul")?;
     list_el.set_attribute("class", "workflow-tab-list")?;
 
@@ -51,7 +64,22 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
         cb.forget();
     }
 
-    actions_el.append_child(&run_btn)?;
+    let _ = actions_el.append_child(&run_btn);
+
+    // Logs button 📜
+    let logs_btn = document.create_element("button")?;
+    logs_btn.set_attribute("type", "button")?;
+    logs_btn.set_inner_html("📜");
+    logs_btn.set_attribute("class", "toolbar-btn")?;
+    logs_btn.set_attribute("title", "Toggle Logs")?;
+    {
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            crate::state::dispatch_global_message(crate::messages::Message::ToggleLogDrawer);
+        }));
+        logs_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+    let _ = actions_el.append_child(&logs_btn);
 
     // Center view button
     let center_btn = document.create_element("button")?;
@@ -242,6 +270,40 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
     cb_new.forget();
 
     list_el.append_child(&plus_li)?;
+
+    // Update run button state if it exists
+    update_run_button(document)?;
+
+    Ok(())
+}
+
+/// Update the ▶︎ Run button CSS classes based on AppState.current_execution.
+/// Adds one of: `running`, `success`, `failed` or removes all for idle.
+pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
+    use crate::state::{APP_STATE, ExecPhase};
+
+    if let Some(btn) = document.get_element_by_id("run-workflow-btn") {
+        let class_list = btn.class_list();
+        let _ = class_list.remove_1("running");
+        let _ = class_list.remove_1("success");
+        let _ = class_list.remove_1("failed");
+
+        let phase_opt = APP_STATE.with(|st| st.borrow().current_execution.clone().map(|e| e.status));
+
+        if let Some(phase) = phase_opt {
+            match phase {
+                ExecPhase::Running | ExecPhase::Starting => {
+                    let _ = class_list.add_1("running");
+                }
+                ExecPhase::Success => {
+                    let _ = class_list.add_1("success");
+                }
+                ExecPhase::Failed => {
+                    let _ = class_list.add_1("failed");
+                }
+            }
+        }
+    }
 
     Ok(())
 }
