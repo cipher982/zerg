@@ -5,6 +5,7 @@ supporting subscription to agent and thread events.
 """
 
 import logging
+import os
 from typing import Any
 from typing import Dict
 from typing import List
@@ -12,11 +13,19 @@ from typing import Optional
 
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from zerg.config import _truthy  # type: ignore  # pylint: disable=protected-access
+from zerg.config import get_settings
 from zerg.crud import crud
 from zerg.schemas.schemas import UserOut
 from zerg.schemas.ws_messages import AgentStateMessage
+
+# ---------------------------------------------------------------------------
+# Message & envelope helpers
+# ---------------------------------------------------------------------------
+from zerg.schemas.ws_messages import Envelope
 from zerg.schemas.ws_messages import ErrorMessage
 from zerg.schemas.ws_messages import MessageType
 from zerg.schemas.ws_messages import PingMessage
@@ -66,7 +75,13 @@ async def send_to_client(client_id: str, message: Dict[str, Any]) -> bool:
         return False
 
 
-async def send_error(client_id: str, error_msg: str, message_id: Optional[str] = None) -> None:
+async def send_error(
+    client_id: str,
+    error_msg: str,
+    message_id: Optional[str] = None,
+    *,
+    close_code: int | None = None,
+) -> None:
     """Send an error message to a client.
 
     Args:
@@ -81,6 +96,15 @@ async def send_error(client_id: str, error_msg: str, message_id: Optional[str] =
     )
     await send_to_client(client_id, error.model_dump())
 
+    # Optionally close the socket with a specific WebSocket close code.  We
+    # perform the close *after* sending the error frame so the client learns
+    # the reason before the connection drops.
+    if close_code is not None and client_id in topic_manager.active_connections:
+        try:
+            await topic_manager.active_connections[client_id].close(code=close_code)
+        except Exception:  # noqa: BLE001 – ignore errors during close
+            pass
+
 
 async def handle_ping(client_id: str, message: Dict[str, Any], _: Session) -> None:
     """Handle ping messages to keep connection alive.
@@ -92,15 +116,60 @@ async def handle_ping(client_id: str, message: Dict[str, Any], _: Session) -> No
     """
     try:
         ping_msg = PingMessage(**message)
-        pong = PongMessage(
+
+        # Build the *raw* pong payload (same shape as before the envelope
+        # upgrade) so existing consumers that have not opted in to V2 still
+        # work unchanged.
+        pong_payload = PongMessage(
             type=MessageType.PONG,
             message_id=ping_msg.message_id,
             timestamp=ping_msg.timestamp,
-        )
-        await send_to_client(client_id, pong.model_dump())
+        ).model_dump()
+
+        # Recompute envelope flag on **every** ping so tests that mutate the
+        # environment mid-process pick up the change without clearing
+        # ``functools.lru_cache`` used by :pyfunc:`get_settings`.
+        _envelope_enabled = get_settings().ws_envelope_v2 or _truthy(os.getenv("WS_ENVELOPE_V2"))
+
+        if _envelope_enabled:
+            # Wrap in protocol-level envelope so the frontend can rely on the
+            # unified structure.  We treat all ping/pong traffic as a
+            # *system* message which is consistent with the existing
+            # heartbeat implementation in ``TopicConnectionManager``.
+            envelope = Envelope.create(
+                message_type="PONG",
+                topic="system",
+                data=pong_payload,
+                req_id=ping_msg.message_id,
+            )
+
+            await send_to_client(client_id, envelope.model_dump())
+        else:
+            # Legacy – send bare payload
+            await send_to_client(client_id, pong_payload)
+
     except Exception as e:
-        logger.error(f"Error handling ping: {str(e)}")
+        logger.error("Error handling ping: %s", e)
         await send_error(client_id, "Failed to process ping")
+
+
+# ---------------------------------------------------------------------------
+# Heart-beat response (client → pong)
+# ---------------------------------------------------------------------------
+
+
+async def handle_pong(client_id: str, message: Dict[str, Any], _: Session) -> None:  # noqa: D401
+    """Handle *pong* frames sent by clients.
+
+    Simply updates the TopicConnectionManager watchdog so the connection is
+    considered alive. No response is sent back to the client.
+    """
+
+    try:
+        # Validate schema (already done centrally) then record pong.
+        topic_manager.record_pong(client_id)
+    except Exception as exc:
+        logger.debug("Failed to record pong from %s: %s", client_id, exc)
 
 
 # Topic subscription handlers for different topic types
@@ -296,11 +365,29 @@ async def handle_unsubscribe(client_id: str, message: Dict[str, Any], _: Session
 # Message handler dispatcher
 MESSAGE_HANDLERS = {
     "ping": handle_ping,
+    "pong": handle_pong,
     "subscribe": handle_subscribe,
     "unsubscribe": handle_unsubscribe,
     # Thread‑specific handlers used by higher‑level chat API
     "subscribe_thread": None,  # populated below
     "send_message": None,  # populated below
+}
+
+# ---------------------------------------------------------------------------
+# Runtime inbound payload validation (Phase 2 groundwork)
+# ---------------------------------------------------------------------------
+
+# Mapping of *client → server* message types to their strict Pydantic models.
+# We validate the incoming JSON before it reaches individual handlers so that
+# malformed payloads are rejected consistently in one place.
+
+_INBOUND_SCHEMA_MAP: Dict[str, type[BaseModel]] = {
+    "ping": PingMessage,
+    "pong": PongMessage,
+    "subscribe": SubscribeMessage,
+    "unsubscribe": UnsubscribeMessage,
+    "subscribe_thread": SubscribeThreadMessage,
+    "send_message": SendMessageRequest,
 }
 
 
@@ -391,10 +478,38 @@ async def dispatch_message(client_id: str, message: Dict[str, Any], db: Session)
     """
     try:
         message_type = message.get("type")
-        if message_type in MESSAGE_HANDLERS:
-            await MESSAGE_HANDLERS[message_type](client_id, message, db)
-        else:
+        # ------------------------------------------------------------------
+        # 1) Fast-fail on completely unknown "type" field.
+        # ------------------------------------------------------------------
+        if message_type not in MESSAGE_HANDLERS:
             await send_error(client_id, f"Unknown message type: {message_type}")
+            return
+
+        # ------------------------------------------------------------------
+        # 2) Schema validation using Pydantic models defined in
+        #    ``_INBOUND_SCHEMA_MAP``.  We do **not** trust handlers to repeat
+        #    validation – doing it centrally prevents duplicate effort and
+        #    guarantees identical error semantics across all message types.
+        # ------------------------------------------------------------------
+
+        model_cls = _INBOUND_SCHEMA_MAP.get(message_type)
+        if model_cls is not None:
+            try:
+                # Pydantic v2 – ``model_validate`` is the zero-copy validator.
+                model_cls.model_validate(message)
+            except ValidationError as exc:
+                logger.debug("Schema validation failed for %s: %s", message_type, exc)
+                await send_error(
+                    client_id,
+                    "INVALID_PAYLOAD",
+                    message.get("message_id"),
+                    close_code=1002,
+                )
+                # Draft spec says we should close with 1002 on protocol error;
+                return
+
+        # If validation passed (or no schema yet), forward to handler.
+        await MESSAGE_HANDLERS[message_type](client_id, message, db)
     except Exception as e:
         logger.error(f"Error dispatching message: {str(e)}")
         await send_error(client_id, "Failed to process message")

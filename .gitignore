@@ -186,3 +186,7 @@ e2e/test-results
 .clinerules
 *.pw_tmp*
 *.db
+frontend/tmp/*
+backend/zerg/ws_schema/
+frontend/generated/
+node_modules/

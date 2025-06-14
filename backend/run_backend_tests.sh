@@ -19,5 +19,5 @@ mkdir -p "$XDG_CACHE_HOME" "$TMPDIR"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Run all tests with verbose output
-uv run pytest tests/ -p no:warnings --tb=short
+# Run all tests (additional args forwarded, e.g. -k pattern)
+uv run pytest tests/ -p no:warnings --tb=short "$@"

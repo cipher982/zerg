@@ -168,35 +168,47 @@ impl TopicManager {
     /// Routes an incoming message (parsed JSON) to the appropriate topic handlers.
     /// Determines the topic based on message content (e.g., `type` and `data` fields).
     pub fn route_incoming_message(&self, message: serde_json::Value) {
-        // Handle administrative messages that don't belong to a topic
-        if let Some("unsubscribe_success") = message.get("type").and_then(|t| t.as_str()) {
-            web_sys::console::debug_1(&"Received unsubscribe confirmation".into());
-            return;
-        }
+        use crate::network::ws_schema::Envelope;
 
-        use crate::network::ws_schema::WsMessage;
+        // Attempt to parse as a v2 Envelope first
+        if let Ok(envelope) = serde_json::from_value::<Envelope>(message.clone()) {
+            // v2 path: need to transform Envelope → legacy flat shape that
+            // downstream handlers (`ChatViewWsManager`, dashboard managers…)
+            // still expect: `{ "type": "…", <payload-fields…> }`.
+            // Move every key from `envelope.data` to the root object and add
+            // the `type` attribute from the envelope itself so the existing
+            // `WsMessage` enum can deserialize successfully.
 
-        // Try to parse via strongly-typed WsMessage.  Any deserialisation
-        // error is considered a *bug* – we log an error but otherwise ignore
-        // the frame so the issue surfaces quickly during development.
+            use serde_json::{json, Value};
 
-        let topic_str_option: Option<String> = match serde_json::from_value::<WsMessage>(message.clone()) {
-            Ok(parsed) => parsed.topic(),
-            Err(err) => {
-                web_sys::console::error_1(&format!("TopicManager: failed to parse WS message: {:?} – raw: {:?}", err, message).into());
-                None
-            }
-        };
+            let mut merged = match envelope.data {
+                Value::Object(map) => map,
+                other => {
+                    // In the unlikely case `data` is not an object pass the
+                    // original envelope for debugging – downstream will log
+                    // an error for unmatched shape.
+                    self.dispatch_to_topic_handlers(&envelope.topic, json!({
+                        "type": envelope.r#type,
+                        "data": other,
+                    }));
+                    return;
+                }
+            };
 
-        if let Some(topic_str) = topic_str_option {
-            self.dispatch_to_topic_handlers(&topic_str, message);
-        } else if let Some(t) = message.get("type").and_then(|t| t.as_str()) {
-            // Non-topic frames – log but do not treat as fatal.
-            match t {
-                "ping" => web_sys::console::debug_1(&"WS ping received".into()),
-                "pong" => web_sys::console::debug_1(&"WS pong received".into()),
-                "error" => web_sys::console::error_1(&format!("Received WS error frame: {:?}", message).into()),
-                other => web_sys::console::error_1(&format!("Unhandled WS frame type '{}': {:?}", other, message).into()),
+            // Insert the `type` discriminator (always lower-case to match
+            // `WsMessage` discriminators and avoid a huge alias list).
+            merged.insert("type".to_string(), Value::String(envelope.r#type.to_lowercase()));
+
+            self.dispatch_to_topic_handlers(&envelope.topic, Value::Object(merged));
+        } else {
+            // Fallback to v1 parsing
+            use crate::network::ws_schema::WsMessage;
+            if let Ok(parsed) = serde_json::from_value::<WsMessage>(message.clone()) {
+                if let Some(topic_str) = parsed.topic() {
+                    self.dispatch_to_topic_handlers(&topic_str, message);
+                }
+            } else {
+                web_sys::console::error_1(&format!("Failed to parse incoming message as Envelope or WsMessage: {:?}", message).into());
             }
         }
     }

@@ -62,6 +62,7 @@ async def patch_layout(
     payload: LayoutUpdate,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+    workflow_id: Optional[int] = None,
 ) -> Response:
     """Upsert the authenticated user's canvas layout."""
 
@@ -69,7 +70,13 @@ async def patch_layout(
     nodes_dict = {k: v.dict() for k, v in payload.nodes.items()}
     viewport_dict = payload.viewport.dict() if payload.viewport is not None else None
 
-    crud.upsert_canvas_layout(db, getattr(current_user, "id", None), nodes_dict, viewport_dict)
+    crud.upsert_canvas_layout(
+        db,
+        getattr(current_user, "id", None),
+        nodes_dict,
+        viewport_dict,
+        workflow_id,
+    )
 
     # Consider broadcasting update over WebSocket in a future enhancement.
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -79,10 +86,11 @@ async def patch_layout(
 async def get_layout(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
+    workflow_id: Optional[int] = None,
 ):
     """Return the stored layout for the authenticated user (if any)."""
 
-    layout = crud.get_canvas_layout(db, getattr(current_user, "id", None))
+    layout = crud.get_canvas_layout(db, getattr(current_user, "id", None), workflow_id)
     if layout is None:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 

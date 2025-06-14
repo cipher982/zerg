@@ -2,11 +2,14 @@
 # Keep stdlib ``datetime`` for type annotations; runtime *now()* comes from
 # ``utc_now``.
 from datetime import datetime
+
+# Standard library typing helpers
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import selectinload
 
@@ -35,7 +38,13 @@ from zerg.schemas.schemas import RunTrigger
 from zerg.utils.time import utc_now
 
 
-def _validate_cron_or_raise(expr: str | None):
+# Our minimum runtime is Python 3.12 so the PEP-604 ``T | None`` syntax is
+# available everywhere, but we still use ``Optional`` in a few places to keep
+# the signatures short when multiple union members would otherwise be
+# required.
+# Runtime targets Python ≥3.12 so PEP-604 union syntax is fine.
+# Python <3.10 does not support PEP-604 union for `None` at *runtime* inside
+def _validate_cron_or_raise(expr: Optional[str]):
     """Raise ``ValueError`` if *expr* is not a valid crontab string."""
 
     if expr is None:
@@ -684,6 +693,7 @@ def upsert_canvas_layout(
     user_id: Optional[int],
     nodes: dict,
     viewport: Optional[dict],
+    workflow_id: Optional[int] = None,
 ):
     """Insert **or** update the *canvas layout* for *(user_id, workspace=NULL)*.
 
@@ -699,23 +709,19 @@ def upsert_canvas_layout(
     if user_id is None:
         raise ValueError("upsert_canvas_layout: `user_id` must not be None, auth dependency failed?")
 
-    workspace_val = None  # Reserved for future multi-tenant feature
-
     stmt = (
         insert(CanvasLayout)
         .values(
             user_id=user_id,
-            workspace=workspace_val,
+            workflow_id=workflow_id,
             nodes_json=nodes,
             viewport=viewport,
         )
         .on_conflict_do_update(
-            index_elements=["user_id", "workspace"],
+            index_elements=["user_id", "workflow_id"],
             set_={
                 "nodes_json": nodes,
                 "viewport": viewport,
-                # Explicitly bump timestamp – SQLite will not evaluate the
-                # column default on an UPDATE.
                 "updated_at": func.now(),
             },
         )
@@ -725,16 +731,16 @@ def upsert_canvas_layout(
     db.commit()
 
     # Return the *current* row so callers can inspect the stored payload.
-    return db.query(CanvasLayout).filter_by(user_id=user_id, workspace=None).first()
+    return db.query(CanvasLayout).filter_by(user_id=user_id, workflow_id=workflow_id).first()
 
 
-def get_canvas_layout(db: Session, user_id: Optional[int]):
-    """Return the persisted canvas layout for *user_id* (or None)."""
+def get_canvas_layout(db: Session, user_id: Optional[int], workflow_id: Optional[int] = None):
+    """Return the persisted canvas layout for *(user_id, workflow_id)*."""
 
     if user_id is None:
         return None
 
-    return db.query(CanvasLayout).filter_by(user_id=user_id, workspace=None).first()
+    return db.query(CanvasLayout).filter_by(user_id=user_id, workflow_id=workflow_id).first()
 
 
 def create_workflow(
@@ -742,6 +748,19 @@ def create_workflow(
 ):
     """Create a new workflow."""
     from zerg.models.models import Workflow
+
+    # Check for existing active workflow with the same name for the same owner
+    existing_workflow = (
+        db.query(Workflow)
+        .filter(
+            Workflow.owner_id == owner_id,
+            Workflow.name == name,
+            Workflow.is_active.is_(True),
+        )
+        .first()
+    )
+    if existing_workflow:
+        raise HTTPException(status_code=409, detail="A workflow with this name already exists.")
 
     db_workflow = Workflow(
         owner_id=owner_id,
@@ -753,3 +772,40 @@ def create_workflow(
     db.commit()
     db.refresh(db_workflow)
     return db_workflow
+
+
+# -------------------------------------------------------------------
+# Workflow helpers – list / fetch by id (active only)
+# -------------------------------------------------------------------
+
+
+def get_workflows(
+    db: Session,
+    *,
+    owner_id: int,
+    skip: int = 0,
+    limit: int = 100,
+):
+    """Return active workflows owned by *owner_id*."""
+
+    from zerg.models.models import Workflow as WorkflowModel
+
+    return db.query(WorkflowModel).filter_by(owner_id=owner_id, is_active=True).offset(skip).limit(limit).all()
+
+
+def get_workflow(db: Session, workflow_id: int):
+    from zerg.models.models import Workflow as WorkflowModel
+
+    return db.query(WorkflowModel).filter_by(id=workflow_id).first()
+
+
+def get_workflow_execution(db: Session, execution_id: int):
+    from zerg.models.models import WorkflowExecution
+
+    return db.query(WorkflowExecution).filter_by(id=execution_id).first()
+
+
+def get_workflow_executions(db: Session, workflow_id: int, skip: int = 0, limit: int = 100):
+    from zerg.models.models import WorkflowExecution
+
+    return db.query(WorkflowExecution).filter_by(workflow_id=workflow_id).offset(skip).limit(limit).all()

@@ -22,6 +22,8 @@
   width: min(95vw, 480px);
   box-shadow: var(--shadow-lg);
   animation: modal-pop var(--transition-normal);
+  min-height: 580px;
+  overflow-y: auto;
 }
 
 @keyframes modal-fade {
@@ -48,3 +50,32 @@
   to   { transform: scale(1);    opacity: 1; }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Modal tabs                                                        */
+/* ------------------------------------------------------------------ */
+
+.modal-tabs {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-tabs .tab-button {
+  background: transparent;
+  border: none;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-bottom-color var(--transition-fast);
+  border-bottom: 2px solid transparent;
+}
+
+.modal-tabs .tab-button.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.modal-tabs .tab-button:hover {
+  color: var(--text);
+}

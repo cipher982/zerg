@@ -70,6 +70,98 @@ pub fn execute_fetch_command(cmd: Command) {
             });
         },
 
+        // -----------------------------------------------------------
+        // Workflow helpers (new)
+        // -----------------------------------------------------------
+
+        Command::FetchWorkflows => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_workflows().await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<Vec<crate::models::ApiWorkflow>>(&json_str) {
+                            Ok(api_wfs) => {
+                                let workflows: Vec<crate::models::Workflow> = api_wfs.into_iter().map(|w| w.into()).collect();
+                                dispatch_global_message(Message::WorkflowsLoaded(workflows));
+                            },
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse workflows: {:?}", e).into()),
+                        }
+                    }
+                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch workflows: {:?}", e).into()),
+                }
+            });
+        },
+
+        // ---------------- Workflow CRUD commands -------------------
+
+        Command::CreateWorkflowApi { name } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::create_workflow(&name).await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
+                            Ok(api_wf) => {
+                                let wf: crate::models::Workflow = api_wf.into();
+                                dispatch_global_message(Message::WorkflowCreated(wf));
+                            }
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse created workflow: {:?}", e).into()),
+                        }
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to create workflow: {:?}", e).into());
+                        // Could dispatch error message / toast
+                    }
+                }
+            });
+        }
+        Command::DeleteWorkflowApi { workflow_id } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::delete_workflow(workflow_id).await {
+                    Ok(()) => dispatch_global_message(Message::WorkflowDeleted { workflow_id }),
+                    Err(e) => web_sys::console::error_1(&format!("Failed to delete workflow: {:?}", e).into()),
+                }
+            });
+        }
+        Command::RenameWorkflowApi { workflow_id, name, description } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::rename_workflow(workflow_id, &name, &description).await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
+                            Ok(api_wf) => {
+                                let wf: crate::models::Workflow = api_wf.into();
+                                dispatch_global_message(Message::WorkflowUpdated(wf));
+                            }
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse renamed workflow: {:?}", e).into()),
+                        }
+                    }
+                    Err(e) => web_sys::console::error_1(&format!("Failed to rename workflow: {:?}", e).into()),
+                }
+            });
+        }
+
+        // -----------------------------------------------------------
+        // Start workflow execution – call backend and then subscribe
+        // -----------------------------------------------------------
+        Command::StartWorkflowExecutionApi { workflow_id } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::start_workflow_execution(workflow_id).await {
+                    Ok(json_str) => {
+                        // Expected response: { "execution_id": 123, "status": "running" }
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                            if let Some(exec_id_val) = val.get("execution_id") {
+                                if let Some(exec_id_u64) = exec_id_val.as_u64() {
+                                    let exec_id = exec_id_u64 as u32;
+                                    crate::state::dispatch_global_message(crate::messages::Message::SubscribeWorkflowExecution { execution_id: exec_id });
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to start workflow execution: {:?}", e).into());
+                        // Optionally: dispatch toast / error message here
+                    }
+                }
+            });
+        }
+
         Command::FetchAgentDetails(agent_id) => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_agent_details(agent_id).await {

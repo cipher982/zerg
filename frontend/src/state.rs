@@ -16,10 +16,35 @@ use crate::models::{
 use crate::models::ApiAgentRun;
 
 use crate::models::ApiAgentDetails;
-use crate::canvas::renderer;
+use crate::canvas::{renderer, background::ParticleSystem};
 use crate::storage::ActiveView;
 use crate::network::{WsClientV2, TopicManager};
 use crate::messages::{Message, Command};
+
+// ---------------------------------------------------------------------------
+//  Workflow execution helper structs (UI state only)
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, PartialEq)]
+pub enum ExecPhase {
+    Starting,
+    Running,
+    Success,
+    Failed,
+}
+
+#[derive(Clone)]
+pub struct ExecutionStatus {
+    pub execution_id: u32,
+    pub status: ExecPhase,
+}
+
+#[derive(Clone)]
+pub struct ExecutionLog {
+    pub node_id: String,
+    pub stream: String, // stdout | stderr
+    pub text: String,
+}
 use crate::constants::{
     DEFAULT_NODE_WIDTH,
     DEFAULT_NODE_HEIGHT,
@@ -30,6 +55,16 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use crate::update;
+
+// ---------------------------------------------------------------------------
+// Viewport constraints – keep values sane so we never generate Inf/NaN or
+// absurd world-space coordinates.
+// Default zoom == 1.0 so we allow ±50 %.
+// ---------------------------------------------------------------------------
+
+// Zoom is currently disabled – hard-lock to 100 %.
+pub const MIN_ZOOM: f64 = 1.0;
+pub const MAX_ZOOM: f64 = 1.0;
 // Bring legacy helper trait into scope (methods formerly on CanvasNode)
 
 // ---------------------------------------------------------------------------
@@ -150,10 +185,12 @@ pub enum ConnectionStatus {
     Checking,
 }
 
-// Store global application state
+    // Store global application state
 pub struct AppState {
     /// If true, global keyboard shortcuts (power mode) are enabled
     pub power_mode: bool,
+    // Particle system for animated background
+    pub particle_system: Option<ParticleSystem>,
     // Agent domain data (business logic)
     pub agents: HashMap<u32, ApiAgent>,        // Backend agent data
     pub agents_on_canvas: HashSet<u32>,        // Track which agents are already placed on canvas
@@ -166,6 +203,7 @@ pub struct AppState {
     // Canvas and rendering related
     pub canvas: Option<HtmlCanvasElement>,
     pub context: Option<CanvasRenderingContext2d>,
+    pub connection_animation_offset: f64,
     pub input_text: String,
     pub dragging: Option<String>,
     pub drag_offset_x: f64,
@@ -186,6 +224,20 @@ pub struct AppState {
     pub viewport_y: f64,
     pub zoom_level: f64,
     pub auto_fit: bool,
+
+    // ------------------------------------------------------------------
+    // Workflow execution – live run status & logs
+    // ------------------------------------------------------------------
+
+    pub current_execution: Option<ExecutionStatus>,
+    pub execution_logs: Vec<ExecutionLog>,
+
+    // Execution history sidebar
+    pub exec_history_open: bool,
+    pub executions: Vec<crate::models::ExecutionSummary>,
+    pub logs_open: bool,
+
+    // (duplicate fields removed)
     // Track the latest user input node ID
     pub latest_user_input_id: Option<String>,
     // Track message IDs and their corresponding node IDs
@@ -237,8 +289,6 @@ pub struct AppState {
     /// replace the entry with `Some(id)` so tool_output bubbles can link to
     /// their parent.
     pub active_streams: HashMap<u32, Option<u32>>,
-    // Pending UI updates to avoid recursive borrow issues
-    pub pending_ui_updates: Option<Box<dyn FnOnce()>>,
     // --- WebSocket v2 and Topic Manager --- 
     pub ws_client: Rc<RefCell<WsClientV2>>,
     pub topic_manager: Rc<RefCell<TopicManager>>,
@@ -388,6 +438,7 @@ impl AppState {
             current_workflow_id: None,
             canvas: None,
             context: None,
+            connection_animation_offset: 0.0,
             input_text: String::new(),
             dragging: None,
             drag_offset_x: 0.0,
@@ -417,7 +468,7 @@ impl AppState {
             selected_node_id: None,
             clicked_node_id: None,
             is_dragging_agent: false,
-            active_view: ActiveView::Dashboard,
+            active_view: ActiveView::ChatView,
 
             dashboard_scope: {
                 // Read persisted dashboard scope from localStorage (if any)
@@ -474,7 +525,6 @@ impl AppState {
             thread_messages: HashMap::new(),
             is_chat_loading: false,
             active_streams: HashMap::new(),
-            pending_ui_updates: None,
             ws_client: ws_client_rc,
             topic_manager: topic_manager_rc,
             streaming_threads: HashSet::new(),
@@ -541,6 +591,13 @@ impl AppState {
             available_mcp_tools: HashMap::new(),
             mcp_connection_status: HashMap::new(),
             power_mode: false,
+            particle_system: None,
+
+            current_execution: None,
+            execution_logs: Vec::new(),
+            exec_history_open: false,
+            executions: Vec::new(),
+            logs_open: false,
         }
     }
 
@@ -594,6 +651,7 @@ impl AppState {
             node_type: node_type.clone(),
             is_selected: false,
             is_dragging: false,
+            exec_status: None,
         };
         
         web_sys::console::log_1(&format!("Node created with dimensions: {}x{} at position ({}, {})", 
@@ -675,6 +733,7 @@ impl AppState {
             text: response_text.clone(),
             node_type: NodeType::ResponseOutput,
             parent_id: Some(parent_id.to_string()),
+            exec_status: None,
             is_selected: false,
             is_dragging: false,
         };
@@ -802,9 +861,23 @@ impl AppState {
         let box_width = max_x - min_x;
         let box_height = max_y - min_y;
         
-        // Get the canvas dimensions
-        let canvas_width = self.canvas_width;
-        let canvas_height = self.canvas_height;
+        // Ensure canvas exists and has valid dimensions
+        let (canvas_width, canvas_height) = match &self.canvas {
+            Some(canvas) => {
+                let dpr = web_sys::window().unwrap().device_pixel_ratio();
+                let w = canvas.width() as f64 / dpr;
+                let h = canvas.height() as f64 / dpr;
+                if w < 1.0 || h < 1.0 {
+                    web_sys::console::error_1(&"fit_nodes_to_view: canvas not yet sized".into());
+                    return;
+                }
+                (w, h)
+            }
+            None => {
+                web_sys::console::error_1(&"fit_nodes_to_view: no canvas available".into());
+                return;
+            }
+        };
         
         // Calculate zoom level to fit all nodes with padding
         let padding = 50.0; // Padding around the bounding box
@@ -856,12 +929,15 @@ impl AppState {
             let width_ratio = canvas_width / effective_width;
             let height_ratio = canvas_height / effective_height;
             
-            // Use the smaller ratio to ensure everything fits
-            let new_zoom = f64::min(width_ratio, height_ratio);
-            
-            // Limit maximum zoom level to prevent excessive zooming
-            let max_zoom = 1.0; // Maximum zoom level (1.0 = 100%)
-            let new_zoom = f64::min(new_zoom, max_zoom);
+            // Use the smaller ratio to ensure everything fits, but clamp to a
+            // sensible range so we don't zoom to nearly-zero which would make
+            // subsequent coordinate conversions explode.
+            let mut new_zoom = f64::min(width_ratio, height_ratio);
+            if new_zoom > MAX_ZOOM {
+                new_zoom = MAX_ZOOM;
+            } else if new_zoom < MIN_ZOOM {
+                new_zoom = MIN_ZOOM;
+            }
             
             // Calculate the center of the nodes
             let center_x = min_x + (max_x - min_x) / 2.0;
@@ -873,8 +949,10 @@ impl AppState {
             
             // Update state
             self.zoom_level = new_zoom;
+            self.clamp_zoom();
             self.viewport_x = new_viewport_x;
             self.viewport_y = new_viewport_y;
+            self.clamp_viewport();
             
             // Schedule a redraw via RAF
             self.mark_dirty();
@@ -891,19 +969,92 @@ impl AppState {
 
     // Center the viewport on all nodes without changing auto-fit setting
     pub fn center_view(&mut self) {
-        // Store original auto-fit setting
-        let original_auto_fit = self.auto_fit;
-        
-        // Temporarily disable auto-fit if it's on
-        if original_auto_fit {
-            self.auto_fit = false;
+        // Calculate bounding box of all nodes first. If there are none, bail.
+        if self.nodes.is_empty() {
+            return;
         }
-        
-        // Use existing fit method to center the view - this is known to work well
-        self.fit_nodes_to_view();
-        
-        // Restore original auto-fit setting
-        self.auto_fit = original_auto_fit;
+
+        let mut min_x = f64::MAX;
+        let mut min_y = f64::MAX;
+        let mut max_x = f64::MIN;
+        let mut max_y = f64::MIN;
+
+        for (_, node) in &self.nodes {
+            min_x = f64::min(min_x, node.x);
+            min_y = f64::min(min_y, node.y);
+            max_x = f64::max(max_x, node.x + node.width);
+            max_y = f64::max(max_y, node.y + node.height);
+        }
+
+        // Canvas dimensions must be ready; otherwise bail loudly.
+        let (canvas_w, canvas_h) = match &self.canvas {
+            Some(canvas) => {
+                let dpr = web_sys::window().unwrap().device_pixel_ratio();
+                let w = canvas.width() as f64 / dpr;
+                let h = canvas.height() as f64 / dpr;
+                if w < 1.0 || h < 1.0 {
+                    web_sys::console::error_1(&"center_view: canvas not yet sized".into());
+                    return;
+                }
+                (w, h)
+            }
+            None => {
+                web_sys::console::error_1(&"center_view: no canvas available".into());
+                return;
+            }
+        };
+
+        let padding = 80.0;
+        let required_w = (max_x - min_x) + padding;
+        let required_h = (max_y - min_y) + padding;
+
+        let width_ratio = canvas_w / required_w;
+        let height_ratio = canvas_h / required_h;
+        let mut target_zoom = f64::min(width_ratio, height_ratio);
+
+        // Clamp zoom to a sensible range so that extremely small bounding
+        // boxes (or an un-initialised <canvas>) cannot drive the zoom towards
+        // zero which then explodes world-space coordinates on the next drag.
+        if target_zoom > MAX_ZOOM {
+            target_zoom = MAX_ZOOM;
+        } else if target_zoom < MIN_ZOOM {
+            target_zoom = MIN_ZOOM;
+        }
+
+        // Desired centre point of nodes
+        let centre_x = min_x + (max_x - min_x) / 2.0;
+        let centre_y = min_y + (max_y - min_y) / 2.0;
+
+        let target_viewport_x = centre_x - (canvas_w / (2.0 * target_zoom));
+        let target_viewport_y = centre_y - (canvas_h / (2.0 * target_zoom));
+
+        // ------------------------------------------------------------------
+        // Apply viewport change immediately.
+        // ------------------------------------------------------------------
+        // The earlier animated version left `zoom_level` unchanged until the
+        // next RAF callback, which meant any user interaction that happened
+        // in that single frame (e.g. dropping a new node) still used the old
+        // (possibly tiny) zoom value and generated astronomically large
+        // coordinates.  We switch to an immediate update – the user barely
+        // notices the 250 ms animation anyway, but the correctness win is
+        // massive.
+
+        self.zoom_level  = target_zoom;
+        self.clamp_zoom();
+        self.viewport_x  = target_viewport_x;
+        self.viewport_y  = target_viewport_y;
+
+        self.mark_dirty();
+    }
+
+    /// Reset viewport to origin & 100% zoom with animation
+    pub fn reset_view(&mut self) {
+        // Immediate reset – avoid stale zoom during animation window.
+        self.zoom_level = 1.0;
+        self.clamp_zoom();
+        self.viewport_x = 0.0;
+        self.viewport_y = 0.0;
+        self.mark_dirty();
     }
     
     #[allow(dead_code)]
@@ -1119,6 +1270,36 @@ impl AppState {
         Ok(())
     }
 
+    // -------------------------------------------------------------------
+    // SANITY HELPERS – must be called after *any* change to zoom/viewport.
+    // -------------------------------------------------------------------
+
+    /// Clamp `zoom_level` to the hard limits.
+    pub fn clamp_zoom(&mut self) {
+        self.zoom_level = self.zoom_level.clamp(MIN_ZOOM, MAX_ZOOM);
+    }
+
+    /// Clamp `viewport_x` / `viewport_y` so that the centre of the viewport
+    /// cannot move farther than half a canvas from the origin.  This keeps
+    /// panning within ±50 % of the default view.
+    pub fn clamp_viewport(&mut self) {
+        // Determine canvas dimensions (world units depend on zoom).
+        let (canvas_w, canvas_h) = if let Some(canvas) = &self.canvas {
+            let window = web_sys::window().unwrap();
+            let dpr = window.device_pixel_ratio();
+            (canvas.width() as f64 / dpr, canvas.height() as f64 / dpr)
+        } else {
+            (self.canvas_width.max(1.0), self.canvas_height.max(1.0))
+        };
+
+        // Half of the viewport size in world units.
+        let half_w = (canvas_w / self.zoom_level) * 0.5;
+        let half_h = (canvas_h / self.zoom_level) * 0.5;
+
+        self.viewport_x = self.viewport_x.clamp(-half_w, half_w);
+        self.viewport_y = self.viewport_y.clamp(-half_h, half_h);
+    }
+
     pub fn resize_node_for_content(&mut self, node_id: &str) {
         if let Some(node) = self.nodes.get_mut(node_id) {
             // Calculate approximate node size based on text content
@@ -1212,6 +1393,7 @@ impl AppState {
             parent_id: None,
             is_selected: false,
             is_dragging: false,
+            exec_status: None,
         };
 
         self.nodes.insert(node_id.clone(), node);
@@ -1296,7 +1478,7 @@ pub fn update_app_state_from_api(nodes: HashMap<String, Node>) -> Result<(), JsV
         if let Some(_canvas) = &app_state.canvas {
             if let Some(_context) = &app_state.context {
                 // Use the correct draw_nodes function instead of render_canvas
-                crate::canvas::renderer::draw_nodes(&app_state);
+                crate::canvas::renderer::draw_nodes(&mut *app_state);
             }
         }
     });
@@ -1350,16 +1532,15 @@ pub fn update_node_id(old_id: &str, new_id: &str) {
 // Global helper function for dispatching messages with proper UI refresh handling
 pub fn dispatch_global_message(msg: crate::messages::Message) {
     // 1. Perform state updates and collect commands
-    let (commands, pending_updates, network_data) = APP_STATE.with(|state| {
+    let (commands, network_data) = APP_STATE.with(|state| {
         let mut state = state.borrow_mut();
         let commands = state.dispatch(msg);
         
-        // Take ownership of pending updates and network data
+        // Take ownership of pending network data
         // We'll gradually migrate these to commands
-        let updates = state.pending_ui_updates.take();
         let network = state.pending_network_call.take();
         
-        (commands, updates, network)
+        (commands, network)
     });
     
     // 2. Execute commands after state borrow is dropped
@@ -1379,6 +1560,12 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::FetchAgents |
             cmd @ Command::FetchAgentRuns(_) |
             cmd @ Command::FetchAgentDetails(_) => crate::command_executors::execute_fetch_command(cmd),
+            cmd @ Command::FetchWorkflows => crate::command_executors::execute_fetch_command(cmd),
+            cmd @ Command::FetchExecutionHistory { .. } => crate::command_executors::execute_fetch_command(cmd),
+            cmd @ Command::CreateWorkflowApi { .. } |
+            cmd @ Command::DeleteWorkflowApi { .. } |
+            cmd @ Command::RenameWorkflowApi { .. } |
+            cmd @ Command::StartWorkflowExecutionApi { .. } => crate::command_executors::execute_fetch_command(cmd),
             cmd @ Command::FetchTriggers(_) |
             cmd @ Command::CreateTrigger { .. } |
             cmd @ Command::DeleteTrigger(_) => crate::command_executors::execute_fetch_command(cmd),
@@ -1402,12 +1589,7 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
         }
     }
     
-    // 3. Execute legacy side effects (these will be migrated to commands)
-    if let Some(updates) = pending_updates {
-        updates();
-    }
-    
-    // 4. Process legacy network calls (these will be migrated to commands)
+    // 3. Process legacy network calls (these will be migrated to commands)
     if let Some((text, message_id)) = network_data {
         // This only handles thread messages now
         if let Ok(thread_id) = message_id.parse::<u32>() {

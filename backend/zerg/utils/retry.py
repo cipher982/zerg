@@ -37,6 +37,10 @@ import logging
 import random
 from typing import Awaitable
 from typing import Callable
+
+# ---------------------------------------------------------------------------
+# Typing helpers – runtime is Python ≥3.12 so ``ParamSpec`` exists in stdlib.
+# ---------------------------------------------------------------------------
 from typing import ParamSpec
 from typing import TypeVar
 

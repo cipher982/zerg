@@ -1,10 +1,17 @@
-from __future__ import annotations
-
-# Standard library
 import threading
 from pathlib import Path
 from typing import Any
 from typing import Dict
+from typing import Iterator
+
+import dotenv
+from sqlalchemy import Engine
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+from zerg.config import get_settings
 
 # Thread-safe caches for per-worker engines/sessionmakers --------------------
 
@@ -23,25 +30,13 @@ _WORKER_LOCK = threading.Lock()
 # the overhead negligible for production usage.
 
 try:
-    from zerg.middleware.worker_db import current_worker_id  # type: ignore
+    from zerg.middleware.worker_db import current_worker_id
 
-except ModuleNotFoundError:  # pragma: no cover – unit-tests without middleware
+except ModuleNotFoundError:
     import contextvars
 
     current_worker_id = contextvars.ContextVar("current_worker_id", default=None)
 
-# from pathlib import Path  # duplicate removed above
-# import threading  # duplicate
-from typing import Iterator
-
-import dotenv
-from sqlalchemy import Engine
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import sessionmaker
-
-from zerg.config import get_settings
 
 _settings = get_settings()
 

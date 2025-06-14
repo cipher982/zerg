@@ -1,8 +1,14 @@
 {
-  "extends": "stylelint-config-standard",
+  "extends": [
+    "stylelint-config-standard"
+  ],
   "rules": {
-    "color-named": "never",
-    "font-family-no-missing-generic-family-keyword": null,
-    "no-descending-specificity": null
+    "declaration-property-value-disallowed-list": {
+      "overflow": ["hidden"],
+      "transform": ["/^.+$/"],
+      "filter": ["/^.+$/"],
+      "opacity": ["/^0?\\.[0-9]+$/"]
+    },
+    "selector-max-id": 3
   }
 }

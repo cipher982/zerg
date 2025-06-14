@@ -85,7 +85,7 @@ async def websocket_endpoint(
 
     try:
         await websocket.accept()
-        await topic_manager.connect(client_id, websocket, getattr(user, "id", None))
+        await topic_manager.connect(client_id, websocket, getattr(user, "id", None), auto_system=True)
         logger.info(f"WebSocket connection established for client {client_id}")
 
         # Handle initial topic subscriptions if provided

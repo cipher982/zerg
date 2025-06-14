@@ -1,8 +1,7 @@
-"""Agent routes module."""
-
 import logging
 from typing import Any
 from typing import List
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -160,10 +159,11 @@ async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(
 # ---------------------------------------------------------------------------
 
 
+# Optional import for type hints
 @router.get("/{agent_id}/details", response_model=AgentDetails, response_model_exclude_none=True)
 def read_agent_details(
     agent_id: int,
-    include: str | None = None,
+    include: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     row = crud.get_agent(db, agent_id)

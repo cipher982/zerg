@@ -81,3 +81,8 @@ select:focus,
   color: var(--text-primary);
 }
 
+#sched-summary {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-top: var(--spacing-md);
+}

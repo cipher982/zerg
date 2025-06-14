@@ -32,8 +32,12 @@ API_BASE_URL="${API_BASE_URL:-http://localhost:8001}"
 # --------------------------------------------------
 # Build – dev profile, debuginfo, target web
 # --------------------------------------------------
+
+# Record the build step – the actual `wasm-pack build` command is invoked
+# *after* we ensure a writable TMPDIR below.  Keeping the banner here avoids
+# altering the original log order while preventing an accidental line-continuation
+# without a command (which would cause a syntax error in `bash`).
 echo "[build-only] 🏗  wasm-pack build …" >&2
-API_BASE_URL="$API_BASE_URL" RUSTFLAGS="-C debuginfo=2" \
 
 # Ensure a writable TMPDIR for systems with restricted /var directories (e.g. sandboxed CI)
 TMPDIR_OVERRIDDEN="${TMPDIR:-}"
@@ -42,7 +46,8 @@ if [[ -z "$TMPDIR_OVERRIDDEN" || ! -w "$TMPDIR_OVERRIDDEN" ]]; then
   mkdir -p "$TMPDIR"
 fi
 
-API_BASE_URL="$API_BASE_URL" RUSTFLAGS="-C debuginfo=2" \
+RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\" -C debuginfo=2" \
+API_BASE_URL="$API_BASE_URL" \
   wasm-pack build --dev --target web --out-dir pkg
 
 # Copy the generated files to www directory

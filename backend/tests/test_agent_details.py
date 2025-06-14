@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 from zerg.models.models import Agent
 
+# Tests assume Python ≥3.12 – full union syntax available.
+
 
 def _details_url(agent_id: int, include: str | None = None) -> str:
     if include is None:

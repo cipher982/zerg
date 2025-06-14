@@ -49,16 +49,16 @@ impl ToolConfigModal {
                         <option value='static' {}>Static Value</option>
                         <option value='node_output' {}>From Node Output</option>
                     </select>
-                    <input type='text' class='static-value-input' data-input-key='{}' value='{}' style='display:{}'>
+                    <input type='text' class='static-value-input {}' data-input-key='{}' value='{}'>
                 </div>",
                 input_label,
                 required_html,
                 input_key,
                 if mapping_type == "static" { "selected" } else { "" },
                 if mapping_type == "node_output" { "selected" } else { "" },
+                if mapping_type == "static" { "" } else { "hidden" }, // Add 'hidden' class dynamically
                 input_key,
-                static_value,
-                if mapping_type == "static" { "block" } else { "none" }
+                static_value
             ));
         }
 

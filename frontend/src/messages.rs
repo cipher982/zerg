@@ -98,10 +98,30 @@ pub enum Message {
         to_node_id: String,
         label: Option<String>,
     },
+
+    // Workflow rename/delete actions coming from UI
+    RenameWorkflow {
+        workflow_id: u32,
+        name: String,
+        description: String,
+    },
+    DeleteWorkflow {
+        workflow_id: u32,
+    },
+
+    // Workflows fetched from backend
+    WorkflowsLoaded(Vec<crate::models::Workflow>),
+    /// Workflow successfully created via backend
+    WorkflowCreated(crate::models::Workflow),
+    /// Workflow was deleted (soft delete)
+    WorkflowDeleted { workflow_id: u32 },
+    /// Workflow renamed / updated
+    WorkflowUpdated(crate::models::Workflow),
     
     // Canvas view controls
     ToggleAutoFit,                       // Toggle auto-fit functionality
     CenterView,                          // Center the canvas view
+    ResetView,                           // Reset zoom =100% and pan to origin
     ClearCanvas,                         // Clear all nodes from the canvas
     
     // Canvas zooming
@@ -189,6 +209,57 @@ pub enum Message {
     UpdateNodeStatus {
         node_id: String,
         status: String,
+    },
+
+    /// Workflow execution finished (success or failed)
+    ExecutionFinished {
+        execution_id: u32,
+        status: String,
+        error: Option<String>,
+    },
+
+    /// Append a single stdout/stderr line to the log drawer
+    AppendExecutionLog {
+        execution_id: u32,
+        node_id: String,
+        stream: String,
+        text: String,
+    },
+
+    // ------------------------------------------------------------------
+    // Execution history / right-hand sidebar
+    // ------------------------------------------------------------------
+
+    /// Toggle the execution history drawer
+    ToggleExecutionHistory,
+
+    /// Load execution history for current workflow (async command will follow)
+    LoadExecutionHistory {
+        workflow_id: u32,
+    },
+
+    /// Execution history loaded from backend
+    ExecutionHistoryLoaded(Vec<crate::models::ExecutionSummary>),
+
+    /// User selected an execution from the list – triggers replay
+    SelectExecution {
+        execution_id: u32,
+    },
+
+    /// Toggle the collapsible execution log drawer
+    ToggleLogDrawer,
+
+    /// User clicked Run – initiate backend execution and subscribe to progress.
+    StartWorkflowExecution {
+        workflow_id: u32,
+    },
+
+    // -------------------------------------------------------------------
+    // Workflow execution streaming
+    // -------------------------------------------------------------------
+    /// Subscribe to execution progress for the given execution_id.
+    SubscribeWorkflowExecution {
+        execution_id: u32,
     },
 
 
@@ -449,6 +520,10 @@ pub enum Message {
         name: String,
         auth_token: String,
     },
+
+    // Particle System Messages
+    InitializeParticleSystem { width: f64, height: f64 },
+    ClearParticleSystem,
 }
 
 /// Commands represent side effects that should be executed after state updates.
@@ -465,6 +540,25 @@ pub enum Command {
     
     /// Fetch messages for a thread
     FetchThreadMessages(u32), // thread_id
+
+    /// Fetch workflows (visual canvas definitions)
+    FetchWorkflows,
+
+    /// Fetch execution history for workflow
+    FetchExecutionHistory { workflow_id: u32 },
+
+    // Workflow CRUD actions
+    CreateWorkflowApi { name: String },
+    DeleteWorkflowApi { workflow_id: u32 },
+    RenameWorkflowApi {
+        workflow_id: u32,
+        name: String,
+        description: String,
+    },
+
+    // ---------------- Workflow execution -----------------------------
+    /// POST /workflow-executions/{workflow_id}/start
+    StartWorkflowExecutionApi { workflow_id: u32 },
 
     // ---------------------------------------------------------------
     // Trigger-related side-effect commands (Phase A wiring only)
@@ -536,6 +630,7 @@ pub enum Command {
 
     FetchAgents,                     // Command to fetch agents from API
 
+    /// Fetch visual workflows from backend
     /// Fetch detailed debug info for an agent
     FetchAgentDetails(u32), // agent_id
 

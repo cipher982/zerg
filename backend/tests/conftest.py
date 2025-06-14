@@ -370,9 +370,30 @@ def db_session():
 
 
 @pytest.fixture
-def client(db_session):
+def client(db_session, auth_headers):
     """
-    Create a FastAPI TestClient with the test database dependency.
+    Create a FastAPI TestClient with the test database dependency and auth headers.
+    """
+
+    def override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(app, backend="asyncio") as client:
+        client.headers = auth_headers
+        yield client
+
+    app.dependency_overrides = {}
+
+
+@pytest.fixture
+def unauthenticated_client(db_session):
+    """
+    Create a FastAPI TestClient without authentication headers.
     """
 
     def override_get_db():
@@ -576,6 +597,17 @@ def test_user(_dev_user):  # noqa: D401 – passthrough alias
     """Provide ``test_user`` as backwards-compatible alias for *_dev_user*."""
 
     return _dev_user
+
+
+@pytest.fixture
+def other_user(db_session):
+    """Create a second, distinct user for isolation tests."""
+    from zerg.crud import crud as _crud
+
+    user = _crud.get_user_by_email(db_session, "other@local")
+    if user is None:
+        user = _crud.create_user(db_session, email="other@local", provider=None, role="USER")
+    return user
 
 
 @pytest.fixture

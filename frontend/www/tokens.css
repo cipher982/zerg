@@ -72,4 +72,11 @@
   --transition-fast: 150ms ease;
   --transition-normal: 300ms ease;
   --transition-slow: 500ms ease;
+
+  /* --------------------------------------------------------- */
+  /* Z-index scale                                            */
+  /* --------------------------------------------------------- */
+  --z-canvas: 10;      /* main interactive canvas layer */
+  --z-toolbar: 20;     /* workflow bar, header toolbars */
+  --z-overlay: 1000;   /* dropdowns, modals, toasts */
 }

@@ -31,8 +31,15 @@ export TMPDIR="${SCRIPT_DIR}/.pw_tmp"
 mkdir -p "$TMPDIR"
 export PW_TMP_DIR="$TMPDIR"
 
+# Reduce backend & frontend noise so CI logs stay readable.  The backend
+# honours this flag via `zerg.main` (see *silence_info_logs()*), muting
+# *INFO* level messages and above for most internal loggers.  Front-end
+# build output remains unchanged; Playwright’s coloured reporter will still
+# show failing test details.
+export E2E_LOG_SUPPRESS=1
+
 # Pass through all given args to the underlying npm command
-npm test -- "$@"
+npm test -- --reporter=dot "$@"
 TEST_EXIT_CODE=$?
 
 # Clean up worker-specific test databases

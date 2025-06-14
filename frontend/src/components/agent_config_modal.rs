@@ -209,18 +209,11 @@ impl AgentConfigModal {
         modal_title.set_id("modal-title");
         modal_title.set_inner_html("Agent Configuration");
 
-        let close_button = document.create_element("span")?;
-        close_button.set_class_name("close");
-        close_button.set_inner_html("&times;");
-        close_button.set_id("modal-close");
-        close_button.set_attribute(ATTR_DATA_TESTID, "agent-modal-close")?;
-        close_button.set_attribute("aria-label", "Close modal")?;
-
         modal_header.append_child(&modal_title)?;
-        modal_header.append_child(&close_button)?;
 
         // Tabs: Main / Triggers / Tools – built via shared helper ------------------
         let tab_container = tab_bar::build_tab_bar(document, &[("Main", true), ("Triggers", false), ("Tools", false)])?;
+        tab_container.set_class_name("modal-tabs");
 
         // -----------------------------------------------------------------
         // Attach tab-switch click handlers *immediately* so we do not rely on
@@ -436,7 +429,6 @@ impl AgentConfigModal {
 
         let freq_select = document.create_element("select")?;
         freq_select.set_id("sched-frequency");
-        freq_select.set_class_name("modal-select");
 
         let frequencies = [
             ("none", "Not scheduled"),
@@ -593,6 +585,7 @@ impl AgentConfigModal {
         let save_button = document.create_element("button")?;
         save_button.set_attribute("type", "button")?;
         save_button.set_id("save-agent");
+        save_button.set_class_name("btn-primary");
         save_button.set_inner_html("Save");
 
         button_container.append_child(&save_button)?;
@@ -649,15 +642,6 @@ impl AgentConfigModal {
 
         // Helper: dispatch via global function
         let dispatch = |msg| crate::state::dispatch_global_message(msg);
-
-        // Close (×) button
-        if let Some(btn) = document.get_element_by_id("modal-close") {
-            let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
-                dispatch(crate::messages::Message::CloseAgentModal);
-            }));
-            btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
-            cb.forget();
-        }
 
         // Tab switching click handlers are now attached immediately after
         // `build_tab_bar()` so we no longer wire them up here.
@@ -1149,7 +1133,6 @@ impl AgentConfigModal {
 
                 let select_el = document.create_element("select")?;
                 select_el.set_id("model-select");
-                select_el.set_class_name("modal-select");
                 model_row.append_child(&select_el)?;
 
                 main_tab.append_child(&model_row)?;

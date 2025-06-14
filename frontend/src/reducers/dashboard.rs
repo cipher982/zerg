@@ -10,9 +10,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             // Set the active view to Dashboard
             state.active_view = crate::storage::ActiveView::Dashboard;
 
-            // Instead of directly rendering the view,
-            // which would cause a nested borrow, use pending_ui_updates
-            state.pending_ui_updates = Some(Box::new(move || {
+            commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(document) = web_sys::window().unwrap().document() {
                     // First hide the chat view container
                     if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
@@ -23,7 +21,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                         web_sys::console::error_1(&format!("Failed to render dashboard: {:?}", e).into());
                     }
                 }
-            }));
+            })));
             true
         }
         Message::RefreshDashboard => {

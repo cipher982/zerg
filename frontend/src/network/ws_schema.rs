@@ -6,12 +6,22 @@
 //! needs – additional attributes sent by the backend are captured via Serde
 //! `flatten` so they do not break deserialisation when new fields appear.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Top-level WebSocket frame coming from the backend.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Envelope {
+    pub v: u8,
+    pub r#type: String,
+    pub topic: String,
+    pub req_id: Option<String>,
+    pub ts: u64,
+    pub data: Value,
+}
+
+/// Top-level WebSocket frame coming from the backend (legacy or fallback).
 ///
-/// The backend always uses `{ "type": ..., "data": {...} }`.
+/// The backend always uses `{ "type": ..., "data": {...} }` in v1, but v2 uses Envelope.
 #[derive(Debug, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum WsMessage {
@@ -22,7 +32,13 @@ pub enum WsMessage {
     // *event_type* labels emitted by the backend event bus ("agent_updated",
     // "agent_created", "agent_deleted" ...).  They all carry the same payload
     // shape so we don’t distinguish further on the frontend.
-    #[serde(rename = "agent_event", alias = "agent_state", alias = "agent_created", alias = "agent_updated", alias = "agent_deleted")]
+    #[serde(
+        rename = "agent_event",
+        alias = "agent_state",
+        alias = "agent_created",
+        alias = "agent_updated",
+        alias = "agent_deleted"
+    )]
     AgentEvent { data: WsAgentEvent },
 
     // Thread lifecycle updates share payload structure – expose a single
@@ -62,6 +78,18 @@ pub enum WsMessage {
     // Profile update of the authenticated user.
     #[serde(rename = "user_update")]
     UserUpdate { data: WsUserUpdate },
+
+    // Workflow canvas – per-node execution state
+    #[serde(rename = "node_state")]
+    NodeState { data: WsNodeState },
+
+    // Workflow execution is done – emitted once per run.
+    #[serde(rename = "execution_finished")]
+    ExecutionFinished { data: WsExecutionFinished },
+
+    // Single stdout/stderr line from a running node.
+    #[serde(rename = "node_log")]
+    NodeLog { data: WsNodeLog },
 
     #[serde(other)]
     Unknown,
@@ -243,9 +271,64 @@ impl WsMessage {
             WsMessage::AssistantId(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::ThreadMessage { data } => Some(format!("thread:{}", data.thread_id)),
             WsMessage::UserUpdate { data } => Some(format!("user:{}", data.id)),
+            WsMessage::NodeState { data } => Some(format!("workflow_execution:{}", data.execution_id)),
+            WsMessage::ExecutionFinished { data } => Some(format!("workflow_execution:{}", data.execution_id)),
+            WsMessage::NodeLog { data } => Some(format!("workflow_execution:{}", data.execution_id)),
             WsMessage::Unknown => None,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+//   Workflow Execution – node state payload
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct WsNodeState {
+    pub execution_id: u32,
+    pub node_id: String,
+    pub status: String, // running | success | failed
+
+    #[serde(default)]
+    pub output: Option<serde_json::Value>,
+
+    #[serde(default)]
+    pub error: Option<String>,
+
+    #[serde(flatten)]
+    #[allow(dead_code)]
+    pub extra: serde_json::Value,
+}
+
+/// Payload emitted once per workflow execution when all nodes finished (either
+/// success or failed).
+#[derive(Debug, Deserialize, Clone)]
+pub struct WsExecutionFinished {
+    pub execution_id: u32,
+    pub status: String, // success | failed
+
+    #[serde(default)]
+    pub error: Option<String>,
+
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
+
+    #[serde(flatten)]
+    #[allow(dead_code)]
+    pub extra: serde_json::Value,
+}
+
+/// Single log line produced by a node (stdout/stderr).
+#[derive(Debug, Deserialize, Clone)]
+pub struct WsNodeLog {
+    pub execution_id: u32,
+    pub node_id: String,
+    pub stream: String, // stdout | stderr
+    pub text: String,
+
+    #[serde(flatten)]
+    #[allow(dead_code)]
+    pub extra: serde_json::Value,
 }
 
 // ---------------------------------------------------------------------------

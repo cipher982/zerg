@@ -1,0 +1,36 @@
+name: WebSocket Code Drift Guard
+
+on:
+  pull_request:
+    paths:
+      - "asyncapi/**"
+      - "scripts/regen-ws-code.sh"
+      - "Makefile"
+      - ".github/workflows/ws-code-drift.yml"
+
+jobs:
+  codegen-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node 18 (for AsyncAPI generator)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: 'npm'
+
+      - name: Install build essentials
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y make git
+
+      - name: Run drift check
+        run: make ws-code-diff-check
+
+      - name: Print note if diff detected (should not reach here)
+        if: failure()
+        run: |
+          echo '❌ WebSocket generated code is out of sync with asyncapi/chat.yml.'
+          echo '   Please run `make regen-ws-code` and commit the changes.'

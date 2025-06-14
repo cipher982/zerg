@@ -15,10 +15,30 @@ fi
 
 echo "[build-debug] HELLO compiling WASM (debug)..."
 
+# Ensure a writable TMPDIR – some sandboxed CI runners mount the default
+# /var/folders/... macOS location read-only which breaks Cargo during
+# compilation (it needs to create temporary crates & metadata files).  We
+# create a local directory inside the repository as a safe fallback.
+
+if [[ -z "${TMPDIR:-}" || ! -w "${TMPDIR}" ]]; then
+  export TMPDIR="$(pwd)/.tmp_build"
+  mkdir -p "$TMPDIR"
+fi
+
 # Default API_BASE_URL if not provided via .env
 API_BASE_URL="${API_BASE_URL:-http://localhost:8001}"
 
-API_BASE_URL="$API_BASE_URL" RUSTFLAGS="-C debuginfo=2" wasm-pack build --dev --target web --out-dir pkg
+# -------------------------------------------------------------
+# RUSTFLAGS — preserve existing debuginfo flag *and* opt-in to
+# the getrandom JS backend required for wasm32-unknown-unknown.
+# When RUSTFLAGS is set directly (instead of via .cargo/config.toml)
+# it overrides the project-level configuration, so we must include
+# the `--cfg getrandom_backend="wasm_js"` flag here as well.
+# -------------------------------------------------------------
+
+RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\" -C debuginfo=2" \
+  API_BASE_URL="$API_BASE_URL" \
+  wasm-pack build --dev --target web --out-dir pkg
 
 # Copy the generated files to www directory
 echo "[build-debug] copying WASM artifacts to www..."

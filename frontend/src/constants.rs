@@ -107,6 +107,7 @@ pub const AGENT_BORDER_SUBTLE: &str = "#e5e7eb";
 pub const STATUS_IDLE_COLOR: &str = "#10b981";
 pub const STATUS_PROCESSING_COLOR: &str = "#3b82f6";
 pub const STATUS_ERROR_COLOR: &str = "#ef4444";
+pub const STATUS_SUCCESS_COLOR: &str = "#22c55e";
 pub const STATUS_SCHEDULED_COLOR: &str = "#8b5cf6";
 pub const STATUS_PAUSED_COLOR: &str = "#f59e0b";
 
@@ -114,6 +115,7 @@ pub const STATUS_PAUSED_COLOR: &str = "#f59e0b";
 pub const STATUS_IDLE_BG: &str = "rgba(16, 185, 129, 0.1)";
 pub const STATUS_PROCESSING_BG: &str = "rgba(59, 130, 246, 0.1)";
 pub const STATUS_ERROR_BG: &str = "rgba(239, 68, 68, 0.1)";
+pub const STATUS_SUCCESS_BG: &str = "rgba(34, 197, 94, 0.1)";
 pub const STATUS_SCHEDULED_BG: &str = "rgba(139, 92, 246, 0.1)";
 pub const STATUS_PAUSED_BG: &str = "rgba(245, 158, 11, 0.1)";
 

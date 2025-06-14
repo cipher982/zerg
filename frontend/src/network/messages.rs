@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use super::event_types::MessageType;
 
 /// Base message structure that all WebSocket messages must implement
@@ -179,37 +178,59 @@ pub struct ModelListMessage {
 /// Helper functions for creating messages
 pub mod builders {
     use super::*;
-    
+    use serde_json::json;
+    use uuid::Uuid;
+
+    /// Helper: generate a random UUID for the `message_id` field.
+    fn new_id() -> String {
+        Uuid::new_v4().to_string()
+    }
+
+    /// Build a `PingMessage` (typed) ready for serialisation.
     pub fn create_ping() -> PingMessage {
         PingMessage {
             message_type: MessageType::Ping,
-            message_id: Some(Uuid::new_v4().to_string()),
+            message_id: Some(new_id()),
             timestamp: Some(js_sys::Date::now() as i64),
         }
     }
 
+    /// Build a `SubscribeMessage` for one or more topics.
     pub fn create_subscribe(topics: Vec<String>) -> SubscribeMessage {
         SubscribeMessage {
             message_type: MessageType::Subscribe,
-            message_id: Some(Uuid::new_v4().to_string()),
+            message_id: Some(new_id()),
             topics,
         }
     }
 
+    /// Build an `UnsubscribeMessage` for the given topics.
     pub fn create_unsubscribe(topics: Vec<String>) -> UnsubscribeMessage {
         UnsubscribeMessage {
             message_type: MessageType::Unsubscribe,
-            message_id: Some(Uuid::new_v4().to_string()),
+            message_id: Some(new_id()),
             topics,
         }
     }
-    
+
     #[allow(dead_code)]
-    pub fn create_models_request() -> BaseMessage {
-        BaseMessage {
+    pub fn create_models_request() -> ModelListMessage {
+        ModelListMessage {
             message_type: MessageType::Models,
-            message_id: Some(Uuid::new_v4().to_string()),
+            message_id: Some(new_id()),
+            models: Vec::new(), // request carries empty list
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn create_send_message(thread_id: i32, content: &str) -> serde_json::Value {
+        // For now keep raw JSON because `SendMessage` struct is not defined yet.
+        json!({
+            "type": "send_message",
+            "message_id": new_id(),
+            "thread_id": thread_id,
+            "content": content
+        })
     }
 }
 
@@ -306,4 +327,4 @@ mod tests {
          assert!(json.contains("\"message_id\":\"msg-1\""));
          assert!(json.contains("\"data\":{\"id\":789")); // Check nested data
     }
-} 
+}

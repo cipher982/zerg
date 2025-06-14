@@ -5,6 +5,9 @@ use std::rc::Rc;
 use js_sys::Array;
 use serde_json::Value;
 use std::any::Any;
+use js_sys::Date;
+
+use crate::schema_validation;
 
 use super::messages::builders;
 
@@ -53,8 +56,16 @@ pub struct WsConfig {
     pub initial_backoff_ms: u32,
     /// Maximum backoff delay in milliseconds
     pub max_backoff_ms: u32,
-    /// Ping interval in milliseconds (None to disable)
+    /// Ping interval in milliseconds when *client*-initiated heart-beat is
+    /// required.  Our server now sends the periodic `ping`, so by default we
+    /// turn the client-side timer **off**.
     pub ping_interval_ms: Option<u32>,
+
+    /// Watch-dog interval (ms).  If **no** frame has been received within
+    /// this threshold the client assumes the connection is stale and forces
+    /// a reconnect.  Defaults to twice the expected server-side ping
+    /// cadence (≈60 s).
+    pub watchdog_ms: u32,
 }
 
 impl Default for WsConfig {
@@ -71,7 +82,8 @@ impl Default for WsConfig {
             max_reconnect_attempts: None,
             initial_backoff_ms: 1000,
             max_backoff_ms: 30000,
-            ping_interval_ms: Some(30000), // 30-second ping interval
+            ping_interval_ms: None, // server → ping, client replies with pong
+            watchdog_ms: 65_000,   // 65 s gives generous slack above 60 s drop rule
         }
     }
 }
@@ -92,6 +104,12 @@ pub struct WsClientV2 {
     ping_interval: Option<i32>, // Store interval ID for cleanup
     reconnect_timeout: Rc<RefCell<Option<i32>>>, // Store timeout ID so we can cancel on success
 
+    // Track last *any* frame timestamp (ms since epoch) so the watchdog can
+    // detect silent socket hangs where *onclose* never fires (e.g. router
+    // drops outgoing but not incoming packets).
+    last_activity_ms: Rc<RefCell<f64>>,
+    activity_interval: Rc<RefCell<Option<i32>>>,
+
     // --- NEW Callbacks ---
     on_connect_callback: Option<OnConnectCallback>,
     on_message_callback: Option<OnMessageCallback>,
@@ -108,6 +126,9 @@ impl WsClientV2 {
             reconnect_attempt: Rc::new(RefCell::new(0)),
             ping_interval: None,
             reconnect_timeout: Rc::new(RefCell::new(None)),
+
+            last_activity_ms: Rc::new(RefCell::new(js_sys::Date::now())),
+            activity_interval: Rc::new(RefCell::new(None)),
             // Initialize callbacks as None
             on_connect_callback: None,
             on_message_callback: None,
@@ -247,11 +268,22 @@ impl WsClientV2 {
                     // 4401: unauthenticated, 4003: forbidden – logout and show banner.
                     crate::network::ui_updates::show_auth_error_banner();
                     let _ = crate::utils::logout();
+                } else if code == 1002 {
+                    crate::toast::error("Protocol error – socket closed (1002)");
+                } else if code == 4408 {
+                    crate::toast::error("Heartbeat timeout – reconnecting… (4408)");
                 }
             }
 
             web_sys::console::log_1(&"WebSocket closed".into());
             *state_clone.borrow_mut() = ConnectionState::Disconnected;
+
+            // Cancel watchdog interval (if set) to avoid leaks when the
+            // socket was closed intentionally or due to network issues.
+            if let Some(id) = *client_clone_for_reconnect.activity_interval.borrow() {
+                let _ = web_sys::window().unwrap().clear_interval_with_handle(id);
+                *client_clone_for_reconnect.activity_interval.borrow_mut() = None;
+            }
 
             // --- Call on_disconnect callback --- 
             if let Some(callback_rc) = &on_disconnect_cb_clone_for_close {
@@ -272,47 +304,71 @@ impl WsClientV2 {
         ws.set_onclose(Some(onclose_closure.as_ref().unchecked_ref()));
         onclose_closure.forget();
 
-        // Set up message handler: parse JSON once, handle control frames, then forward to topic manager
+        // Clone WebSocket so the closure that may call `close_with_code` does not
+        // move ownership of the *original* socket (we still need it afterwards
+        // to attach the handler and potentially other callbacks).
+        let ws_for_close = ws.clone();
+
+        // ----- Watchdog: share last_activity_ms between closure and interval ----
+        let last_activity_ms_clone = self.last_activity_ms.clone();
+
+        // Set up message handler: parse JSON once, validate envelope, then forward to topic manager
         let onmessage_closure = Closure::wrap(Box::new(move |event: MessageEvent| {
             // Only handle text messages
             if let Ok(text) = event.data().dyn_into::<js_sys::JsString>() {
                 if let Some(msg_str) = text.as_string() {
-                    match serde_json::from_str::<Value>(&msg_str) {
-                        Ok(parsed_value) => {
-                            // Inspect the message type field
-                            let msg_type = parsed_value
+                    if let Ok(parsed_value) = serde_json::from_str::<Value>(&msg_str) {
+                        // ------------------------------------------------------------------
+                        // Phase-2: Runtime schema validation (lightweight)
+                        // ------------------------------------------------------------------
+                        if schema_validation::validate_envelope(&parsed_value) {
+                            // ------------------------------------------------------------------
+                            // Automatic Pong reply – server-initiated heart-beat
+                            // ------------------------------------------------------------------
+                            if let Some(ty) = parsed_value
                                 .get("type")
                                 .and_then(|v| v.as_str())
-                                .unwrap_or("");
+                            {
+                                if ty.eq_ignore_ascii_case("PING") {
+                                    // Extract ping_id if present under data.ping_id (enveloped) OR
+                                    // at root for legacy format.
+                                    let ping_id = parsed_value
+                                        .get("data")
+                                        .and_then(|d| d.get("ping_id"))
+                                        .and_then(|v| v.as_str())
+                                        .or_else(|| parsed_value.get("ping_id").and_then(|v| v.as_str()));
 
-                            match msg_type {
-                                "pong" => {
-                                    // Keep-alive frame, ignore
-                                    return;
-                                }
-                                "error" => {
-                                    web_sys::console::error_1(
-                                        &format!("WebSocket error: {:?}", parsed_value).into()
-                                    );
-                                    return;
-                                }
-                                _ => {
-                                    // Forward all other messages to topic manager via callback
-                                    if let Some(callback_rc) = &on_message_cb_clone {
-                                        (callback_rc.borrow_mut())(parsed_value);
+                                    let mut pong_obj = serde_json::json!({"type": "pong"});
+                                    if let Some(pid) = ping_id {
+                                        pong_obj["ping_id"] = serde_json::Value::String(pid.to_string());
+                                    }
+
+                                    if let Ok(pong_str) = serde_json::to_string(&pong_obj) {
+                                        let _ = ws_for_close.send_with_str(&pong_str);
                                     }
                                 }
                             }
+
+                            if let Some(callback_rc) = &on_message_cb_clone {
+                                (callback_rc.borrow_mut())(parsed_value);
+                            }
+
+                            // Update last-activity timestamp for watchdog
+                            *last_activity_ms_clone.borrow_mut() = Date::now();
+                        } else {
+                            web_sys::console::error_1(&"Protocol error – invalid envelope".into());
+                                // Close to trigger reconnect (matches backend 1002 logic).  We ignore
+                                // failures since the socket may already be closed by the server.
+                                let _ = ws_for_close.close_with_code(1002);
                         }
-                        Err(e) => {
-                            web_sys::console::error_1(
-                                &format!(
-                                    "Failed to parse incoming WebSocket message as JSON: {}, Error: {:?}",
-                                    msg_str, e
-                                )
-                                .into()
-                            );
-                        }
+                    } else {
+                        web_sys::console::error_1(
+                            &format!(
+                                "Failed to parse incoming WebSocket message as JSON: {}",
+                                msg_str
+                            )
+                            .into()
+                        );
                     }
                 }
             } else {
@@ -321,6 +377,37 @@ impl WsClientV2 {
         }) as Box<dyn FnMut(MessageEvent)>);
         ws.set_onmessage(Some(onmessage_closure.as_ref().unchecked_ref()));
         onmessage_closure.forget();
+
+        // ------------------------------------------------------------------
+        // Watch-dog interval – runs every `watchdog_ms` to ensure at least
+        // *some* traffic is flowing.  If the timer detects silence for more
+        // than the threshold it forcibly closes the socket with 4408 which
+        // flows into the existing onclose → reconnect logic.
+        // ------------------------------------------------------------------
+
+        let watchdog_last = self.last_activity_ms.clone();
+        let watchdog_ws   = ws.clone();
+        let watchdog_ms   = self.config.watchdog_ms as i32;
+
+        // Store interval id so we can clear it on manual close / reconnect.
+        let watchdog_closure = Closure::wrap(Box::new(move || {
+            let now = Date::now();
+            let last = *watchdog_last.borrow();
+            if now - last > watchdog_ms as f64 {
+                let _ = watchdog_ws.close_with_code(4408);
+            }
+        }) as Box<dyn FnMut()>);
+
+        let interval_id = web_sys::window()
+            .expect("window")
+            .set_interval_with_callback_and_timeout_and_arguments_0(
+                watchdog_closure.as_ref().unchecked_ref(),
+                watchdog_ms,
+            )?;
+
+        watchdog_closure.forget();
+
+        *self.activity_interval.borrow_mut() = Some(interval_id);
 
         Ok(ws)
     }
@@ -424,7 +511,7 @@ impl WsClientV2 {
     }
 
     /// Close the WebSocket connection gracefully.
-    pub fn close(&mut self) -> Result<(), JsValue> {
+    pub async fn close(&mut self) -> Result<(), JsValue> {
         web_sys::console::log_1(&"Closing WebSocket connection...".into());
         // Clear ping interval
         self.clear_ping_interval();
@@ -433,7 +520,7 @@ impl WsClientV2 {
         *self.state.borrow_mut() = ConnectionState::Disconnected;
 
         if let Some(ws) = self.websocket.take() { // Use take to remove it
-             match ws.close() {
+             match ws.close_with_code(1000) {
                 Ok(_) => web_sys::console::log_1(&"WebSocket close command sent.".into()),
                 Err(e) => web_sys::console::error_1(&format!("Error sending close command: {:?}", e).into()),
             }
@@ -442,6 +529,15 @@ impl WsClientV2 {
         Ok(())
     }
 }
+
+/// Minimal validation that an incoming frame matches the *Envelope* shape.
+/// This is **not** a full JSON-Schema check (that will be generated once the
+/// AsyncAPI toolchain works in CI).  It simply guards against blatantly
+/// malformed payloads so we can fail-fast and close the connection –
+/// mirroring the backend 1002 close code behaviour.
+// The inline `validate_envelope()` helper has been superseded by the
+// full JSON-Schema based check in `crate::schema_validation`.
+// (Function removed.)
 
 // Implement IWsClient trait for WsClientV2
 impl IWsClient for WsClientV2 {
@@ -458,7 +554,16 @@ impl IWsClient for WsClientV2 {
     }
 
     fn close(&mut self) -> Result<(), JsValue> {
-        self.close()
+        web_sys::console::log_1(&"Closing WebSocket connection...".into());
+        self.clear_ping_interval();
+        *self.state.borrow_mut() = ConnectionState::Disconnected;
+        if let Some(ws) = self.websocket.take() {
+            match ws.close_with_code(1000) {
+                Ok(_) => web_sys::console::log_1(&"WebSocket close command sent.".into()),
+                Err(e) => web_sys::console::error_1(&format!("Error sending close command: {:?}", e).into()),
+            }
+        }
+        Ok(())
     }
 
     fn set_on_connect(&mut self, callback: Box<dyn FnMut() + 'static>) {
@@ -497,6 +602,9 @@ impl Clone for WsClientV2 {
             on_connect_callback: self.on_connect_callback.clone(),
             on_message_callback: self.on_message_callback.clone(), 
             on_disconnect_callback: self.on_disconnect_callback.clone(),
+
+            last_activity_ms: self.last_activity_ms.clone(),
+            activity_interval: self.activity_interval.clone(),
         }
     }
 }
@@ -605,4 +713,4 @@ pub fn send_thread_message(text: &str, message_id: String) {
     } else {
         web_sys::console::error_1(&"Cannot send message: No websocket connection or no agent selected".into());
     }
-} 
+}

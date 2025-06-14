@@ -15,7 +15,8 @@
   height: 100vh;
   padding-top: 108px; /* header + tabs */
   box-sizing: border-box;
-  overflow: hidden;
+  /* Changed from hidden → visible to prevent popover clipping */
+  overflow: visible;
 }
 
 #app-container.canvas-view {
@@ -28,7 +29,8 @@
   height: 100vh;
   padding-top: 108px; /* header (60) + tabs (48) */
   box-sizing: border-box;
-  overflow: hidden;
+  /* Same change – avoid clipping dropdown */
+  overflow: visible;
 }
 
 #canvas-root.canvas-view {
@@ -39,7 +41,7 @@
   flex: 1;
   min-height: 0;
   display: flex;
-  overflow: hidden;
+  /* overflow: hidden;  Removed to allow dropdowns to escape stacking context */
   /* Dark neutral surface – previously light grey created unwanted white box */
   background: var(--dark-lighter);
   position: relative;
@@ -56,7 +58,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  /* overflow: hidden;  Removed to allow dropdowns to escape stacking context */
 }
 
 /* Light grid overlay */
@@ -75,18 +77,20 @@
   width: 100%;
   height: 100%;
   position: relative;
-  z-index: 1;
+  z-index: var(--z-canvas);
   background-color: #33334a !important;
 }
 
 /* Input toolbar anchored to top of canvas */
-#input-panel {
+#canvas-input-panel {
   display: flex;
   align-items: center;
-  padding: 10px 15px;
-  background: rgba(42, 42, 58, 0.9);
-  border-bottom: 1px solid #3d3d5c;
+  padding: var(--spacing-md);
+  background: var(--dark-card);
+  border-bottom: 1px solid var(--border-color);
   z-index: 5;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
 }
 
 /* Chat / command input within panel */
@@ -119,6 +123,223 @@
   margin-left: 10px;
   border-radius: var(--radius-sm);
   border: 1px solid #ccc;
+}
+
+/* ------------------------------------------------------------------ */
+/* Workflow tab bar                                                   */
+/* ------------------------------------------------------------------ */
+
+#workflow-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  background: var(--dark-card);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 var(--spacing-md);
+  overflow-x: auto;
+  flex-shrink: 0;
+  /* Sit above the canvas itself so dropdowns are never occluded */
+  position: relative;
+  z-index: var(--z-toolbar);
+}
+
+.workflow-tab-list {
+  display: flex;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  align-items: center;
+  gap: var(--spacing-xs);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.workflow-tab-list .tab {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 500;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+.workflow-tab-list .tab:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.workflow-tab-list .tab.active {
+  background: var(--bg-button);
+  color: var(--text);
+  border-color: var(--border-color);
+}
+
+.workflow-tab-list .plus-tab {
+  font-weight: bold;
+  color: var(--primary);
+  font-size: 16px;
+  min-width: 32px;
+  justify-content: center;
+}
+
+.workflow-tab-list .plus-tab:hover {
+  background: rgba(100, 255, 218, 0.1);
+  color: var(--primary);
+}
+
+/* Space-bar panning cursor override */
+body.space-pan #node-canvas {
+  cursor: grab !important;
+}
+
+/* Toolbar actions container (right side of workflow bar) */
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 16px;
+}
+
+.toolbar-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0 6px;
+  font: 500 15px/1 system-ui, sans-serif;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 28px;
+  position: relative;
+}
+
+.toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  border-color: rgba(100, 255, 218, 0.3);
+  transform: translateY(-1px);
+}
+
+.toolbar-btn:active {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(0);
+}
+
+/* Tooltip styles */
+.toolbar-btn::after {
+  content: attr(title);
+  position: absolute;
+  bottom: -32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--dark-card);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+  border: 1px solid var(--border-color);
+  z-index: 100;
+}
+
+.toolbar-btn:hover::after {
+  opacity: 1;
+}
+
+/* Custom dropdown container */
+.dropdown-container {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-toggle {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 28px;
+  user-select: none;
+}
+
+.dropdown-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  border-color: rgba(100, 255, 218, 0.3);
+  transform: translateY(-1px);
+}
+
+.dropdown-toggle.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border-color: rgba(100, 255, 218, 0.5);
+}
+
+.dropdown-menu {
+  position: absolute;
+  background: var(--dark-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 4px 0;
+  min-width: 120px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: var(--z-overlay);
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: all var(--transition-fast);
+  pointer-events: none;
+}
+
+.dropdown-menu.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.dropdown-item.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
 }
 
 /* Toggle switch */

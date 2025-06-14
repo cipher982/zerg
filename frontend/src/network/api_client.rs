@@ -33,6 +33,17 @@ impl ApiClient {
         super::get_api_base_url().expect("API base URL must be set (no fallback allowed)")
     }
 
+    // -------------------------------------------------------------------
+    // Workflow execution history
+    // -------------------------------------------------------------------
+
+    pub async fn get_execution_history(workflow_id: u32, limit: u32) -> Result<String, JsValue> {
+        let base = Self::api_base_url();
+        // Backend currently ignores limit param but we include for forward-compat
+        let url = format!("{}/api/workflow-executions/history/{}?limit={}", base, workflow_id, limit);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
     // ---------------- Agent Runs ----------------
 
     /// Fetch most recent runs for an agent (limit parameter default 20)
@@ -50,6 +61,64 @@ impl ApiClient {
     pub async fn fetch_available_models() -> Result<String, JsValue> {
         let url = format!("{}/api/models", Self::api_base_url());
         Self::fetch_json(&url, "GET", None).await
+    }
+
+    // -------------------------------------------------------------------
+    // Workflow CRUD – new backend integration (July 2025)
+    // -------------------------------------------------------------------
+
+    /// Fetch all workflows for the **current** user (active only).
+    pub async fn get_workflows() -> Result<String, JsValue> {
+        let url = format!("{}/api/workflows", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    /// Create a new workflow – returns the JSON representation from backend.
+    pub async fn create_workflow(name: &str) -> Result<String, JsValue> {
+        // Minimal payload; description empty and canvas_data empty object
+        let body = format!(
+            "{{\"name\": \"{}\", \"description\": \"\", \"canvas_data\": {{}}}}",
+            name
+        );
+        let url = format!("{}/api/workflows/", Self::api_base_url());
+        Self::fetch_json(&url, "POST", Some(&body)).await
+    }
+
+    /// Soft-delete a workflow.
+    pub async fn delete_workflow(workflow_id: u32) -> Result<(), JsValue> {
+        let url = format!("{}/api/workflows/{}", Self::api_base_url(), workflow_id);
+        Self::fetch_json(&url, "DELETE", None).await.map(|_| ())
+    }
+
+    /// Rename / update a workflow (PATCH).
+    pub async fn rename_workflow(
+        workflow_id: u32,
+        name: &str,
+        description: &str,
+    ) -> Result<String, JsValue> {
+        let url = format!("{}/api/workflows/{}", Self::api_base_url(), workflow_id);
+        let body = format!(
+            "{{\"name\": \"{}\", \"description\": \"{}\", \"canvas_data\": {{}}}}",
+            name, description
+        );
+        Self::fetch_json(&url, "PATCH", Some(&body)).await
+    }
+
+    // -------------------------------------------------------------------
+    // Workflow execution – run & status
+    // -------------------------------------------------------------------
+
+    /// Start an execution for the given workflow ID.  Returns the JSON
+    /// response from the backend which contains at least
+    /// `{ "execution_id": <u32>, "status": "running" }`.
+    pub async fn start_workflow_execution(workflow_id: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/{}/start",
+            Self::api_base_url(),
+            workflow_id
+        );
+
+        Self::fetch_json(&url, "POST", None).await
     }
 
     // Get all agents
@@ -129,8 +198,13 @@ impl ApiClient {
 
     /// Retrieve the persisted canvas layout for the authenticated user.
     /// Returns an **empty string** if the backend responded with 204.
-    pub async fn get_layout() -> Result<String, JsValue> {
-        let url = format!("{}/api/graph/layout", Self::api_base_url());
+    pub async fn get_layout(workflow_id: Option<u32>) -> Result<String, JsValue> {
+        let base = Self::api_base_url();
+        let url = if let Some(id) = workflow_id {
+            format!("{}/api/graph/layout?workflow_id={}", base, id)
+        } else {
+            format!("{}/api/graph/layout", base)
+        };
         Self::fetch_json(&url, "GET", None).await
     }
 
@@ -302,8 +376,13 @@ impl ApiClient {
     /// convert the successful `fetch_json` result (an empty string) into `()`
     /// so callers can use the function in a boolean-style `match` without
     /// caring about a body.
-    pub async fn patch_layout(payload_json: &str) -> Result<(), JsValue> {
-        let url = format!("{}/api/graph/layout", Self::api_base_url());
+    pub async fn patch_layout(payload_json: &str, workflow_id: Option<u32>) -> Result<(), JsValue> {
+        let base = Self::api_base_url();
+        let url = if let Some(id) = workflow_id {
+            format!("{}/api/graph/layout?workflow_id={}", base, id)
+        } else {
+            format!("{}/api/graph/layout", base)
+        };
         Self::fetch_json(&url, "PATCH", Some(payload_json))
             .await
             .map(|_| ())

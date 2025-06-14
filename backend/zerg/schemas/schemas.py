@@ -39,6 +39,18 @@ class AgentUpdate(BaseModel):
     allowed_tools: Optional[List[str]] = None
 
 
+# ---------------------------------------------------------------------------
+# Pydantic 2.x quirk: on some Python versions ForwardRef resolution fails when
+# schema is imported *before* all referenced types are defined.  Calling
+# `.model_rebuild()` ensures the internal TypeAdapter tree is fully resolved.
+# This is a no-op if everything is already valid.
+for _m in [AgentCreate]:
+    try:
+        _m.model_rebuild()
+    except Exception:  # pragma: no cover – defensive only
+        pass
+
+
 class AgentMessage(BaseModel):
     id: int
     agent_id: int

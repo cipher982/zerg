@@ -55,6 +55,11 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.state_modified = true;
             true
         }
+        Message::ResetView => {
+            state.reset_view();
+            state.state_modified = true;
+            true
+        }
         Message::ClearCanvas => {
             state.nodes.clear();
             state.latest_user_input_id = None;
@@ -161,6 +166,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::ZoomCanvas { new_zoom, viewport_x, viewport_y } => {
             state.zoom_level = *new_zoom;
+            state.clamp_zoom();
             state.viewport_x = *viewport_x;
             state.viewport_y = *viewport_y;
             state.state_modified = true;
@@ -225,13 +231,17 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::UpdateNodeStatus { node_id, status } => {
             if let Some(node) = state.nodes.get_mut(node_id) {
-                match status.as_str() {
-                    "idle" => node.color = "#ffecb3".to_string(),
-                    "processing" => node.color = "#b3e5fc".to_string(),
-                    "complete" => node.color = "#c8e6c9".to_string(),
-                    "error" => node.color = "#ffcdd2".to_string(),
-                    _ => node.color = "#ffecb3".to_string(),
-                }
+                use crate::models::NodeExecStatus;
+
+                let (color, exec_status) = match status.as_str() {
+                    "running" | "processing" => ("#fcd34d", NodeExecStatus::Running),   // amber-300
+                    "success" | "complete" => ("#86efac", NodeExecStatus::Success),     // green-300
+                    "failed" | "error" => ("#fca5a5", NodeExecStatus::Failed),        // red-300
+                    _ => ("#e0e7ff", NodeExecStatus::Idle),                               // indigo-100
+                };
+
+                node.color = color.to_string();
+                node.exec_status = Some(exec_status);
                 if let Some(agent_id) = node.agent_id {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
                         agent.status = Some(status.clone());
@@ -266,12 +276,15 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::AnimationTick => {
+            // Always mark dirty to keep animations running smoothly
+            state.mark_dirty();
+
             if state.dirty {
                 state.dirty = false;
                 cmds.push(Command::UpdateUI(Box::new(|| {
                     crate::state::APP_STATE.with(|state_rc| {
-                        let st = state_rc.borrow_mut();
-                        st.draw_nodes();
+                        let mut st = state_rc.borrow_mut();
+                        crate::canvas::renderer::draw_nodes(&mut st);
                         #[cfg(debug_assertions)] {
                             if let Some(ctx) = st.context.as_ref() {
                                 crate::utils::debug::draw_overlay(ctx, &st.debug_ring);
@@ -338,6 +351,16 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             let workflow_id = state.create_workflow(name.clone());
             web_sys::console::log_1(&format!("Created new workflow '{}' with ID: {}", name, workflow_id).into());
             state.state_modified = true;
+
+            // Refresh tab bar UI
+            cmds.push(Command::UpdateUI(Box::new(|| {
+                if let (Some(win),) = (web_sys::window(),) {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::workflow_switcher::refresh(&doc);
+                    }
+                }
+            })));
+
             true
         }
         Message::SelectWorkflow { workflow_id } => {
@@ -350,6 +373,15 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             }
             state.mark_dirty();
             state.state_modified = true;
+
+            cmds.push(Command::UpdateUI(Box::new(|| {
+                if let (Some(win),) = (web_sys::window(),) {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::workflow_switcher::refresh(&doc);
+                    }
+                }
+            })));
+
             true
         }
         Message::AddEdge { from_node_id, to_node_id, label } => {

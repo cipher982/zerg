@@ -15,8 +15,8 @@ import os
 import pathlib
 import subprocess
 import sys
-from typing import Any, Dict
-
+from typing import Any
+from typing import Dict
 
 # ---------------------------------------------------------------------------
 # Configuration helpers
