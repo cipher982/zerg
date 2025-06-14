@@ -136,59 +136,100 @@ class WorkflowExecutionEngine:
                 error=None,
             )
 
-            try:
-                # Placeholder execution – replace with real logic later
-                time.sleep(0.005)
+            # ------------------------------------------------------------------
+            # Retry / back-off handling (simple v1 implementation)
+            # ------------------------------------------------------------------
 
-                # Mock output so the front-end has something to display.
-                output: Dict[str, Any] = {"result": f"{node_type}_executed"}
+            # Defaults from workflow-level policy
+            policy: Dict[str, Any] = (canvas.get("retries") or {}) if isinstance(canvas.get("retries"), dict) else {}
+            default_max_retries: int = int(policy.get("default", 0))
+            backoff_strategy: str = str(policy.get("backoff", "exp"))
 
-                node_state.status = "success"
-                node_state.output = output
-                db.commit()
+            # Per-node override (optional)
+            node_policy: Dict[str, Any] = node.get("retries", {}) if isinstance(node.get("retries"), dict) else {}
+            max_retries: int = int(node_policy.get("max", default_max_retries))
 
-                # Emit *success* event
-                self._publish_node_event(
-                    execution_id=execution.id,
-                    node_id=node_id,
-                    status="success",
-                    output=output,
-                    error=None,
-                )
+            attempt = 0
+            last_exc: Exception | None = None
 
-                log_lines.append(f"Node {node_id} ({node_type}) executed – OK")
+            while attempt <= max_retries:
+                try:
+                    # Placeholder execution – replace with real logic later
+                    self._execute_placeholder_node(node_type, node)
 
-            except Exception as exc:  # pylint: disable=broad-except
-                # -- mark node failed -------------------------------------
-                node_state.status = "failed"
-                node_state.error = str(exc)
-                db.commit()
+                    # Mock output so the front-end has something to display.
+                    output: Dict[str, Any] = {"result": f"{node_type}_executed", "attempt": attempt}
 
-                # Emit *failed* event *before* marking execution failed so UI sees red immediately
-                self._publish_node_event(
-                    execution_id=execution.id,
-                    node_id=node_id,
-                    status="failed",
-                    output=None,
-                    error=str(exc),
-                )
+                    node_state.status = "success"
+                    node_state.output = output
+                    db.commit()
 
-                # -- mark parent execution failed ------------------------
-                execution.status = "failed"
-                execution.error = str(exc)
-                execution.finished_at = datetime.now(timezone.utc)
-                execution.log = "\n".join(log_lines)
-                db.commit()
+                    # Emit *success* event
+                    self._publish_node_event(
+                        execution_id=execution.id,
+                        node_id=node_id,
+                        status="success",
+                        output=output,
+                        error=None,
+                    )
 
-                # Emit execution_finished (failed)
-                self._publish_execution_finished(
-                    execution_id=execution.id,
-                    status="failed",
-                    error=str(exc),
-                    duration_ms=self._duration_ms(execution),
-                )
-                logger.exception("[WorkflowEngine] node execution failed – node_id=%s", node_id)
-                return execution.id
+                    log_lines.append(f"Node {node_id} ({node_type}) executed – OK (attempt {attempt})")
+                    break  # success
+
+                except Exception as exc:  # noqa: BLE001 – placeholder for broad errors
+                    last_exc = exc
+                    if attempt < max_retries:
+                        # Log + wait for back-off then retry
+                        log_lines.append(
+                            f"Node {node_id} ({node_type}) failed – RETRY {attempt+1}/{max_retries}: {exc}"
+                        )
+                        # Emit retrying state for UI
+                        self._publish_node_event(
+                            execution_id=execution.id,
+                            node_id=node_id,
+                            status="retrying",
+                            output=None,
+                            error=str(exc),
+                        )
+
+                        # sleep back-off (blocking since we are in worker thread)
+                        backoff_sec = self._calc_backoff_delay(backoff_strategy, attempt)
+                        time.sleep(backoff_sec)
+                        attempt += 1
+                        continue
+
+                    # Max retries exceeded – mark failed
+                    node_state.status = "failed"
+                    node_state.error = str(exc)
+                    db.commit()
+
+                    # Emit *failed* event
+                    self._publish_node_event(
+                        execution_id=execution.id,
+                        node_id=node_id,
+                        status="failed",
+                        output=None,
+                        error=str(exc),
+                    )
+
+                    # -- mark parent execution failed ------------------------
+                    execution.status = "failed"
+                    execution.error = str(exc)
+                    execution.finished_at = datetime.now(timezone.utc)
+                    execution.log = "\n".join(log_lines)
+                    db.commit()
+
+                    # Emit execution_finished (failed)
+                    self._publish_execution_finished(
+                        execution_id=execution.id,
+                        status="failed",
+                        error=str(exc),
+                        duration_ms=self._duration_ms(execution),
+                    )
+                    logger.exception("[WorkflowEngine] node execution failed – node_id=%s", node_id)
+                    return execution.id
+
+            # End while
 
         # ------------------------------------------------------------------
         # 3) Success path – mark execution done
@@ -276,6 +317,45 @@ class WorkflowExecutionEngine:
             delta = execution.finished_at - execution.started_at
             return int(delta.total_seconds() * 1000)
         return None
+
+    # ------------------------------------------------------------------
+    # Internal util – placeholder node execution & back-off calculation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _execute_placeholder_node(node_type: str, node_payload: Dict[str, Any]) -> None:
+        """Simulate node execution with optional *simulate_failures* logic.
+
+        This keeps the engine fully deterministic for unit tests **before**
+        real tool/agent execution lands.  Callers can set
+
+        ```json
+        { "type": "dummy", "simulate_failures": 2 }
+        ```
+
+        to raise an exception *simulate_failures* times before succeeding.
+        The counter is kept *inside* the node payload so repeated calls within
+        one engine execution see the updated count.
+        """
+
+        # Simulated delay
+        time.sleep(0.005)
+
+        remaining_failures = int(node_payload.get("simulate_failures", 0))
+        if remaining_failures > 0:
+            # Decrement counter so next retry may succeed
+            node_payload["simulate_failures"] = remaining_failures - 1
+            raise RuntimeError("Simulated node failure for testing")
+
+    @staticmethod
+    def _calc_backoff_delay(strategy: str, attempt: int) -> float:
+        """Return back-off seconds based on *strategy* and *attempt* (0-based)."""
+
+        strategy = strategy.lower()
+        if strategy == "linear":
+            return 0.1 * (attempt + 1)
+        # default exponential
+        return 0.1 * (2**attempt)
 
 
 # ---------------------------------------------------------------------------
