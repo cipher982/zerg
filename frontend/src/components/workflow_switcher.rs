@@ -82,6 +82,29 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     }
     let _ = actions_el.append_child(&logs_btn);
 
+    // Execution history button 🕒
+    let hist_btn = document.create_element("button")?;
+    hist_btn.set_attribute("type", "button")?;
+    hist_btn.set_inner_html("🕒");
+    hist_btn.set_attribute("class", "toolbar-btn")?;
+    hist_btn.set_attribute("title", "Execution History")?;
+    {
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            crate::state::dispatch_global_message(crate::messages::Message::ToggleExecutionHistory);
+            // If opening, also trigger load for current workflow
+            crate::state::APP_STATE.with(|st| {
+                if st.borrow().exec_history_open {
+                    if let Some(wf_id) = st.borrow().current_workflow_id {
+                        crate::state::dispatch_global_message(crate::messages::Message::LoadExecutionHistory { workflow_id: wf_id });
+                    }
+                }
+            });
+        }));
+        hist_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+    let _ = actions_el.append_child(&hist_btn);
+
     // Center view button
     let center_btn = document.create_element("button")?;
     center_btn.set_attribute("type", "button")?;

@@ -18,6 +18,7 @@ pub mod tool_config_modal;
 pub mod trigger_config_modal;
 pub mod workflow_switcher;
 pub mod log_drawer;
+pub mod execution_sidebar;
 
 // utilities
 

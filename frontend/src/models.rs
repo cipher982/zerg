@@ -238,6 +238,28 @@ pub struct Workflow {
     pub edges: Vec<Edge>,          // Edges connecting nodes in this workflow
 }
 
+// ---------------------------------------------------------------------------
+//   Execution history (sidebar)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct ExecutionSummary {
+    pub id: u32,
+    pub status: String, // running | success | failed | cancelled
+
+    #[serde(default)]
+    pub started_at: Option<String>,
+
+    #[serde(default)]
+    pub finished_at: Option<String>,
+
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
+
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
 // -----------------------------------------------------------------------------
 // Backend **Workflow** DTO (matches FastAPI schema) ---------------------------
 // -----------------------------------------------------------------------------

@@ -226,6 +226,26 @@ pub enum Message {
         text: String,
     },
 
+    // ------------------------------------------------------------------
+    // Execution history / right-hand sidebar
+    // ------------------------------------------------------------------
+
+    /// Toggle the execution history drawer
+    ToggleExecutionHistory,
+
+    /// Load execution history for current workflow (async command will follow)
+    LoadExecutionHistory {
+        workflow_id: u32,
+    },
+
+    /// Execution history loaded from backend
+    ExecutionHistoryLoaded(Vec<crate::models::ExecutionSummary>),
+
+    /// User selected an execution from the list – triggers replay
+    SelectExecution {
+        execution_id: u32,
+    },
+
     /// Toggle the collapsible execution log drawer
     ToggleLogDrawer,
 
@@ -523,6 +543,9 @@ pub enum Command {
 
     /// Fetch workflows (visual canvas definitions)
     FetchWorkflows,
+
+    /// Fetch execution history for workflow
+    FetchExecutionHistory { workflow_id: u32 },
 
     // Workflow CRUD actions
     CreateWorkflowApi { name: String },
