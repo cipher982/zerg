@@ -20,6 +20,31 @@ use crate::canvas::{renderer, background::ParticleSystem};
 use crate::storage::ActiveView;
 use crate::network::{WsClientV2, TopicManager};
 use crate::messages::{Message, Command};
+
+// ---------------------------------------------------------------------------
+//  Workflow execution helper structs (UI state only)
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, PartialEq)]
+pub enum ExecPhase {
+    Starting,
+    Running,
+    Success,
+    Failed,
+}
+
+#[derive(Clone)]
+pub struct ExecutionStatus {
+    pub execution_id: u32,
+    pub status: ExecPhase,
+}
+
+#[derive(Clone)]
+pub struct ExecutionLog {
+    pub node_id: String,
+    pub stream: String, // stdout | stderr
+    pub text: String,
+}
 use crate::constants::{
     DEFAULT_NODE_WIDTH,
     DEFAULT_NODE_HEIGHT,
@@ -199,6 +224,16 @@ pub struct AppState {
     pub viewport_y: f64,
     pub zoom_level: f64,
     pub auto_fit: bool,
+
+    // ------------------------------------------------------------------
+    // Workflow execution – live run status & logs
+    // ------------------------------------------------------------------
+
+    pub current_execution: Option<ExecutionStatus>,
+    pub execution_logs: Vec<ExecutionLog>,
+    pub logs_open: bool,
+
+    // (duplicate fields removed)
     // Track the latest user input node ID
     pub latest_user_input_id: Option<String>,
     // Track message IDs and their corresponding node IDs
@@ -553,6 +588,10 @@ impl AppState {
             mcp_connection_status: HashMap::new(),
             power_mode: false,
             particle_system: None,
+
+            current_execution: None,
+            execution_logs: Vec::new(),
+            logs_open: false,
         }
     }
 

@@ -459,10 +459,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         | Message::DeleteNode { .. }
         | Message::UpdateNodeText { .. }
         | Message::CompleteNodeResponse { .. }
-        | Message::UpdateNodeStatus { .. }
-        | Message::ExecutionFinished { .. }
-        | Message::AppendExecutionLog { .. }
-        
+        | Message::UpdateNodeStatus { .. } => {
+            // These are handled by the canvas reducer which returns early
+            unreachable!("Canvas messages should be handled by the canvas reducer")
+        }
+        // (handled later)
         | Message::AnimationTick => {
             // Fire async command to backend
             // These are handled elsewhere or in canvas reducer. No-op here.
@@ -472,6 +473,12 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // SubscribeWorkflowExecution – create WS topic subscription
         // -------------------------------------------------------------------
         Message::SubscribeWorkflowExecution { execution_id } => {
+            // Update state.current_execution with real id
+            state.current_execution = Some(crate::state::ExecutionStatus {
+                execution_id,
+                status: crate::state::ExecPhase::Running,
+            });
+
             let topic = format!("workflow_execution:{}", execution_id);
             let topic_manager_rc = state.topic_manager.clone();
 
@@ -518,6 +525,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // Start workflow execution – triggers API call command
         // -------------------------------------------------------------------
         Message::StartWorkflowExecution { workflow_id } => {
+            state.current_execution = Some(crate::state::ExecutionStatus {
+                execution_id: 0,
+                status: crate::state::ExecPhase::Starting,
+            });
+            state.execution_logs.clear();
             commands.push(Command::StartWorkflowExecutionApi { workflow_id });
         }
         Message::CreateWorkflow { name } => {
@@ -561,6 +573,39 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     let _ = crate::components::workflow_switcher::refresh(&doc);
                 }
             })));
+        }
+
+        // -------------------------------------------------------------------
+        // Live workflow execution updates
+        // -------------------------------------------------------------------
+        Message::ExecutionFinished { execution_id, status, error } => {
+            if let Some(exec) = &mut state.current_execution {
+                if exec.execution_id == 0 || exec.execution_id == execution_id {
+                    exec.execution_id = execution_id;
+                    exec.status = if status == "success" {
+                        crate::state::ExecPhase::Success
+                    } else {
+                        crate::state::ExecPhase::Failed
+                    };
+                }
+            }
+            if let Some(err) = error {
+                state.execution_logs.push(crate::state::ExecutionLog {
+                    node_id: "execution".to_string(),
+                    stream: "error".to_string(),
+                    text: format!("Execution failed: {}", err),
+                });
+            }
+            needs_refresh = true;
+        }
+
+        Message::AppendExecutionLog { execution_id, node_id, stream, text } => {
+            if let Some(exec) = &state.current_execution {
+                if exec.execution_id == 0 || exec.execution_id == execution_id {
+                    state.execution_logs.push(crate::state::ExecutionLog { node_id: node_id.clone(), stream: stream.clone(), text: text.clone() });
+                    needs_refresh = true;
+                }
+            }
         }
         Message::WorkflowsLoaded(workflows) => {
             state.workflows.clear();
