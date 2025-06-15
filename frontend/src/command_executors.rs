@@ -162,6 +162,63 @@ pub fn execute_fetch_command(cmd: Command) {
             });
         }
 
+        // -----------------------------------------------------------
+        // Workflow Scheduling commands
+        // -----------------------------------------------------------
+        Command::ScheduleWorkflowApi { workflow_id, cron_expression } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::schedule_workflow(workflow_id, &cron_expression).await {
+                    Ok(json_str) => {
+                        web_sys::console::log_1(&format!("Workflow {} scheduled successfully: {}", workflow_id, json_str).into());
+                        // Could dispatch success message / toast
+                        crate::toast::success(&format!("Workflow scheduled with cron: {}", cron_expression));
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to schedule workflow: {:?}", e).into());
+                        crate::toast::error("Failed to schedule workflow");
+                    }
+                }
+            });
+        }
+
+        Command::UnscheduleWorkflowApi { workflow_id } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::unschedule_workflow(workflow_id).await {
+                    Ok(_) => {
+                        web_sys::console::log_1(&format!("Workflow {} unscheduled successfully", workflow_id).into());
+                        crate::toast::success("Workflow unscheduled successfully");
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to unschedule workflow: {:?}", e).into());
+                        crate::toast::error("Failed to unschedule workflow");
+                    }
+                }
+            });
+        }
+
+        Command::CheckWorkflowScheduleApi { workflow_id } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_workflow_schedule(workflow_id).await {
+                    Ok(json_str) => {
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                            if let Some(scheduled) = val.get("scheduled").and_then(|v| v.as_bool()) {
+                                if scheduled {
+                                    if let Some(next_run) = val.get("next_run_time").and_then(|v| v.as_str()) {
+                                        web_sys::console::log_1(&format!("Workflow {} is scheduled, next run: {}", workflow_id, next_run).into());
+                                    }
+                                } else {
+                                    web_sys::console::log_1(&format!("Workflow {} is not scheduled", workflow_id).into());
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to check workflow schedule: {:?}", e).into());
+                    }
+                }
+            });
+        }
+
         Command::FetchAgentDetails(agent_id) => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_agent_details(agent_id).await {

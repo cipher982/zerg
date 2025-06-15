@@ -108,6 +108,18 @@ pub enum Message {
     DeleteWorkflow {
         workflow_id: u32,
     },
+    
+    // Workflow scheduling actions
+    ScheduleWorkflow {
+        workflow_id: u32,
+        cron_expression: String,
+    },
+    UnscheduleWorkflow {
+        workflow_id: u32,
+    },
+    CheckWorkflowSchedule {
+        workflow_id: u32,
+    },
 
     // Workflows fetched from backend
     WorkflowsLoaded(Vec<crate::models::Workflow>),
@@ -559,6 +571,14 @@ pub enum Command {
     // ---------------- Workflow execution -----------------------------
     /// POST /workflow-executions/{workflow_id}/start
     StartWorkflowExecutionApi { workflow_id: u32 },
+
+    // ---------------- Workflow scheduling -----------------------------
+    /// POST /workflow-executions/{workflow_id}/schedule
+    ScheduleWorkflowApi { workflow_id: u32, cron_expression: String },
+    /// DELETE /workflow-executions/{workflow_id}/schedule
+    UnscheduleWorkflowApi { workflow_id: u32 },
+    /// GET /workflow-executions/{workflow_id}/schedule
+    CheckWorkflowScheduleApi { workflow_id: u32 },
 
     // ---------------------------------------------------------------
     // Trigger-related side-effect commands (Phase A wiring only)

@@ -67,6 +67,31 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
 
     let _ = actions_el.append_child(&run_btn);
 
+    // --------------------------------------------------------------------
+    // Schedule (⏰) button – schedule workflow execution
+    // --------------------------------------------------------------------
+    let schedule_btn = document.create_element("button")?;
+    schedule_btn.set_attribute("type", "button")?;
+    schedule_btn.set_inner_html("⏰");
+    schedule_btn.set_attribute("class", "toolbar-btn")?;
+    schedule_btn.set_attribute("id", "schedule-workflow-btn")?;
+    schedule_btn.set_attribute("title", "Schedule Workflow")?;
+
+    {
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            // Read current workflow id at click time (avoid stale capture)
+            if let Some(current_id) = APP_STATE.with(|st| st.borrow().current_workflow_id) {
+                show_schedule_modal(current_id);
+            } else {
+                web_sys::console::warn_1(&"No workflow selected – cannot schedule".into());
+            }
+        }));
+        schedule_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+
+    let _ = actions_el.append_child(&schedule_btn);
+
     // Logs button 📜
     let logs_btn = document.create_element("button")?;
     logs_btn.set_attribute("type", "button")?;
@@ -445,4 +470,165 @@ pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
     }
 
     Ok(())
+}
+
+/// Show a modal dialog for scheduling a workflow with cron expression input
+fn show_schedule_modal(workflow_id: u32) {
+    let window = match web_sys::window() {
+        Some(w) => w,
+        None => return,
+    };
+    
+    let document = match window.document() {
+        Some(d) => d,
+        None => return,
+    };
+
+    // Create modal overlay
+    let overlay = match document.create_element("div") {
+        Ok(el) => el,
+        Err(_) => return,
+    };
+    let _ = overlay.set_attribute("class", "modal-overlay");
+    let _ = overlay.set_attribute("id", "schedule-modal-overlay");
+    
+    // Create modal content
+    let modal = match document.create_element("div") {
+        Ok(el) => el,
+        Err(_) => return,
+    };
+    let _ = modal.set_attribute("class", "modal schedule-modal");
+    
+    // Modal header
+    let header = match document.create_element("div") {
+        Ok(el) => el,
+        Err(_) => return,
+    };
+    let _ = header.set_attribute("class", "modal-header");
+    header.set_inner_html("<h3>Schedule Workflow</h3>");
+    
+    // Modal body
+    let body = match document.create_element("div") {
+        Ok(el) => el,
+        Err(_) => return,
+    };
+    let _ = body.set_attribute("class", "modal-body");
+    
+    // Cron expression input
+    let input_html = r#"
+        <div class="form-group">
+            <label for="cron-expression">Cron Expression:</label>
+            <input type="text" id="cron-expression" class="input w-full" 
+                   placeholder="0 9 * * 1-5" 
+                   title="Examples: '0 9 * * 1-5' (weekdays at 9 AM), '0 0 * * 0' (Sundays at midnight)">
+            <div class="help-text">
+                <p>Examples:</p>
+                <ul>
+                    <li><code>0 9 * * 1-5</code> - Weekdays at 9:00 AM</li>
+                    <li><code>0 0 * * 0</code> - Sundays at midnight</li>
+                    <li><code>*/15 * * * *</code> - Every 15 minutes</li>
+                    <li><code>0 2 1 * *</code> - First day of every month at 2:00 AM</li>
+                </ul>
+            </div>
+        </div>
+    "#;
+    body.set_inner_html(input_html);
+    
+    // Modal footer
+    let footer = match document.create_element("div") {
+        Ok(el) => el,
+        Err(_) => return,
+    };
+    let _ = footer.set_attribute("class", "modal-footer");
+    
+    let cancel_btn = match document.create_element("button") {
+        Ok(el) => el,
+        Err(_) => return,
+    };
+    let _ = cancel_btn.set_attribute("type", "button");
+    let _ = cancel_btn.set_attribute("class", "btn btn-secondary");
+    cancel_btn.set_text_content(Some("Cancel"));
+    
+    let schedule_btn = match document.create_element("button") {
+        Ok(el) => el,
+        Err(_) => return,
+    };
+    let _ = schedule_btn.set_attribute("type", "button");
+    let _ = schedule_btn.set_attribute("class", "btn btn-primary");
+    let _ = schedule_btn.set_attribute("id", "confirm-schedule-btn");
+    schedule_btn.set_text_content(Some("Schedule"));
+    
+    let _ = footer.append_child(&cancel_btn);
+    let _ = footer.append_child(&schedule_btn);
+    
+    // Assemble modal
+    let _ = modal.append_child(&header);
+    let _ = modal.append_child(&body);
+    let _ = modal.append_child(&footer);
+    let _ = overlay.append_child(&modal);
+    
+    // Add event handlers
+    {
+        let overlay_clone = overlay.clone();
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            let _ = overlay_clone.remove();
+        }));
+        let _ = cancel_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref());
+        cb.forget();
+    }
+    
+    // Schedule button handler
+    {
+        let overlay_clone = overlay.clone();
+        let document_clone = document.clone();
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            if let Some(input) = document_clone.get_element_by_id("cron-expression") {
+                if let Some(html_input) = input.dyn_ref::<web_sys::HtmlInputElement>() {
+                    let cron_expr = html_input.value().trim().to_string();
+                    if !cron_expr.is_empty() {
+                        // Dispatch schedule message
+                        dispatch_global_message(Message::ScheduleWorkflow {
+                            workflow_id,
+                            cron_expression: cron_expr,
+                        });
+                        let _ = overlay_clone.remove();
+                    } else {
+                        // Show error for empty cron expression
+                        if let Some(window) = web_sys::window() {
+                            let _ = window.alert_with_message("Please enter a valid cron expression");
+                        }
+                    }
+                }
+            }
+        }));
+        let _ = schedule_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref());
+        cb.forget();
+    }
+    
+    // Close on overlay click (outside modal)
+    {
+        let overlay_clone = overlay.clone();
+        let modal_clone = modal.clone();
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: web_sys::MouseEvent| {
+            if let Some(target) = e.target() {
+                if let Ok(element) = target.dyn_into::<web_sys::Element>() {
+                    if element == overlay_clone && !modal_clone.contains(Some(&element)) {
+                        let _ = overlay_clone.remove();
+                    }
+                }
+            }
+        }));
+        let _ = overlay.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref());
+        cb.forget();
+    }
+    
+    // Add to body and focus input
+    let _ = document.body().unwrap().append_child(&overlay);
+    
+    // Focus the cron expression input
+    if let Some(input) = document.get_element_by_id("cron-expression") {
+        if let Some(html_input) = input.dyn_ref::<web_sys::HtmlInputElement>() {
+            let _ = html_input.focus();
+        }
+    }
 }

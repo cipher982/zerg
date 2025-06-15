@@ -1565,7 +1565,10 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::CreateWorkflowApi { .. } |
             cmd @ Command::DeleteWorkflowApi { .. } |
             cmd @ Command::RenameWorkflowApi { .. } |
-            cmd @ Command::StartWorkflowExecutionApi { .. } => crate::command_executors::execute_fetch_command(cmd),
+            cmd @ Command::StartWorkflowExecutionApi { .. } |
+            cmd @ Command::ScheduleWorkflowApi { .. } |
+            cmd @ Command::UnscheduleWorkflowApi { .. } |
+            cmd @ Command::CheckWorkflowScheduleApi { .. } => crate::command_executors::execute_fetch_command(cmd),
             cmd @ Command::FetchTriggers(_) |
             cmd @ Command::CreateTrigger { .. } |
             cmd @ Command::DeleteTrigger(_) => crate::command_executors::execute_fetch_command(cmd),

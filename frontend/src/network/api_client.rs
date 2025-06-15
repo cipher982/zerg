@@ -44,6 +44,44 @@ impl ApiClient {
         Self::fetch_json(&url, "GET", None).await
     }
 
+    // -------------------------------------------------------------------
+    // Workflow Scheduling
+    // -------------------------------------------------------------------
+
+    /// Schedule a workflow to run on a cron schedule
+    pub async fn schedule_workflow(workflow_id: u32, cron_expression: &str) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/{}/schedule",
+            Self::api_base_url(),
+            workflow_id
+        );
+        let body = format!(
+            "{{\"cron_expression\": \"{}\", \"trigger_config\": {{}}}}",
+            cron_expression
+        );
+        Self::fetch_json(&url, "POST", Some(&body)).await
+    }
+
+    /// Remove the schedule for a workflow
+    pub async fn unschedule_workflow(workflow_id: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/{}/schedule",
+            Self::api_base_url(),
+            workflow_id
+        );
+        Self::fetch_json(&url, "DELETE", None).await
+    }
+
+    /// Get the current schedule status for a workflow
+    pub async fn get_workflow_schedule(workflow_id: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/{}/schedule",
+            Self::api_base_url(),
+            workflow_id
+        );
+        Self::fetch_json(&url, "GET", None).await
+    }
+
     // ---------------- Agent Runs ----------------
 
     /// Fetch most recent runs for an agent (limit parameter default 20)
