@@ -13,6 +13,7 @@ from zerg.database import get_db
 from zerg.dependencies.auth import get_current_user
 from zerg.models.models import User
 from zerg.services.workflow_engine import workflow_execution_engine
+from zerg.services.workflow_scheduler import workflow_scheduler
 
 router = APIRouter(
     prefix="/workflow-executions",
@@ -28,6 +29,11 @@ router = APIRouter(
 
 class CancelPayload(BaseModel):
     reason: str = Field(..., max_length=500)
+
+
+class ScheduleWorkflowPayload(BaseModel):
+    cron_expression: str = Field(..., min_length=1, max_length=100)
+    trigger_config: dict = Field(default_factory=dict)
 
 
 @router.post("/{workflow_id}/start")
@@ -165,3 +171,110 @@ def cancel_execution(
         loop.close()
 
     return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Workflow Scheduling endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{workflow_id}/schedule")
+async def schedule_workflow(
+    workflow_id: int,
+    payload: ScheduleWorkflowPayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Schedule a workflow to run on a cron schedule.
+    """
+    workflow = crud.get_workflow(db, workflow_id)
+    if not workflow or workflow.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    success = await workflow_scheduler.schedule_workflow(
+        workflow_id=workflow_id,
+        cron_expression=payload.cron_expression,
+        trigger_config=payload.trigger_config,
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail="Failed to schedule workflow")
+
+    return {"status": "scheduled", "cron_expression": payload.cron_expression}
+
+
+@router.delete("/{workflow_id}/schedule")
+def unschedule_workflow(
+    workflow_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Remove the schedule for a workflow.
+    """
+    workflow = crud.get_workflow(db, workflow_id)
+    if not workflow or workflow.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    success = workflow_scheduler.unschedule_workflow(workflow_id)
+
+    if not success:
+        raise HTTPException(status_code=404, detail="Workflow not scheduled")
+
+    return {"status": "unscheduled"}
+
+
+@router.get("/{workflow_id}/schedule")
+def get_workflow_schedule(
+    workflow_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get the current schedule for a workflow.
+    """
+    workflow = crud.get_workflow(db, workflow_id)
+    if not workflow or workflow.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    scheduled_workflows = workflow_scheduler.get_scheduled_workflows()
+
+    if workflow_id in scheduled_workflows:
+        schedule_info = scheduled_workflows[workflow_id]
+        return {
+            "scheduled": True,
+            "next_run_time": schedule_info["next_run_time"].isoformat() if schedule_info["next_run_time"] else None,
+            "trigger": schedule_info["trigger"],
+        }
+    else:
+        return {"scheduled": False}
+
+
+@router.get("/scheduled")
+def list_scheduled_workflows(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List all scheduled workflows for the current user.
+    """
+    scheduled_workflows = workflow_scheduler.get_scheduled_workflows()
+
+    # Filter to only workflows owned by current user
+    user_scheduled = []
+    for workflow_id, schedule_info in scheduled_workflows.items():
+        workflow = crud.get_workflow(db, workflow_id)
+        if workflow and workflow.owner_id == current_user.id:
+            user_scheduled.append(
+                {
+                    "workflow_id": workflow_id,
+                    "workflow_name": workflow.name,
+                    "next_run_time": schedule_info["next_run_time"].isoformat()
+                    if schedule_info["next_run_time"]
+                    else None,
+                    "trigger": schedule_info["trigger"],
+                }
+            )
+
+    return {"scheduled_workflows": user_scheduled}

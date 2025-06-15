@@ -45,7 +45,7 @@ All major backend execution features are now complete:
 - [x] WebSocket broadcast (`execution_finished`, `node_log`) events
     - [x] Front-end subscription & visualisation (see section 2.3)
 - [x] **DAG traversal & parallel branches** *(COMPLETED)*
-- [ ] Manual vs scheduled runs (APScheduler hook via Trigger nodes)
+- [x] **Manual vs scheduled runs (APScheduler hook via Trigger nodes)** *(COMPLETED)*
 
     **✅ Already done** (so engine work can build on top):
     - DB schema for execution tracking.
@@ -200,6 +200,7 @@ engine; payload shape is considered **beta** until DAG support lands.
    - Comprehensive retry policies with configurable backoff strategies  
    - Parallel node execution with dependency resolution
    - Error handling, cancellation support, and real-time WebSocket updates
+   - Manual vs scheduled workflow execution with APScheduler integration
 
 2. ✅ **Frontend Stability & UX**: Production-ready canvas interface  
    - Fixed all critical panic errors in workflow_switcher.rs

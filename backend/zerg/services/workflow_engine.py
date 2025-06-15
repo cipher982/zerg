@@ -64,22 +64,29 @@ class WorkflowExecutionEngine:
     # Public API – called from FastAPI routers
     # ------------------------------------------------------------------
 
-    async def execute_workflow(self, workflow_id: int) -> int:
+    async def execute_workflow(
+        self, workflow_id: int, trigger_type: str = "manual", trigger_config: Dict[str, Any] = None
+    ) -> int:
         """Run *workflow_id* and return the new `WorkflowExecution.id`.
 
         We off-load the blocking DB / CPU part to a thread-pool via
         ``asyncio.to_thread`` so the coroutine does not block the event loop.
         The function is therefore safe to ``await`` directly from a request
         handler (no `BackgroundTasks` yet – that can come later).
+
+        Args:
+            workflow_id: The ID of the workflow to execute
+            trigger_type: Type of trigger ("manual", "schedule", "webhook", etc.)
+            trigger_config: Additional config from the trigger that initiated this execution
         """
 
-        logger.info("[WorkflowEngine] queued execution – workflow_id=%s", workflow_id)
+        logger.info("[WorkflowEngine] queued execution – workflow_id=%s trigger_type=%s", workflow_id, trigger_type)
 
         session_factory = get_session_factory()
 
         async def _run() -> int:  # runs inside a worker thread
             with session_factory() as db:
-                return await self._run_async(db, workflow_id)
+                return await self._run_async(db, workflow_id, trigger_type, trigger_config or {})
 
         execution_id: int = await _run()
         logger.info("[WorkflowEngine] execution finished – workflow_id=%s execution_id=%s", workflow_id, execution_id)
@@ -89,7 +96,9 @@ class WorkflowExecutionEngine:
     # Internal helpers – executed in worker thread
     # ------------------------------------------------------------------
 
-    async def _run_async(self, db: Session, workflow_id: int) -> int:
+    async def _run_async(
+        self, db: Session, workflow_id: int, trigger_type: str = "manual", trigger_config: Dict[str, Any] = None
+    ) -> int:
         """Asynchronous implementation for real node execution."""
 
         workflow: Workflow | None = db.query(Workflow).filter_by(id=workflow_id, is_active=True).first()
@@ -104,6 +113,7 @@ class WorkflowExecutionEngine:
             workflow_id=workflow_id,
             status="running",
             started_at=datetime.now(timezone.utc),
+            triggered_by=trigger_type,  # Track how this execution was triggered
         )
         db.add(execution)
         db.commit()
@@ -775,55 +785,93 @@ class WorkflowExecutionEngine:
     async def _create_schedule_trigger(
         self, db: Session, node: Dict[str, Any], agent_id: int, execution_id: int
     ) -> Dict[str, Any]:
-        """Create a scheduled trigger by updating agent's schedule."""
-
-        from zerg.crud import crud
+        """Create a scheduled trigger for workflow execution."""
 
         node_id = str(node.get("id", "unknown"))
         cron_expression = node.get("cron_expression")
 
+        # Check if this is for workflow scheduling or agent scheduling
+        schedule_type = node.get("schedule_type", "workflow")  # "workflow" or "agent"
+
         if not cron_expression:
             raise ValueError("Schedule trigger missing cron_expression field")
 
-        # Update the target agent's schedule
-        agent = crud.get_agent(db, agent_id)
-        if not agent:
-            raise ValueError(f"Agent {agent_id} not found")
+        if schedule_type == "workflow":
+            # Schedule the current workflow to run on this cron schedule
+            workflow_execution = db.query(WorkflowExecution).filter_by(id=execution_id).first()
+            if not workflow_execution:
+                raise ValueError(f"Workflow execution {execution_id} not found")
 
-        # Update agent with schedule
-        crud.update_agent(db, agent_id, schedule=cron_expression)
+            workflow_id = workflow_execution.workflow_id
 
-        # Try to register with scheduler if available
-        try:
-            import importlib.util
+            # Import and use the workflow scheduler
+            from zerg.services.workflow_scheduler import workflow_scheduler
 
-            if importlib.util.find_spec("zerg.services.scheduler_service") is not None:
-                # Scheduler service is available - could import and use it here
-                # For now, we'll just log that the schedule was set
+            success = await workflow_scheduler.schedule_workflow(
+                workflow_id=workflow_id, cron_expression=cron_expression, trigger_config=node.copy()
+            )
+
+            if success:
                 self._publish_node_log(
                     execution_id=execution_id,
                     node_id=node_id,
                     stream="stdout",
-                    text=f"Scheduled agent {agent_id} with cron: {cron_expression}",
+                    text=f"Scheduled workflow {workflow_id} with cron: {cron_expression}",
                 )
-            else:
-                raise ImportError("Scheduler service not found")
-        except ImportError:
-            # Scheduler service not available, just update the database
-            self._publish_node_log(
-                execution_id=execution_id,
-                node_id=node_id,
-                stream="stdout",
-                text=f"Updated agent {agent_id} schedule (scheduler service not available)",
-            )
 
-        return {
-            "agent_id": agent_id,
-            "trigger_type": "schedule",
-            "cron_expression": cron_expression,
-            "status": "scheduled",
-            "type": "trigger",
-        }
+                return {
+                    "workflow_id": workflow_id,
+                    "trigger_type": "schedule",
+                    "cron_expression": cron_expression,
+                    "status": "scheduled",
+                    "type": "trigger",
+                }
+            else:
+                raise RuntimeError(f"Failed to schedule workflow {workflow_id}")
+
+        else:
+            # Original agent scheduling logic
+            from zerg.crud import crud
+
+            # Update the target agent's schedule
+            agent = crud.get_agent(db, agent_id)
+            if not agent:
+                raise ValueError(f"Agent {agent_id} not found")
+
+            # Update agent with schedule
+            crud.update_agent(db, agent_id, schedule=cron_expression)
+
+            # Try to register with scheduler if available
+            try:
+                import importlib.util
+
+                if importlib.util.find_spec("zerg.services.scheduler_service") is not None:
+                    # Scheduler service is available - could import and use it here
+                    # For now, we'll just log that the schedule was set
+                    self._publish_node_log(
+                        execution_id=execution_id,
+                        node_id=node_id,
+                        stream="stdout",
+                        text=f"Scheduled agent {agent_id} with cron: {cron_expression}",
+                    )
+                else:
+                    raise ImportError("Scheduler service not found")
+            except ImportError:
+                # Scheduler service not available, just update the database
+                self._publish_node_log(
+                    execution_id=execution_id,
+                    node_id=node_id,
+                    stream="stdout",
+                    text=f"Updated agent {agent_id} schedule (scheduler service not available)",
+                )
+
+            return {
+                "agent_id": agent_id,
+                "trigger_type": "schedule",
+                "cron_expression": cron_expression,
+                "status": "scheduled",
+                "type": "trigger",
+            }
 
     async def _create_email_trigger(
         self, db: Session, node: Dict[str, Any], agent_id: int, execution_id: int
