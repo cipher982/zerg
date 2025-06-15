@@ -418,6 +418,7 @@ class WorkflowExecution(Base):
     id = Column(Integer, primary_key=True, index=True)
     workflow_id = Column(Integer, ForeignKey("workflows.id"), nullable=False, index=True)
     status = Column(String, nullable=False, default="queued")  # queued, running, success, failed
+    triggered_by = Column(String, nullable=True, default="manual")  # manual, schedule, webhook, email, etc.
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
     error = Column(Text, nullable=True)
