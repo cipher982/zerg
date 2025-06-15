@@ -171,6 +171,52 @@ impl NodePalette {
                 
                 // Set drag effect
                 data_transfer.set_effect_allowed("copy");
+                
+                // Create a clean drag image instead of showing the full element
+                if let Ok(document) = web_sys::window().unwrap().document().ok_or("No document") {
+                    let drag_image = document.create_element("div").unwrap();
+                    
+                    // Choose color based on node type
+                    let (bg_color, text) = match node_data.node_type.as_str() {
+                        "Tool" => ("#10b981", "Tool"),
+                        "Trigger" => ("#f59e0b", "Trigger"),
+                        _ => ("#6366f1", "Node")
+                    };
+                    
+                    drag_image.set_attribute("style", &format!(
+                        "position: absolute; top: -1000px; left: -1000px; \
+                         width: 80px; height: 30px; \
+                         background: {}; color: white; \
+                         border-radius: 15px; \
+                         display: flex; align-items: center; justify-content: center; \
+                         font-size: 12px; font-weight: 500; \
+                         box-shadow: 0 2px 8px rgba(0,0,0,0.2);", 
+                        bg_color
+                    )).unwrap();
+                    drag_image.set_inner_text(text);
+                    
+                    if let Some(body) = document.body() {
+                        body.append_child(&drag_image).unwrap();
+                        
+                        // Set the custom drag image
+                        data_transfer.set_drag_image(&drag_image, 40, 15);
+                        
+                        // Clean up the temporary element after a short delay
+                        let cleanup_drag_image = drag_image.clone();
+                        let cleanup_closure = wasm_bindgen::closure::Closure::once(Box::new(move || {
+                            if let Some(parent) = cleanup_drag_image.parent_node() {
+                                let _ = parent.remove_child(&cleanup_drag_image);
+                            }
+                        }));
+                        
+                        web_sys::window().unwrap()
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                cleanup_closure.as_ref().unchecked_ref(), 
+                                100
+                            ).unwrap();
+                        cleanup_closure.forget();
+                    }
+                }
             }
         }) as Box<dyn FnMut(_)>);
 
