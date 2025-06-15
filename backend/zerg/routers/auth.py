@@ -77,8 +77,8 @@ def _issue_access_token(
     user_id: int,
     email: str,
     *,
-    display_name: str | None = None,
-    avatar_url: str | None = None,
+    display_name: Optional[str] = None,
+    avatar_url: Optional[str] = None,
     expires_delta: timedelta = timedelta(minutes=30),
 ) -> str:
     """Return signed HS256 access token including *optional* profile fields.
@@ -144,7 +144,7 @@ def _issue_access_token(
 # ---------------------------------------------------------------------------
 
 
-def _exchange_google_auth_code(auth_code: str, *, redirect_uri: str | None = None) -> dict[str, str]:
+def _exchange_google_auth_code(auth_code: str, *, redirect_uri: Optional[str] = None) -> dict[str, str]:
     """Exchange an *authorization code* for tokens via Google's OAuth endpoint.
 
     The function returns the full token response as a dictionary.  We are

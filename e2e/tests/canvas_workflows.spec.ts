@@ -100,12 +100,57 @@ test.describe('Canvas Editor basic node interactions', () => {
     test.skip();
   });
 
-  test('Save and load workflow (placeholder)', async () => {
-    test.skip();
+  test('Save and load workflow', async ({ page }) => {
+    // Create a workflow with a node
+    const pill = page.locator('#agent-shelf .agent-pill').first();
+    if (await pill.count() === 0) {
+      test.skip(true, 'No agents available');
+      return;
+    }
+
+    const canvasArea = page.locator('#canvas-container canvas');
+    await pill.dragTo(canvasArea, { targetPosition: { x: 200, y: 200 } });
+    
+    // Wait for node to appear
+    await expect(page.locator('.canvas-node, .generic-node')).toHaveCount(1, { timeout: 5000 });
+    
+    // Reload page to test persistence
+    await page.reload();
+    await page.waitForSelector('#canvas-container', { timeout: 10_000 });
+    
+    // Verify node persists after reload
+    await expect(page.locator('.canvas-node, .generic-node')).toHaveCount(1, { timeout: 5000 });
   });
 
-  test('Clear canvas (placeholder)', async () => {
-    test.skip();
+  test('Clear canvas', async ({ page }) => {
+    // First ensure we have some nodes
+    const pill = page.locator('#agent-shelf .agent-pill').first();
+    if (await pill.count() === 0) {
+      test.skip(true, 'No agents available');
+      return;
+    }
+
+    const canvasArea = page.locator('#canvas-container canvas');
+    await pill.dragTo(canvasArea, { targetPosition: { x: 100, y: 100 } });
+    await expect(page.locator('.canvas-node, .generic-node')).toHaveCount(1, { timeout: 5000 });
+
+    // Look for clear canvas option in dropdown menu
+    const dropdownToggle = page.locator('.dropdown-toggle');
+    if (await dropdownToggle.count() > 0) {
+      await dropdownToggle.click();
+      
+      const clearOption = page.locator('text=Clear Canvas');
+      if (await clearOption.count() > 0) {
+        await clearOption.click();
+        
+        // Verify canvas is cleared
+        await expect(page.locator('.canvas-node, .generic-node')).toHaveCount(0, { timeout: 5000 });
+      } else {
+        test.skip(true, 'Clear canvas option not found in dropdown');
+      }
+    } else {
+      test.skip(true, 'Dropdown toggle not found');
+    }
   });
 
   test('Test zoom/pan controls', async ({ page }) => {

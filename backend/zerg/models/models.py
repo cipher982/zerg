@@ -169,10 +169,8 @@ class CanvasLayout(Base):
     # work easier and allows us to rely on an atomic *upsert* in the CRUD
     # helper.
     __table_args__ = (
-        # NOTE: SQLite supports the ON CONFLICT clause that references this
-        # UNIQUE constraint, enabling an atomic UPSERT in
-        # ``crud.upsert_canvas_layout``.
-        UniqueConstraint("user_id", "workspace", name="uix_user_workspace_layout"),
+        # Ensure a user has at most *one* layout per workflow.
+        UniqueConstraint("user_id", "workflow_id", name="uix_user_workflow_layout"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -190,6 +188,9 @@ class CanvasLayout(Base):
     # Reserved for a future multi-tenant feature where a user can switch
     # between different *workspaces*.
     workspace = Column(String, nullable=True)
+
+    # NEW – link layout to a specific **workflow**.  NULL = global / legacy.
+    workflow_id = Column(Integer, ForeignKey("workflows.id"), nullable=True)
 
     # Raw JSON blobs coming from the WASM frontend.
     nodes_json = Column(MutableDict.as_mutable(JSON), nullable=False)
@@ -209,6 +210,9 @@ class CanvasLayout(Base):
 
     # ORM relationship back to the owning user – one-to-one convenience.
     user = relationship("User", backref="canvas_layout", uselist=False)
+
+    # Backref to owning workflow (optional)
+    workflow = relationship("Workflow", backref="canvas_layouts", uselist=False)
 
 
 class AgentMessage(Base):
@@ -380,6 +384,7 @@ class AgentRun(Base):
 
     # Failure ------------------------------------------------------------
     error = Column(Text, nullable=True)
+    cancel_reason = Column(Text, nullable=True)
 
     # Relationships ------------------------------------------------------
     agent = relationship("Agent", back_populates="runs")
@@ -405,3 +410,57 @@ class Workflow(Base):
 
     # ORM relationship to User
     owner = relationship("User", backref="workflows")
+
+
+class WorkflowTemplate(Base):
+    __tablename__ = "workflow_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String, nullable=False, index=True)
+    canvas_data = Column(MutableDict.as_mutable(JSON), nullable=False)
+    tags = Column(MutableDict.as_mutable(JSON), nullable=True, default=list)  # List of strings
+    preview_image_url = Column(String, nullable=True)
+    is_public = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # ORM relationships
+    creator = relationship("User", backref="created_templates")
+
+
+class WorkflowExecution(Base):
+    __tablename__ = "workflow_executions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workflow_id = Column(Integer, ForeignKey("workflows.id"), nullable=False, index=True)
+    status = Column(String, nullable=False, default="queued")  # queued, running, success, failed
+    triggered_by = Column(String, nullable=True, default="manual")  # manual, schedule, webhook, email, etc.
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    error = Column(Text, nullable=True)
+    log = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # ORM relationships
+    workflow = relationship("Workflow", backref="executions")
+    node_states = relationship("NodeExecutionState", back_populates="workflow_execution", cascade="all, delete-orphan")
+
+
+class NodeExecutionState(Base):
+    __tablename__ = "node_execution_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    workflow_execution_id = Column(Integer, ForeignKey("workflow_executions.id"), nullable=False, index=True)
+    node_id = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="idle")  # idle, queued, running, success, failed
+    output = Column(MutableDict.as_mutable(JSON), nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # ORM relationship
+    workflow_execution = relationship("WorkflowExecution", back_populates="node_states")

@@ -98,10 +98,47 @@ pub enum Message {
         to_node_id: String,
         label: Option<String>,
     },
+
+    // Workflow rename/delete actions coming from UI
+    RenameWorkflow {
+        workflow_id: u32,
+        name: String,
+        description: String,
+    },
+    DeleteWorkflow {
+        workflow_id: u32,
+    },
+    
+    // Loading state messages for workflow operations
+    WorkflowCreationStarted,
+    WorkflowDeletionStarted { workflow_id: u32 },
+    WorkflowUpdateStarted { workflow_id: u32 },
+    
+    // Workflow scheduling actions
+    ScheduleWorkflow {
+        workflow_id: u32,
+        cron_expression: String,
+    },
+    UnscheduleWorkflow {
+        workflow_id: u32,
+    },
+    CheckWorkflowSchedule {
+        workflow_id: u32,
+    },
+
+    // Workflows fetched from backend
+    WorkflowsLoaded(Vec<crate::models::Workflow>),
+    /// Workflow successfully created via backend
+    WorkflowCreated(crate::models::Workflow),
+    /// Workflow was deleted (soft delete)
+    WorkflowDeleted { workflow_id: u32 },
+    /// Workflow renamed / updated
+    WorkflowUpdated(crate::models::Workflow),
     
     // Canvas view controls
     ToggleAutoFit,                       // Toggle auto-fit functionality
     CenterView,                          // Center the canvas view
+    ResetView,                           // Reset zoom =100% and pan to origin
     ClearCanvas,                         // Clear all nodes from the canvas
     
     // Canvas zooming
@@ -189,6 +226,57 @@ pub enum Message {
     UpdateNodeStatus {
         node_id: String,
         status: String,
+    },
+
+    /// Workflow execution finished (success or failed)
+    ExecutionFinished {
+        execution_id: u32,
+        status: String,
+        error: Option<String>,
+    },
+
+    /// Append a single stdout/stderr line to the log drawer
+    AppendExecutionLog {
+        execution_id: u32,
+        node_id: String,
+        stream: String,
+        text: String,
+    },
+
+    // ------------------------------------------------------------------
+    // Execution history / right-hand sidebar
+    // ------------------------------------------------------------------
+
+    /// Toggle the execution history drawer
+    ToggleExecutionHistory,
+
+    /// Load execution history for current workflow (async command will follow)
+    LoadExecutionHistory {
+        workflow_id: u32,
+    },
+
+    /// Execution history loaded from backend
+    ExecutionHistoryLoaded(Vec<crate::models::ExecutionSummary>),
+
+    /// User selected an execution from the list – triggers replay
+    SelectExecution {
+        execution_id: u32,
+    },
+
+    /// Toggle the collapsible execution log drawer
+    ToggleLogDrawer,
+
+    /// User clicked Run – initiate backend execution and subscribe to progress.
+    StartWorkflowExecution {
+        workflow_id: u32,
+    },
+
+    // -------------------------------------------------------------------
+    // Workflow execution streaming
+    // -------------------------------------------------------------------
+    /// Subscribe to execution progress for the given execution_id.
+    SubscribeWorkflowExecution {
+        execution_id: u32,
     },
 
 
@@ -449,6 +537,22 @@ pub enum Message {
         name: String,
         auth_token: String,
     },
+
+    // Particle System Messages
+    InitializeParticleSystem { width: f64, height: f64 },
+    ClearParticleSystem,
+
+    // Template Gallery Messages
+    ShowTemplateGallery,
+    HideTemplateGallery,
+    LoadTemplates { category: Option<String>, my_templates: bool },
+    TemplatesLoaded(Vec<crate::models::WorkflowTemplate>),
+    LoadTemplateCategories,
+    TemplateCategoriesLoaded(Vec<String>),
+    SetTemplateCategory(Option<String>),
+    ToggleMyTemplatesOnly,
+    DeployTemplate { template_id: u32, name: String, description: String },
+    TemplateDeployed(crate::models::Workflow),
 }
 
 /// Commands represent side effects that should be executed after state updates.
@@ -465,6 +569,33 @@ pub enum Command {
     
     /// Fetch messages for a thread
     FetchThreadMessages(u32), // thread_id
+
+    /// Fetch workflows (visual canvas definitions)
+    FetchWorkflows,
+
+    /// Fetch execution history for workflow
+    FetchExecutionHistory { workflow_id: u32 },
+
+    // Workflow CRUD actions
+    CreateWorkflowApi { name: String },
+    DeleteWorkflowApi { workflow_id: u32 },
+    RenameWorkflowApi {
+        workflow_id: u32,
+        name: String,
+        description: String,
+    },
+
+    // ---------------- Workflow execution -----------------------------
+    /// POST /workflow-executions/{workflow_id}/start
+    StartWorkflowExecutionApi { workflow_id: u32 },
+
+    // ---------------- Workflow scheduling -----------------------------
+    /// POST /workflow-executions/{workflow_id}/schedule
+    ScheduleWorkflowApi { workflow_id: u32, cron_expression: String },
+    /// DELETE /workflow-executions/{workflow_id}/schedule
+    UnscheduleWorkflowApi { workflow_id: u32 },
+    /// GET /workflow-executions/{workflow_id}/schedule
+    CheckWorkflowScheduleApi { workflow_id: u32 },
 
     // ---------------------------------------------------------------
     // Trigger-related side-effect commands (Phase A wiring only)
@@ -531,16 +662,48 @@ pub enum Command {
     /// Represents no side effect
     NoOp,
     
+    // Template Gallery Messages
+    LoadTemplates {
+        category: Option<String>,
+        my_templates: bool,
+    },
+    TemplatesLoaded(Vec<crate::models::WorkflowTemplate>),
+    LoadTemplateCategories,
+    TemplateCategoriesLoaded(Vec<String>),
+    SetTemplateCategory(Option<String>),
+    ToggleMyTemplatesOnly,
+    ShowTemplateGallery,
+    HideTemplateGallery,
+    DeployTemplate {
+        template_id: u32,
+        name: Option<String>,
+        description: Option<String>,
+    },
+    TemplateDeployed(crate::models::Workflow),
+    
     // Add the DeleteAgentApi command inside the enum
     DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion
 
     FetchAgents,                     // Command to fetch agents from API
 
+    /// Fetch visual workflows from backend
     /// Fetch detailed debug info for an agent
     FetchAgentDetails(u32), // agent_id
 
     /// Fetch latest runs for an agent
     FetchAgentRuns(u32), // agent_id
+
+    // Template Gallery Commands
+    LoadTemplatesApi {
+        category: Option<String>,
+        my_templates: bool,
+    },
+    LoadTemplateCategoriesApi,
+    DeployTemplateApi {
+        template_id: u32,
+        name: Option<String>,
+        description: Option<String>,
+    },
 
     /// Persist current canvas/layout state (debounced in AnimationTick)
     SaveState,

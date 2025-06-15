@@ -33,6 +33,98 @@ impl ApiClient {
         super::get_api_base_url().expect("API base URL must be set (no fallback allowed)")
     }
 
+    /// Format HTTP errors with user-friendly messages and show appropriate toasts
+    fn format_http_error(status: u16, status_text: &str, response_body: &str) -> String {
+        match status {
+            409 => {
+                crate::toast::error("That name is already taken. Please choose a different name.");
+                "Conflict: Resource already exists".to_string()
+            }
+            422 => {
+                // Try to parse validation errors from response body
+                if let Ok(error_data) = serde_json::from_str::<serde_json::Value>(response_body) {
+                    if let Some(detail) = error_data.get("detail") {
+                        if let Some(detail_str) = detail.as_str() {
+                            crate::toast::error(&format!("Validation error: {}", detail_str));
+                            return format!("Validation failed: {}", detail_str);
+                        }
+                    }
+                }
+                crate::toast::error("Invalid input. Please check your data and try again.");
+                "Validation failed".to_string()
+            }
+            400 => {
+                crate::toast::error("Bad request. Please check your input.");
+                format!("Bad request: {}", status_text)
+            }
+            403 => {
+                crate::toast::error("You don't have permission to perform this action.");
+                "Permission denied".to_string()
+            }
+            404 => {
+                crate::toast::error("The requested resource was not found.");
+                "Resource not found".to_string()
+            }
+            500..=599 => {
+                crate::toast::error("Server error. Please try again later.");
+                format!("Server error: {} {}", status, status_text)
+            }
+            _ => {
+                crate::toast::error("An unexpected error occurred. Please try again.");
+                format!("API request failed: {} {}", status, status_text)
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // Workflow execution history
+    // -------------------------------------------------------------------
+
+    pub async fn get_execution_history(workflow_id: u32, limit: u32) -> Result<String, JsValue> {
+        let base = Self::api_base_url();
+        // Backend currently ignores limit param but we include for forward-compat
+        let url = format!("{}/api/workflow-executions/history/{}?limit={}", base, workflow_id, limit);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    // -------------------------------------------------------------------
+    // Workflow Scheduling
+    // -------------------------------------------------------------------
+
+    /// Schedule a workflow to run on a cron schedule
+    pub async fn schedule_workflow(workflow_id: u32, cron_expression: &str) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/{}/schedule",
+            Self::api_base_url(),
+            workflow_id
+        );
+        let body = format!(
+            "{{\"cron_expression\": \"{}\", \"trigger_config\": {{}}}}",
+            cron_expression
+        );
+        Self::fetch_json(&url, "POST", Some(&body)).await
+    }
+
+    /// Remove the schedule for a workflow
+    pub async fn unschedule_workflow(workflow_id: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/{}/schedule",
+            Self::api_base_url(),
+            workflow_id
+        );
+        Self::fetch_json(&url, "DELETE", None).await
+    }
+
+    /// Get the current schedule status for a workflow
+    pub async fn get_workflow_schedule(workflow_id: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/{}/schedule",
+            Self::api_base_url(),
+            workflow_id
+        );
+        Self::fetch_json(&url, "GET", None).await
+    }
+
     // ---------------- Agent Runs ----------------
 
     /// Fetch most recent runs for an agent (limit parameter default 20)
@@ -50,6 +142,64 @@ impl ApiClient {
     pub async fn fetch_available_models() -> Result<String, JsValue> {
         let url = format!("{}/api/models", Self::api_base_url());
         Self::fetch_json(&url, "GET", None).await
+    }
+
+    // -------------------------------------------------------------------
+    // Workflow CRUD – new backend integration (July 2025)
+    // -------------------------------------------------------------------
+
+    /// Fetch all workflows for the **current** user (active only).
+    pub async fn get_workflows() -> Result<String, JsValue> {
+        let url = format!("{}/api/workflows", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    /// Create a new workflow – returns the JSON representation from backend.
+    pub async fn create_workflow(name: &str) -> Result<String, JsValue> {
+        // Minimal payload; description empty and canvas_data empty object
+        let body = format!(
+            "{{\"name\": \"{}\", \"description\": \"\", \"canvas_data\": {{}}}}",
+            name
+        );
+        let url = format!("{}/api/workflows/", Self::api_base_url());
+        Self::fetch_json(&url, "POST", Some(&body)).await
+    }
+
+    /// Soft-delete a workflow.
+    pub async fn delete_workflow(workflow_id: u32) -> Result<(), JsValue> {
+        let url = format!("{}/api/workflows/{}", Self::api_base_url(), workflow_id);
+        Self::fetch_json(&url, "DELETE", None).await.map(|_| ())
+    }
+
+    /// Rename / update a workflow (PATCH).
+    pub async fn rename_workflow(
+        workflow_id: u32,
+        name: &str,
+        description: &str,
+    ) -> Result<String, JsValue> {
+        let url = format!("{}/api/workflows/{}", Self::api_base_url(), workflow_id);
+        let body = format!(
+            "{{\"name\": \"{}\", \"description\": \"{}\", \"canvas_data\": {{}}}}",
+            name, description
+        );
+        Self::fetch_json(&url, "PATCH", Some(&body)).await
+    }
+
+    // -------------------------------------------------------------------
+    // Workflow execution – run & status
+    // -------------------------------------------------------------------
+
+    /// Start an execution for the given workflow ID.  Returns the JSON
+    /// response from the backend which contains at least
+    /// `{ "execution_id": <u32>, "status": "running" }`.
+    pub async fn start_workflow_execution(workflow_id: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/{}/start",
+            Self::api_base_url(),
+            workflow_id
+        );
+
+        Self::fetch_json(&url, "POST", None).await
     }
 
     // Get all agents
@@ -129,8 +279,13 @@ impl ApiClient {
 
     /// Retrieve the persisted canvas layout for the authenticated user.
     /// Returns an **empty string** if the backend responded with 204.
-    pub async fn get_layout() -> Result<String, JsValue> {
-        let url = format!("{}/api/graph/layout", Self::api_base_url());
+    pub async fn get_layout(workflow_id: Option<u32>) -> Result<String, JsValue> {
+        let base = Self::api_base_url();
+        let url = if let Some(id) = workflow_id {
+            format!("{}/api/graph/layout?workflow_id={}", base, id)
+        } else {
+            format!("{}/api/graph/layout", base)
+        };
         Self::fetch_json(&url, "GET", None).await
     }
 
@@ -302,8 +457,13 @@ impl ApiClient {
     /// convert the successful `fetch_json` result (an empty string) into `()`
     /// so callers can use the function in a boolean-style `match` without
     /// caring about a body.
-    pub async fn patch_layout(payload_json: &str) -> Result<(), JsValue> {
-        let url = format!("{}/api/graph/layout", Self::api_base_url());
+    pub async fn patch_layout(payload_json: &str, workflow_id: Option<u32>) -> Result<(), JsValue> {
+        let base = Self::api_base_url();
+        let url = if let Some(id) = workflow_id {
+            format!("{}/api/graph/layout?workflow_id={}", base, id)
+        } else {
+            format!("{}/api/graph/layout", base)
+        };
         Self::fetch_json(&url, "PATCH", Some(payload_json))
             .await
             .map(|_| ())
@@ -352,10 +512,24 @@ impl ApiClient {
             if status == 401 {
                 // Attempt to log out; ignore errors (e.g. during unit tests)
                 let _ = crate::utils::logout();
+                crate::toast::error("Session expired. Please sign in again.");
+                return Err(JsValue::from_str("Authentication failed"));
             }
 
+            // Get response body for detailed error messages
+            let error_text = if let Ok(text_future) = resp.text() {
+                if let Ok(text_js) = JsFuture::from(text_future).await {
+                    text_js.as_string().unwrap_or_default()
+                } else {
+                    String::new()
+                }
+            } else {
+                String::new()
+            };
+
             let status_text = resp.status_text();
-            return Err(JsValue::from_str(&format!("API request failed: {} {}", status, status_text)));
+            let error_message = Self::format_http_error(status, &status_text, &error_text);
+            return Err(JsValue::from_str(&error_message));
         }
 
         // Parse body as text – caller can decode JSON.
@@ -420,6 +594,100 @@ impl ApiClient {
         }
 
         Ok(())
+    }
+
+    // -------------------------------------------------------------------
+    // Template Gallery API methods
+    // -------------------------------------------------------------------
+
+    /// List workflow templates
+    pub async fn get_templates(category: Option<&str>, my_templates: bool) -> Result<String, JsValue> {
+        let base = Self::api_base_url();
+        let mut url = format!("{}/api/templates", base);
+        
+        let mut params = Vec::new();
+        if let Some(cat) = category {
+            params.push(format!("category={}", cat));
+        }
+        if my_templates {
+            params.push("my_templates=true".to_string());
+        }
+        
+        if !params.is_empty() {
+            url.push('?');
+            url.push_str(&params.join("&"));
+        }
+        
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    /// Get template categories
+    pub async fn get_template_categories() -> Result<String, JsValue> {
+        let url = format!("{}/api/templates/categories", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    /// Get a specific template by ID
+    pub async fn get_template(template_id: u32) -> Result<String, JsValue> {
+        let url = format!("{}/api/templates/{}", Self::api_base_url(), template_id);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    /// Deploy a template as a new workflow
+    pub async fn deploy_template(template_id: u32, name: Option<&str>, description: Option<&str>) -> Result<String, JsValue> {
+        let url = format!("{}/api/templates/deploy", Self::api_base_url());
+        
+        let mut deploy_request = format!(r#"{{"template_id": {}}}"#, template_id);
+        
+        if name.is_some() || description.is_some() {
+            let mut fields = vec![format!(r#""template_id": {}"#, template_id)];
+            if let Some(n) = name {
+                fields.push(format!(r#""name": "{}""#, n.replace('"', r#"\""#)));
+            }
+            if let Some(d) = description {
+                fields.push(format!(r#""description": "{}""#, d.replace('"', r#"\""#)));
+            }
+            deploy_request = format!("{{{}}}", fields.join(", "));
+        }
+        
+        Self::fetch_json(&url, "POST", Some(&deploy_request)).await
+    }
+
+    /// Create a new template
+    pub async fn create_template(
+        name: &str,
+        description: Option<&str>,
+        category: &str,
+        canvas_data: &str,
+        tags: Option<&[&str]>,
+        preview_image_url: Option<&str>,
+    ) -> Result<String, JsValue> {
+        let url = format!("{}/api/templates", Self::api_base_url());
+        
+        let mut fields = vec![
+            format!(r#""name": "{}""#, name.replace('"', r#"\""#)),
+            format!(r#""category": "{}""#, category.replace('"', r#"\""#)),
+            format!(r#""canvas_data": {}"#, canvas_data),
+        ];
+        
+        if let Some(desc) = description {
+            fields.push(format!(r#""description": "{}""#, desc.replace('"', r#"\""#)));
+        }
+        
+        if let Some(tag_list) = tags {
+            let tags_json = tag_list.iter()
+                .map(|t| format!(r#""{}""#, t.replace('"', r#"\""#)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            fields.push(format!(r#""tags": [{}]"#, tags_json));
+        }
+        
+        if let Some(img_url) = preview_image_url {
+            fields.push(format!(r#""preview_image_url": "{}""#, img_url.replace('"', r#"\""#)));
+        }
+        
+        let payload = format!("{{{}}}", fields.join(", "));
+        Self::fetch_json(&url, "POST", Some(&payload)).await
     }
 }
 

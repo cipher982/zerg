@@ -49,23 +49,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
         content
     };
     
-    // Create input panel (toolbar) if needed
-    web_sys::console::log_1(&"CANVAS: Creating/finding input panel".into());
-    let input_panel = if let Some(panel) = document.get_element_by_id("canvas-input-panel") {
-        panel
-    } else {
-        crate::ui::main::create_input_panel(document)?
-    };
-    
-    // Add input panel to main content if not already there
-    if input_panel.parent_node().map_or(true, |p| p.node_name() != "DIV" || 
-           p.dyn_ref::<Element>().map_or(true, |e| e.id() != "main-content-area")) {
-        web_sys::console::log_1(&"CANVAS: Appending input panel to main content".into());
-        main_content.append_child(&input_panel)?;
-    }
-    
-    // Make sure input panel is visible
-    crate::dom_utils::show(&input_panel);
+    // Removed: input panel (toolbar) creation and mounting; controls are now in workflow bar
     
     // Create canvas container if needed
     web_sys::console::log_1(&"CANVAS: Creating/finding canvas container".into());
@@ -93,6 +77,18 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     // Ensure canvas container is visible
     crate::dom_utils::show(&canvas_container);
     
+    // Initialize/refresh the workflow switcher bar for this canvas view
+    web_sys::console::log_1(&"CANVAS: Initializing workflow switcher".into());
+    if let Err(e) = crate::components::workflow_switcher::init(document) {
+        web_sys::console::error_1(&format!("Failed to initialize workflow switcher: {:?}", e).into());
+    }
+    
+    // Initialize the particle system for the canvas background via message dispatch
+    crate::state::dispatch_global_message(crate::messages::Message::InitializeParticleSystem {
+        width: crate::state::APP_STATE.with(|state| state.borrow().canvas_width),
+        height: crate::state::APP_STATE.with(|state| state.borrow().canvas_height),
+    });
+
     web_sys::console::log_1(&"CANVAS: Setup canvas drawing (no state borrowed)".into());
 
     // ------------------------------------------------------------------
@@ -122,6 +118,14 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
 #[allow(dead_code)]
 pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
     web_sys::console::log_1(&"CANVAS: Starting unmount".into());
+    
+    // Remove workflow bar
+    if let Some(workflow_bar) = document.get_element_by_id("workflow-bar") {
+        web_sys::console::log_1(&"CANVAS: Removing workflow bar".into());
+        if let Some(parent) = workflow_bar.parent_node() {
+            parent.remove_child(&workflow_bar)?;
+        }
+    }
     
     // Remove input panel
     if let Some(panel) = document.get_element_by_id("canvas-input-panel") {
@@ -161,6 +165,9 @@ pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
         app_container.set_class_name("");
     }
     
+    // Clear the particle system when unmounting the canvas via message dispatch
+    crate::state::dispatch_global_message(crate::messages::Message::ClearParticleSystem);
+
     web_sys::console::log_1(&"CANVAS: Unmount complete".into());
     Ok(())
 }

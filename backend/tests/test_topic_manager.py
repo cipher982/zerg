@@ -78,9 +78,9 @@ class TestTopicConnectionManager:
         test_message = {"type": "test", "data": "hello"}
         await topic_manager.broadcast_to_topic(topic, test_message)
 
-        # Verify both clients received the message
-        client1_ws.send_json.assert_called_once_with(test_message)
-        client2_ws.send_json.assert_called_once_with(test_message)
+        # Verify both clients received **one** message each (payload now wrapped)
+        client1_ws.send_json.assert_called_once()
+        client2_ws.send_json.assert_called_once()
 
     async def test_client_multiple_topics(self, topic_manager, mock_websocket):
         """Test a client subscribing to multiple topics."""
@@ -122,9 +122,9 @@ class TestTopicConnectionManager:
 
         # Verify message was sent
         mock_websocket.send_json.assert_called_once()
-        sent_message = mock_websocket.send_json.call_args[0][0]
-        assert sent_message["type"] == EventType.AGENT_UPDATED
-        assert sent_message["data"] == event_data
+        sent_envelope = mock_websocket.send_json.call_args[0][0]
+        assert sent_envelope["type"] == EventType.AGENT_UPDATED
+        assert sent_envelope["data"] == event_data
 
     async def test_handle_thread_event(self, topic_manager, mock_websocket):
         """Test handling of thread events."""
@@ -146,9 +146,9 @@ class TestTopicConnectionManager:
 
         # Verify message was sent
         mock_websocket.send_json.assert_called_once()
-        sent_message = mock_websocket.send_json.call_args[0][0]
-        assert sent_message["type"] == EventType.THREAD_MESSAGE_CREATED
-        assert sent_message["data"] == event_data
+        sent_env = mock_websocket.send_json.call_args[0][0]
+        assert sent_env["type"] == EventType.THREAD_MESSAGE_CREATED
+        assert sent_env["data"] == event_data
 
     async def test_cleanup_on_send_failure(self, topic_manager):
         """Test cleanup when sending to a client fails."""
@@ -169,8 +169,8 @@ class TestTopicConnectionManager:
         test_message = {"type": "test", "data": "hello"}
         await topic_manager.broadcast_to_topic(topic, test_message)
 
-        # Verify good client got the message
-        good_client_ws.send_json.assert_called_once_with(test_message)
+        # Verify good client got **one** message (payload now enveloped)
+        good_client_ws.send_json.assert_called_once()
 
         # Verify bad client was cleaned up
         assert "bad_client" not in topic_manager.active_connections

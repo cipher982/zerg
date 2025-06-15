@@ -154,6 +154,7 @@ mod pages;
 mod scheduling;
 mod utils;
 mod toast;
+mod schema_validation;
 
 // ---------------------------------------------------------------------------
 // Global keyboard shortcuts
@@ -441,7 +442,7 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
     
     // Set up shared UI components
     ui::main::setup_ui(&document)?;
-    
+
     // Show initial loading spinner
     if let Some(loading_spinner) = document.get_element_by_id("loading-spinner") {
         if let Some(spinner_element) = loading_spinner.dyn_ref::<web_sys::HtmlElement>() {

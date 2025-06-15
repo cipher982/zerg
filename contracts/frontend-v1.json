@@ -1,0 +1,34 @@
+{
+  "consumer": {
+    "name": "agent-frontend"
+  },
+  "interactions": [
+    {
+      "description": "subscribe_thread → receive thread_history",
+      "request": {
+        "body": {
+          "message_id": "test-1",
+          "thread_id": 1,
+          "type": "subscribe_thread"
+        },
+        "subtype": "text",
+        "type": "websocket"
+      },
+      "response": {
+        "body": {
+          "messages": [],
+          "thread_id": 1,
+          "type": "thread_history"
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "pactSpecification": {
+      "version": "4.0"
+    }
+  },
+  "provider": {
+    "name": "zerg-backend"
+  }
+}

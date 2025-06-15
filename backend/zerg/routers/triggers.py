@@ -5,15 +5,18 @@ an EventType.TRIGGER_FIRED event.  The SchedulerService listens for that event
 and executes the associated agent immediately.
 """
 
+# typing and forward-ref convenience
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import hmac
 import json
 import logging
 import time
-from typing import Dict  # Added List, Optional
-from typing import List  # Added List, Optional
-from typing import Optional  # Added List, Optional
+from typing import Dict
+from typing import List
+from typing import Optional
 
 # FastAPI helpers
 from fastapi import APIRouter
@@ -86,7 +89,7 @@ async def delete_trigger(
             from zerg.utils import crypto as _crypto  # lazy
 
             # Pick any gmail-connected user (MVP logic)
-            user: User | None = db.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
+            user: Optional[User] = db.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
 
             if user is not None:
                 refresh_token = _crypto.decrypt(user.gmail_refresh_token)  # type: ignore[arg-type]

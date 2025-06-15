@@ -48,25 +48,14 @@ pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
     // Save changes to API
     save_state_to_api(app_state);
     
-    // Save the original node data
+    // NOTE: Persisting node positions & viewport to localStorage has been
+    // removed now that the `/api/graph/layout` endpoint is fully live.  Any
+    // save error bubbles up via `update_layout_status()` so developers can
+    // diagnose backend or network issues immediately instead of silently
+    // falling back to stale client-side data.
+
     let window = web_sys::window().expect("no global window exists");
     let local_storage = window.local_storage()?.expect("no local storage exists");
-    
-    // Convert nodes to a JSON string
-    let nodes_str = to_string(&app_state.nodes).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    
-    // Save to localStorage
-    local_storage.set_item("nodes", &nodes_str)?;
-    
-    // Save viewport position and zoom
-    let viewport_data = ViewportData {
-        x: app_state.viewport_x,
-        y: app_state.viewport_y,
-        zoom: app_state.zoom_level,
-    };
-    
-    let viewport_str = to_string(&viewport_data).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    local_storage.set_item("viewport", &viewport_str)?;
     
     // Save active view
     let active_view_str = to_string(&app_state.active_view).map_err(|e| JsValue::from_str(&e.to_string()))?;
@@ -123,7 +112,10 @@ fn try_load_layout_from_api() {
     use crate::constants::{DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT, NODE_COLOR_GENERIC};
 
     spawn_local(async {
-        match crate::network::ApiClient::get_layout().await {
+        // Determine current workflow id once – avoid borrowing after await.
+        let wf_id = crate::state::APP_STATE.with(|s| s.borrow().current_workflow_id);
+
+        match crate::network::ApiClient::get_layout(wf_id.map(|v| v as u32)).await {
             Ok(body) if !body.is_empty() => {
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&body) {
                     // ------------------------------------------------------------------
@@ -175,6 +167,7 @@ fn try_load_layout_from_api() {
                                                 parent_id: None,
                                                 is_selected: false,
                                                 is_dragging: false,
+                                                exec_status: None,
                                             });
                                         }
                                     }
@@ -214,7 +207,12 @@ fn try_load_layout_from_api() {
 
                 // Log full error to console for debugging.
                 web_sys::console::error_1(&format!("Remote layout fetch failed: {:?}", e).into());
+
+                // No localStorage fallback – surface error to developer instead
             }
+            // 204 No Content – no layout for this workflow yet.  **Do not**
+            // load the stale localStorage copy (if any) because the user
+            // explicitly reset the database or created a new workflow.
             _ => {
                 // Got 204 – backend responded with "no content".  Inform the
                 // user so they realise a first save is still required.
@@ -227,11 +225,57 @@ fn try_load_layout_from_api() {
     });
 }
 
+// ---------------------------------------------------------------------------
+// LocalStorage helpers
+// ---------------------------------------------------------------------------
+
+/// Attempt to hydrate nodes + viewport from localStorage.  Does **not**
+/// overwrite existing nodes if any are already present.
+pub fn try_load_from_localstorage() {
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            // Bail if we already have nodes loaded
+            let has_nodes = crate::state::APP_STATE.with(|s| s.borrow().nodes.len() > 0);
+            if has_nodes {
+                return;
+            }
+
+            if let Ok(Some(nodes_str)) = storage.get_item("nodes") {
+                if let Ok(nodes_map) = serde_json::from_str::<std::collections::HashMap<String, crate::models::CanvasNode>>(&nodes_str) {
+                    crate::state::APP_STATE.with(|s| {
+                        let mut st = s.borrow_mut();
+                        st.nodes = nodes_map;
+                    });
+                }
+            }
+
+            if let Ok(Some(vp_str)) = storage.get_item("viewport") {
+                #[derive(serde::Deserialize)]
+                struct Vp { x: f64, y: f64, zoom: f64 }
+                if let Ok(vp) = serde_json::from_str::<Vp>(&vp_str) {
+                    crate::state::APP_STATE.with(|s| {
+                        let mut st = s.borrow_mut();
+                        st.viewport_x = vp.x;
+                        st.viewport_y = vp.y;
+                        st.zoom_level = vp.zoom;
+                    });
+                }
+            }
+
+            web_sys::console::log_1(&"Layout loaded from localStorage fallback".into());
+            update_layout_status("Layout: local offline copy", "orange");
+        }
+    }
+}
+
 /// Clear all stored data
 pub fn clear_storage() -> Result<(), JsValue> {
-    // No localStorage to clear, but we might want to add
-    // API endpoint calls to clear data in the future
-    
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            let _ = storage.remove_item("nodes");
+            let _ = storage.remove_item("viewport");
+        }
+    }
     Ok(())
 }
 
@@ -275,9 +319,31 @@ pub fn save_state_to_api(app_state: &AppState) {
         crate::state::APP_STATE.with(|state_ref| {
             let st = state_ref.borrow();
 
+            // ------------------------------------------------------------------
+            // Validate state – bail out loudly on any invalid value instead of
+            // silently coercing.  This surfaces bugs early.
+            // ------------------------------------------------------------------
+
+            if !st.viewport_x.is_finite() || !st.viewport_y.is_finite() || !st.zoom_level.is_finite() {
+                web_sys::console::error_1(&format!(
+                    "Refusing to save: non-finite viewport detected (x={}, y={}, zoom={})",
+                    st.viewport_x, st.viewport_y, st.zoom_level
+                ).into());
+                return; // Abort save – developer must investigate
+            }
+
             let mut layout_nodes = std::collections::HashMap::new();
             for (id, node) in &st.nodes {
-                layout_nodes.insert(id.clone(), json!({ "x": node.x, "y": node.y }));
+                if node.x.is_finite() && node.y.is_finite() {
+                    layout_nodes.insert(id.clone(), json!({ "x": node.x, "y": node.y }));
+                } else {
+                    web_sys::console::error_1(&format!(
+                        "Refusing to save: node '{}' has invalid position (x={}, y={})",
+                        id, node.x, node.y
+                    ).into());
+                    // Do NOT include the node; we still continue so that other
+                    // valid nodes/viewport can be persisted.
+                }
             }
 
             let payload = json!({
@@ -292,7 +358,8 @@ pub fn save_state_to_api(app_state: &AppState) {
             let payload_str = payload.to_string();
 
             spawn_local(async move {
-                match crate::network::ApiClient::patch_layout(&payload_str).await {
+                let wf_id = crate::state::APP_STATE.with(|s| s.borrow().current_workflow_id);
+                match crate::network::ApiClient::patch_layout(&payload_str, wf_id.map(|v| v as u32)).await {
                     Ok(_) => update_layout_status("Layout: saved", "green"),
                     Err(e) => {
                         update_layout_status("Layout: save failed", "red");

@@ -65,6 +65,8 @@ pub fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>
             if let Some(el) = &main_c { show(el); }
             if let Some(btn) = &main_t { set_active(btn); }
         }
+
+
         AgentConfigTab::History => {
             if let Some(el) = &hist_c { show(el); }
             if let Some(btn) = &hist_t { set_active(btn); }
@@ -267,6 +269,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // If switching to Canvas, always fetch agents (will trigger shelf update when loaded)
             if view_clone_for_shelf == crate::storage::ActiveView::Canvas {
                 commands.push(Command::FetchAgents);
+                commands.push(Command::FetchWorkflows);
             }
         },
        
@@ -361,9 +364,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 
                 // Dispatch a message to update the UI instead of calling render directly
                 // This keeps the update flow consistent
-                state.pending_ui_updates = Some(Box::new(move || {
+                commands.push(Command::UpdateUI(Box::new(move || {
                     dispatch_global_message(Message::UpdateConversation(messages_clone_for_dispatch));
-                }));
+                })));
 
                 needs_refresh = false; // UI update handled by UpdateConversation
             } else {
@@ -393,10 +396,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             let title_to_update = current_title.clone();
             
             // Schedule UI update for after this function completes
-            state.pending_ui_updates = Some(Box::new(move || {
+            commands.push(Command::UpdateUI(Box::new(move || {
                 // Dispatch a message to update the thread title UI
                 dispatch_global_message(Message::UpdateThreadTitleUI(title_to_update));
-            }));
+            })));
         },
 
         // Agent Debug Modal
@@ -439,34 +442,390 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         
         
         // Canvas-related messages are handled by the canvas reducer
-        Message::UpdateNodePosition { .. } |
-        Message::AddNode { .. } |
-        Message::AddResponseNode { .. } |
-        Message::ToggleAutoFit |
-        Message::CenterView |
-        Message::ClearCanvas |
-        Message::CanvasNodeClicked { .. } |
-        Message::MarkCanvasDirty |
-        Message::StartDragging { .. } |
-        Message::StopDragging |
-        Message::StartCanvasDrag { .. } |
-        Message::UpdateCanvasDrag { .. } |
-        Message::StopCanvasDrag |
-        Message::ZoomCanvas { .. } |
-        Message::AddCanvasNode { .. } |
-        Message::DeleteNode { .. } |
-        Message::UpdateNodeText { .. } |
-        Message::CompleteNodeResponse { .. } |
-        Message::UpdateNodeStatus { .. } |
-        Message::AnimationTick |
-        Message::CreateWorkflow { .. } |
-        Message::SelectWorkflow { .. } |
+        Message::UpdateNodePosition { .. }
+        | Message::AddNode { .. }
+        | Message::AddResponseNode { .. }
+        | Message::ToggleAutoFit
+        | Message::CenterView
+        | Message::ResetView
+        | Message::ClearCanvas
+        | Message::CanvasNodeClicked { .. }
+        | Message::MarkCanvasDirty
+        | Message::StartDragging { .. }
+        | Message::StopDragging
+        | Message::StartCanvasDrag { .. }
+        | Message::UpdateCanvasDrag { .. }
+        | Message::StopCanvasDrag
+        | Message::ZoomCanvas { .. }
+        | Message::AddCanvasNode { .. }
+        | Message::DeleteNode { .. }
+        | Message::UpdateNodeText { .. }
+        | Message::CompleteNodeResponse { .. }
+        | Message::UpdateNodeStatus { .. } => {
+            // These are handled by the canvas reducer which returns early
+            unreachable!("Canvas messages should be handled by the canvas reducer")
+        }
+        // (handled later)
+        | Message::AnimationTick => {
+            // Fire async command to backend
+            // These are handled elsewhere or in canvas reducer. No-op here.
+        }
+
+        // -------------------------------------------------------------------
+        // SubscribeWorkflowExecution – create WS topic subscription
+        // -------------------------------------------------------------------
+        Message::SubscribeWorkflowExecution { execution_id } => {
+            // Update state.current_execution with real id
+            state.current_execution = Some(crate::state::ExecutionStatus {
+                execution_id,
+                status: crate::state::ExecPhase::Running,
+            });
+
+            let topic = format!("workflow_execution:{}", execution_id);
+            let topic_manager_rc = state.topic_manager.clone();
+
+            commands.push(Command::UpdateUI(Box::new(move || {
+                use std::cell::RefCell;
+                use std::rc::Rc;
+                let mut tm = topic_manager_rc.borrow_mut();
+
+                let handler: crate::network::topic_manager::TopicHandler = Rc::new(RefCell::new(move |payload: serde_json::Value| {
+                    use crate::network::ws_schema::WsMessage;
+                    if let Ok(parsed) = serde_json::from_value::<WsMessage>(payload) {
+                        match parsed {
+                            WsMessage::NodeState { data } => {
+                                crate::state::dispatch_global_message(Message::UpdateNodeStatus {
+                                    node_id: data.node_id.clone(),
+                                    status: data.status.clone(),
+                                });
+                            }
+                            WsMessage::ExecutionFinished { data } => {
+                                crate::state::dispatch_global_message(Message::ExecutionFinished {
+                                    execution_id: data.execution_id,
+                                    status: data.status.clone(),
+                                    error: data.error.clone(),
+                                });
+                            }
+                            WsMessage::NodeLog { data } => {
+                                crate::state::dispatch_global_message(Message::AppendExecutionLog {
+                                    execution_id: data.execution_id,
+                                    node_id: data.node_id.clone(),
+                                    stream: data.stream.clone(),
+                                    text: data.text.clone(),
+                                });
+                            }
+                            _ => {}
+                        }
+                    }
+                }));
+
+                let _ = tm.subscribe(topic, handler);
+            })));
+
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
+                }
+            })));
+        }
+
+        // -------------------------------------------------------------------
+        // Start workflow execution – triggers API call command
+        // -------------------------------------------------------------------
+        Message::StartWorkflowExecution { workflow_id } => {
+            state.current_execution = Some(crate::state::ExecutionStatus {
+                execution_id: 0,
+                status: crate::state::ExecPhase::Starting,
+            });
+            state.execution_logs.clear();
+            commands.push(Command::StartWorkflowExecutionApi { workflow_id });
+
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
+                }
+            })));
+
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::log_drawer::refresh(&doc);
+                }
+            })));
+        }
+        Message::CreateWorkflow { name } => {
+            state.creating_workflow = true;
+            commands.push(Command::CreateWorkflowApi { name: name.clone() });
+        }
+
+        Message::RenameWorkflow { workflow_id, name, description } => {
+            state.updating_workflow = Some(workflow_id);
+            commands.push(Command::RenameWorkflowApi { workflow_id, name: name.clone(), description: description.clone() });
+        }
+
+        Message::DeleteWorkflow { workflow_id } => {
+            state.deleting_workflow = Some(workflow_id);
+            commands.push(Command::DeleteWorkflowApi { workflow_id });
+        }
+        
+        // Loading state handlers
+        Message::WorkflowCreationStarted => {
+            state.creating_workflow = true;
+        }
+        
+        Message::WorkflowDeletionStarted { workflow_id } => {
+            state.deleting_workflow = Some(workflow_id);
+        }
+        
+        Message::WorkflowUpdateStarted { workflow_id } => {
+            state.updating_workflow = Some(workflow_id);
+        }
+
+        // Workflow scheduling messages
+        Message::ScheduleWorkflow { workflow_id, cron_expression } => {
+            commands.push(Command::ScheduleWorkflowApi { workflow_id, cron_expression });
+        }
+
+        Message::UnscheduleWorkflow { workflow_id } => {
+            commands.push(Command::UnscheduleWorkflowApi { workflow_id });
+        }
+
+        Message::CheckWorkflowSchedule { workflow_id } => {
+            commands.push(Command::CheckWorkflowScheduleApi { workflow_id });
+        }
+        Message::SelectWorkflow { workflow_id } => {
+            state.current_workflow_id = Some(workflow_id);
+            needs_refresh = true;
+
+            // Refresh run button & log drawer in UI
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
+                    let _ = crate::components::log_drawer::refresh(&doc);
+                }
+            })));
+        }
+        Message::WorkflowCreated(wf) => {
+            // Remove any optimistic entry with same name or temp id (<=0)
+            let wf_id = wf.id;
+            state.workflows.retain(|_, v| v.id > 0 || v.name != wf.name);
+            state.workflows.insert(wf_id, wf);
+            state.current_workflow_id = Some(wf_id);
+            state.creating_workflow = false; // Clear loading state
+            needs_refresh = true;
+            // UI update to refresh bar after new workflow added
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::refresh(&doc);
+                }
+            })));
+        }
+
+        // (ExecutionFinished & AppendExecutionLog handled in dedicated arms
+        // below.  Any UI refresh logic is appended there to avoid duplicate
+        // pattern matches that caused unreachable-pattern warnings.)
+        Message::WorkflowDeleted { workflow_id } => {
+            state.workflows.remove(&workflow_id);
+            if state.current_workflow_id == Some(workflow_id) {
+                state.current_workflow_id = state.workflows.keys().next().cloned();
+            }
+            state.deleting_workflow = None; // Clear loading state
+            needs_refresh = true;
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::refresh(&doc);
+                }
+            })));
+        }
+        Message::WorkflowUpdated(wf) => {
+            state.workflows.insert(wf.id, wf.clone());
+            state.updating_workflow = None; // Clear loading state
+            needs_refresh = true;
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::refresh(&doc);
+                }
+            })));
+        }
+
+        // -------------------------------------------------------------------
+        // Live workflow execution updates
+        // -------------------------------------------------------------------
+
+        Message::ExecutionFinished { execution_id, status, error } => {
+            if let Some(exec) = &mut state.current_execution {
+                if exec.execution_id == 0 || exec.execution_id == execution_id {
+                    exec.execution_id = execution_id;
+                    exec.status = if status == "success" {
+                        crate::state::ExecPhase::Success
+                    } else {
+                        crate::state::ExecPhase::Failed
+                    };
+                }
+            }
+            if let Some(err) = error {
+                state.execution_logs.push(crate::state::ExecutionLog {
+                    node_id: "execution".to_string(),
+                    stream: "error".to_string(),
+                    text: format!("Execution failed: {}", err),
+                });
+            }
+            needs_refresh = true;
+        }
+
+        Message::AppendExecutionLog { execution_id, node_id, stream, text } => {
+            if let Some(exec) = &state.current_execution {
+                if exec.execution_id == 0 || exec.execution_id == execution_id {
+                    state.execution_logs.push(crate::state::ExecutionLog { node_id: node_id.clone(), stream: stream.clone(), text: text.clone() });
+                    needs_refresh = true;
+                }
+            }
+
+            // Live append means drawer needs repaint if open
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::log_drawer::refresh(&doc);
+                }
+            })));
+        }
+
+        // UI toggle for log drawer
+        Message::ToggleLogDrawer => {
+            state.logs_open = !state.logs_open;
+            needs_refresh = true;
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::log_drawer::refresh(&doc);
+                }
+            })));
+        }
+
+        // -------------------------------------------------------------------
+        // Template Gallery Messages
+        // -------------------------------------------------------------------
+
+        Message::LoadTemplates { category, my_templates } => {
+            state.templates_loading = true;
+            state.selected_template_category = category.clone();
+            state.show_my_templates_only = my_templates;
+            commands.push(Command::LoadTemplatesApi { 
+                category: category.clone(), 
+                my_templates 
+            });
+        }
+
+        Message::TemplatesLoaded(templates) => {
+            state.templates = templates.clone();
+            state.templates_loading = false;
+            needs_refresh = true;
+            // Refresh template gallery if it's open
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::template_gallery::refresh_templates_grid(&doc);
+                }
+            })));
+        }
+
+        Message::LoadTemplateCategories => {
+            commands.push(Command::LoadTemplateCategoriesApi);
+        }
+
+        Message::TemplateCategoriesLoaded(categories) => {
+            state.template_categories = categories.clone();
+            needs_refresh = true;
+            // Refresh template gallery if it's open
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::template_gallery::refresh_templates_grid(&doc);
+                }
+            })));
+        }
+
+        Message::SetTemplateCategory(category) => {
+            state.selected_template_category = category.clone();
+            // Reload templates with new category filter
+            commands.push(Command::LoadTemplatesApi { 
+                category: category.clone(), 
+                my_templates: state.show_my_templates_only 
+            });
+        }
+
+        Message::ToggleMyTemplatesOnly => {
+            state.show_my_templates_only = !state.show_my_templates_only;
+            // Reload templates with new filter
+            commands.push(Command::LoadTemplatesApi { 
+                category: state.selected_template_category.clone(), 
+                my_templates: state.show_my_templates_only 
+            });
+        }
+
+        Message::DeployTemplate { template_id, name, description } => {
+            commands.push(Command::DeployTemplateApi { 
+                template_id, 
+                name: Some(name.clone()), 
+                description: Some(description.clone()) 
+            });
+        }
+
+        Message::TemplateDeployed(workflow) => {
+            // Add the new workflow to state
+            state.workflows.insert(workflow.id, workflow.clone());
+            state.current_workflow_id = Some(workflow.id);
+            needs_refresh = true;
+            // Show success toast and refresh UI
+            crate::toast::success("Template deployed successfully!");
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::refresh(&doc);
+                }
+            })));
+        }
+
+        Message::ShowTemplateGallery => {
+            // Load templates and categories when showing gallery
+            commands.push(Command::LoadTemplatesApi { 
+                category: state.selected_template_category.clone(), 
+                my_templates: state.show_my_templates_only 
+            });
+            commands.push(Command::LoadTemplateCategoriesApi);
+        }
+
+        Message::HideTemplateGallery => {
+            // No action needed - gallery will be hidden by UI component
+        }
+        Message::WorkflowsLoaded(workflows) => {
+            state.workflows.clear();
+            for wf in workflows {
+                state.workflows.insert(wf.id, wf);
+            }
+            // Ensure current_workflow_id is set
+            if state.current_workflow_id.is_none() {
+                if let Some(first_id) = state.workflows.keys().next().cloned() {
+                    state.current_workflow_id = Some(first_id);
+                }
+            }
+            // Trigger UI refresh of workflow switcher
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let (Some(win),) = (web_sys::window(),) {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::workflow_switcher::refresh(&doc);
+                    }
+                }
+            })));
+        }
         Message::AddEdge { .. } |
         Message::GenerateCanvasFromAgents => {
             // These are handled by the canvas reducer which returns early
             unreachable!("Canvas messages should be handled by the canvas reducer")
         }
         
+        Message::InitializeParticleSystem { width, height } => {
+            state.particle_system = Some(crate::canvas::background::ParticleSystem::new(width, height, 50));
+            needs_refresh = true; // Particle system initialized, likely needs a redraw
+        },
+        Message::ClearParticleSystem => {
+            state.particle_system = None;
+            needs_refresh = true; // Particle system cleared, likely needs a redraw
+        },
         // Catch-all for any unhandled messages
         _ => {
             // Warn about unexpected messages so nothing silently fails

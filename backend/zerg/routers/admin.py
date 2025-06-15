@@ -2,7 +2,9 @@ import logging
 
 # FastAPI helpers
 from fastapi import APIRouter
+from fastapi import APIRouter as _AR
 from fastapi import Depends
+from fastapi import FastAPI as _FastAPI
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
@@ -49,34 +51,56 @@ async def reset_database():
         if engine is None:  # pragma: no cover – safety guard
             raise RuntimeError("Session factory returned no bound engine")
 
-        # Clear active connections to avoid SQLite locking issues.
-        engine.dispose()
-
         # Safer + faster for SQLite: disable FK checks, truncate every table,
         # then re-enable.  Avoids losing autoincrement counters that some
         # tests rely on for deterministic IDs.
 
-        from sqlalchemy.orm import close_all_sessions
+        # ------------------------------------------------------------------
+        # SQLAlchemy's *global* ``close_all_sessions()`` helper invalidates
+        # **every** Session that exists in the current process – even the
+        # ones that belong to a *different* Playwright worker using another
+        # database file.  When multiple E2E workers run in parallel this
+        # leads to race-conditions where an ongoing request suddenly loses
+        # its Session mid-flight and subsequent ORM access explodes with
+        # ``InvalidRequestError: Instance … is not persistent within this
+        # Session``.
+        #
+        # Because each Playwright worker is already fully isolated via its
+        # *own* SQLite engine (handled by WorkerDBMiddleware &
+        # zerg.database) it is safe – and *necessary* – to avoid closing
+        # foreign Sessions.  Instead we:
+        #   1. Dispose the *current* worker’s engine after we are done.  This
+        #      releases connections that *belong to this engine only*.
+        #   2. Rely on the fact that every incoming HTTP request obtains a
+        #      **fresh** Session, so no stale identity maps can leak across
+        #      requests.
+        #
+        # Hence: **do not** call ``close_all_sessions()`` here.
 
-        # Close any open Sessions first to avoid lingering identity maps that
-        # would otherwise return *stale* ORM objects after the truncate.
-        close_all_sessions()
+        # Drop & recreate schema so **new columns** land automatically when
+        # models change during active dev work (e.g. `workflow_id`).  Safer
+        # than DELETE-rows because SQLite cannot ALTER TABLE with multiple
+        # columns easily.
 
-        with engine.begin() as conn:
-            if engine.dialect.name == "sqlite":
-                conn.exec_driver_sql("PRAGMA foreign_keys = OFF;")
+        logger.info("Dropping all tables …")
+        Base.metadata.drop_all(bind=engine)
 
-            for table in reversed(Base.metadata.sorted_tables):
-                conn.exec_driver_sql(f'DELETE FROM "{table.name}";')
+        logger.info("Re-creating all tables …")
+        Base.metadata.create_all(bind=engine)
 
-            if engine.dialect.name == "sqlite":
-                conn.exec_driver_sql("PRAGMA foreign_keys = ON;")
-
-        logger.info("All tables truncated (worker-isolated)")
+        logger.info("Database schema reset (drop+create) complete")
 
         # Dispose again after recreation to release references held by
-        # background threads.
-        engine.dispose()
+        # background threads.  However, **skip** this step when the backend
+        # runs inside the unit-test environment (``TESTING=1``) because
+        # test fixtures may still hold an *open* SQLAlchemy ``Session`` that
+        # shares the same Engine/connection.  Calling ``engine.dispose()``
+        # would invalidate those connections and subsequent calls like
+        # ``Session.close()`` trigger a *ProgrammingError: Cannot operate on
+        # a closed database* exception which breaks the tear-down phase.
+
+        if not settings.testing:  # avoid invalidating live connections in tests
+            engine.dispose()
 
         return {"message": "Database reset successfully"}
     except Exception as e:
@@ -94,8 +118,6 @@ async def reset_database():
 # delegate to the main handler.
 # ---------------------------------------------------------------------------
 
-from fastapi import APIRouter as _AR
-
 _legacy_router = _AR(prefix="/admin")
 
 
@@ -105,7 +127,6 @@ async def _legacy_reset_database():  # noqa: D401 – thin wrapper
 
 
 # mount the legacy router without the global /api prefix
-from fastapi import FastAPI as _FastAPI
 
 
 def _mount_legacy(app: _FastAPI):  # noqa: D401 – helper

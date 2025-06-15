@@ -335,19 +335,16 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             }
 
             // Schedule a general UI refresh for other views or broader updates
-            state.pending_ui_updates = Some(Box::new(|| {
+            commands.push(Command::UpdateUI(Box::new(|| {
                 if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::error_1(&format!("Failed to refresh UI after AgentsRefreshed (pending_ui_updates): {:?}", e).into());
+                    web_sys::console::error_1(&format!("Failed to refresh UI after AgentsRefreshed: {:?}", e).into());
                 }
 
                 // Ensure Dashboard WS manager is subscribed to all current agents.
                 if let Err(e) = crate::components::dashboard::ws_manager::init_dashboard_ws() {
-                    web_sys::console::error_1(&format!("Failed to re-init dashboard WS subscriptions (pending_ui_updates): {:?}", e).into());
+                    web_sys::console::error_1(&format!("Failed to re-init dashboard WS subscriptions: {:?}", e).into());
                 }
-                
-                // The explicit refresh for canvas if it became active *during* this pending_ui_updates execution
-                // is already handled by refresh_ui_after_state_change.
-            }));
+            })));
 
             // After updating the agent list trigger a label refresh so all
             // visual nodes show the latest agent names.

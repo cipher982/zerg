@@ -21,6 +21,7 @@ pub fn setup_ui_event_handlers(document: &Document) -> Result<(), JsValue> {
     setup_auto_fit_button_handler(document)?;
     setup_center_view_handler(document)?;
     setup_clear_button_handler(document)?;
+    setup_keyboard_shortcuts()?;
     Ok(())
 }
 
@@ -70,6 +71,78 @@ fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
         btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
         cb.forget();
     }
+    Ok(())
+}
+
+/// Global keyboard shortcuts (F = fit to content, 0 = reset view)
+fn setup_keyboard_shortcuts() -> Result<(), JsValue> {
+    use web_sys::KeyboardEvent;
+
+    let window = web_sys::window().expect("no global window exists");
+
+    let window_clone = window.clone();
+
+    let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: KeyboardEvent| {
+        // Ignore when typing in inputs
+        if let Some(target) = e.target() {
+            if target.dyn_ref::<web_sys::HtmlInputElement>().is_some()
+                || target.dyn_ref::<web_sys::HtmlTextAreaElement>().is_some()
+            {
+                return;
+            }
+            if let Some(el) = target.dyn_ref::<web_sys::Element>() {
+                if el.has_attribute("contenteditable") {
+                    return;
+                }
+            }
+        }
+
+        match e.key().as_str() {
+            " " => {
+                if let Some(doc) = web_sys::window().unwrap().document() {
+                    let _ = doc.body().unwrap().class_list().add_1("space-pan");
+                }
+            }
+            "f" | "F" => {
+                dispatch_global_message(Message::CenterView);
+                // Prevent default browser find shortcut when Ctrl+F not pressed
+                if !e.ctrl_key() && !e.meta_key() {
+                    e.prevent_default();
+                }
+            }
+            "0" => {
+                dispatch_global_message(Message::ResetView);
+                e.prevent_default();
+            }
+            "r" | "R" => {
+                // Cmd/Ctrl + R triggers browser refresh; intercept only when
+                // *not* pressed with meta/ctrl to avoid hijacking.
+                if !e.meta_key() && !e.ctrl_key() {
+                    if let Some(current_id) = crate::state::APP_STATE.with(|st| st.borrow().current_workflow_id) {
+                        dispatch_global_message(Message::StartWorkflowExecution { workflow_id: current_id });
+                    }
+                    e.prevent_default();
+                }
+            }
+            _ => {}
+        }
+    }));
+
+    window.add_event_listener_with_callback("keydown", cb.as_ref().unchecked_ref())?;
+    cb.forget();
+
+    // Keyup – exit pan mode etc.
+    let cb_up = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: KeyboardEvent| {
+        if e.key() == " " {
+            if let Some(doc) = window_clone.document() {
+                let _ = doc.body().unwrap().class_list().remove_1("space-pan");
+            }
+        }
+    }));
+
+    window.add_event_listener_with_callback("keyup", cb_up.as_ref().unchecked_ref())?;
+    cb_up.forget();
+
     Ok(())
 }
 
