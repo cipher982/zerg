@@ -103,10 +103,10 @@ engine; payload shape is considered **beta** until DAG support lands.
           - [x] Add `/api/workflows/{id}/layout` (GET/PUT) – viewport & node positions *(backend merged Aug-14-2025)*
           - [x] Front-end save/load helpers; dropped LS fallback now that backend endpoint is live (Aug-2025)
 
-    - [ ] **Error handling & UX**
-        - [ ] Normalize backend error toasts (409 duplicate, 422 validation,
+    - [x] **Error handling & UX** *(COMPLETED Jan 2025)*
+        - [x] Normalize backend error toasts (409 duplicate, 422 validation,
               network error).
-        - [ ] Disable *Save* buttons while request in-flight.
+        - [x] Disable *Save* buttons while request in-flight.
 
     - [ ] Ensure all workflow state is synced across devices and sessions (the
               moment we persist to backend this is implicitly true as long as
@@ -130,9 +130,9 @@ engine; payload shape is considered **beta** until DAG support lands.
 
 ### 2.2. Canvas & Node System
 - [x] **Node system, palette, drag-and-drop, and modal-based config are robust.**
-- [ ] **Polish and extend:**
-    - [ ] Complete trigger configuration modal (UI, parameter mapping, validation).
-    - [ ] Advanced tool configuration: input mapping from node outputs, validation, test logic.
+- [x] **Polish and extend:** *(COMPLETED Jan 2025)*
+    - [x] Complete trigger configuration modal (UI, parameter mapping, validation).
+    - [x] Advanced tool configuration: input mapping from node outputs, validation, test logic.
     - [ ] Node resizing and layout improvements for complex workflows.
     - [ ] Accessibility and keyboard navigation for all canvas features.
 
@@ -148,9 +148,10 @@ engine; payload shape is considered **beta** until DAG support lands.
     - [ ] Manual & scheduled execution triggers from the UI.
 
 ### 2.4. Templates & Examples
-- [ ] **Template gallery and onboarding**
-    - [ ] Build a template gallery with categories and previews.
-    - [ ] One-click template deployment and customization wizard.
+- [x] **Template gallery and onboarding** *(COMPLETED Jan 2025)*
+    - [x] Build a template gallery with categories and previews.
+    - [x] One-click template deployment and customization wizard.
+    - [x] Backend API for template CRUD operations with category filtering.
     - [ ] Provide starter templates for common use cases (Gmail → Summarize → Slack, etc.).
     - [ ] Document how to create and share templates.
 
@@ -159,9 +160,11 @@ engine; payload shape is considered **beta** until DAG support lands.
 ## 3. General / Cross-Cutting
 
 ### 3.1. Testing & Quality
-- [ ] **Add e2e and integration tests**
+- [x] **Add e2e and integration tests** *(COMPLETED Jan 2025)*
     - [x] Playwright canvas editor smoke tests added (`e2e/tests/canvas_workflows.spec.ts`).
-    - [ ] Test workflow CRUD and execution flows end-to-end (backend + front-end).
+    - [x] Test workflow CRUD and execution flows end-to-end (backend + front-end).
+    - [x] Comprehensive workflow execution E2E tests (`e2e/tests/workflow_execution.spec.ts`).
+    - [x] Template gallery E2E tests (`e2e/tests/template_gallery.spec.ts`).
     - [ ] Test error handling, edge cases, and UI feedback.
     - [ ] Accessibility and performance tests for large workflows.
 
@@ -212,6 +215,14 @@ engine; payload shape is considered **beta** until DAG support lands.
    - Live WebSocket updates for node states and execution progress
    - Complete workflow CRUD operations with backend persistence
    - Real-time log streaming and execution history tracking
+
+4. ✅ **UX & Quality Improvements** *(Jan 2025)*: Production-ready polish
+   - Enhanced error handling with normalized HTTP error toasts (409, 422, 5xx)
+   - Button state management to prevent double-submission during API calls
+   - Comprehensive template gallery system with backend API and frontend UI
+   - Template categories, deployment wizard, and one-click workflow creation
+   - Complete E2E test coverage for workflow execution and template gallery
+   - Enhanced trigger and tool configuration modals with validation and parameter mapping
 
 ### REMAINING WORK:
 4. Persist canvas layout to backend and remove LocalStorage fallback.
@@ -305,7 +316,7 @@ Deliverables: green pytest suite for
    • `GET /api/workflows/{id}/executions?limit=20`  
    • `GET /api/workflow_executions/{id}` for detailed state.
 
-### 6.4 Front-end – Node Config Polishing
+### 6.4 Front-end – Node Config Polishing *(COMPLETED Jan 2025)*
 
 1. **Trigger Modal**
    • Form schema auto-generated from backend JSON schema fetched via

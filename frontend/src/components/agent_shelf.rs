@@ -122,7 +122,7 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
                                          font-size: 12px; font-weight: 500; \
                                          box-shadow: 0 2px 8px rgba(0,0,0,0.2);"
                                     ).unwrap();
-                                    drag_image.set_inner_text("Agent");
+                                    drag_image.set_inner_html("Agent");
                                     
                                     if let Some(body) = document.body() {
                                         body.append_child(&drag_image).unwrap();

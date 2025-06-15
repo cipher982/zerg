@@ -52,6 +52,7 @@ from zerg.routers.metrics import router as metrics_router
 from zerg.routers.models import router as models_router
 from zerg.routers.runs import router as runs_router
 from zerg.routers.system import router as system_router
+from zerg.routers.templates import router as templates_router
 from zerg.routers.threads import router as threads_router
 from zerg.routers.triggers import router as triggers_router
 from zerg.routers.users import router as users_router
@@ -202,6 +203,7 @@ app.include_router(workflows_router, prefix=f"{API_PREFIX}")
 app.include_router(workflow_executions_router, prefix=f"{API_PREFIX}")
 app.include_router(auth_router, prefix=f"{API_PREFIX}")
 app.include_router(users_router, prefix=f"{API_PREFIX}")
+app.include_router(templates_router, prefix=f"{API_PREFIX}")
 app.include_router(graph_router, prefix=f"{API_PREFIX}")
 app.include_router(system_router, prefix=API_PREFIX)
 app.include_router(metrics_router)  # no prefix – Prometheus expects /metrics

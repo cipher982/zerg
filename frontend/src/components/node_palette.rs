@@ -177,9 +177,9 @@ impl NodePalette {
                     let drag_image = document.create_element("div").unwrap();
                     
                     // Choose color based on node type
-                    let (bg_color, text) = match node_data.node_type.as_str() {
-                        "Tool" => ("#10b981", "Tool"),
-                        "Trigger" => ("#f59e0b", "Trigger"),
+                    let (bg_color, text) = match &node_data.node_type {
+                        crate::models::NodeType::Tool { .. } => ("#10b981", "Tool"),
+                        crate::models::NodeType::Trigger { .. } => ("#f59e0b", "Trigger"),
                         _ => ("#6366f1", "Node")
                     };
                     
@@ -193,7 +193,7 @@ impl NodePalette {
                          box-shadow: 0 2px 8px rgba(0,0,0,0.2);", 
                         bg_color
                     )).unwrap();
-                    drag_image.set_inner_text(text);
+                    drag_image.set_inner_html(text);
                     
                     if let Some(body) = document.body() {
                         body.append_child(&drag_image).unwrap();

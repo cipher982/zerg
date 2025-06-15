@@ -553,15 +553,31 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             })));
         }
         Message::CreateWorkflow { name } => {
+            state.creating_workflow = true;
             commands.push(Command::CreateWorkflowApi { name: name.clone() });
         }
 
         Message::RenameWorkflow { workflow_id, name, description } => {
+            state.updating_workflow = Some(workflow_id);
             commands.push(Command::RenameWorkflowApi { workflow_id, name: name.clone(), description: description.clone() });
         }
 
         Message::DeleteWorkflow { workflow_id } => {
+            state.deleting_workflow = Some(workflow_id);
             commands.push(Command::DeleteWorkflowApi { workflow_id });
+        }
+        
+        // Loading state handlers
+        Message::WorkflowCreationStarted => {
+            state.creating_workflow = true;
+        }
+        
+        Message::WorkflowDeletionStarted { workflow_id } => {
+            state.deleting_workflow = Some(workflow_id);
+        }
+        
+        Message::WorkflowUpdateStarted { workflow_id } => {
+            state.updating_workflow = Some(workflow_id);
         }
 
         // Workflow scheduling messages
@@ -594,6 +610,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.workflows.retain(|_, v| v.id > 0 || v.name != wf.name);
             state.workflows.insert(wf_id, wf);
             state.current_workflow_id = Some(wf_id);
+            state.creating_workflow = false; // Clear loading state
             needs_refresh = true;
             // UI update to refresh bar after new workflow added
             commands.push(Command::UpdateUI(Box::new(|| {
@@ -611,6 +628,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             if state.current_workflow_id == Some(workflow_id) {
                 state.current_workflow_id = state.workflows.keys().next().cloned();
             }
+            state.deleting_workflow = None; // Clear loading state
             needs_refresh = true;
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
@@ -620,6 +638,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         }
         Message::WorkflowUpdated(wf) => {
             state.workflows.insert(wf.id, wf.clone());
+            state.updating_workflow = None; // Clear loading state
             needs_refresh = true;
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
@@ -678,6 +697,100 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     let _ = crate::components::log_drawer::refresh(&doc);
                 }
             })));
+        }
+
+        // -------------------------------------------------------------------
+        // Template Gallery Messages
+        // -------------------------------------------------------------------
+
+        Message::LoadTemplates { category, my_templates } => {
+            state.templates_loading = true;
+            state.selected_template_category = category.clone();
+            state.show_my_templates_only = my_templates;
+            commands.push(Command::LoadTemplatesApi { 
+                category: category.clone(), 
+                my_templates 
+            });
+        }
+
+        Message::TemplatesLoaded(templates) => {
+            state.templates = templates.clone();
+            state.templates_loading = false;
+            needs_refresh = true;
+            // Refresh template gallery if it's open
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::template_gallery::refresh_templates_grid(&doc);
+                }
+            })));
+        }
+
+        Message::LoadTemplateCategories => {
+            commands.push(Command::LoadTemplateCategoriesApi);
+        }
+
+        Message::TemplateCategoriesLoaded(categories) => {
+            state.template_categories = categories.clone();
+            needs_refresh = true;
+            // Refresh template gallery if it's open
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::template_gallery::refresh_templates_grid(&doc);
+                }
+            })));
+        }
+
+        Message::SetTemplateCategory(category) => {
+            state.selected_template_category = category.clone();
+            // Reload templates with new category filter
+            commands.push(Command::LoadTemplatesApi { 
+                category: category.clone(), 
+                my_templates: state.show_my_templates_only 
+            });
+        }
+
+        Message::ToggleMyTemplatesOnly => {
+            state.show_my_templates_only = !state.show_my_templates_only;
+            // Reload templates with new filter
+            commands.push(Command::LoadTemplatesApi { 
+                category: state.selected_template_category.clone(), 
+                my_templates: state.show_my_templates_only 
+            });
+        }
+
+        Message::DeployTemplate { template_id, name, description } => {
+            commands.push(Command::DeployTemplateApi { 
+                template_id, 
+                name: Some(name.clone()), 
+                description: Some(description.clone()) 
+            });
+        }
+
+        Message::TemplateDeployed(workflow) => {
+            // Add the new workflow to state
+            state.workflows.insert(workflow.id, workflow.clone());
+            state.current_workflow_id = Some(workflow.id);
+            needs_refresh = true;
+            // Show success toast and refresh UI
+            crate::toast::success("Template deployed successfully!");
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::refresh(&doc);
+                }
+            })));
+        }
+
+        Message::ShowTemplateGallery => {
+            // Load templates and categories when showing gallery
+            commands.push(Command::LoadTemplatesApi { 
+                category: state.selected_template_category.clone(), 
+                my_templates: state.show_my_templates_only 
+            });
+            commands.push(Command::LoadTemplateCategoriesApi);
+        }
+
+        Message::HideTemplateGallery => {
+            // No action needed - gallery will be hidden by UI component
         }
         Message::WorkflowsLoaded(workflows) => {
             state.workflows.clear();

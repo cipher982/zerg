@@ -809,3 +809,103 @@ def get_workflow_executions(db: Session, workflow_id: int, skip: int = 0, limit:
     from zerg.models.models import WorkflowExecution
 
     return db.query(WorkflowExecution).filter_by(workflow_id=workflow_id).offset(skip).limit(limit).all()
+
+
+# -------------------------------------------------------------------
+# Workflow Template CRUD operations
+# -------------------------------------------------------------------
+
+
+def create_workflow_template(
+    db: Session,
+    *,
+    created_by: int,
+    name: str,
+    description: Optional[str] = None,
+    category: str,
+    canvas_data: Dict[str, Any],
+    tags: Optional[List[str]] = None,
+    preview_image_url: Optional[str] = None,
+    is_public: bool = True,
+):
+    """Create a new workflow template."""
+    from zerg.models.models import WorkflowTemplate
+
+    db_template = WorkflowTemplate(
+        created_by=created_by,
+        name=name,
+        description=description,
+        category=category,
+        canvas_data=canvas_data,
+        tags=tags or [],
+        preview_image_url=preview_image_url,
+        is_public=is_public,
+    )
+    db.add(db_template)
+    db.commit()
+    db.refresh(db_template)
+    return db_template
+
+
+def get_workflow_templates(
+    db: Session,
+    *,
+    category: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    created_by: Optional[int] = None,
+    public_only: bool = True,
+):
+    """Get workflow templates with optional filtering."""
+    from zerg.models.models import WorkflowTemplate
+
+    query = db.query(WorkflowTemplate)
+
+    if public_only and created_by is None:
+        query = query.filter(WorkflowTemplate.is_public.is_(True))
+    elif created_by is not None:
+        # If user is specified, show their templates regardless of public status
+        query = query.filter(WorkflowTemplate.created_by == created_by)
+
+    if category:
+        query = query.filter(WorkflowTemplate.category == category)
+
+    return query.offset(skip).limit(limit).all()
+
+
+def get_workflow_template(db: Session, template_id: int):
+    """Get a specific workflow template by ID."""
+    from zerg.models.models import WorkflowTemplate
+
+    return db.query(WorkflowTemplate).filter_by(id=template_id).first()
+
+
+def get_template_categories(db: Session):
+    """Get all unique template categories."""
+    from zerg.models.models import WorkflowTemplate
+
+    result = db.query(WorkflowTemplate.category).distinct().all()
+    return [r[0] for r in result]
+
+
+def deploy_workflow_template(
+    db: Session, *, template_id: int, owner_id: int, name: Optional[str] = None, description: Optional[str] = None
+):
+    """Deploy a template as a new workflow for the user."""
+    from zerg.models.models import WorkflowTemplate
+
+    # Get the template
+    template = db.query(WorkflowTemplate).filter_by(id=template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    if not template.is_public and template.created_by != owner_id:
+        raise HTTPException(status_code=403, detail="Access denied to this template")
+
+    # Create workflow from template
+    workflow_name = name or f"{template.name} (Copy)"
+    workflow_description = description or template.description
+
+    return create_workflow(
+        db=db, owner_id=owner_id, name=workflow_name, description=workflow_description, canvas_data=template.canvas_data
+    )
