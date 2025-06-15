@@ -768,15 +768,15 @@ LLM / CRUD change ──▶ EventBus ──▶ TopicConnectionManager ──▶ 
 3. Success → socket auto-subscribed to `user:{id}` personal topic.  
 4. Failure → close code 4401; front-end banner + logout.
 
-Message schema (v1):
+Message envelope schema (v2):
 
 ```jsonc
 {
   "v": 1,
-  "id": "uuid4",
   "topic": "thread:42",
   "type": "thread_message_created",
   "ts": 1719958453,
+  "req_id": "optional-correlation-id",  // for request/response correlation
   "data": { … }
 }
 ```
