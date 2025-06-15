@@ -78,7 +78,6 @@ brings immediate value and leaves the codebase in a green state.
 ----------------------------------------------------------------------
 ## Phase 4 — Property-based fuzzing
 
-* [ ] Generate proptest strategies from JSON Schema (blog pattern)
 * [x] Generate proptest strategies from JSON Schema (blog pattern)
 * [x] Fuzz sequences: random valid control & user messages (max 30)
 * [x] Assert: server never panics, always responds within 100 ms
