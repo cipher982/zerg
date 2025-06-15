@@ -77,7 +77,7 @@ engine; payload shape is considered **beta** until DAG support lands.
 > AsyncAPI spec (and regenerate SDKs + Pact files) so the build stays green.
 
 ### 2.1. Workflow Persistence & API Integration
-- [ ] **Connect frontend to backend workflow CRUD API**
+- [x] **Connect frontend to backend workflow CRUD API** *(COMPLETED Jan 2025)*
     - [x] Fetch workflows from backend on app load (tab-bar reflects server data).
     - [x] **Create – plus-tab (`＋`) hooks to `POST /api/workflows`**
         - [x] `create_workflow()` helper added to `network/api_client.rs`.
@@ -108,9 +108,7 @@ engine; payload shape is considered **beta** until DAG support lands.
               network error).
         - [x] Disable *Save* buttons while request in-flight.
 
-    - [ ] Ensure all workflow state is synced across devices and sessions (the
-              moment we persist to backend this is implicitly true as long as
-              we re-fetch on app boot and after CRUD actions).
+    - [x] Ensure all workflow state is synced across devices and sessions *(COMPLETED - backend persistence active)*
 
     *Current status (Jan 2025)*: **Create** is wired up end-to-end (＋ tab →
     backend → state refresh). **Workflow tabs are now visible** in Canvas Editor
@@ -224,10 +222,13 @@ engine; payload shape is considered **beta** until DAG support lands.
    - Complete E2E test coverage for workflow execution and template gallery
    - Enhanced trigger and tool configuration modals with validation and parameter mapping
 
-### REMAINING WORK:
-4. Persist canvas layout to backend and remove LocalStorage fallback.
-5. Template gallery & onboarding docs.
-6. Clean-up tech-debt & multi-device edge-cases.
+### REMAINING WORK (Lower Priority):
+5. Canvas layout persistence to backend (LocalStorage fallback removal)
+6. Node resizing and layout improvements for complex workflows
+7. Accessibility and keyboard navigation for all canvas features  
+8. Create starter templates for common use cases (Gmail → Summarize → Slack, etc.)
+9. Documentation: API docs, onboarding guides, migration plans
+10. Clean-up tech-debt & multi-device edge-cases
 
 ---
 
