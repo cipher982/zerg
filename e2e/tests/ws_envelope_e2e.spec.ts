@@ -81,19 +81,5 @@ test.describe('WebSocket Envelope Protocol E2E', () => {
     expect(statusAfter).toContain('Connected');
   });
 
-  test('Envelope fallback: legacy protocol still works', async ({ page }) => {
-    // Set a cookie or localStorage flag to disable envelope (simulate legacy)
-    await page.goto('/');
-    await page.evaluate(() => {
-      localStorage.setItem('WS_ENVELOPE_V2', '0');
-    });
-    await page.reload();
-
-    // Perform a basic chat action and ensure it still works
-    await page.fill('[data-testid="chat-input"]', 'Legacy protocol test');
-    await page.click('[data-testid="send-message-btn"]');
-    await page.waitForSelector('[data-testid="chat-message"]');
-    const msg = await page.textContent('[data-testid="chat-message"]');
-    expect(msg).toContain('Legacy protocol test');
-  });
+  // Legacy protocol test removed - envelope structure is now mandatory
 });
