@@ -24,6 +24,12 @@ ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # ---------------------------------------------------------------------------
 export TMPDIR="${ROOT_DIR}/tmp"
 mkdir -p "${TMPDIR}"
+# Some wasm-bindgen helpers ignore *TMPDIR* on macOS and instead consult the
+# generic *TMP* / *TEMP* variables.  Ensure they point to the **same** writable
+# directory so temp-file creation succeeds in sandboxed CI runners (fixes
+# “Operation not permitted (os error 1)” failures).
+export TMP="${TMPDIR}"
+export TEMP="${TMPDIR}"
 
 # ---------------------------------------------------------------------------
 # Helper to execute wasm-pack for a given browser. Do NOT abort the script

@@ -54,7 +54,12 @@ class UnsubscribeMessage(BaseModel):
     message_id: str
 
 
-async def send_to_client(client_id: str, message: Dict[str, Any]) -> bool:
+async def send_to_client(
+    client_id: str,
+    message: Dict[str, Any],
+    *,
+    topic: str | None = None,
+) -> bool:
     """Send a message to a client if they are connected.
 
     Args:
@@ -64,14 +69,74 @@ async def send_to_client(client_id: str, message: Dict[str, Any]) -> bool:
     Returns:
         bool: True if message was sent, False if client not found
     """
+    """Low-level helper to push a JSON-serialisable payload to a single client.
+
+    When the *WS_ENVELOPE_V2* feature flag is **enabled** every outgoing
+    frame **must** follow the unified *Envelope* contract.  Older call-sites
+    still pass the historical, unconstrained dictionaries.  To bridge the
+    compatibility gap we wrap such legacy payloads **on the fly** unless the
+    caller already provided a fully-formed envelope.
+
+    Args:
+        client_id: Recipient connection id (uuid4 string)
+        message:  Arbitrary JSON-serialisable mapping.  If the mapping lacks
+            the mandatory envelope keys (``v``, ``topic``, …) it will be
+            embedded into a new envelope automatically when the feature flag
+            is active.
+        topic:    Optional topic string.  Required when *message* itself does
+            not include a topic and the envelope feature is active.  Helpers
+            such as ``_subscribe_agent`` therefore forward their known topic
+            so the wrapper logic can construct a valid envelope.
+
+    Returns:
+        True when the frame was queued for sending, False if the *client_id*
+        was unknown or the underlying ``send_json`` raised an exception.
+    """
+
     if client_id not in topic_manager.active_connections:
         return False
 
+    # ------------------------------------------------------------------
+    # Optional V2 envelope upgrade
+    # ------------------------------------------------------------------
+
+    _envelope_enabled = get_settings().ws_envelope_v2 or _truthy(os.getenv("WS_ENVELOPE_V2"))
+
+    is_already_enveloped = (
+        isinstance(message, dict)
+        and "v" in message
+        and "topic" in message
+        and "ts" in message
+    )
+
     try:
-        await topic_manager.active_connections[client_id].send_json(message)
+        if _envelope_enabled and not is_already_enveloped:
+            from zerg.schemas.ws_messages import Envelope  # local to avoid cycles
+
+            # Determine target topic – caller-supplied *topic* overrides any
+            # guess derived from the payload.
+            _topic: str | None = topic or message.get("topic")  # type: ignore[arg-type]
+            if _topic is None:
+                # Fallback to system-wide channel to avoid schema rejection.
+                _topic = "system"
+
+            message_type = str(message.get("type", "UNKNOWN")).upper()
+
+            envelope = Envelope.create(
+                message_type=message_type,
+                topic=_topic,
+                data=message,
+                req_id=message.get("message_id"),  # echo if available
+            )
+
+            payload = envelope.model_dump()
+        else:
+            payload = message
+
+        await topic_manager.active_connections[client_id].send_json(payload)  # type: ignore[arg-type]
         return True
-    except Exception as e:
-        logger.error(f"Error sending to client {client_id}: {str(e)}")
+    except Exception as e:  # noqa: BLE001 – log & swallow
+        logger.error("Error sending to client %s: %s", client_id, e)
         return False
 
 
@@ -94,7 +159,7 @@ async def send_error(
         error=error_msg,
         message_id=message_id,
     )
-    await send_to_client(client_id, error.model_dump())
+    await send_to_client(client_id, error.model_dump(), topic="system")
 
     # Optionally close the socket with a specific WebSocket close code.  We
     # perform the close *after* sending the error frame so the client learns
@@ -226,7 +291,11 @@ async def _subscribe_agent(client_id: str, agent_id: int, message_id: str, db: S
             message_id=message_id,
             data=agent,
         )
-        await send_to_client(client_id, jsonable_encoder(agent_state_msg))
+        await send_to_client(
+            client_id,
+            jsonable_encoder(agent_state_msg),
+            topic=topic,
+        )
         logger.info(f"Sent initial agent_state for agent {agent_id} to client {client_id}")
 
     except Exception as e:
@@ -284,6 +353,7 @@ async def _subscribe_user(client_id: str, user_id: int, message_id: str, db: Ses
                 "message_id": message_id,
                 "data": user_payload,
             },
+            topic=topic,
         )
 
         logger.info("Sent initial user_update for user %s to client %s", user_id, client_id)
