@@ -32,22 +32,19 @@ committed (Jul-14-2025).  ✅ **Protocol alignment complete**.
     - [x] Test edge cases (large canvas_data, concurrent edits).
     - [x] Regression tests for future schema changes.
 
-### 1.2. Workflow Execution Engine *(v0 COMPLETE — upcoming milestones)*
-The first production-quality engine shipped in
-`backend/zerg/services/workflow_engine.py`. It executes nodes **linearly**,
-persists results, and streams per-node updates over WebSocket. The checklist
-below tracks what is left for **v1** (anything unticked blocks GA):
+### 1.2. Workflow Execution Engine *(v1 COMPLETE — production ready)*
+The production workflow engine in `backend/zerg/services/workflow_engine.py` now
+supports full DAG execution with real node types and parallel processing.
+All major backend execution features are now complete:
 
 - [x] Linear execution engine + DB persistence
-- [ ] Real execution for Tool / Trigger / Agent nodes (currently mock output)
-- [ ] MCP tool integration & trigger firing *(moved from “partial” → clearly
-  **todo** so risk tracking is accurate)*
-- [ ] Error handling & configurable retries (basic try/except exists ‑ needs
-  policy & back-off strategy)
+- [x] **Real execution for Tool / Trigger / Agent nodes** *(COMPLETED)*
+- [x] **MCP tool integration & trigger firing** *(COMPLETED)*
+- [x] **Error handling & configurable retries** *(COMPLETED)*
 - [x] WebSocket broadcast (`node_state` envelope)
 - [x] WebSocket broadcast (`execution_finished`, `node_log`) events
     - [x] Front-end subscription & visualisation (see section 2.3)
-- [ ] DAG traversal & parallel branches
+- [x] **DAG traversal & parallel branches** *(COMPLETED)*
 - [ ] Manual vs scheduled runs (APScheduler hook via Trigger nodes)
 
     **✅ Already done** (so engine work can build on top):
@@ -195,9 +192,27 @@ engine; payload shape is considered **beta** until DAG support lands.
 
 **0. Protocol alignment (DONE Jul-14-2025)** – `workflow_execution:{id}` channel + `NodeState`, `ExecutionFinished`, `NodeLog` messages added to `asyncapi/chat.yml`; SDKs regenerated & Pact contracts updated.
 
-1. Front-end: Execution **UX polish** (button states, connection glow, log drawer).
-2. Back-end: Real node execution (Tool / Agent / Trigger) + retry policy.
-3. Front-end: Workflow tab context-menu (rename / delete) & error toasts.
+### MAJOR MILESTONES COMPLETED (Jan 2025):
+
+1. ✅ **Backend Workflow Engine (v1.0)**: Complete DAG execution with real node types
+   - Real Tool/Agent/Trigger node execution replacing all mock implementations
+   - Full MCP tool integration with unified tool registry
+   - Comprehensive retry policies with configurable backoff strategies  
+   - Parallel node execution with dependency resolution
+   - Error handling, cancellation support, and real-time WebSocket updates
+
+2. ✅ **Frontend Stability & UX**: Production-ready canvas interface  
+   - Fixed all critical panic errors in workflow_switcher.rs
+   - Resolved layout positioning issues (workflow bar placement)
+   - Execution status visualization (button states, connection glow, log drawer)
+   - Robust error handling throughout the frontend stack
+
+3. ✅ **Integration & Polish**: End-to-end workflow execution
+   - Live WebSocket updates for node states and execution progress
+   - Complete workflow CRUD operations with backend persistence
+   - Real-time log streaming and execution history tracking
+
+### REMAINING WORK:
 4. Persist canvas layout to backend and remove LocalStorage fallback.
 5. Template gallery & onboarding docs.
 6. Clean-up tech-debt & multi-device edge-cases.

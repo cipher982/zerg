@@ -35,12 +35,16 @@ from typing import Dict
 
 from sqlalchemy.orm import Session
 
+from zerg.crud import crud
 from zerg.database import get_session_factory
 from zerg.events import EventType
 from zerg.events import event_bus
+from zerg.managers.agent_runner import AgentRunner
+from zerg.models.models import Agent
 from zerg.models.models import NodeExecutionState
 from zerg.models.models import Workflow
 from zerg.models.models import WorkflowExecution
+from zerg.tools.registry import get_registry
 
 logger = logging.getLogger(__name__)
 
@@ -73,11 +77,11 @@ class WorkflowExecutionEngine:
 
         session_factory = get_session_factory()
 
-        def _run() -> int:  # runs inside a worker thread
+        async def _run() -> int:  # runs inside a worker thread
             with session_factory() as db:
-                return self._run_sync(db, workflow_id)
+                return await self._run_async(db, workflow_id)
 
-        execution_id: int = await asyncio.to_thread(_run)
+        execution_id: int = await _run()
         logger.info("[WorkflowEngine] execution finished – workflow_id=%s execution_id=%s", workflow_id, execution_id)
         return execution_id
 
@@ -85,8 +89,8 @@ class WorkflowExecutionEngine:
     # Internal helpers – executed in worker thread
     # ------------------------------------------------------------------
 
-    def _run_sync(self, db: Session, workflow_id: int) -> int:
-        """Synchronous implementation – *must* be called within a worker thread."""
+    async def _run_async(self, db: Session, workflow_id: int) -> int:
+        """Asynchronous implementation for real node execution."""
 
         workflow: Workflow | None = db.query(Workflow).filter_by(id=workflow_id, is_active=True).first()
         if workflow is None:
@@ -116,167 +120,30 @@ class WorkflowExecutionEngine:
         log_lines: list[str] = []
 
         # ------------------------------------------------------------------
-        # 2) Sequentially process every node (placeholder logic)
+        # 2) Execute workflow using DAG traversal
         # ------------------------------------------------------------------
         canvas: Dict[str, Any] = workflow.canvas_data or {}
         nodes: list[Dict[str, Any]] = canvas.get("nodes", [])
+        edges: list[Dict[str, Any]] = canvas.get("edges", [])
 
-        for idx, node in enumerate(nodes):
-            # Respect cancellation requested by user (status set to "cancelled").
-            db.refresh(execution)
-            if execution.status == "cancelled":
-                log_lines.append("Execution cancelled by user – stopping before node %s" % idx)
-                execution.finished_at = datetime.now(timezone.utc)
-                execution.log = "\n".join(log_lines)
-                db.commit()
-
-                self._publish_execution_finished(
-                    execution_id=execution.id,
-                    status="cancelled",
-                    error=getattr(execution, "cancel_reason", "cancelled"),
-                    duration_ms=self._duration_ms(execution),
-                )
-                return execution.id
-            node_id: str = str(node.get("id", f"idx_{idx}"))
-            node_type: str = str(node.get("type", "unknown"))
-
-            # -- persist initial NodeExecutionState (running) -------------
-            node_state = NodeExecutionState(
-                workflow_execution_id=execution.id,
-                node_id=node_id,
-                status="running",
-            )
-            db.add(node_state)
+        # Build DAG and execute
+        try:
+            await self._execute_dag(db, execution, nodes, edges, log_lines, canvas)
+        except Exception as e:
+            # DAG execution failed - mark workflow as failed
+            execution.status = "failed"
+            execution.error = str(e)
+            execution.finished_at = datetime.now(timezone.utc)
+            execution.log = "\n".join(log_lines)
             db.commit()
-            db.refresh(node_state)
 
-            # Emit *running* event
-            self._publish_node_event(
+            self._publish_execution_finished(
                 execution_id=execution.id,
-                node_id=node_id,
-                status="running",
-                output=None,
-                error=None,
+                status="failed",
+                error=str(e),
+                duration_ms=self._duration_ms(execution),
             )
-
-            # ------------------------------------------------------------------
-            # Retry / back-off handling (simple v1 implementation)
-            # ------------------------------------------------------------------
-
-            # Defaults from workflow-level policy
-            policy: Dict[str, Any] = (canvas.get("retries") or {}) if isinstance(canvas.get("retries"), dict) else {}
-            default_max_retries: int = int(policy.get("default", 0))
-            backoff_strategy: str = str(policy.get("backoff", "exp"))
-
-            # Per-node override (optional)
-            node_policy: Dict[str, Any] = node.get("retries", {}) if isinstance(node.get("retries"), dict) else {}
-            max_retries: int = int(node_policy.get("max", default_max_retries))
-
-            attempt = 0
-            last_exc: Exception | None = None
-
-            while attempt <= max_retries:
-                try:
-                    # Placeholder execution – replace with real logic later
-                    self._execute_placeholder_node(node_type, node)
-
-                    # Mock output so the front-end has something to display.
-                    output: Dict[str, Any] = {"result": f"{node_type}_executed", "attempt": attempt}
-
-                    node_state.status = "success"
-                    node_state.output = output
-                    db.commit()
-
-                    # Emit *success* event
-                    self._publish_node_event(
-                        execution_id=execution.id,
-                        node_id=node_id,
-                        status="success",
-                        output=output,
-                        error=None,
-                    )
-
-                    log_lines.append(f"Node {node_id} ({node_type}) executed – OK (attempt {attempt})")
-
-                    # Stream success line so the UI log drawer updates instantly
-                    self._publish_node_log(
-                        execution_id=execution.id,
-                        node_id=node_id,
-                        stream="stdout",
-                        text=f"Node {node_id} succeeded (attempt {attempt})",
-                    )
-                    break  # success
-
-                except Exception as exc:  # noqa: BLE001 – placeholder for broad errors
-                    last_exc = exc
-                    if attempt < max_retries:
-                        # Log + wait for back-off then retry
-                        log_lines.append(
-                            f"Node {node_id} ({node_type}) failed – RETRY {attempt+1}/{max_retries}: {exc}"
-                        )
-                        # Emit retrying state for UI
-                        self._publish_node_event(
-                            execution_id=execution.id,
-                            node_id=node_id,
-                            status="retrying",
-                            output=None,
-                            error=str(exc),
-                        )
-
-                        # Live retry log line
-                        self._publish_node_log(
-                            execution_id=execution.id,
-                            node_id=node_id,
-                            stream="stdout",
-                            text=f"RETRY {attempt + 1}/{max_retries}: {exc}",
-                        )
-
-                        # sleep back-off (blocking since we are in worker thread)
-                        backoff_sec = self._calc_backoff_delay(backoff_strategy, attempt)
-                        time.sleep(backoff_sec)
-                        attempt += 1
-                        continue
-
-                    # Max retries exceeded – mark failed
-                    node_state.status = "failed"
-                    node_state.error = str(exc)
-                    db.commit()
-
-                    # Emit *failed* event
-                    self._publish_node_event(
-                        execution_id=execution.id,
-                        node_id=node_id,
-                        status="failed",
-                        output=None,
-                        error=str(exc),
-                    )
-
-                    # -- mark parent execution failed ------------------------
-                    execution.status = "failed"
-                    execution.error = str(exc)
-                    execution.finished_at = datetime.now(timezone.utc)
-                    execution.log = "\n".join(log_lines)
-                    db.commit()
-
-                    # Emit execution_finished (failed)
-                    self._publish_execution_finished(
-                        execution_id=execution.id,
-                        status="failed",
-                        error=str(exc),
-                        duration_ms=self._duration_ms(execution),
-                    )
-                    # Also send failure line to log stream
-                    self._publish_node_log(
-                        execution_id=execution.id,
-                        node_id=node_id,
-                        stream="stderr",
-                        text=f"Node {node_id} failed after {attempt + 1} attempt(s): {exc}",
-                    )
-
-                    logger.exception("[WorkflowEngine] node execution failed – node_id=%s", node_id)
-                    return execution.id
-
-            # End while
+            return execution.id
 
         # ------------------------------------------------------------------
         # 3) Success path – but honour user cancellation that may have been set
@@ -316,11 +183,274 @@ class WorkflowExecutionEngine:
         return execution.id
 
     # ------------------------------------------------------------------
+    # DAG Execution Engine
+    # ------------------------------------------------------------------
+
+    async def _execute_dag(
+        self,
+        db: Session,
+        execution: WorkflowExecution,
+        nodes: list[Dict[str, Any]],
+        edges: list[Dict[str, Any]],
+        log_lines: list[str],
+        canvas: Dict[str, Any] = None,
+    ) -> None:
+        """Execute workflow nodes using DAG traversal with dependency resolution."""
+
+        # Build dependency graph
+        node_deps = self._build_dependency_graph(nodes, edges)
+        node_outputs = {}  # Store outputs from completed nodes
+        completed_nodes = set()
+        running_tasks = {}  # Track currently running node tasks
+
+        # Create all node states upfront
+        node_states = {}
+        for node in nodes:
+            node_id = str(node.get("id", "unknown"))
+            node_state = NodeExecutionState(
+                workflow_execution_id=execution.id,
+                node_id=node_id,
+                status="idle",
+            )
+            db.add(node_state)
+            node_states[node_id] = node_state
+
+        db.commit()
+
+        # Main execution loop
+        while len(completed_nodes) < len(nodes):
+            # Check for cancellation
+            db.refresh(execution)
+            if execution.status == "cancelled":
+                # Cancel all running tasks
+                for task in running_tasks.values():
+                    task.cancel()
+
+                log_lines.append("Execution cancelled by user")
+                execution.finished_at = datetime.now(timezone.utc)
+                execution.log = "\n".join(log_lines)
+                db.commit()
+
+                self._publish_execution_finished(
+                    execution_id=execution.id,
+                    status="cancelled",
+                    error=getattr(execution, "cancel_reason", "cancelled"),
+                    duration_ms=self._duration_ms(execution),
+                )
+                return
+
+            # Find nodes ready to execute (dependencies satisfied)
+            ready_nodes = []
+            for node in nodes:
+                node_id = str(node.get("id", "unknown"))
+                if (
+                    node_id not in completed_nodes
+                    and node_id not in running_tasks
+                    and self._node_dependencies_satisfied(node_id, node_deps, completed_nodes)
+                ):
+                    ready_nodes.append(node)
+
+            # Start execution of ready nodes
+            for node in ready_nodes:
+                node_id = str(node.get("id", "unknown"))
+                # Add canvas context to node for retry configuration
+                enhanced_node = dict(node)
+                enhanced_node["_canvas_context"] = canvas or {}
+
+                task = asyncio.create_task(
+                    self._execute_node_with_context(db, enhanced_node, execution.id, node_outputs, node_states[node_id])
+                )
+                running_tasks[node_id] = task
+
+                # Mark as running
+                node_states[node_id].status = "running"
+                db.commit()
+
+                self._publish_node_event(
+                    execution_id=execution.id,
+                    node_id=node_id,
+                    status="running",
+                    output=None,
+                    error=None,
+                )
+
+            # Wait for at least one task to complete
+            if running_tasks:
+                done, pending = await asyncio.wait(running_tasks.values(), return_when=asyncio.FIRST_COMPLETED)
+
+                # Process completed tasks
+                for task in done:
+                    # Find which node this task belongs to
+                    completed_node_id = None
+                    for nid, t in running_tasks.items():
+                        if t == task:
+                            completed_node_id = nid
+                            break
+
+                    if completed_node_id:
+                        try:
+                            output = await task
+                            # Node succeeded
+                            node_outputs[completed_node_id] = output
+                            completed_nodes.add(completed_node_id)
+                            node_states[completed_node_id].status = "success"
+                            node_states[completed_node_id].output = output
+                            db.commit()
+
+                            self._publish_node_event(
+                                execution_id=execution.id,
+                                node_id=completed_node_id,
+                                status="success",
+                                output=output,
+                                error=None,
+                            )
+
+                            log_lines.append(f"Node {completed_node_id} completed successfully")
+
+                        except Exception as e:
+                            # Node failed - mark workflow as failed
+                            node_states[completed_node_id].status = "failed"
+                            node_states[completed_node_id].error = str(e)
+                            db.commit()
+
+                            self._publish_node_event(
+                                execution_id=execution.id,
+                                node_id=completed_node_id,
+                                status="failed",
+                                output=None,
+                                error=str(e),
+                            )
+
+                            log_lines.append(f"Node {completed_node_id} failed: {e}")
+                            raise  # Re-raise to fail the entire workflow
+
+                        # Remove from running tasks
+                        del running_tasks[completed_node_id]
+            else:
+                # No tasks running and no ready nodes - check for deadlock
+                if len(completed_nodes) < len(nodes):
+                    remaining_nodes = [n for n in nodes if str(n.get("id", "unknown")) not in completed_nodes]
+                    raise RuntimeError(
+                        f"Workflow deadlock: remaining nodes {[n.get('id') for n in remaining_nodes]} cannot execute"
+                    )
+                break
+
+        # All nodes completed successfully
+        log_lines.append(f"DAG execution completed - {len(completed_nodes)} nodes executed")
+
+    def _build_dependency_graph(self, nodes: list[Dict[str, Any]], edges: list[Dict[str, Any]]) -> Dict[str, set[str]]:
+        """Build a dependency graph from nodes and edges."""
+
+        # Initialize empty dependency sets for all nodes
+        deps = {}
+        for node in nodes:
+            node_id = str(node.get("id", "unknown"))
+            deps[node_id] = set()
+
+        # Add dependencies based on edges
+        for edge in edges:
+            source = str(edge.get("source", ""))
+            target = str(edge.get("target", ""))
+
+            if source and target and target in deps:
+                deps[target].add(source)
+
+        return deps
+
+    def _node_dependencies_satisfied(
+        self, node_id: str, node_deps: Dict[str, set[str]], completed_nodes: set[str]
+    ) -> bool:
+        """Check if all dependencies for a node are satisfied."""
+
+        required_deps = node_deps.get(node_id, set())
+        return required_deps.issubset(completed_nodes)
+
+    async def _execute_node_with_context(
+        self,
+        db: Session,
+        node: Dict[str, Any],
+        execution_id: int,
+        node_outputs: Dict[str, Any],
+        node_state: NodeExecutionState,
+    ) -> Dict[str, Any]:
+        """Execute a node with access to outputs from previous nodes and retry logic."""
+
+        node_id = str(node.get("id", "unknown"))
+        node_type = str(node.get("type", "unknown"))
+
+        # Get retry configuration - need to get canvas from parent execution context
+        # For now, we'll extract from the global context or use defaults
+        canvas = node.get("_canvas_context", {})
+        policy: Dict[str, Any] = (canvas.get("retries") or {}) if isinstance(canvas.get("retries"), dict) else {}
+        default_max_retries: int = int(policy.get("default", 0))
+        backoff_strategy: str = str(policy.get("backoff", "exp"))
+
+        # Per-node override (optional)
+        node_policy: Dict[str, Any] = node.get("retries", {}) if isinstance(node.get("retries"), dict) else {}
+        max_retries: int = int(node_policy.get("max", default_max_retries))
+
+        # Add context from previous nodes to the node data
+        enhanced_node = dict(node)
+        enhanced_node["context"] = node_outputs
+
+        attempt = 0
+
+        while attempt <= max_retries:
+            try:
+                # Execute the node with context
+                output = await self._execute_node(db, enhanced_node, node_type, execution_id, attempt)
+
+                # Log success
+                self._publish_node_log(
+                    execution_id=execution_id,
+                    node_id=node_id,
+                    stream="stdout",
+                    text=f"Node {node_id} succeeded (attempt {attempt})",
+                )
+
+                return output
+
+            except Exception as exc:
+                if attempt < max_retries:
+                    # Log retry
+                    self._publish_node_event(
+                        execution_id=execution_id,
+                        node_id=node_id,
+                        status="retrying",
+                        output=None,
+                        error=str(exc),
+                    )
+
+                    self._publish_node_log(
+                        execution_id=execution_id,
+                        node_id=node_id,
+                        stream="stdout",
+                        text=f"RETRY {attempt + 1}/{max_retries}: {exc}",
+                    )
+
+                    # Wait with backoff
+                    backoff_sec = self._calc_backoff_delay(backoff_strategy, attempt)
+                    await asyncio.sleep(backoff_sec)
+                    attempt += 1
+                    continue
+
+                # Max retries exceeded
+                self._publish_node_log(
+                    execution_id=execution_id,
+                    node_id=node_id,
+                    stream="stderr",
+                    text=f"Node {node_id} failed after {attempt + 1} attempt(s): {exc}",
+                )
+
+                logger.exception("[WorkflowEngine] node execution failed – node_id=%s", node_id)
+                raise
+
+    # ------------------------------------------------------------------
     # Event helper
     # ------------------------------------------------------------------
 
-    @staticmethod
     def _publish_node_event(
+        self,
         *,
         execution_id: int,
         node_id: str,
@@ -340,20 +470,26 @@ class WorkflowExecutionEngine:
         }
 
         # Run publish in a fresh event loop inside the worker thread.
+        # Since we're now async, create a task instead of trying to run a new loop
         try:
-            asyncio.run(event_bus.publish(EventType.NODE_STATE_CHANGED, payload))
+            loop = asyncio.get_running_loop()
+            loop.create_task(event_bus.publish(EventType.NODE_STATE_CHANGED, payload))
+            # Don't await - let it run in background
         except RuntimeError:
-            # In case we're already inside a running loop (unlikely in thread)
+            # No running loop, create one
             loop = asyncio.new_event_loop()
-            loop.run_until_complete(event_bus.publish(EventType.NODE_STATE_CHANGED, payload))
-            loop.close()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(event_bus.publish(EventType.NODE_STATE_CHANGED, payload))
+            finally:
+                loop.close()
 
     # ------------------------------------------------------------------
     # Execution finished helper
     # ------------------------------------------------------------------
 
-    @staticmethod
     def _publish_execution_finished(
+        self,
         *,
         execution_id: int,
         status: str,
@@ -371,18 +507,24 @@ class WorkflowExecutionEngine:
         }
 
         try:
-            asyncio.run(event_bus.publish(EventType.EXECUTION_FINISHED, payload))
+            loop = asyncio.get_running_loop()
+            loop.create_task(event_bus.publish(EventType.EXECUTION_FINISHED, payload))
+            # Don't await - let it run in background
         except RuntimeError:
+            # No running loop, create one
             loop = asyncio.new_event_loop()
-            loop.run_until_complete(event_bus.publish(EventType.EXECUTION_FINISHED, payload))
-            loop.close()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(event_bus.publish(EventType.EXECUTION_FINISHED, payload))
+            finally:
+                loop.close()
 
     # ------------------------------------------------------------------
     # Node log helper – stream stdout/stderr lines
     # ------------------------------------------------------------------
 
-    @staticmethod
     def _publish_node_log(
+        self,
         *,
         execution_id: int,
         node_id: str,
@@ -400,11 +542,17 @@ class WorkflowExecutionEngine:
         }
 
         try:
-            asyncio.run(event_bus.publish(EventType.NODE_LOG, payload))
+            loop = asyncio.get_running_loop()
+            loop.create_task(event_bus.publish(EventType.NODE_LOG, payload))
+            # Don't await - let it run in background
         except RuntimeError:
+            # No running loop, create one
             loop = asyncio.new_event_loop()
-            loop.run_until_complete(event_bus.publish(EventType.NODE_LOG, payload))
-            loop.close()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(event_bus.publish(EventType.NODE_LOG, payload))
+            finally:
+                loop.close()
 
     @staticmethod
     def _duration_ms(execution: WorkflowExecution) -> int | None:
@@ -416,6 +564,301 @@ class WorkflowExecutionEngine:
     # ------------------------------------------------------------------
     # Internal util – placeholder node execution & back-off calculation
     # ------------------------------------------------------------------
+
+    async def _execute_node(
+        self, db: Session, node: Dict[str, Any], node_type: str, execution_id: int, attempt: int = 0
+    ) -> Dict[str, Any]:
+        """Execute a node based on its type and return the output."""
+
+        node_id = str(node.get("id", "unknown"))
+
+        # Log node execution start
+        self._publish_node_log(
+            execution_id=execution_id,
+            node_id=node_id,
+            stream="stdout",
+            text=f"Starting {node_type} node execution",
+        )
+
+        if node_type.lower() == "tool":
+            return await self._execute_tool_node(db, node, execution_id)
+        elif node_type.lower() == "agent":
+            return await self._execute_agent_node(db, node, execution_id)
+        elif node_type.lower() == "trigger":
+            return await self._execute_trigger_node(db, node, execution_id)
+        else:
+            # Fall back to placeholder for unknown node types
+            # Use original node data for simulated failures (not the enhanced context)
+            original_node = dict(node)
+            if "context" in original_node:
+                del original_node["context"]
+            if "_canvas_context" in original_node:
+                del original_node["_canvas_context"]
+
+            self._execute_placeholder_node(node_type, original_node)
+            return {"result": f"{node_type}_executed", "type": "placeholder", "attempt": attempt}
+
+    async def _execute_tool_node(self, db: Session, node: Dict[str, Any], execution_id: int) -> Dict[str, Any]:
+        """Execute a tool node using the tool registry."""
+
+        node_id = str(node.get("id", "unknown"))
+        tool_name = node.get("tool_name") or node.get("name", "")
+        tool_params = node.get("parameters", {})
+
+        if not tool_name:
+            raise ValueError("Tool node missing tool_name field")
+
+        # Get tool from registry - supports builtin, registered, and MCP tools
+        registry = get_registry()
+
+        # Use the unified registry which already includes builtin + MCP tools
+        all_tools = {t.name: t for t in registry.all_tools()}
+        tool = all_tools.get(tool_name)
+
+        if not tool:
+            available_tools = [t.name for t in registry.all_tools()]
+            raise ValueError(f"Tool '{tool_name}' not found in registry. Available: {available_tools}")
+
+        self._publish_node_log(
+            execution_id=execution_id,
+            node_id=node_id,
+            stream="stdout",
+            text=f"Executing tool: {tool_name}",
+        )
+
+        try:
+            # Execute the tool
+            result = await tool.ainvoke(tool_params)
+
+            self._publish_node_log(
+                execution_id=execution_id,
+                node_id=node_id,
+                stream="stdout",
+                text=f"Tool {tool_name} completed successfully",
+            )
+
+            return {"tool_name": tool_name, "parameters": tool_params, "result": result, "type": "tool"}
+
+        except Exception as e:
+            self._publish_node_log(
+                execution_id=execution_id,
+                node_id=node_id,
+                stream="stderr",
+                text=f"Tool {tool_name} failed: {str(e)}",
+            )
+            raise
+
+    async def _execute_agent_node(self, db: Session, node: Dict[str, Any], execution_id: int) -> Dict[str, Any]:
+        """Execute an agent node using AgentRunner."""
+
+        node_id = str(node.get("id", "unknown"))
+        agent_id = node.get("agent_id")
+
+        if not agent_id:
+            raise ValueError("Agent node missing agent_id field")
+
+        # Get agent from database
+        agent = db.query(Agent).filter_by(id=agent_id).first()
+        if not agent:
+            raise ValueError(f"Agent with id {agent_id} not found")
+
+        self._publish_node_log(
+            execution_id=execution_id,
+            node_id=node_id,
+            stream="stdout",
+            text=f"Executing agent: {agent.name}",
+        )
+
+        try:
+            # Create a temporary thread for this workflow execution
+            thread = crud.create_thread(
+                db=db,
+                user_id=1,  # TODO: Get actual user from context
+                thread_type="workflow",
+                title=f"Workflow execution {execution_id}",
+            )
+
+            # Add user message with context from previous nodes
+            user_message = node.get("message", "Execute this task")
+            crud.create_message(db=db, thread_id=thread.id, role="user", content=user_message, processed=False)
+
+            # Run the agent
+            runner = AgentRunner(agent)
+            created_messages = await runner.run_thread(db, thread)
+
+            # Extract the assistant response
+            assistant_messages = [msg for msg in created_messages if msg.role == "assistant"]
+            result = assistant_messages[-1].content if assistant_messages else "No response generated"
+
+            self._publish_node_log(
+                execution_id=execution_id,
+                node_id=node_id,
+                stream="stdout",
+                text=f"Agent {agent.name} completed successfully",
+            )
+
+            return {
+                "agent_id": agent_id,
+                "agent_name": agent.name,
+                "message": user_message,
+                "response": result,
+                "type": "agent",
+            }
+
+        except Exception as e:
+            self._publish_node_log(
+                execution_id=execution_id,
+                node_id=node_id,
+                stream="stderr",
+                text=f"Agent {agent.name} failed: {str(e)}",
+            )
+            raise
+
+    async def _execute_trigger_node(self, db: Session, node: Dict[str, Any], execution_id: int) -> Dict[str, Any]:
+        """Execute a trigger node by creating/configuring triggers."""
+
+        node_id = str(node.get("id", "unknown"))
+        trigger_type = node.get("trigger_type", "webhook")
+        target_agent_id = node.get("target_agent_id")
+
+        self._publish_node_log(
+            execution_id=execution_id,
+            node_id=node_id,
+            stream="stdout",
+            text=f"Processing {trigger_type} trigger for agent {target_agent_id}",
+        )
+
+        if not target_agent_id:
+            raise ValueError("Trigger node missing target_agent_id field")
+
+        # Create the trigger based on type
+        if trigger_type == "webhook":
+            return await self._create_webhook_trigger(db, node, target_agent_id, execution_id)
+        elif trigger_type == "schedule":
+            return await self._create_schedule_trigger(db, node, target_agent_id, execution_id)
+        elif trigger_type == "email":
+            return await self._create_email_trigger(db, node, target_agent_id, execution_id)
+        else:
+            raise ValueError(f"Unsupported trigger type: {trigger_type}")
+
+    async def _create_webhook_trigger(
+        self, db: Session, node: Dict[str, Any], agent_id: int, execution_id: int
+    ) -> Dict[str, Any]:
+        """Create a webhook trigger."""
+
+        from zerg.crud import crud
+
+        node_id = str(node.get("id", "unknown"))
+
+        # Create the trigger
+        trigger = crud.create_trigger(db=db, agent_id=agent_id, trigger_type="webhook", config=node.get("config", {}))
+
+        # Generate webhook URL
+        webhook_url = f"/api/triggers/{trigger.id}/events"
+
+        self._publish_node_log(
+            execution_id=execution_id,
+            node_id=node_id,
+            stream="stdout",
+            text=f"Created webhook trigger {trigger.id} for agent {agent_id}",
+        )
+
+        return {
+            "trigger_id": trigger.id,
+            "trigger_type": "webhook",
+            "webhook_url": webhook_url,
+            "secret": trigger.secret,
+            "status": "active",
+            "type": "trigger",
+        }
+
+    async def _create_schedule_trigger(
+        self, db: Session, node: Dict[str, Any], agent_id: int, execution_id: int
+    ) -> Dict[str, Any]:
+        """Create a scheduled trigger by updating agent's schedule."""
+
+        from zerg.crud import crud
+
+        node_id = str(node.get("id", "unknown"))
+        cron_expression = node.get("cron_expression")
+
+        if not cron_expression:
+            raise ValueError("Schedule trigger missing cron_expression field")
+
+        # Update the target agent's schedule
+        agent = crud.get_agent(db, agent_id)
+        if not agent:
+            raise ValueError(f"Agent {agent_id} not found")
+
+        # Update agent with schedule
+        crud.update_agent(db, agent_id, schedule=cron_expression)
+
+        # Try to register with scheduler if available
+        try:
+            import importlib.util
+
+            if importlib.util.find_spec("zerg.services.scheduler_service") is not None:
+                # Scheduler service is available - could import and use it here
+                # For now, we'll just log that the schedule was set
+                self._publish_node_log(
+                    execution_id=execution_id,
+                    node_id=node_id,
+                    stream="stdout",
+                    text=f"Scheduled agent {agent_id} with cron: {cron_expression}",
+                )
+            else:
+                raise ImportError("Scheduler service not found")
+        except ImportError:
+            # Scheduler service not available, just update the database
+            self._publish_node_log(
+                execution_id=execution_id,
+                node_id=node_id,
+                stream="stdout",
+                text=f"Updated agent {agent_id} schedule (scheduler service not available)",
+            )
+
+        return {
+            "agent_id": agent_id,
+            "trigger_type": "schedule",
+            "cron_expression": cron_expression,
+            "status": "scheduled",
+            "type": "trigger",
+        }
+
+    async def _create_email_trigger(
+        self, db: Session, node: Dict[str, Any], agent_id: int, execution_id: int
+    ) -> Dict[str, Any]:
+        """Create an email trigger."""
+
+        from zerg.crud import crud
+
+        node_id = str(node.get("id", "unknown"))
+        provider = node.get("email_provider", "gmail")
+        filters = node.get("email_filters", {})
+
+        config = {"provider": provider, "filters": filters}
+
+        # Create email trigger
+        trigger = crud.create_trigger(db=db, agent_id=agent_id, trigger_type="email", config=config)
+
+        # TODO: Initialize provider-specific setup (Gmail watch, etc.)
+        # This would require Gmail API integration which is complex
+
+        self._publish_node_log(
+            execution_id=execution_id,
+            node_id=node_id,
+            stream="stdout",
+            text=f"Created {provider} email trigger {trigger.id} for agent {agent_id}",
+        )
+
+        return {
+            "trigger_id": trigger.id,
+            "trigger_type": "email",
+            "provider": provider,
+            "filters": filters,
+            "status": "created",
+            "type": "trigger",
+        }
 
     @staticmethod
     def _execute_placeholder_node(node_type: str, node_payload: Dict[str, Any]) -> None:

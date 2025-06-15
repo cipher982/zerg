@@ -304,12 +304,36 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     // Insert bar into the main content area of the canvas layout
     // Try multiple locations in order of preference
     if let Some(main_content) = document.get_element_by_id("main-content-area") {
-        // Insert at the top of main content area, before input panel
+        web_sys::console::log_1(&"WORKFLOW_SWITCHER: Inserting into main-content-area".into());
+        // Insert at the top of main content area, before canvas container
         main_content.insert_before(&bar_el, main_content.first_child().as_ref())?;
     } else if let Some(app_container) = document.get_element_by_id("app-container") {
-        // Fallback: insert at top of app container (current canvas layout)
-        app_container.insert_before(&bar_el, app_container.first_child().as_ref())?;
+        web_sys::console::log_1(&"WORKFLOW_SWITCHER: Fallback - inserting into app-container".into());
+        // Create main-content-area if it doesn't exist and we're in canvas view
+        if app_container.class_list().contains("canvas-view") {
+            let main_content = document.create_element("div")?;
+            main_content.set_id("main-content-area");
+            main_content.set_class_name("main-content-area");
+            
+            // Move existing children to main content area
+            while let Some(child) = app_container.first_child() {
+                if let Some(element) = child.dyn_ref::<web_sys::Element>() {
+                    // Don't move the agent shelf
+                    if element.id() == "agent-shelf" {
+                        break;
+                    }
+                }
+                main_content.append_child(&child)?;
+            }
+            
+            app_container.append_child(&main_content)?;
+            main_content.insert_before(&bar_el, main_content.first_child().as_ref())?;
+        } else {
+            // Not in canvas view, use old behavior
+            app_container.insert_before(&bar_el, app_container.first_child().as_ref())?;
+        }
     } else {
+        web_sys::console::log_1(&"WORKFLOW_SWITCHER: Last resort - inserting into body".into());
         // Last resort fallback
         document.body().unwrap().append_child(&bar_el)?;
     }
@@ -321,10 +345,21 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
 
 /// Rebuild the tab list from current AppState
 pub fn refresh(document: &Document) -> Result<(), JsValue> {
-    let list_el = document
-        .get_element_by_id("workflow-bar")
-        .and_then(|b| b.first_child())
-        .unwrap()
+    // Make sure workflow bar is initialized first
+    let workflow_bar = match document.get_element_by_id("workflow-bar") {
+        Some(bar) => bar,
+        None => {
+            // Workflow bar not initialized yet, call init first
+            init(document)?;
+            document
+                .get_element_by_id("workflow-bar")
+                .ok_or_else(|| JsValue::from_str("workflow-bar element not found after init"))?
+        }
+    };
+    
+    let list_el = workflow_bar
+        .first_child()
+        .ok_or_else(|| JsValue::from_str("workflow-bar has no children - initialization may have failed"))?
         .dyn_into::<web_sys::Element>()?;
 
     // Clear existing children
