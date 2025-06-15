@@ -39,6 +39,13 @@ class EventType(str, Enum):
     # User events (profile updates, etc.)
     USER_UPDATED = "user_updated"
 
+    # Workflow execution events (visual canvas)
+    NODE_STATE_CHANGED = "node_state_changed"
+
+    # Workflow execution – finish & log stream
+    EXECUTION_FINISHED = "execution_finished"
+    NODE_LOG = "node_log"
+
 
 class EventBus:
     """Central event bus for publishing and subscribing to events."""

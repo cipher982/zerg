@@ -74,12 +74,24 @@ class MCPClient:
 
     def __init__(self, config: MCPServerConfig):
         self.config = config
-        # Enable HTTP/2 for better multiplexing
-        self.client = httpx.AsyncClient(
-            timeout=config.timeout,
-            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
-            http2=True,
-        )
+        # Enable HTTP/2 for better multiplexing.  When the optional *h2*
+        # dependency is missing **httpx** raises an ``ImportError``.  This is
+        # perfectly fine in our unit-test environment where we don’t actually
+        # perform any network I/O – gracefully fall back to classic HTTP/1.1
+        # instead of failing the entire request pipeline.
+
+        try:
+            self.client = httpx.AsyncClient(
+                timeout=config.timeout,
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+                http2=True,
+            )
+        except ImportError:  # pragma: no cover – only triggered in minimal envs
+            self.client = httpx.AsyncClient(
+                timeout=config.timeout,
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+                http2=False,
+            )
         self._health_check_passed = False
 
     async def __aenter__(self):

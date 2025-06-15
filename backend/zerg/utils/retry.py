@@ -37,7 +37,15 @@ import logging
 import random
 from typing import Awaitable
 from typing import Callable
-from typing import ParamSpec
+
+# ---------------------------------------------------------------------------
+# Typing helpers – runtime is Python ≥3.12 so ``ParamSpec`` exists in stdlib.
+# ---------------------------------------------------------------------------
+# Python <3.10 compatibility – fallback to `typing_extensions`.
+try:
+    from typing import ParamSpec  # type: ignore
+except ImportError:  # pragma: no cover – old interpreter
+    from typing_extensions import ParamSpec  # type: ignore
 from typing import TypeVar
 
 # Centralised settings access

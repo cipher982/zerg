@@ -104,11 +104,48 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
                         // Set visual drag effect
                         dt.set_effect_allowed("copy");
                         
-                        // Get the target element
+                        // Create a clean drag image instead of showing the full element
                         if let Some(target) = event.current_target() {
                             if let Some(element) = target.dyn_ref::<HtmlElement>() {
                                 // Add dragging class for visual feedback
                                 element.class_list().add_1("dragging").unwrap();
+                                
+                                // Create a simple drag image - just a small rounded rectangle
+                                if let Ok(document) = web_sys::window().unwrap().document().ok_or("No document") {
+                                    let drag_image = document.create_element("div").unwrap();
+                                    drag_image.set_attribute("style", 
+                                        "position: absolute; top: -1000px; left: -1000px; \
+                                         width: 80px; height: 30px; \
+                                         background: #3b82f6; color: white; \
+                                         border-radius: 15px; \
+                                         display: flex; align-items: center; justify-content: center; \
+                                         font-size: 12px; font-weight: 500; \
+                                         box-shadow: 0 2px 8px rgba(0,0,0,0.2);"
+                                    ).unwrap();
+                                    drag_image.set_inner_html("Agent");
+                                    
+                                    if let Some(body) = document.body() {
+                                        body.append_child(&drag_image).unwrap();
+                                        
+                                        // Set the custom drag image
+                                        dt.set_drag_image(&drag_image, 40, 15);
+                                        
+                                        // Clean up the temporary element after a short delay
+                                        let cleanup_drag_image = drag_image.clone();
+                                        let cleanup_closure = Closure::once(Box::new(move || {
+                                            if let Some(parent) = cleanup_drag_image.parent_node() {
+                                                let _ = parent.remove_child(&cleanup_drag_image);
+                                            }
+                                        }));
+                                        
+                                        web_sys::window().unwrap()
+                                            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                                cleanup_closure.as_ref().unchecked_ref(), 
+                                                100
+                                            ).unwrap();
+                                        cleanup_closure.forget();
+                                    }
+                                }
                             }
                         }
                         

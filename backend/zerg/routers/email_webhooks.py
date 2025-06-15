@@ -23,10 +23,11 @@ the *"push to HTTPS"* option.  Validation is **always enabled** unless the
 `TESTING=1` environment variable is set (unit-tests run without real JWTs).
 """
 
+# typing helpers
 from __future__ import annotations
 
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -98,7 +99,10 @@ async def _clamp_body_size(request: Request):  # noqa: D401 – dependency
 # ---------------------------------------------------------------------------
 
 
-def _validate_google_jwt(auth_header: str | None):  # noqa: D401 – helper
+# Import Optional for 3.9-compatible type hints
+
+
+def _validate_google_jwt(auth_header: Optional[str]):  # noqa: D401 – helper
     """Validate Google-signed JWT contained in ``Authorization: Bearer …``.
 
     Validation is **always ON** in dev/staging/prod.  The check is skipped
@@ -151,10 +155,10 @@ def _validate_google_jwt(auth_header: str | None):  # noqa: D401 – helper
 async def gmail_webhook(
     *,
     x_goog_channel_token: str = Header(..., alias="X-Goog-Channel-Token"),
-    x_goog_resource_id: str | None = Header(None, alias="X-Goog-Resource-Id"),
-    x_goog_message_number: str | None = Header(None, alias="X-Goog-Message-Number"),
-    authorization: str | None = Header(None, alias="Authorization"),
-    payload: Dict | None = None,  # Google sends no body – future-proof
+    x_goog_resource_id: Optional[str] = Header(None, alias="X-Goog-Resource-Id"),
+    x_goog_message_number: Optional[str] = Header(None, alias="X-Goog-Message-Number"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    payload: Optional[Dict] = None,  # Google sends no body – future-proof
     db: Session = Depends(get_db),
 ):
     """Handle Gmail *watch* callbacks.
@@ -208,7 +212,7 @@ async def gmail_webhook(
     # Use *X-Goog-Message-Number* as a quick dedup mechanism so we do not call
     # the expensive Gmail *history* API multiple times for the same push.
 
-    msg_no_int: int | None = None
+    msg_no_int: Optional[int] = None
     if x_goog_message_number and x_goog_message_number.isdigit():
         msg_no_int = int(x_goog_message_number)
 

@@ -168,6 +168,24 @@ pub fn is_focusable(element: &Element) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// Overlay portal helper
+// ---------------------------------------------------------------------------
+
+/// Append the given element to the global `#overlay-root` portal.  Falls back
+/// to `<body>` when the element is absent (e.g. dev HTML not yet updated).
+pub fn mount_in_overlay(el: &Element) {
+    let window = web_sys::window().expect("no window");
+    if let Some(doc) = window.document() {
+        if let Some(portal) = doc.get_element_by_id("overlay-root") {
+            let _ = portal.append_child(el);
+            return;
+        }
+        // Fallback – shouldn’t happen but keeps behaviour sane in older HTML builds
+        let _ = doc.body().unwrap().append_child(el);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Unit tests (run with `cargo test --lib` in the frontend crate)
 // ---------------------------------------------------------------------------
 

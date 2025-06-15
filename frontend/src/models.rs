@@ -184,7 +184,7 @@ pub struct Message {
 /// To keep the incremental refactor compilable we provide an interim type
 /// alias `pub type Node = CanvasNode;` – this will be removed once all
 /// call-sites migrate.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CanvasNode {
     pub node_id: String,           // Unique identifier for this node
     pub agent_id: Option<u32>,     // Optional reference to a backend agent
@@ -198,6 +198,20 @@ pub struct CanvasNode {
     pub parent_id: Option<String>, // Optional parent node reference
     pub is_selected: bool,
     pub is_dragging: bool,
+
+    /// Live execution state coming from the WorkflowExecutionEngine.
+    /// None means the node has never been executed in the current run.
+    #[serde(skip, default)]
+    pub exec_status: Option<NodeExecStatus>,
+}
+
+/// Execution status emitted via WebSocket (running/success/failed).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NodeExecStatus {
+    Idle,
+    Running,
+    Success,
+    Failed,
 }
 
 // -----------------------------------------------------------------------------
@@ -207,7 +221,7 @@ pub struct CanvasNode {
 pub type Node = CanvasNode;
 
 /// Edge represents a connection between two nodes in a workflow
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Edge {
     pub id: String,                // Unique identifier for this edge
     pub from_node_id: String,      // Source node ID
@@ -216,12 +230,78 @@ pub struct Edge {
 }
 
 /// Workflow represents a collection of nodes and edges that form a complete workflow
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Workflow {
     pub id: u32,                   // Unique identifier for this workflow
     pub name: String,              // Name of the workflow
     pub nodes: Vec<CanvasNode>,          // Nodes in this workflow
     pub edges: Vec<Edge>,          // Edges connecting nodes in this workflow
+}
+
+// ---------------------------------------------------------------------------
+//   Execution history (sidebar)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct ExecutionSummary {
+    pub id: u32,
+    pub status: String, // running | success | failed | cancelled
+
+    #[serde(default)]
+    pub started_at: Option<String>,
+
+    #[serde(default)]
+    pub finished_at: Option<String>,
+
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
+
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
+// -----------------------------------------------------------------------------
+// Backend **Workflow** DTO (matches FastAPI schema) ---------------------------
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApiWorkflow {
+    pub id: u32,
+    pub owner_id: u32,
+    pub name: String,
+    pub description: Option<String>,
+    #[serde(default)]
+    pub canvas_data: serde_json::Value,
+    #[serde(default)]
+    pub is_active: bool,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+}
+
+impl From<ApiWorkflow> for Workflow {
+    fn from(api: ApiWorkflow) -> Self {
+        // canvas_data is expected to be an object with "nodes" and "edges" arrays.
+        let (nodes, edges) = if let Some(obj) = api.canvas_data.as_object() {
+            let nodes_val = obj.get("nodes").cloned().unwrap_or(serde_json::Value::Array(vec![]));
+            let edges_val = obj.get("edges").cloned().unwrap_or(serde_json::Value::Array(vec![]));
+
+            // Deserialize to Vec<CanvasNode> / Vec<Edge>; fall back to empty vec on error
+            let nodes: Vec<CanvasNode> = serde_json::from_value(nodes_val).unwrap_or_default();
+            let edges: Vec<Edge> = serde_json::from_value(edges_val).unwrap_or_default();
+            (nodes, edges)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+
+        Workflow {
+            id: api.id,
+            name: api.name,
+            nodes,
+            edges,
+        }
+    }
 }
 
 // API models that match the backend schema
@@ -568,4 +648,36 @@ pub struct ApiThreadMessageCreate {
 /// Extension methods for Node to provide backward compatibility with legacy code
 #[allow(dead_code)] // These methods are kept for backward compatibility
 impl CanvasNode {
+}
+
+// -----------------------------------------------------------------------------
+// Template Gallery Models
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowTemplate {
+    pub id: u32,
+    pub created_by: u32,
+    pub name: String,
+    pub description: Option<String>,
+    pub category: String,
+    pub canvas_data: serde_json::Value,
+    pub tags: Vec<String>,
+    pub preview_image_url: Option<String>,
+    pub is_public: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateCategory {
+    pub name: String,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateDeployRequest {
+    pub template_id: u32,
+    pub name: Option<String>,
+    pub description: Option<String>,
 }

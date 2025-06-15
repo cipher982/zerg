@@ -40,7 +40,7 @@ impl NodePalette {
         let header = document.create_element("div")?;
         header.set_class_name("palette-header");
         header.set_inner_html("
-            <h3 style='margin: 0 0 16px 0; font-size: 16px; font-weight: 600; color: #1e293b;'>
+            <h3>
                 Node Palette
             </h3>
         ");
@@ -53,15 +53,7 @@ impl NodePalette {
                 type='text' 
                 placeholder='Search nodes...' 
                 value='{}' 
-                style='
-                    width: 100%; 
-                    padding: 8px 12px; 
-                    border: 1px solid #d1d5db; 
-                    border-radius: 6px; 
-                    margin-bottom: 16px;
-                    font-size: 14px;
-                    outline: none;
-                '
+                class='palette-search-input'
                 id='palette-search'
             />
         ", self.search_query));
@@ -98,14 +90,7 @@ impl NodePalette {
         let category_header = document.create_element("div")?;
         category_header.set_class_name("category-header");
         category_header.set_inner_html(&format!("
-            <h4 style='
-                margin: 0 0 8px 0; 
-                font-size: 14px; 
-                font-weight: 600; 
-                color: #64748b;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            '>
+            <h4 class='palette-category-header'>
                 {}
             </h4>
         ", category_name));
@@ -137,49 +122,16 @@ impl NodePalette {
         node_element.set_attribute("data-node-type", &node.id)?;
 
         // Style the node
-        node_element.set_attribute("style", "
-            display: flex;
-            align-items: center;
-            padding: 8px 12px;
-            margin-bottom: 4px;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            cursor: grab;
-            transition: all 0.2s ease;
-            background: #f8fafc;
-        ")?;
-
+        // Styles moved to CSS file
         // Add hover effects with event listeners
         let node_clone = node_element.clone();
         let onmouseenter = wasm_bindgen::closure::Closure::wrap(Box::new(move |_: MouseEvent| {
-            let _ = node_clone.set_attribute("style", "
-                display: flex;
-                align-items: center;
-                padding: 8px 12px;
-                margin-bottom: 4px;
-                border: 1px solid #3b82f6;
-                border-radius: 6px;
-                cursor: grab;
-                transition: all 0.2s ease;
-                background: #eff6ff;
-                transform: translateY(-1px);
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            ");
+            let _ = node_clone.set_class_name("palette-node hover"); // Apply hover class
         }) as Box<dyn FnMut(_)>);
 
         let node_clone2 = node_element.clone();
         let onmouseleave = wasm_bindgen::closure::Closure::wrap(Box::new(move |_: MouseEvent| {
-            let _ = node_clone2.set_attribute("style", "
-                display: flex;
-                align-items: center;
-                padding: 8px 12px;
-                margin-bottom: 4px;
-                border: 1px solid #e2e8f0;
-                border-radius: 6px;
-                cursor: grab;
-                transition: all 0.2s ease;
-                background: #f8fafc;
-            ");
+            let _ = node_clone2.set_class_name("palette-node"); // Remove hover class
         }) as Box<dyn FnMut(_)>);
 
         node_element.add_event_listener_with_callback("mouseenter", onmouseenter.as_ref().unchecked_ref())?;
@@ -191,10 +143,10 @@ impl NodePalette {
 
         // Node content
         node_element.set_inner_html(&format!("
-            <span style='font-size: 16px; margin-right: 8px;'>{}</span>
+            <span class='palette-node-icon'>{}</span>
             <div>
-                <div style='font-size: 14px; font-weight: 500; color: #1e293b;'>{}</div>
-                <div style='font-size: 12px; color: #64748b; margin-top: 2px;'>{}</div>
+                <div class='palette-node-name'>{}</div>
+                <div class='palette-node-description'>{}</div>
             </div>
         ", node.icon, node.name, node.description));
 
@@ -219,6 +171,52 @@ impl NodePalette {
                 
                 // Set drag effect
                 data_transfer.set_effect_allowed("copy");
+                
+                // Create a clean drag image instead of showing the full element
+                if let Ok(document) = web_sys::window().unwrap().document().ok_or("No document") {
+                    let drag_image = document.create_element("div").unwrap();
+                    
+                    // Choose color based on node type
+                    let (bg_color, text) = match &node_data.node_type {
+                        crate::models::NodeType::Tool { .. } => ("#10b981", "Tool"),
+                        crate::models::NodeType::Trigger { .. } => ("#f59e0b", "Trigger"),
+                        _ => ("#6366f1", "Node")
+                    };
+                    
+                    drag_image.set_attribute("style", &format!(
+                        "position: absolute; top: -1000px; left: -1000px; \
+                         width: 80px; height: 30px; \
+                         background: {}; color: white; \
+                         border-radius: 15px; \
+                         display: flex; align-items: center; justify-content: center; \
+                         font-size: 12px; font-weight: 500; \
+                         box-shadow: 0 2px 8px rgba(0,0,0,0.2);", 
+                        bg_color
+                    )).unwrap();
+                    drag_image.set_inner_html(text);
+                    
+                    if let Some(body) = document.body() {
+                        body.append_child(&drag_image).unwrap();
+                        
+                        // Set the custom drag image
+                        data_transfer.set_drag_image(&drag_image, 40, 15);
+                        
+                        // Clean up the temporary element after a short delay
+                        let cleanup_drag_image = drag_image.clone();
+                        let cleanup_closure = wasm_bindgen::closure::Closure::once(Box::new(move || {
+                            if let Some(parent) = cleanup_drag_image.parent_node() {
+                                let _ = parent.remove_child(&cleanup_drag_image);
+                            }
+                        }));
+                        
+                        web_sys::window().unwrap()
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                cleanup_closure.as_ref().unchecked_ref(), 
+                                100
+                            ).unwrap();
+                        cleanup_closure.forget();
+                    }
+                }
             }
         }) as Box<dyn FnMut(_)>);
 
@@ -457,6 +455,7 @@ pub fn create_node_from_palette(state: &mut AppState, palette_node: &PaletteNode
         node_type,
         is_selected: false,
         is_dragging: false,
+        exec_status: None,
     };
     state.nodes.insert(node_id.clone(), node);
 

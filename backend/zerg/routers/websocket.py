@@ -33,7 +33,10 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def get_websocket_session(session_factory: sessionmaker | None = None) -> Session:
+from typing import Optional
+
+
+def get_websocket_session(session_factory: Optional[sessionmaker] = None) -> Session:
     """Create a new database session for WebSocket handlers.
 
     Args:
@@ -85,7 +88,7 @@ async def websocket_endpoint(
 
     try:
         await websocket.accept()
-        await topic_manager.connect(client_id, websocket, getattr(user, "id", None))
+        await topic_manager.connect(client_id, websocket, getattr(user, "id", None), auto_system=True)
         logger.info(f"WebSocket connection established for client {client_id}")
 
         # Handle initial topic subscriptions if provided

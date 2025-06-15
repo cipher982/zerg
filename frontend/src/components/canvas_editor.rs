@@ -493,13 +493,26 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     let canvas_wheel_inside = canvas_wheel.clone();
     
     let wheel_handler = Closure::wrap(Box::new(move |event: web_sys::WheelEvent| {
-        // Check if auto-fit is enabled before doing anything
+        // ------------------------------------------------------------------
+        // Interactive zoom is disabled.  Prevent the browser’s default page
+        // zoom (two-finger pinch on trackpads) so the canvas stays put.
+        // ------------------------------------------------------------------
+
+        // Only cancel the event if the gesture looks like a pinch-zoom:
+        // on macOS this arrives as a wheel event with `ctrlKey` true.
+        if event.ctrl_key() {
+            event.prevent_default();
+        }
+
+        // Early-exit: we no longer perform any canvas zoom.
+        return;
+
+        // (Code below kept for future re-enable.)
+        /*
         let auto_fit_enabled = APP_STATE.with(|state| {
             let state = state.borrow();
             state.auto_fit
         });
-        
-        // Only process the event when auto-fit is disabled, never call preventDefault()
         if !auto_fit_enabled {
             // Rest of the zoom handling code
             let (canvas_width, canvas_height, zoom_level, viewport_x, viewport_y) = APP_STATE.with(|state| {
@@ -531,8 +544,9 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
             let zoom_delta = if delta_y > 0.0 { 0.9 } else { 1.1 };
             let new_zoom = zoom_level * zoom_delta;
             
-            // Limit zoom to reasonable values
-            let new_zoom = f64::max(0.1, f64::min(new_zoom, 5.0));
+            // Clamp zoom to ±50 % around default
+            use crate::state::{MIN_ZOOM, MAX_ZOOM};
+            let new_zoom = new_zoom.clamp(MIN_ZOOM, MAX_ZOOM);
             
             // Calculate new viewport based on the zoom
             let new_viewport_x = world_x - x / new_zoom;
@@ -557,10 +571,12 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 }
             }
         }
+        */
     }) as Box<dyn FnMut(_)>);
     
     // Create options with passive: true
-    let options = AddEventListenerOptions::new();
+    let mut options = AddEventListenerOptions::new();
+    options.passive(false); // Allow preventDefault inside wheel handler
     
     // Add wheel event listener with passive option
     canvas_wheel.add_event_listener_with_callback_and_add_event_listener_options(
