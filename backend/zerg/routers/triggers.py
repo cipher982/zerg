@@ -89,7 +89,7 @@ async def delete_trigger(
             from zerg.utils import crypto as _crypto  # lazy
 
             # Pick any gmail-connected user (MVP logic)
-            user: User | None = db.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
+            user: Optional[User] = db.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
 
             if user is not None:
                 refresh_token = _crypto.decrypt(user.gmail_refresh_token)  # type: ignore[arg-type]

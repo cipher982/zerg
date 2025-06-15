@@ -53,7 +53,7 @@ class Settings:  # noqa: D401 – simple data container
 
     # Feature flags ----------------------------------------------------
     _llm_token_stream_default: bool  # internal default
-    ws_envelope_v2: bool
+    ws_envelope_v2: bool  # always **True** – legacy flag kept for API stability
 
     # Misc
     dev_admin: bool
@@ -138,7 +138,7 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
         database_url=os.getenv("DATABASE_URL", ""),
         fernet_secret=os.getenv("FERNET_SECRET"),
         _llm_token_stream_default=_truthy(os.getenv("LLM_TOKEN_STREAM")),
-        ws_envelope_v2=_truthy(os.getenv("WS_ENVELOPE_V2")),
+        ws_envelope_v2=True,  # legacy flag removed – envelope v2 is mandatory
         dev_admin=_truthy(os.getenv("DEV_ADMIN")),
         log_level=os.getenv("LOG_LEVEL", "INFO"),
         e2e_log_suppress=_truthy(os.getenv("E2E_LOG_SUPPRESS")),

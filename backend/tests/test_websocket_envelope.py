@@ -23,7 +23,7 @@ def test_envelope_ping(ws_client):
     response = ws_client.receive_json()
     # Envelope fields
     assert response["v"] == 1
-    assert response["type"] == "PONG"
+    assert response["type"] == "pong"
     assert response["topic"] == "system" or response["topic"]  # topic may be "system" or similar
     assert "ts" in response
     assert "data" in response
@@ -60,4 +60,4 @@ async def test_no_hang_on_slow_client(test_client: TestClient):
         for _ in range(3):
             msg = fast_client.receive_json()
             assert msg["v"] == 1
-            assert msg["type"] == "TEST"
+            assert msg["type"] == "test"

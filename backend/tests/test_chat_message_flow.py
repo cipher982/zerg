@@ -43,7 +43,8 @@ class TestChatMessageFlow:
         """Verify basic websocket connection works"""
         # Send a ping to check connectivity
         ws_client.send_json({"type": MessageType.PING})
-        response = ws_client.receive_json()
+        raw_response = ws_client.receive_json()
+        response = raw_response.get("data", raw_response)
         assert response["type"] == MessageType.PONG
 
     def test_chat_message_flow(self, ws_client, test_thread):
@@ -70,13 +71,14 @@ class TestChatMessageFlow:
         ws_client.send_json(message)
 
         # 3. Wait for response
-        response = ws_client.receive_json()
-        logger.info(f"Received response: {response}")
+        raw_response = ws_client.receive_json()
+        logger.info(f"Received response: {raw_response}")
+        response = raw_response.get("data", raw_response)
 
-        # Check for error
-        if response["type"] == "error":
-            logger.error(f"Error sending message: {response}")
-            assert False, f"Error sending message: {response.get('error')}"
+        # Check for error on raw envelope layer
+        if raw_response["type"] == "error":
+            logger.error(f"Error sending message: {raw_response}")
+            assert False, f"Error sending message: {raw_response.get('error')}"
 
         assert response["type"] == MessageType.THREAD_MESSAGE
         assert "message" in response
@@ -108,7 +110,8 @@ class TestChatMessageFlow:
             ws_client.send_json(message)
 
             # Verify response for each message
-            response = ws_client.receive_json()  # Remove timeout parameter
+            raw = ws_client.receive_json()
+            response = raw.get("data", raw)
             logger.info(f"Received response for message {idx+1}: {response}")
 
             # Check for error

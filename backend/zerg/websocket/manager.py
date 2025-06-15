@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 from typing import Any
 from typing import Dict
@@ -17,7 +16,6 @@ from typing import Set
 from fastapi import WebSocket
 from fastapi.encoders import jsonable_encoder
 
-from zerg.config import _truthy  # type: ignore  # pylint: disable=protected-access
 from zerg.config import get_settings
 from zerg.events import EventType
 from zerg.events import event_bus
@@ -311,16 +309,12 @@ class TopicConnectionManager:
                 await asyncio.sleep(30)  # 30-second heartbeat
 
                 # Create ping message (envelope format if feature flag enabled)
-                settings = get_settings()
-                if settings.ws_envelope_v2:
-                    ping_envelope = Envelope.create(
-                        message_type="PING",
-                        topic="system",  # System-level ping doesn't belong to a specific topic
-                        data={},
-                    )
-                    ping_message = ping_envelope.model_dump()
-                else:
-                    ping_message = {"type": "ping"}
+                ping_envelope = Envelope.create(
+                    message_type="PING",
+                    topic="system",
+                    data={},
+                )
+                ping_message = ping_envelope.model_dump()
 
                 # Get client queues snapshot
                 async with self._lock:
@@ -416,18 +410,21 @@ class TopicConnectionManager:
         # Re-evaluate the *WS_ENVELOPE_V2* env var at **runtime** so tests
         # that monkey-patch the variable after the first ``get_settings()``
         # call still take effect without having to clear the LRU cache.
-        _envelope_enabled = get_settings().ws_envelope_v2 or _truthy(os.getenv("WS_ENVELOPE_V2"))
+        # Always wrap legacy payload into the mandatory Envelope.
 
-        if _envelope_enabled:
-            # Extract message type and data from the legacy format
+        is_already_enveloped = (
+            isinstance(message, dict)
+            and "v" in message
+            and "topic" in message
+            and "ts" in message
+        )
+
+        if not is_already_enveloped:
             message_type = message.get("type", "UNKNOWN")
-            message_data = message.get("data", message)  # Use entire message as data if no 'data' field
-
-            # Create envelope
+            message_data = message.get("data", message)
             envelope = Envelope.create(message_type=message_type, topic=topic, data=message_data)
             final_message = envelope.model_dump()
         else:
-            # Use legacy format
             final_message = message
 
         # Queue / immediately send the message for each client

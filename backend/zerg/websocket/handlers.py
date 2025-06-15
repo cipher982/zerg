@@ -5,11 +5,7 @@ supporting subscription to agent and thread events.
 """
 
 import logging
-import os
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
@@ -58,7 +54,7 @@ async def send_to_client(
     client_id: str,
     message: Dict[str, Any],
     *,
-    topic: str | None = None,
+    topic: Optional[str] = None,
 ) -> bool:
     """Send a message to a client if they are connected.
 
@@ -100,7 +96,8 @@ async def send_to_client(
     # Optional V2 envelope upgrade
     # ------------------------------------------------------------------
 
-    _envelope_enabled = get_settings().ws_envelope_v2 or _truthy(os.getenv("WS_ENVELOPE_V2"))
+    # Envelope v2 is mandatory – wrap **any** legacy payload that does not yet
+    # include the required keys.
 
     is_already_enveloped = (
         isinstance(message, dict)
@@ -110,12 +107,12 @@ async def send_to_client(
     )
 
     try:
-        if _envelope_enabled and not is_already_enveloped:
+        if not is_already_enveloped:
             from zerg.schemas.ws_messages import Envelope  # local to avoid cycles
 
             # Determine target topic – caller-supplied *topic* overrides any
             # guess derived from the payload.
-            _topic: str | None = topic or message.get("topic")  # type: ignore[arg-type]
+            _topic: Optional[str] = topic or message.get("topic")
             if _topic is None:
                 # Fallback to system-wide channel to avoid schema rejection.
                 _topic = "system"
@@ -145,7 +142,7 @@ async def send_error(
     error_msg: str,
     message_id: Optional[str] = None,
     *,
-    close_code: int | None = None,
+    close_code: Optional[int] = None,
 ) -> None:
     """Send an error message to a client.
 
@@ -194,24 +191,19 @@ async def handle_ping(client_id: str, message: Dict[str, Any], _: Session) -> No
         # Recompute envelope flag on **every** ping so tests that mutate the
         # environment mid-process pick up the change without clearing
         # ``functools.lru_cache`` used by :pyfunc:`get_settings`.
-        _envelope_enabled = get_settings().ws_envelope_v2 or _truthy(os.getenv("WS_ENVELOPE_V2"))
+        # Always wrap in the unified Envelope format.
 
-        if _envelope_enabled:
-            # Wrap in protocol-level envelope so the frontend can rely on the
-            # unified structure.  We treat all ping/pong traffic as a
-            # *system* message which is consistent with the existing
-            # heartbeat implementation in ``TopicConnectionManager``.
-            envelope = Envelope.create(
-                message_type="PONG",
-                topic="system",
-                data=pong_payload,
-                req_id=ping_msg.message_id,
-            )
+        # Wrap in protocol-level envelope so the frontend can rely on the
+        # unified structure.  We treat all ping/pong traffic as a
+        # *system* message which is consistent with the heartbeat logic.
+        envelope = Envelope.create(
+            message_type="PONG",
+            topic="system",
+            data=pong_payload,
+            req_id=ping_msg.message_id,
+        )
 
-            await send_to_client(client_id, envelope.model_dump())
-        else:
-            # Legacy – send bare payload
-            await send_to_client(client_id, pong_payload)
+        await send_to_client(client_id, envelope.model_dump())
 
     except Exception as e:
         logger.error("Error handling ping: %s", e)

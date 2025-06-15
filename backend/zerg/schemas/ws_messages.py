@@ -39,7 +39,7 @@ class Envelope(BaseModel):
     ) -> "Envelope":
         """Create a new envelope with current timestamp."""
         return cls(
-            type=message_type.upper(),
+            type=message_type.lower(),
             topic=topic,
             data=data,
             req_id=req_id,
