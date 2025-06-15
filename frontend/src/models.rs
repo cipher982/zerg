@@ -649,3 +649,35 @@ pub struct ApiThreadMessageCreate {
 #[allow(dead_code)] // These methods are kept for backward compatibility
 impl CanvasNode {
 }
+
+// -----------------------------------------------------------------------------
+// Template Gallery Models
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowTemplate {
+    pub id: u32,
+    pub created_by: u32,
+    pub name: String,
+    pub description: Option<String>,
+    pub category: String,
+    pub canvas_data: serde_json::Value,
+    pub tags: Vec<String>,
+    pub preview_image_url: Option<String>,
+    pub is_public: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateCategory {
+    pub name: String,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateDeployRequest {
+    pub template_id: u32,
+    pub name: Option<String>,
+    pub description: Option<String>,
+}

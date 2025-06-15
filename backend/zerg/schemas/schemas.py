@@ -310,3 +310,37 @@ class Workflow(WorkflowBase):
 
     class Config:
         from_attributes = True
+
+
+# Template Gallery schemas
+# ------------------------------------------------------------
+
+
+class WorkflowTemplateBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    category: str
+    canvas_data: Dict[str, Any]
+    tags: Optional[List[str]] = []
+    preview_image_url: Optional[str] = None
+
+
+class WorkflowTemplateCreate(WorkflowTemplateBase):
+    pass
+
+
+class WorkflowTemplate(WorkflowTemplateBase):
+    id: int
+    created_by: int
+    is_public: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TemplateDeployRequest(BaseModel):
+    template_id: int
+    name: Optional[str] = None  # Override template name if desired
+    description: Optional[str] = None  # Override template description if desired

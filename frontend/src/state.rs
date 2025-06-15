@@ -276,6 +276,11 @@ pub struct AppState {
     pub is_loading: bool,
     pub data_loaded: bool,
     pub api_load_attempted: bool,
+    
+    // Workflow operation loading states
+    pub creating_workflow: bool,
+    pub deleting_workflow: Option<u32>, // workflow_id being deleted
+    pub updating_workflow: Option<u32>, // workflow_id being updated
     // Chat/Thread related state
     pub current_thread_id: Option<u32>,
     pub threads: HashMap<u32, ApiThread>,
@@ -401,6 +406,28 @@ pub struct AppState {
     /// Connection status for each MCP server (key: "agent_id:server_name")
     pub mcp_connection_status: HashMap<String, ConnectionStatus>,
     
+    // -------------------------------------------------------------------
+    // Template Gallery State
+    // -------------------------------------------------------------------
+    
+    /// Available workflow templates
+    pub templates: Vec<crate::models::WorkflowTemplate>,
+    
+    /// Template categories
+    pub template_categories: Vec<String>,
+    
+    /// Currently selected template category filter
+    pub selected_template_category: Option<String>,
+    
+    /// Whether to show only user's own templates
+    pub show_my_templates_only: bool,
+    
+    /// Template gallery loading state
+    pub templates_loading: bool,
+    
+    /// Whether the template gallery modal is currently shown
+    pub show_template_gallery: bool,
+    
 }
 
 // ---------------------------------------------------------------------------
@@ -520,6 +547,11 @@ impl AppState {
             is_loading: true,
             data_loaded: false,
             api_load_attempted: false,
+            
+            // Initialize workflow operation loading states
+            creating_workflow: false,
+            deleting_workflow: None,
+            updating_workflow: None,
             current_thread_id: None,
             threads: HashMap::new(),
             thread_messages: HashMap::new(),
@@ -592,6 +624,14 @@ impl AppState {
             mcp_connection_status: HashMap::new(),
             power_mode: false,
             particle_system: None,
+            
+            // Template Gallery state
+            templates: Vec::new(),
+            template_categories: Vec::new(),
+            selected_template_category: None,
+            show_my_templates_only: false,
+            templates_loading: false,
+            show_template_gallery: false,
 
             current_execution: None,
             execution_logs: Vec::new(),
@@ -1573,6 +1613,11 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::CreateTrigger { .. } |
             cmd @ Command::DeleteTrigger(_) => crate::command_executors::execute_fetch_command(cmd),
             
+            // Template Gallery Commands - API calls
+            cmd @ Command::LoadTemplatesApi { .. } |
+            cmd @ Command::LoadTemplateCategoriesApi |
+            cmd @ Command::DeployTemplateApi { .. } => crate::command_executors::execute_template_command(cmd),
+            
             cmd @ Command::CreateThread { .. } |
             cmd @ Command::SendThreadMessage { .. } |
             cmd @ Command::UpdateThreadTitle { .. } |
@@ -1587,6 +1632,65 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
 
             // Persist debounced state saves
             Command::SaveState => crate::command_executors::execute_save_command(),
+            
+            
+            // Template state commands handled directly here
+            Command::TemplatesLoaded(templates) => {
+                APP_STATE.with(|st| {
+                    let mut state = st.borrow_mut();
+                    state.templates = templates;
+                    state.templates_loading = false;
+                });
+            },
+            Command::TemplateCategoriesLoaded(categories) => {
+                APP_STATE.with(|st| {
+                    let mut state = st.borrow_mut();
+                    state.template_categories = categories;
+                });
+            },
+            Command::SetTemplateCategory(category) => {
+                APP_STATE.with(|st| {
+                    let mut state = st.borrow_mut();
+                    state.selected_template_category = category;
+                });
+            },
+            Command::ToggleMyTemplatesOnly => {
+                APP_STATE.with(|st| {
+                    let mut state = st.borrow_mut();
+                    state.show_my_templates_only = !state.show_my_templates_only;
+                });
+            },
+            Command::ShowTemplateGallery => {
+                APP_STATE.with(|st| {
+                    let mut state = st.borrow_mut();
+                    state.show_template_gallery = true;
+                });
+            },
+            Command::HideTemplateGallery => {
+                APP_STATE.with(|st| {
+                    let mut state = st.borrow_mut();
+                    state.show_template_gallery = false;
+                });
+            },
+            Command::TemplateDeployed(workflow) => {
+                APP_STATE.with(|st| {
+                    let mut state = st.borrow_mut();
+                    state.workflows.insert(workflow.id, workflow);
+                });
+            },
+            
+            // Handle the non-API template commands by converting to API calls
+            Command::LoadTemplates { category, my_templates } => {
+                dispatch_global_message(Message::LoadTemplates { category, my_templates });
+            },
+            Command::LoadTemplateCategories => {
+                dispatch_global_message(Message::LoadTemplateCategories);
+            },
+            Command::DeployTemplate { template_id, name, description } => {
+                let name_str = name.unwrap_or("Untitled Template".to_string());
+                let desc_str = description.unwrap_or("Template deployment".to_string());
+                dispatch_global_message(Message::DeployTemplate { template_id, name: name_str, description: desc_str });
+            },
             
             Command::NoOp => {},
         }

@@ -101,13 +101,16 @@ pub fn execute_fetch_command(cmd: Command) {
                             Ok(api_wf) => {
                                 let wf: crate::models::Workflow = api_wf.into();
                                 dispatch_global_message(Message::WorkflowCreated(wf));
+                                crate::toast::success("Workflow created successfully!");
                             }
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse created workflow: {:?}", e).into()),
+                            Err(e) => {
+                                web_sys::console::error_1(&format!("Failed to parse created workflow: {:?}", e).into());
+                                crate::toast::error("Failed to process workflow creation response");
+                            }
                         }
                     }
-                    Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to create workflow: {:?}", e).into());
-                        // Could dispatch error message / toast
+                    Err(_) => {
+                        // Error toast already shown by ApiClient::format_http_error
                     }
                 }
             });
@@ -115,8 +118,13 @@ pub fn execute_fetch_command(cmd: Command) {
         Command::DeleteWorkflowApi { workflow_id } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::delete_workflow(workflow_id).await {
-                    Ok(()) => dispatch_global_message(Message::WorkflowDeleted { workflow_id }),
-                    Err(e) => web_sys::console::error_1(&format!("Failed to delete workflow: {:?}", e).into()),
+                    Ok(()) => {
+                        dispatch_global_message(Message::WorkflowDeleted { workflow_id });
+                        crate::toast::success("Workflow deleted successfully");
+                    }
+                    Err(_) => {
+                        // Error toast already shown by ApiClient::format_http_error
+                    }
                 }
             });
         }
@@ -128,11 +136,17 @@ pub fn execute_fetch_command(cmd: Command) {
                             Ok(api_wf) => {
                                 let wf: crate::models::Workflow = api_wf.into();
                                 dispatch_global_message(Message::WorkflowUpdated(wf));
+                                crate::toast::success("Workflow updated successfully!");
                             }
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse renamed workflow: {:?}", e).into()),
+                            Err(e) => {
+                                web_sys::console::error_1(&format!("Failed to parse renamed workflow: {:?}", e).into());
+                                crate::toast::error("Failed to process workflow update response");
+                            }
                         }
                     }
-                    Err(e) => web_sys::console::error_1(&format!("Failed to rename workflow: {:?}", e).into()),
+                    Err(_) => {
+                        // Error toast already shown by ApiClient::format_http_error
+                    }
                 }
             });
         }
@@ -154,9 +168,8 @@ pub fn execute_fetch_command(cmd: Command) {
                             }
                         }
                     }
-                    Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to start workflow execution: {:?}", e).into());
-                        // Optionally: dispatch toast / error message here
+                    Err(_) => {
+                        // Error toast already shown by ApiClient::format_http_error
                     }
                 }
             });
@@ -292,6 +305,68 @@ pub fn execute_fetch_command(cmd: Command) {
                 }
             });
         },
+
+        // Template Gallery Commands
+        Command::LoadTemplatesApi { category, my_templates } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_templates(category.as_deref(), my_templates).await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<Vec<crate::models::WorkflowTemplate>>(&json_str) {
+                            Ok(templates) => dispatch_global_message(Message::TemplatesLoaded(templates)),
+                            Err(e) => {
+                                web_sys::console::error_1(&format!("Failed to parse templates: {:?}", e).into());
+                                crate::toast::error("Failed to load templates");
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Error toast already shown by ApiClient::format_http_error
+                    }
+                }
+            });
+        }
+
+        Command::LoadTemplateCategoriesApi => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_template_categories().await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<Vec<String>>(&json_str) {
+                            Ok(categories) => dispatch_global_message(Message::TemplateCategoriesLoaded(categories)),
+                            Err(e) => {
+                                web_sys::console::error_1(&format!("Failed to parse template categories: {:?}", e).into());
+                                crate::toast::error("Failed to load template categories");
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Error toast already shown by ApiClient::format_http_error
+                    }
+                }
+            });
+        }
+
+        Command::DeployTemplateApi { template_id, name, description } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::deploy_template(template_id, name.as_deref(), description.as_deref()).await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
+                            Ok(api_wf) => {
+                                let workflow: crate::models::Workflow = api_wf.into();
+                                dispatch_global_message(Message::TemplateDeployed(workflow));
+                            }
+                            Err(e) => {
+                                web_sys::console::error_1(&format!("Failed to parse deployed workflow: {:?}", e).into());
+                                crate::toast::error("Failed to process template deployment");
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Error toast already shown by ApiClient::format_http_error
+                    }
+                }
+            });
+        }
+
         _ => web_sys::console::warn_1(&"Unexpected command type in execute_fetch_command".into())
     }
 }
@@ -511,5 +586,58 @@ pub fn execute_websocket_command(cmd: Command) {
             }
         },
         _ => web_sys::console::warn_1(&"Unexpected command type in execute_websocket_command".into())
+    }
+}
+
+pub fn execute_template_command(cmd: Command) {
+    match cmd {
+        Command::LoadTemplatesApi { category, my_templates } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_templates(category.as_deref(), my_templates).await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<Vec<crate::models::WorkflowTemplate>>(&json_str) {
+                            Ok(templates) => dispatch_global_message(Message::TemplatesLoaded(templates)),
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse templates: {:?}", e).into())
+                        }
+                    },
+                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch templates: {:?}", e).into())
+                }
+            });
+        },
+        Command::LoadTemplateCategoriesApi => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_template_categories().await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<Vec<String>>(&json_str) {
+                            Ok(categories) => dispatch_global_message(Message::TemplateCategoriesLoaded(categories)),
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse template categories: {:?}", e).into())
+                        }
+                    },
+                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch template categories: {:?}", e).into())
+                }
+            });
+        },
+        Command::DeployTemplateApi { template_id, name, description } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::deploy_template(template_id, name.as_deref(), description.as_deref()).await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
+                            Ok(api_wf) => {
+                                let workflow: crate::models::Workflow = api_wf.into();
+                                dispatch_global_message(Message::TemplateDeployed(workflow));
+                            }
+                            Err(e) => {
+                                web_sys::console::error_1(&format!("Failed to parse deployed workflow: {:?}", e).into());
+                                crate::toast::error("Failed to process template deployment");
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Error toast already shown by ApiClient::format_http_error
+                    }
+                }
+            });
+        },
+        _ => web_sys::console::warn_1(&"Unexpected command type in execute_template_command".into())
     }
 }

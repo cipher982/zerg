@@ -100,10 +100,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         if let Some(document) = window.document() {
                             let _ = crate::components::tool_config_modal::ToolConfigModal::open(
                                 &document,
-                                node_id.clone(),
-                                &node.text,
-                                &description,
-                                config,
+                                node,
                             );
                         }
                     }

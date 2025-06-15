@@ -145,6 +145,21 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     }
     actions_el.append_child(&center_btn)?;
 
+    // Template Gallery button 📋
+    let gallery_btn = document.create_element("button")?;
+    gallery_btn.set_attribute("type", "button")?;
+    gallery_btn.set_inner_html("📋");
+    gallery_btn.set_attribute("class", "toolbar-btn")?;
+    gallery_btn.set_attribute("title", "Template Gallery")?;
+    {
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            let _ = crate::components::template_gallery::show_gallery();
+        }));
+        gallery_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+    actions_el.append_child(&gallery_btn)?;
+
     // Dropdown menu (⋮)
     let dropdown_container = document.create_element("div")?;
     dropdown_container.set_attribute("class", "dropdown-container")?;
@@ -234,6 +249,12 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
             // Close dropdown
             let _ = dropdown_menu_clone.class_list().remove_1("show");
             let _ = dropdown_toggle_clone.class_list().remove_1("active");
+
+            // Check if deletion is already in progress
+            let is_deleting = crate::state::APP_STATE.with(|st| st.borrow().deleting_workflow.is_some());
+            if is_deleting {
+                return; // Prevent double-submission
+            }
 
             let confirm = web_sys::window().unwrap().confirm_with_message("Are you sure you want to delete this workflow? This can be restored by support within 30 days.").unwrap_or(false);
             if !confirm {
@@ -421,6 +442,12 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
     plus_li.set_text_content(Some("＋"));
 
     let cb_new = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+        // Check if workflow creation is already in progress
+        let is_creating = APP_STATE.with(|st| st.borrow().creating_workflow);
+        if is_creating {
+            return; // Prevent double-submission
+        }
+        
         // Prompt for name
         let name = web_sys::window().unwrap().prompt_with_message("Workflow name?").unwrap_or(None);
         if let Some(n) = name {
@@ -437,6 +464,9 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
 
     // Update run button state if it exists
     update_run_button(document)?;
+    
+    // Update workflow buttons (plus button, delete buttons) loading states
+    update_workflow_buttons(document)?;
 
     Ok(())
 }
@@ -469,6 +499,41 @@ pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
         }
     }
 
+    Ok(())
+}
+
+/// Update the plus button visual state based on workflow loading states
+pub fn update_workflow_buttons(document: &Document) -> Result<(), JsValue> {
+    use crate::state::APP_STATE;
+    
+    // Update plus button for creation state
+    if let Some(plus_btn) = document.query_selector(".plus-tab").ok().flatten() {
+        let (is_creating, deleting_id, updating_id) = APP_STATE.with(|st| {
+            let state = st.borrow();
+            (state.creating_workflow, state.deleting_workflow, state.updating_workflow)
+        });
+        
+        if is_creating {
+            plus_btn.set_text_content(Some("⟳")); // Spinner character
+            let _ = plus_btn.set_attribute("style", "pointer-events: none; opacity: 0.6;");
+        } else {
+            plus_btn.set_text_content(Some("＋"));
+            let _ = plus_btn.set_attribute("style", "");
+        }
+    }
+    
+    // Update delete buttons in dropdown (if any are showing delete state)
+    if let Some(delete_btn) = document.query_selector(".dropdown-item.danger").ok().flatten() {
+        let is_deleting = APP_STATE.with(|st| st.borrow().deleting_workflow.is_some());
+        if is_deleting {
+            delete_btn.set_text_content(Some("Deleting..."));
+            let _ = delete_btn.set_attribute("style", "pointer-events: none; opacity: 0.6;");
+        } else {
+            delete_btn.set_text_content(Some("Delete Workflow"));
+            let _ = delete_btn.set_attribute("style", "");
+        }
+    }
+    
     Ok(())
 }
 

@@ -412,6 +412,25 @@ class Workflow(Base):
     owner = relationship("User", backref="workflows")
 
 
+class WorkflowTemplate(Base):
+    __tablename__ = "workflow_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String, nullable=False, index=True)
+    canvas_data = Column(MutableDict.as_mutable(JSON), nullable=False)
+    tags = Column(MutableDict.as_mutable(JSON), nullable=True, default=list)  # List of strings
+    preview_image_url = Column(String, nullable=True)
+    is_public = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # ORM relationships
+    creator = relationship("User", backref="created_templates")
+
+
 class WorkflowExecution(Base):
     __tablename__ = "workflow_executions"
 

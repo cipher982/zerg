@@ -109,6 +109,11 @@ pub enum Message {
         workflow_id: u32,
     },
     
+    // Loading state messages for workflow operations
+    WorkflowCreationStarted,
+    WorkflowDeletionStarted { workflow_id: u32 },
+    WorkflowUpdateStarted { workflow_id: u32 },
+    
     // Workflow scheduling actions
     ScheduleWorkflow {
         workflow_id: u32,
@@ -536,6 +541,18 @@ pub enum Message {
     // Particle System Messages
     InitializeParticleSystem { width: f64, height: f64 },
     ClearParticleSystem,
+
+    // Template Gallery Messages
+    ShowTemplateGallery,
+    HideTemplateGallery,
+    LoadTemplates { category: Option<String>, my_templates: bool },
+    TemplatesLoaded(Vec<crate::models::WorkflowTemplate>),
+    LoadTemplateCategories,
+    TemplateCategoriesLoaded(Vec<String>),
+    SetTemplateCategory(Option<String>),
+    ToggleMyTemplatesOnly,
+    DeployTemplate { template_id: u32, name: String, description: String },
+    TemplateDeployed(crate::models::Workflow),
 }
 
 /// Commands represent side effects that should be executed after state updates.
@@ -645,6 +662,25 @@ pub enum Command {
     /// Represents no side effect
     NoOp,
     
+    // Template Gallery Messages
+    LoadTemplates {
+        category: Option<String>,
+        my_templates: bool,
+    },
+    TemplatesLoaded(Vec<crate::models::WorkflowTemplate>),
+    LoadTemplateCategories,
+    TemplateCategoriesLoaded(Vec<String>),
+    SetTemplateCategory(Option<String>),
+    ToggleMyTemplatesOnly,
+    ShowTemplateGallery,
+    HideTemplateGallery,
+    DeployTemplate {
+        template_id: u32,
+        name: Option<String>,
+        description: Option<String>,
+    },
+    TemplateDeployed(crate::models::Workflow),
+    
     // Add the DeleteAgentApi command inside the enum
     DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion
 
@@ -656,6 +692,18 @@ pub enum Command {
 
     /// Fetch latest runs for an agent
     FetchAgentRuns(u32), // agent_id
+
+    // Template Gallery Commands
+    LoadTemplatesApi {
+        category: Option<String>,
+        my_templates: bool,
+    },
+    LoadTemplateCategoriesApi,
+    DeployTemplateApi {
+        template_id: u32,
+        name: Option<String>,
+        description: Option<String>,
+    },
 
     /// Persist current canvas/layout state (debounced in AnimationTick)
     SaveState,
