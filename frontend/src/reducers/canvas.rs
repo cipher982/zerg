@@ -18,6 +18,22 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             }
             true
         }
+        Message::UpdateTriggerNodeConfig { node_id, params } => {
+            if let Some(node) = state.nodes.get_mut(node_id) {
+                if let crate::models::NodeType::Trigger { config, .. } = &mut node.node_type {
+                    // Update the params in the trigger config
+                    if let serde_json::Value::Object(param_map) = params {
+                        config.params.clear();
+                        for (key, value) in param_map {
+                            config.params.insert(key.clone(), value.clone());
+                        }
+                    }
+                    state.state_modified = true;
+                    state.mark_dirty();
+                }
+            }
+            true
+        }
         Message::UpdateNodePosition { node_id, x, y } => {
             state.update_node_position(node_id, *x, *y);
             if !state.is_dragging_agent {

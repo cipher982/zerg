@@ -563,6 +563,19 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::DeleteWorkflow { workflow_id } => {
             commands.push(Command::DeleteWorkflowApi { workflow_id });
         }
+
+        // Workflow scheduling messages
+        Message::ScheduleWorkflow { workflow_id, cron_expression } => {
+            commands.push(Command::ScheduleWorkflowApi { workflow_id, cron_expression });
+        }
+
+        Message::UnscheduleWorkflow { workflow_id } => {
+            commands.push(Command::UnscheduleWorkflowApi { workflow_id });
+        }
+
+        Message::CheckWorkflowSchedule { workflow_id } => {
+            commands.push(Command::CheckWorkflowScheduleApi { workflow_id });
+        }
         Message::SelectWorkflow { workflow_id } => {
             state.current_workflow_id = Some(workflow_id);
             needs_refresh = true;
