@@ -5,15 +5,16 @@ supporting subscription to agent and thread events.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from zerg.config import _truthy  # type: ignore  # pylint: disable=protected-access
-from zerg.config import get_settings
 from zerg.crud import crud
 from zerg.schemas.schemas import UserOut
 from zerg.schemas.ws_messages import AgentStateMessage
@@ -67,22 +68,19 @@ async def send_to_client(
     """
     """Low-level helper to push a JSON-serialisable payload to a single client.
 
-    When the *WS_ENVELOPE_V2* feature flag is **enabled** every outgoing
-    frame **must** follow the unified *Envelope* contract.  Older call-sites
-    still pass the historical, unconstrained dictionaries.  To bridge the
-    compatibility gap we wrap such legacy payloads **on the fly** unless the
-    caller already provided a fully-formed envelope.
+    Every outgoing frame **must** follow the unified *Envelope* contract.
+    For compatibility, messages that don't already have envelope structure
+    are automatically wrapped in envelopes.
 
     Args:
         client_id: Recipient connection id (uuid4 string)
         message:  Arbitrary JSON-serialisable mapping.  If the mapping lacks
-            the mandatory envelope keys (``v``, ``topic``, …) it will be
-            embedded into a new envelope automatically when the feature flag
-            is active.
+            the mandatory envelope keys (``v``, ``topic``, ``ts``) it will be
+            embedded into a new envelope automatically.
         topic:    Optional topic string.  Required when *message* itself does
-            not include a topic and the envelope feature is active.  Helpers
-            such as ``_subscribe_agent`` therefore forward their known topic
-            so the wrapper logic can construct a valid envelope.
+            not include a topic.  Helpers such as ``_subscribe_agent`` 
+            therefore forward their known topic so the wrapper logic can 
+            construct a valid envelope.
 
     Returns:
         True when the frame was queued for sending, False if the *client_id*
@@ -93,18 +91,13 @@ async def send_to_client(
         return False
 
     # ------------------------------------------------------------------
-    # Optional V2 envelope upgrade
+    # Envelope wrapping
     # ------------------------------------------------------------------
 
-    # Envelope v2 is mandatory – wrap **any** legacy payload that does not yet
+    # Envelope structure is mandatory – wrap any payload that does not yet
     # include the required keys.
 
-    is_already_enveloped = (
-        isinstance(message, dict)
-        and "v" in message
-        and "topic" in message
-        and "ts" in message
-    )
+    is_already_enveloped = isinstance(message, dict) and "v" in message and "topic" in message and "ts" in message
 
     try:
         if not is_already_enveloped:
@@ -119,10 +112,17 @@ async def send_to_client(
 
             message_type = str(message.get("type", "UNKNOWN")).upper()
 
+            # If message already has proper structure (type + data fields),
+            # use its data field; otherwise use entire message as data
+            if "data" in message and "type" in message:
+                message_data = message["data"]
+            else:
+                message_data = message
+
             envelope = Envelope.create(
                 message_type=message_type,
                 topic=_topic,
-                data=message,
+                data=message_data,
                 req_id=message.get("message_id"),  # echo if available
             )
 

@@ -406,22 +406,19 @@ class TopicConnectionManager:
                 for client_id in self.topic_subscriptions[topic]
             }
 
-        # Wrap message in envelope if feature flag is enabled
-        # Re-evaluate the *WS_ENVELOPE_V2* env var at **runtime** so tests
-        # that monkey-patch the variable after the first ``get_settings()``
-        # call still take effect without having to clear the LRU cache.
-        # Always wrap legacy payload into the mandatory Envelope.
+        # Always wrap message in envelope format
+        # Envelope structure is mandatory for all WebSocket messages.
 
-        is_already_enveloped = (
-            isinstance(message, dict)
-            and "v" in message
-            and "topic" in message
-            and "ts" in message
-        )
+        is_already_enveloped = isinstance(message, dict) and "v" in message and "topic" in message and "ts" in message
 
         if not is_already_enveloped:
             message_type = message.get("type", "UNKNOWN")
-            message_data = message.get("data", message)
+            # Ensure data is always a dict - if message has "data" field and it's a dict, use it
+            # Otherwise, use the entire message as the data payload
+            if "data" in message and isinstance(message["data"], dict):
+                message_data = message["data"]
+            else:
+                message_data = message
             envelope = Envelope.create(message_type=message_type, topic=topic, data=message_data)
             final_message = envelope.model_dump()
         else:

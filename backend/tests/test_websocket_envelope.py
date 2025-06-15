@@ -3,11 +3,7 @@ from fastapi.testclient import TestClient
 
 from zerg.websocket.manager import topic_manager
 
-
-@pytest.fixture(autouse=True)
-def enable_envelope(monkeypatch):
-    """Enable envelope feature flag for these tests."""
-    monkeypatch.setenv("WS_ENVELOPE_V2", "1")
+# Envelope structure is always enabled - no configuration needed
 
 
 @pytest.fixture
