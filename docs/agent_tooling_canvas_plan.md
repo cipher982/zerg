@@ -1,6 +1,7 @@
 # Agent Tools & Canvas Workflow – Master Design Doc
 
-*Status: Draft — adopted as the **source-of-truth** for the upcoming “Tooling & Canvas” epic.*
+*Status: 🟡 IN PROGRESS — Phase A Complete, Phases B-D Active*  
+*Last Updated: 2025-06-15 — adopted as the **source-of-truth** for the upcoming “Tooling & Canvas” epic.*
 
 ---
 
@@ -101,18 +102,18 @@ Double-clicking an Agent opens a side-panel (or nested canvas) streaming every L
 
 | ID | Task | Status |
 |----|-------|--------|
-| B-1 | Timeout + retry wrapper around each Tool | [ ] |
+| B-1 | Timeout + retry wrapper around each Tool | [x] |
 | B-2 | Emit Prometheus metrics per tool | [ ] |
-| B-3 | Persist per-tool timing & status in `runs` table | [ ] |
+| B-3 | Persist per-tool timing & status in `runs` table | [x] |
 
 ### Phase C – MCP Integration (target ≅ 2 weeks)
 
 | ID | Task | Status |
 |----|-------|--------|
-| C-1 | MCP client adapter for tool registry | [ ] |
-| C-2 | Support for custom MCP server URLs | [ ] |
-| C-3 | Preset popular MCP servers (GitHub, Linear, Slack) | [ ] |
-| C-4 | OAuth token management for MCP servers | [ ] |
+| C-1 | MCP client adapter for tool registry | [x] |
+| C-2 | Support for custom MCP server URLs | [x] |
+| C-3 | Preset popular MCP servers (GitHub, Linear, Slack) | [x] |
+| C-4 | OAuth token management for MCP servers | [x] |
 
 ### Phase D – Frontend Canvas (runs in parallel)
 

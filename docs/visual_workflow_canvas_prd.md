@@ -1,8 +1,8 @@
 # PRD: Visual Workflow Canvas - Tool & Trigger Nodes
 
-*Status: In Progress - Implementation Tracked*  
+*Status: 🟡 IN PROGRESS - Phase 1 Complete, Phase 2+ Active*  
 *Owner: Development Team*  
-*Last Updated: 2025-06-05*
+*Last Updated: 2025-06-15*
 
 ---
 
@@ -20,15 +20,16 @@
 - [x] Rust move/borrow errors resolved
 - [x] Build compiles successfully
 
-### Next Steps
+### Phase 2: Execution Engine (Current Focus)
 - [x] Tool configuration modal opens (modal-based, not sidebar)
 - [x] Tool configuration modal: input mapping (static values), save/cancel, state update via message dispatch
-- [ ] Tool configuration modal: advanced input mapping (node outputs), validation, test logic (future)
 - [x] Agent configuration modal is robust
 - [x] Canvas drag/drop and rendering is stable
-- [ ] Trigger configuration modal: modal UI, parameter mapping
-- [ ] Workflow execution engine: backend + frontend, live feedback
-- [ ] Templates, advanced UX
+- [x] Workflow execution history drawer implemented (June 2025)
+- [x] Workflow cancellation support added
+- [ ] **IN PROGRESS**: Trigger configuration modal: modal UI, parameter mapping
+- [ ] **IN PROGRESS**: Complete workflow execution engine with live feedback
+- [ ] **NEXT**: Templates and advanced UX features
 
 ---
 

@@ -3,7 +3,7 @@
 _File maintained during the implementation sprint to track which items from the
 original spec have shipped, started, or are still pending._
 
-Last updated: 2025-06-07
+Last updated: 2025-06-15
 
 ---
 
@@ -33,11 +33,11 @@ Phase-2 covers the following high-level themes:
 | 5 | Keyboard shortcuts (F = fit, 0 = reset) | ✅ **Done** | Listener in `ui/events.rs`. |
 | 6 | Reset-view (origin, 100 %) | ✅ **Done** | `Message::ResetView`, `AppState::reset_view()`. |
 | 7 | Offline auto-save fallback | ✅ **Done** | LocalStorage save+hydrate + status banner. |
-| 8 | Hold-Space canvas pan | 🟡 **In progress** | Key listener + cursor implemented; uses body.space-pan class. |
-| 9 | Workflow tab bar UI | ✅ **Done (α)** | Tab bar component renders; create & switch wired. |
-|10 | Backend workflow list / rename / delete APIs | 🟡 **In progress** | CRUD helpers + routes added. |
-|11 | `/graph/layout?workflow_id=` support + DB migration | 🟡 **In progress** | Model column, CRUD & router updated; DB auto-creates in tests. |
-|12 | Undo / Redo stack | ⬜ Idea | nice-to-have after workflows. |
+| 8 | Hold-Space canvas pan | ✅ **Done** | Key listener + cursor implemented; uses body.space-pan class. |
+| 9 | Workflow tab bar UI | ✅ **Done** | Tab bar component renders; create & switch wired. |
+|10 | Backend workflow list / rename / delete APIs | ✅ **Done** | CRUD helpers + routes added and tested. |
+|11 | `/graph/layout?workflow_id=` support + DB migration | ✅ **Done** | Model column, CRUD & router updated; DB migration complete. |
+|12 | Undo / Redo stack | ⬜ **Future** | Moved to future enhancement backlog. |
 
 Legend: ✅ completed 🟡 in progress ⬜ not started
 
