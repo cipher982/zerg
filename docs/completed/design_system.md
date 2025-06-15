@@ -1,5 +1,7 @@
 # Zerg Design System
 
+*Status: ✅ COMPLETED*  ·  *Completed: June 2025*  ·  *Moved to completed: June 15, 2025*
+
 This document introduces the shared visual language of the Zerg front-end – tokens, components and composition rules – so that anyone can ship consistent UI without memorising every hex value or spacing multiple.
 
 ## 1. Tokens
