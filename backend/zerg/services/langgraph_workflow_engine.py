@@ -104,11 +104,39 @@ class LangGraphWorkflowEngine:
 
                     # Use thread_id for checkpoint isolation
                     config = {"configurable": {"thread_id": f"workflow_{execution.id}"}}
-                    final_state = await graph.ainvoke(initial_state, config)
+
+                    # Stream execution for real-time updates
+                    final_state = None
+                    node_count = 0
+
+                    logger.info(f"[LangGraphEngine] Starting streaming execution – workflow_id={workflow_id}")
+
+                    async for chunk in graph.astream(initial_state, config):
+                        # Each chunk contains state updates as nodes complete
+                        if chunk:
+                            final_state = chunk
+                            current_completed = len(chunk.get("completed_nodes", []))
+
+                            # Log progress for new completed nodes
+                            if current_completed > node_count:
+                                newly_completed = current_completed - node_count
+                                node_count = current_completed
+                                logger.info(
+                                    f"[LangGraphEngine] Progress update: {newly_completed} new nodes "
+                                    "completed ({node_count} total)"
+                                )
+
+                            # Publish streaming progress event
+                            self._publish_streaming_progress(
+                                execution_id=execution.id,
+                                completed_nodes=chunk.get("completed_nodes", []),
+                                node_outputs=chunk.get("node_outputs", {}),
+                                error=chunk.get("error"),
+                            )
 
                 # Log completion summary
-                completed_count = len(final_state.get("completed_nodes", []))
-                logger.info(f"[LangGraphEngine] Workflow completed – {completed_count} nodes executed")
+                completed_count = len(final_state.get("completed_nodes", [])) if final_state else 0
+                logger.info(f"[LangGraphEngine] Streaming execution completed – {completed_count} nodes executed")
 
                 # Mark as successful
                 execution.status = "success"
@@ -399,6 +427,35 @@ class LangGraphWorkflowEngine:
             asyncio.set_event_loop(loop)
             try:
                 loop.run_until_complete(event_bus.publish(EventType.NODE_STATE_CHANGED, payload))
+            finally:
+                loop.close()
+
+    def _publish_streaming_progress(
+        self,
+        *,
+        execution_id: int,
+        completed_nodes: List[str],
+        node_outputs: Dict[str, Any],
+        error: Union[str, None],
+    ):
+        """Publish streaming progress update event."""
+
+        payload = {
+            "execution_id": execution_id,
+            "completed_nodes": completed_nodes,
+            "node_outputs": node_outputs,
+            "error": error,
+            "event_type": EventType.WORKFLOW_PROGRESS,
+        }
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(event_bus.publish(EventType.WORKFLOW_PROGRESS, payload))
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(event_bus.publish(EventType.WORKFLOW_PROGRESS, payload))
             finally:
                 loop.close()
 

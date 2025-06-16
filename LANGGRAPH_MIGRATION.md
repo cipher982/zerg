@@ -27,10 +27,10 @@
 - [x] Maintain WebSocket event compatibility
 - [x] ~~Feature flag to toggle between engines~~ (REMOVED - alpha stage)
 
-### Phase 3: Enhanced Features ⏳
-- [ ] Add PostgreSQL checkpointing for durability
+### Phase 3: Enhanced Features ✅
+- [x] **Add SQLite checkpointing for durability** - AsyncSqliteSaver with state persistence
+- [x] **Streaming execution with `graph.astream()`** - Real-time workflow progress updates
 - [ ] Implement human-in-the-loop approval nodes
-- [ ] Streaming execution with `graph.astream()`
 
 ### Phase 4: Cleanup ✅
 - [x] Remove old workflow engine (archived as `workflow_engine_old.py`)
@@ -43,7 +43,9 @@
 - **Parallel Execution**: True concurrent node execution (proven)
 - **Better Error Handling**: Proper exception propagation
 - **Cleaner Architecture**: No dual-engine complexity
-- **Future-Ready**: Built for durability, streaming, human-in-loop
+- **State Persistence**: SQLite checkpointing for workflow durability & resumability
+- **Real-time Streaming**: Live progress updates with `graph.astream()`
+- **Future-Ready**: Built for human-in-loop workflows
 
 ## State Schema (FINAL)
 ```python
@@ -75,10 +77,14 @@ class WorkflowState(TypedDict):
 - `backend/zerg/services/workflow_engine.py` - **MOVED** to `workflow_engine_old.py`
 - `backend/test_workflow_api.py` - **CREATED** (simple integration test)
 
-### 🔄 Phase 3 Next (Optional Enhancements)
-- Add PostgreSQL checkpointing for durability
-- Implement human-in-the-loop approval nodes  
-- Streaming execution with `graph.astream()`
+### ✅ Phase 3 Completed Enhancements  
+- **SQLite checkpointing** - `AsyncSqliteSaver` for workflow state persistence
+- **Streaming execution** - Real-time progress with `graph.astream()` and `WORKFLOW_PROGRESS` events
+- **Enhanced event system** - Added `EventType.WORKFLOW_PROGRESS` for live UI updates
+- **Comprehensive testing** - 6 integration tests including streaming verification
+
+### 🔄 Phase 3 Remaining (Optional)
+- Implement human-in-the-loop approval nodes
 - Advanced LangSmith observability integration
 
 ## Technical Discoveries
