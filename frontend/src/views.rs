@@ -56,6 +56,10 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
     hide_by_id(document, "main-content-area");
     hide_by_id(document, "canvas-input-panel");
     hide_by_id(document, "agent-shelf");
+    hide_by_id(document, "workflow-bar");
+    hide_by_id(document, "exec-sidebar");
+    hide_by_id(document, "log-drawer");
+    hide_by_id(document, "node-palette-shelf");
     hide_by_id(document, "profile-container");
     hide_by_id(document, "chat-view-container");
     
@@ -81,6 +85,7 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
             show_block_by_id(document, "canvas-container");
             show_block_by_id(document, "main-content-area");
             show_block_by_id(document, "canvas-input-panel");
+            show_block_by_id(document, "workflow-bar");
             
             show_block_by_id(document, "agent-shelf");
 

@@ -625,11 +625,12 @@ pub(crate) fn fix_stub_nodes() {
         }
 
         // Collect candidate placeholder node ids first.
+        // Only convert nodes that are actually stub nodes (text starts with "node_")
         let candidate_ids: Vec<String> = st
             .nodes
             .iter()
             .filter_map(|(id, n)| {
-                if n.agent_id.is_none() {
+                if n.agent_id.is_none() && n.text.starts_with("node_") {
                     Some(id.clone())
                 } else {
                     None
