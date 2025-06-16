@@ -99,6 +99,32 @@ pub enum Message {
         label: Option<String>,
     },
 
+    // Connection creation UI
+    ToggleConnectionMode,               // Toggle connection creation mode
+    SelectNodeForConnection {           // Select a node for connection
+        node_id: String,
+    },
+    CreateConnectionFromSelected {      // Create connection from selected node to target
+        target_node_id: String,
+    },
+    ClearNodeSelection,                 // Clear current node selection
+
+    // Connection handle dragging
+    StartConnectionDrag {               // Start dragging from a connection handle
+        node_id: String,
+        handle_position: String,
+        start_x: f64,
+        start_y: f64,
+    },
+    UpdateConnectionDrag {              // Update connection drag position
+        current_x: f64,
+        current_y: f64,
+    },
+    EndConnectionDrag {                 // End connection drag
+        end_x: f64,
+        end_y: f64,
+    },
+
     // Workflow rename/delete actions coming from UI
     RenameWorkflow {
         workflow_id: u32,

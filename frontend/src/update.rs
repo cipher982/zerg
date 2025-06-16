@@ -813,6 +813,13 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             })));
         }
         Message::AddEdge { .. } |
+        Message::ToggleConnectionMode |
+        Message::SelectNodeForConnection { .. } |
+        Message::CreateConnectionFromSelected { .. } |
+        Message::ClearNodeSelection |
+        Message::StartConnectionDrag { .. } |
+        Message::UpdateConnectionDrag { .. } |
+        Message::EndConnectionDrag { .. } |
         Message::GenerateCanvasFromAgents => {
             // These are handled by the canvas reducer which returns early
             unreachable!("Canvas messages should be handled by the canvas reducer")

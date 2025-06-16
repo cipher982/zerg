@@ -22,15 +22,16 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     bar_el.set_attribute("id", "workflow-bar")?;
     bar_el.set_attribute("class", "workflow-bar")?;
 
-    // Inject run-button CSS once
-    if document.get_element_by_id("run-btn-style").is_none() {
+    // Inject toolbar button CSS once
+    if document.get_element_by_id("toolbar-btn-style").is_none() {
         let style_el = document.create_element("style")?;
-        style_el.set_attribute("id", "run-btn-style")?;
+        style_el.set_attribute("id", "toolbar-btn-style")?;
         style_el.set_text_content(Some(r#"
 .run-btn.running{pointer-events:none;animation:spin 1s linear infinite;}
 .run-btn.success{color:#6bff92;}
 .run-btn.failed{color:#ff4e4e;}
 @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.toolbar-btn.active{background-color:#3b82f6;color:white;box-shadow:0 0 10px rgba(59, 130, 246, 0.5);}
 "#));
         document.body().unwrap().append_child(&style_el)?;
     }
@@ -144,6 +145,22 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
         cb.forget();
     }
     actions_el.append_child(&center_btn)?;
+
+    // Connection mode toggle button
+    let connect_btn = document.create_element("button")?;
+    connect_btn.set_attribute("type", "button")?;
+    connect_btn.set_inner_html("🔗");
+    connect_btn.set_attribute("class", "toolbar-btn")?;
+    connect_btn.set_attribute("id", "connection-mode-btn")?;
+    connect_btn.set_attribute("title", "Toggle Connection Mode")?;
+    {
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            dispatch_global_message(Message::ToggleConnectionMode);
+        }));
+        connect_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+    actions_el.append_child(&connect_btn)?;
 
     // Template Gallery button 📋
     let gallery_btn = document.create_element("button")?;
@@ -696,4 +713,20 @@ fn show_schedule_modal(workflow_id: u32) {
             let _ = html_input.focus();
         }
     }
+}
+
+/// Update connection mode button visual state
+pub fn update_connection_button(document: &Document) -> Result<(), JsValue> {
+    if let Some(btn) = document.get_element_by_id("connection-mode-btn") {
+        let is_active = APP_STATE.with(|state| state.borrow().connection_mode);
+        
+        if is_active {
+            btn.set_attribute("class", "toolbar-btn active")?;
+            btn.set_attribute("title", "Exit Connection Mode (Click nodes to connect them)")?;
+        } else {
+            btn.set_attribute("class", "toolbar-btn")?;
+            btn.set_attribute("title", "Toggle Connection Mode")?;
+        }
+    }
+    Ok(())
 }
