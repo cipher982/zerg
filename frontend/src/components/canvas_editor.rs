@@ -191,7 +191,32 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         let x = event.offset_x() as f64;
         let y = event.offset_y() as f64;
         
-        // First determine what was clicked
+        // First check if clicking on a connection handle
+        let handle_clicked = {
+            APP_STATE.with(|state| {
+                let state = state.borrow();
+                // Check all nodes for handle hits
+                for (node_id, _) in &state.nodes {
+                    if let Some(handle_position) = state.get_handle_at_point(node_id, x, y) {
+                        return Some((node_id.clone(), handle_position));
+                    }
+                }
+                None
+            })
+        };
+        
+        if let Some((node_id, handle_position)) = handle_clicked {
+            // Start connection drag from this handle
+            dispatch_global_message(crate::messages::Message::StartConnectionDrag {
+                node_id,
+                handle_position,
+                start_x: x,
+                start_y: y,
+            });
+            return;
+        }
+        
+        // If not a handle click, check for regular node clicks
         let clicked_result = {
             APP_STATE.with(|state| {
                 let state = state.borrow();
@@ -278,59 +303,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 }
             }
         } else {
-            // Nothing was clicked - prepare for canvas dragging
-            // Dispatch StartCanvasDrag message
-            let commands = APP_STATE.with(|state| {
-                let mut state = state.borrow_mut();
-                state.dispatch(crate::messages::Message::StartCanvasDrag {
-                    start_x: x,
-                    start_y: y,
-                })
-            });
-            
-            // Execute commands
-            for cmd in commands {
-                match cmd {
-                    Command::SendMessage(msg) => dispatch_global_message(msg),
-                    Command::NoOp => {},
-                    _ => {},  // Ignore other commands in this context
-                }
-            }
-            
-            // After dispatching StartCanvasDrag, check if we need to toggle auto-fit
-            let auto_fit_enabled = APP_STATE.with(|state| {
-                let state = state.borrow();
-                state.auto_fit
-            });
-            
-            // If in Auto Layout Mode, automatically switch to Manual Layout Mode
-            if auto_fit_enabled {
-                let commands = APP_STATE.with(|state| {
-                    let mut state = state.borrow_mut();
-                    state.dispatch(crate::messages::Message::ToggleAutoFit)
-                });
-                
-                // Execute commands
-                for cmd in commands {
-                    match cmd {
-                        Command::SendMessage(msg) => dispatch_global_message(msg),
-                        Command::NoOp => {},
-                        _ => {},  // Ignore other commands in this context
-                    }
-                }
-                
-                // Update the auto-fit toggle button
-                let auto_fit_toggle = window.document()
-                    .expect("should have a document")
-                    .get_element_by_id("auto-fit-toggle");
-                
-                if let Some(toggle) = auto_fit_toggle {
-                    // Cast to HTMLInputElement to set checked property directly
-                    if let Some(toggle_input) = toggle.dyn_ref::<web_sys::HtmlInputElement>() {
-                        toggle_input.set_checked(false);
-                    }
-                }
-            }
+            // Nothing was clicked - no canvas dragging (disabled for simpler interactions)
         }
     }) as Box<dyn FnMut(_)>);
     
@@ -346,45 +319,53 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         let x = event.offset_x() as f64;
         let y = event.offset_y() as f64;
         
-        // Check if we're dragging a node or the canvas
+        // Update mouse position for hover effects
+        APP_STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.update_mouse_position(x, y);
+        });
+        
+        // Check if we're dragging a node or connection (canvas dragging disabled)
         let dragging_type = APP_STATE.with(|state| {
             let state = state.borrow();
-            if state.dragging.is_some() {
+            if state.connection_drag_active {
+                "connection"
+            } else if state.dragging.is_some() {
                 "node"
-            } else if state.canvas_dragging {
-                "canvas"
             } else {
                 "none"
             }
         });
         
         match dragging_type {
+            "connection" => {
+                // Update connection drag position
+                dispatch_global_message(crate::messages::Message::UpdateConnectionDrag {
+                    current_x: x,
+                    current_y: y,
+                });
+            },
             "node" => {
-                // Get the node id and offset from state
-                let (node_id, drag_offset_x, drag_offset_y, zoom_level, viewport_x, viewport_y) = APP_STATE.with(|state| {
+                // Get the node id and offset from state (simplified - no viewport transformation needed)
+                let (node_id, drag_offset_x, drag_offset_y) = APP_STATE.with(|state| {
                     let state = state.borrow();
                     let node_id = state.dragging.clone().unwrap();
                     (
                         node_id,
                         state.drag_offset_x,
-                        state.drag_offset_y,
-                        state.zoom_level,
-                        state.viewport_x,
-                        state.viewport_y
+                        state.drag_offset_y
                     )
                 });
                 
-                // Apply viewport transformation to get world coordinates
-                let world_x = x / zoom_level + viewport_x;
-                let world_y = y / zoom_level + viewport_y;
+                // No viewport transformation needed since viewport is fixed at (0,0) and zoom is 1.0
                 
                 // Dispatch UpdateNodePosition message
                 let commands = APP_STATE.with(|state| {
                     let mut state = state.borrow_mut();
                     state.dispatch(crate::messages::Message::UpdateNodePosition {
                         node_id,
-                        x: world_x - drag_offset_x,
-                        y: world_y - drag_offset_y,
+                        x: x - drag_offset_x,
+                        y: y - drag_offset_y,
                     })
                 });
                 
@@ -398,23 +379,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                 }
             },
             "canvas" => {
-                // Dispatch UpdateCanvasDrag message
-                let commands = APP_STATE.with(|state| {
-                    let mut state = state.borrow_mut();
-                    state.dispatch(crate::messages::Message::UpdateCanvasDrag {
-                        current_x: x,
-                        current_y: y,
-                    })
-                });
-                
-                // Execute commands
-                for cmd in commands {
-                    match cmd {
-                        Command::SendMessage(msg) => dispatch_global_message(msg),
-                        Command::NoOp => {},
-                        _ => {},  // Ignore other commands in this context
-                    }
-                }
+                // Canvas dragging disabled for simpler interactions
             },
             _ => {
                 // Not dragging anything
@@ -466,9 +431,15 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
         }
 
         // Stop any dragging operation
-        if APP_STATE.with(|state| { state.borrow().dragging.is_some() }) {
+        if APP_STATE.with(|state| { state.borrow().connection_drag_active }) {
+            dispatch_global_message(crate::messages::Message::EndConnectionDrag {
+                end_x: x,
+                end_y: y,
+            });
+        } else if APP_STATE.with(|state| { state.borrow().dragging.is_some() }) {
             dispatch_global_message(crate::messages::Message::StopDragging);
         } else if APP_STATE.with(|state| { state.borrow().canvas_dragging }) {
+            // Canvas dragging disabled - just clear the state
             dispatch_global_message(crate::messages::Message::StopCanvasDrag);
         }
 
@@ -672,13 +643,7 @@ fn setup_canvas_drag_drop(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
             // Try to get tool/node palette data first
             if let Ok(node_json) = dt.get_data("application/json") {
                 if let Ok(palette_node) = serde_json::from_str::<crate::components::node_palette::PaletteNode>(&node_json) {
-                    // Get drop position
-                    let (zoom_level, viewport_x, viewport_y) = APP_STATE.with(|state| {
-                        let state = state.borrow();
-                        (state.zoom_level, state.viewport_x, state.viewport_y)
-                    });
-                    let world_x = x / zoom_level + viewport_x;
-                    let world_y = y / zoom_level + viewport_y;
+                    // No viewport transformation needed since viewport is fixed at (0,0) and zoom is 1.0
                     APP_STATE.with(|state| {
                         let mut state = state.borrow_mut();
                         crate::components::node_palette::create_node_from_palette(&mut state, &palette_node, x, y);
@@ -698,15 +663,7 @@ fn setup_canvas_drag_drop(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
                     
                     web_sys::console::log_1(&format!("Parsed agent_id: {:?}, name: {}", agent_id, name).into());
                     
-                    // Convert screen coordinates to world coordinates for proper placement
-                    let (zoom_level, viewport_x, viewport_y) = APP_STATE.with(|state| {
-                        let state = state.borrow();
-                        (state.zoom_level, state.viewport_x, state.viewport_y)
-                    });
-                    
-                    // Apply viewport transformation to get world coordinates
-                    let world_x = x / zoom_level + viewport_x;
-                    let world_y = y / zoom_level + viewport_y;
+                    // No viewport transformation needed since viewport is fixed at (0,0) and zoom is 1.0
                     
                     // Add agent to canvas tracking and dispatch message
                     if let Some(agent_id) = agent_id {
@@ -719,8 +676,8 @@ fn setup_canvas_drag_drop(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
                     // Dispatch message to add node at drop position
                     dispatch_global_message(crate::messages::Message::AddCanvasNode {
                         agent_id,
-                        x: world_x,
-                        y: world_y,
+                        x,
+                        y,
                         node_type: NodeType::AgentIdentity,
                         text: name,
                     });

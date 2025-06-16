@@ -261,6 +261,17 @@ pub struct AppState {
     pub clicked_node_id: Option<String>,
     // Flag to track if we're dragging an agent
     pub is_dragging_agent: bool,
+    // Connection creation mode
+    pub connection_mode: bool,
+    pub connection_source_node: Option<String>,
+    // Connection handle dragging
+    pub connection_drag_active: bool,
+    pub connection_drag_start: Option<(String, String)>, // (node_id, handle_position)
+    pub connection_drag_current: Option<(f64, f64)>, // Current mouse position
+    // Mouse tracking for hover effects
+    pub mouse_x: f64,
+    pub mouse_y: f64,
+    pub hovered_handle: Option<(String, String)>, // (node_id, handle_position)
     // Track the active view (Dashboard, Canvas, or ChatView)
     pub active_view: ActiveView,
 
@@ -495,6 +506,14 @@ impl AppState {
             selected_node_id: None,
             clicked_node_id: None,
             is_dragging_agent: false,
+            connection_mode: false,
+            connection_source_node: None,
+            connection_drag_active: false,
+            connection_drag_start: None,
+            connection_drag_current: None,
+            mouse_x: 0.0,
+            mouse_y: 0.0,
+            hovered_handle: None,
             active_view: ActiveView::ChatView,
 
             dashboard_scope: {
@@ -648,6 +667,51 @@ impl AppState {
     /// Mark the canvas as needing a repaint on the next animation frame.
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
+    }
+
+    /// Check if a point (x, y) is on a connection handle of the given node
+    /// Returns Some(handle_position) if hit, None otherwise
+    pub fn get_handle_at_point(&self, node_id: &str, x: f64, y: f64) -> Option<String> {
+        if let Some(node) = self.nodes.get(node_id) {
+            let handle_radius = 6.0;
+            let handles = [
+                (node.x + node.width / 2.0, node.y, "top"),
+                (node.x + node.width, node.y + node.height / 2.0, "right"),
+                (node.x + node.width / 2.0, node.y + node.height, "bottom"),
+                (node.x, node.y + node.height / 2.0, "left"),
+            ];
+            
+            for (hx, hy, position) in handles.iter() {
+                let dx = x - hx;
+                let dy = y - hy;
+                let distance = (dx * dx + dy * dy).sqrt();
+                if distance <= handle_radius {
+                    return Some(position.to_string());
+                }
+            }
+        }
+        None
+    }
+
+    /// Update mouse position and check for handle hover states
+    pub fn update_mouse_position(&mut self, x: f64, y: f64) {
+        self.mouse_x = x;
+        self.mouse_y = y;
+        
+        // Check if we're hovering over any handle
+        let mut found_hover = None;
+        for (node_id, _) in &self.nodes {
+            if let Some(handle_pos) = self.get_handle_at_point(node_id, x, y) {
+                found_hover = Some((node_id.clone(), handle_pos));
+                break;
+            }
+        }
+        
+        // Update hover state if it changed
+        if self.hovered_handle != found_hover {
+            self.hovered_handle = found_hover;
+            self.mark_dirty(); // Trigger redraw for hover effect
+        }
     }
 
     /// Return the assistant message id that is **currently being streamed**
@@ -814,23 +878,12 @@ impl AppState {
             context.set_fill_style_str(crate::constants::CANVAS_BACKGROUND_COLOR);
             context.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
             
-            // Apply transformations for viewport
-            context.save();
-            context.translate(-self.viewport_x, -self.viewport_y).unwrap();
-            context.scale(self.zoom_level, self.zoom_level).unwrap();
+            // No viewport transformations needed since viewport is fixed at (0,0) and zoom is 1.0
             
             // Draw canvas nodes (new structure)
             for (_, node) in &self.nodes {
-                renderer::draw_node(&context, node, &self.agents);
+                renderer::draw_node(&context, node, &self.agents, &self.selected_node_id, &self.connection_source_node, self.connection_mode, &self.hovered_handle);
             }
-            
-            // Draw legacy nodes (for backward compatibility - will be removed later)
-            for (_, node) in &self.nodes {
-                renderer::draw_node(&context, node, &self.agents);
-            }
-            
-            // Restore the canvas context to its original state
-            context.restore();
         }
     }
     
@@ -859,17 +912,15 @@ impl AppState {
     }
     
     pub fn find_node_at_position(&self, x: f64, y: f64) -> Option<(String, f64, f64)> {
-        // Apply viewport transformation to the coordinates
-        let adjusted_x = x / self.zoom_level + self.viewport_x;
-        let adjusted_y = y / self.zoom_level + self.viewport_y;
+        // No viewport transformation needed since viewport is fixed at (0,0) and zoom is 1.0
         
-        // First, check in nodes (new structure)
+        // Check in nodes
         for (id, node) in &self.nodes {
-            if adjusted_x >= node.x && 
-               adjusted_x <= node.x + node.width &&
-               adjusted_y >= node.y && 
-               adjusted_y <= node.y + node.height {
-                return Some((id.clone(), adjusted_x - node.x, adjusted_y - node.y));
+            if x >= node.x && 
+               x <= node.x + node.width &&
+               y >= node.y && 
+               y <= node.y + node.height {
+                return Some((id.clone(), x - node.x, y - node.y));
             }
         }
         
@@ -1475,15 +1526,39 @@ impl AppState {
         // Create the new edge
         let edge = Edge {
             id: edge_id.clone(),
-            from_node_id,
-            to_node_id,
+            from_node_id: from_node_id.clone(),
+            to_node_id: to_node_id.clone(),
             label,
         };
+        
+        web_sys::console::log_1(&format!("Creating edge {} from {} to {}", edge_id, from_node_id, to_node_id).into());
+        web_sys::console::log_1(&format!("Current workflow ID: {:?}", self.current_workflow_id).into());
+        web_sys::console::log_1(&format!("Available workflows: {:?}", self.workflows.keys().collect::<Vec<_>>()).into());
         
         // If we have a current workflow, add this edge to it
         if let Some(workflow_id) = self.current_workflow_id {
             if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
                 workflow.edges.push(edge);
+                web_sys::console::log_1(&format!("Added edge to workflow {}. Total edges: {}", workflow_id, workflow.edges.len()).into());
+            } else {
+                web_sys::console::error_1(&format!("Workflow {} not found! Creating default workflow.", workflow_id).into());
+                // Create a default workflow if it doesn't exist
+                let default_workflow = Workflow {
+                    id: workflow_id,
+                    name: "Default Workflow".to_string(),
+                    nodes: Vec::new(),
+                    edges: vec![edge],
+                };
+                self.workflows.insert(workflow_id, default_workflow);
+                web_sys::console::log_1(&format!("Created default workflow {} with first edge", workflow_id).into());
+            }
+        } else {
+            web_sys::console::error_1(&"No current workflow ID set! Creating new default workflow.".into());
+            // Create a new default workflow
+            let new_workflow_id = self.create_workflow("Default Workflow".to_string());
+            if let Some(workflow) = self.workflows.get_mut(&new_workflow_id) {
+                workflow.edges.push(edge);
+                web_sys::console::log_1(&format!("Created new default workflow {} with first edge", new_workflow_id).into());
             }
         }
         
