@@ -12,7 +12,7 @@ from zerg.crud import crud
 from zerg.database import get_db
 from zerg.dependencies.auth import get_current_user
 from zerg.models.models import User
-from zerg.services.workflow_engine import workflow_execution_engine
+from zerg.services.langgraph_workflow_engine import langgraph_workflow_engine
 from zerg.services.workflow_scheduler import workflow_scheduler
 
 router = APIRouter(
@@ -43,16 +43,14 @@ async def start_workflow_execution(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Start a new execution of a workflow.
+    Start a new execution of a workflow using LangGraph engine.
     """
     workflow = crud.get_workflow(db, workflow_id)
     if not workflow or workflow.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    # Currently we await directly so the client receives the *execution_id*.
-    # Future background-task refactor will keep the response payload stable
-    # (i.e. still return the created execution id).
-    execution_id = await workflow_execution_engine.execute_workflow(workflow_id)
+    # Execute workflow with LangGraph engine
+    execution_id = await langgraph_workflow_engine.execute_workflow(workflow_id)
 
     return {"execution_id": execution_id, "status": "running"}
 
