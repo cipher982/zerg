@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import operator
+import os
 from datetime import datetime
 from datetime import timezone
 from typing import Annotated
@@ -35,6 +36,11 @@ from zerg.models.models import WorkflowExecution
 from zerg.tools.registry import get_registry
 
 logger = logging.getLogger(__name__)
+
+# Configure LangSmith tracing if enabled
+if os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true":
+    os.environ.setdefault("LANGCHAIN_PROJECT", "zerg-workflows")
+    logger.info("LangSmith tracing enabled for project: zerg-workflows")
 
 
 def merge_dicts(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
@@ -94,6 +100,10 @@ class LangGraphWorkflowEngine:
                 )
 
                 final_state = await graph.ainvoke(initial_state)
+
+                # Log completion summary
+                completed_count = len(final_state.get("completed_nodes", []))
+                logger.info(f"[LangGraphEngine] Workflow completed – {completed_count} nodes executed")
 
                 # Mark as successful
                 execution.status = "success"
