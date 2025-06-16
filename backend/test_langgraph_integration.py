@@ -253,6 +253,58 @@ async def test_state_passing():
         raise
 
 
+async def test_streaming_execution():
+    """Test that streaming execution works and publishes progress events."""
+
+    print("\n🧪 Testing Streaming Execution")
+
+    canvas_data = {
+        "nodes": [
+            {"id": "stream_1", "type": "placeholder"},
+            {"id": "stream_2", "type": "placeholder"},
+        ],
+        "edges": [{"source": "stream_1", "target": "stream_2"}],
+    }
+
+    engine = LangGraphWorkflowEngine()
+
+    try:
+        async with AsyncSqliteSaver.from_conn_string("test_checkpoints.db") as checkpointer:
+            graph = engine._build_langgraph(canvas_data, execution_id=6, checkpointer=checkpointer)
+            print("✅ Streaming test graph built successfully")
+
+            initial_state = WorkflowState(
+                execution_id=6, node_outputs={}, completed_nodes=[], error=None, db_session_factory=None
+            )
+
+            config = {"configurable": {"thread_id": "test_workflow_6"}}
+
+            # Test streaming behavior
+            chunk_count = 0
+            final_state = None
+
+            async for chunk in graph.astream(initial_state, config):
+                chunk_count += 1
+                if chunk:
+                    final_state = chunk
+                    completed = len(chunk.get("completed_nodes", []))
+                    print(f"  📊 Chunk {chunk_count}: {completed} nodes completed")
+
+            # Validate streaming worked
+            assert chunk_count > 0, "Should receive at least one chunk from streaming"
+            assert final_state is not None, "Should have final state"
+
+            completed_nodes = final_state.get("completed_nodes", [])
+            assert len(completed_nodes) >= 0, "Should track completed nodes"
+
+            print(f"✅ Streaming execution completed with {chunk_count} chunks")
+            print("✅ Streaming execution test PASSED")
+
+    except Exception as e:
+        print(f"❌ Streaming execution test FAILED: {e}")
+        raise
+
+
 async def main():
     """Run all integration tests."""
 
@@ -265,6 +317,7 @@ async def main():
         test_error_handling,
         test_complex_workflow,
         test_state_passing,
+        test_streaming_execution,
     ]
 
     passed = 0

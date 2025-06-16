@@ -41,6 +41,7 @@ class EventType(str, Enum):
 
     # Workflow execution events (visual canvas)
     NODE_STATE_CHANGED = "node_state_changed"
+    WORKFLOW_PROGRESS = "workflow_progress"
 
     # Workflow execution – finish & log stream
     EXECUTION_FINISHED = "execution_finished"
