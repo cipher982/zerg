@@ -751,9 +751,9 @@ pub fn load_agents() {
                                                         }
                                                     }
                                                         
-                                                        // Now that we have loaded agents, check if we need to create nodes for them
-                                                        // Only create nodes for agents that don't already have one
-                                                        create_nodes_for_agents(&mut state);
+                                                        // DO NOT automatically create canvas nodes for agents
+                                                        // Agents should only appear on canvas when explicitly dragged from shelf
+                                                        // create_nodes_for_agents(&mut state); // DISABLED - causes auto-canvas bug
                                                         
                                                         state.data_loaded = true;
                                                         state.api_load_attempted = true;
