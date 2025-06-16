@@ -20,6 +20,7 @@ from typing import List
 from typing import TypedDict
 from typing import Union
 
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END
 from langgraph.graph import START
 from langgraph.graph import StateGraph
@@ -87,19 +88,23 @@ class LangGraphWorkflowEngine:
             db.commit()
 
             try:
-                # Build LangGraph from canvas_data
-                graph = self._build_langgraph(workflow.canvas_data, execution.id)
+                # Use checkpointer context manager
+                async with AsyncSqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
+                    # Build LangGraph from canvas_data
+                    graph = self._build_langgraph(workflow.canvas_data, execution.id, checkpointer)
 
-                # Execute the graph
-                initial_state = WorkflowState(
-                    execution_id=execution.id,
-                    node_outputs={},
-                    completed_nodes=[],
-                    error=None,
-                    db_session_factory=session_factory,
-                )
+                    # Execute the graph with checkpointing
+                    initial_state = WorkflowState(
+                        execution_id=execution.id,
+                        node_outputs={},
+                        completed_nodes=[],
+                        error=None,
+                        db_session_factory=session_factory,
+                    )
 
-                final_state = await graph.ainvoke(initial_state)
+                    # Use thread_id for checkpoint isolation
+                    config = {"configurable": {"thread_id": f"workflow_{execution.id}"}}
+                    final_state = await graph.ainvoke(initial_state, config)
 
                 # Log completion summary
                 completed_count = len(final_state.get("completed_nodes", []))
@@ -131,7 +136,7 @@ class LangGraphWorkflowEngine:
                 logger.exception("[LangGraphEngine] Execution failed – execution_id=%s", execution.id)
                 raise
 
-    def _build_langgraph(self, canvas_data: Dict[str, Any], execution_id: int) -> StateGraph:
+    def _build_langgraph(self, canvas_data: Dict[str, Any], execution_id: int, checkpointer) -> StateGraph:
         """Convert canvas_data to LangGraph StateGraph."""
 
         workflow = StateGraph(WorkflowState)
@@ -186,7 +191,7 @@ class LangGraphWorkflowEngine:
         for end_node in end_nodes:
             workflow.add_edge(end_node, END)
 
-        return workflow.compile()
+        return workflow.compile(checkpointer=checkpointer)
 
     def _create_tool_node(self, node_config: Dict[str, Any]):
         """Create a tool execution node function."""
