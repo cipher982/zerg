@@ -10,6 +10,8 @@ from pathlib import Path
 # Add backend to path
 sys.path.append(str(Path(__file__).parent))
 
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
 from zerg.services.langgraph_workflow_engine import LangGraphWorkflowEngine
 from zerg.services.langgraph_workflow_engine import WorkflowState
 
@@ -32,22 +34,25 @@ async def test_basic_linear_workflow():
     engine = LangGraphWorkflowEngine()
 
     try:
-        # Build the graph
-        graph = engine._build_langgraph(canvas_data, execution_id=1)
-        print("✅ Graph built successfully")
+        # Use checkpointer context manager for testing
+        async with AsyncSqliteSaver.from_conn_string("test_checkpoints.db") as checkpointer:
+            # Build the graph
+            graph = engine._build_langgraph(canvas_data, execution_id=1, checkpointer=checkpointer)
+            print("✅ Graph built successfully")
 
-        # Create initial state
-        initial_state = WorkflowState(
-            execution_id=1,
-            node_outputs={},
-            completed_nodes=[],
-            error=None,
-            db_session_factory=None,  # Mock for testing
-        )
+            # Create initial state
+            initial_state = WorkflowState(
+                execution_id=1,
+                node_outputs={},
+                completed_nodes=[],
+                error=None,
+                db_session_factory=None,  # Mock for testing
+            )
 
-        # Execute the graph
-        print("⚡ Executing workflow...")
-        final_state = await graph.ainvoke(initial_state)
+            # Execute the graph with config
+            print("⚡ Executing workflow...")
+            config = {"configurable": {"thread_id": "test_workflow_1"}}
+            final_state = await graph.ainvoke(initial_state, config)
 
         # Validate results
         assert len(final_state["node_outputs"]) == 3, f"Expected 3 node outputs, got {len(final_state['node_outputs'])}"
@@ -89,19 +94,20 @@ async def test_parallel_execution():
     engine = LangGraphWorkflowEngine()
 
     try:
-        graph = engine._build_langgraph(canvas_data, execution_id=2)
-        print("✅ Diamond graph built successfully")
+        async with AsyncSqliteSaver.from_conn_string("test_checkpoints.db") as checkpointer:
+            graph = engine._build_langgraph(canvas_data, execution_id=2, checkpointer=checkpointer)
+            print("✅ Diamond graph built successfully")
 
-        initial_state = WorkflowState(
-            execution_id=2, node_outputs={}, completed_nodes=[], error=None, db_session_factory=None
-        )
+            initial_state = WorkflowState(
+                execution_id=2, node_outputs={}, completed_nodes=[], error=None, db_session_factory=None
+            )
 
-        # Time the execution to verify parallelism
-        import time
+            # Time the execution to verify parallelism
+            import time
 
-        start_time = time.time()
-
-        final_state = await graph.ainvoke(initial_state)
+            start_time = time.time()
+            config = {"configurable": {"thread_id": "test_workflow_2"}}
+            final_state = await graph.ainvoke(initial_state, config)
 
         execution_time = time.time() - start_time
 
@@ -133,15 +139,17 @@ async def test_error_handling():
     engine = LangGraphWorkflowEngine()
 
     try:
-        graph = engine._build_langgraph(canvas_data, execution_id=3)
-        print("✅ Error test graph built successfully")
+        async with AsyncSqliteSaver.from_conn_string("test_checkpoints.db") as checkpointer:
+            graph = engine._build_langgraph(canvas_data, execution_id=3, checkpointer=checkpointer)
+            print("✅ Error test graph built successfully")
 
-        initial_state = WorkflowState(
-            execution_id=3, node_outputs={}, completed_nodes=[], error=None, db_session_factory=None
-        )
+            initial_state = WorkflowState(
+                execution_id=3, node_outputs={}, completed_nodes=[], error=None, db_session_factory=None
+            )
 
-        # This should complete the first node but may have issues with second
-        final_state = await graph.ainvoke(initial_state)
+            # This should complete the first node but may have issues with second
+            config = {"configurable": {"thread_id": "test_workflow_3"}}
+            final_state = await graph.ainvoke(initial_state, config)
 
         # Should have first node output
         assert "good_node" in final_state["node_outputs"], "First node didn't execute"
@@ -175,14 +183,16 @@ async def test_complex_workflow():
     engine = LangGraphWorkflowEngine()
 
     try:
-        graph = engine._build_langgraph(canvas_data, execution_id=4)
-        print("✅ Complex workflow graph built successfully")
+        async with AsyncSqliteSaver.from_conn_string("test_checkpoints.db") as checkpointer:
+            graph = engine._build_langgraph(canvas_data, execution_id=4, checkpointer=checkpointer)
+            print("✅ Complex workflow graph built successfully")
 
-        initial_state = WorkflowState(
-            execution_id=4, node_outputs={}, completed_nodes=[], error=None, db_session_factory=None
-        )
+            initial_state = WorkflowState(
+                execution_id=4, node_outputs={}, completed_nodes=[], error=None, db_session_factory=None
+            )
 
-        final_state = await graph.ainvoke(initial_state)
+            config = {"configurable": {"thread_id": "test_workflow_4"}}
+            final_state = await graph.ainvoke(initial_state, config)
 
         # Validate all nodes executed
         expected_nodes = {"webhook_trigger", "data_processor", "result_formatter"}
@@ -216,14 +226,16 @@ async def test_state_passing():
     engine = LangGraphWorkflowEngine()
 
     try:
-        graph = engine._build_langgraph(canvas_data, execution_id=5)
-        print("✅ State passing graph built successfully")
+        async with AsyncSqliteSaver.from_conn_string("test_checkpoints.db") as checkpointer:
+            graph = engine._build_langgraph(canvas_data, execution_id=5, checkpointer=checkpointer)
+            print("✅ State passing graph built successfully")
 
-        initial_state = WorkflowState(
-            execution_id=5, node_outputs={}, completed_nodes=[], error=None, db_session_factory=None
-        )
+            initial_state = WorkflowState(
+                execution_id=5, node_outputs={}, completed_nodes=[], error=None, db_session_factory=None
+            )
 
-        final_state = await graph.ainvoke(initial_state)
+            config = {"configurable": {"thread_id": "test_workflow_5"}}
+            final_state = await graph.ainvoke(initial_state, config)
 
         # Validate state was passed
         assert "producer" in final_state["node_outputs"], "Producer node didn't execute"
