@@ -172,15 +172,19 @@ class LangGraphWorkflowEngine:
         nodes = canvas_data.get("nodes", [])
         edges = canvas_data.get("edges", [])
 
+        # Store for use in node creation functions
+        self._current_nodes = nodes
+        self._current_edges = edges
+
         # Add all nodes to the graph
         for node in nodes:
-            node_id = str(node.get("id", "unknown"))
-            node_type = str(node.get("type", "unknown")).lower()
+            node_id = str(node.get("node_id", "unknown"))
+            node_type = str(node.get("node_type", "unknown")).lower()
 
             # Create node execution function based on type
             if node_type == "tool":
                 node_func = self._create_tool_node(node)
-            elif node_type == "agent":
+            elif node_type == "agentidentity" or node_type == "agent":
                 node_func = self._create_agent_node(node)
             elif node_type == "trigger":
                 node_func = self._create_trigger_node(node)
@@ -194,11 +198,11 @@ class LangGraphWorkflowEngine:
         end_nodes = []
 
         # Find nodes with no incoming edges (start nodes)
-        target_nodes = {str(edge.get("target", "")) for edge in edges}
-        source_nodes = {str(edge.get("source", "")) for edge in edges}
+        target_nodes = {str(edge.get("to_node_id", "")) for edge in edges}
+        source_nodes = {str(edge.get("from_node_id", "")) for edge in edges}
 
         for node in nodes:
-            node_id = str(node.get("id", "unknown"))
+            node_id = str(node.get("node_id", "unknown"))
             if node_id not in target_nodes:
                 start_nodes.append(node_id)
             if node_id not in source_nodes:
@@ -210,8 +214,8 @@ class LangGraphWorkflowEngine:
 
         # Add internal edges
         for edge in edges:
-            source = str(edge.get("source", ""))
-            target = str(edge.get("target", ""))
+            source = str(edge.get("from_node_id", ""))
+            target = str(edge.get("to_node_id", ""))
             if source and target:
                 workflow.add_edge(source, target)
 
@@ -221,13 +225,62 @@ class LangGraphWorkflowEngine:
 
         return workflow.compile(checkpointer=checkpointer)
 
+    def _get_node_type_by_id(self, node_id: str) -> str:
+        """Get the type of a node by its ID."""
+        for node in self._current_nodes:
+            if str(node.get("node_id", "")) == node_id:
+                return str(node.get("node_type", "unknown")).lower()
+        return "unknown"
+
+    def _has_outgoing_tool_connections(self, node_id: str) -> bool:
+        """Check if a node has outgoing connections to tool nodes."""
+        outgoing_edges = [edge for edge in self._current_edges if str(edge.get("from_node_id", "")) == node_id]
+        return any(self._get_node_type_by_id(str(edge.get("to_node_id", ""))) == "tool" for edge in outgoing_edges)
+
+    def _has_incoming_agent_connections(self, node_id: str) -> bool:
+        """Check if a node has incoming connections from agent nodes."""
+        incoming_edges = [edge for edge in self._current_edges if str(edge.get("to_node_id", "")) == node_id]
+        return any(
+            self._get_node_type_by_id(str(edge.get("from_node_id", ""))) in ["agent", "agentidentity"]
+            for edge in incoming_edges
+        )
+
+    def _get_connected_agent_ids(self, node_id: str) -> List[str]:
+        """Get the IDs of agent nodes connected to this node."""
+        incoming_edges = [edge for edge in self._current_edges if str(edge.get("to_node_id", "")) == node_id]
+        return [
+            str(edge.get("from_node_id", ""))
+            for edge in incoming_edges
+            if self._get_node_type_by_id(str(edge.get("from_node_id", ""))) in ["agent", "agentidentity"]
+        ]
+
     def _create_tool_node(self, node_config: Dict[str, Any]):
         """Create a tool execution node function."""
 
         async def tool_node(state: WorkflowState) -> WorkflowState:
-            node_id = str(node_config.get("id", "unknown"))
+            node_id = str(node_config.get("node_id", "unknown"))
             tool_name = node_config.get("tool_name") or node_config.get("name", "")
             tool_params = node_config.get("parameters", {})
+
+            # Check if this tool node has incoming connections from agents
+            connected_agent_ids = self._get_connected_agent_ids(node_id)
+
+            # If connected to agents, look for tool calls in their outputs
+            if connected_agent_ids:
+                for agent_id in connected_agent_ids:
+                    agent_output = state["node_outputs"].get(agent_id, {})
+                    if agent_output.get("type") == "agent_with_tools" and "tool_calls" in agent_output:
+                        # Find the first tool call that matches this tool
+                        matching_tool_call = None
+                        for tool_call in agent_output["tool_calls"]:
+                            if tool_call.get("tool") == tool_name:
+                                matching_tool_call = tool_call
+                                break
+
+                        # If we found a matching tool call, use its parameters
+                        if matching_tool_call:
+                            tool_params = matching_tool_call.get("parameters", {})
+                            break
 
             # Node execution - just store output at end, don't update intermediate state
 
@@ -289,7 +342,7 @@ class LangGraphWorkflowEngine:
         """Create an agent execution node function."""
 
         async def agent_node(state: WorkflowState) -> WorkflowState:
-            node_id = str(node_config.get("id", "unknown"))
+            node_id = str(node_config.get("node_id", "unknown"))
             agent_id = node_config.get("agent_id")
 
             # Node execution - just store output at end, don't update intermediate state
@@ -326,15 +379,51 @@ class LangGraphWorkflowEngine:
                     created_messages = await runner.run_thread(db, thread)
 
                     assistant_messages = [msg for msg in created_messages if msg.role == "assistant"]
-                    result = assistant_messages[-1].content if assistant_messages else "No response generated"
 
-                    output = {
-                        "agent_id": agent_id,
-                        "agent_name": agent.name,
-                        "message": user_message,
-                        "response": result,
-                        "type": "agent",
-                    }
+                    # Check if this agent connects to tool nodes
+                    connects_to_tools = self._has_outgoing_tool_connections(node_id)
+
+                    if connects_to_tools and assistant_messages:
+                        # Extract tool calls from the last assistant message
+                        last_message = assistant_messages[-1]
+                        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+                            # Output structured tool calls for connected tool nodes
+                            output = {
+                                "agent_id": agent_id,
+                                "agent_name": agent.name,
+                                "message": user_message,
+                                "tool_calls": [
+                                    {
+                                        "tool": tc.get("name", ""),
+                                        "parameters": tc.get("args", {}),
+                                        "id": tc.get("id", ""),
+                                    }
+                                    for tc in last_message.tool_calls
+                                ],
+                                "type": "agent_with_tools",
+                            }
+                        else:
+                            # Fallback: if agent didn't make tool calls, output response
+                            result = (
+                                last_message.content if hasattr(last_message, "content") else "No response generated"
+                            )
+                            output = {
+                                "agent_id": agent_id,
+                                "agent_name": agent.name,
+                                "message": user_message,
+                                "response": result,
+                                "type": "agent",
+                            }
+                    else:
+                        # Normal agent output when not connected to tools
+                        result = assistant_messages[-1].content if assistant_messages else "No response generated"
+                        output = {
+                            "agent_id": agent_id,
+                            "agent_name": agent.name,
+                            "message": user_message,
+                            "response": result,
+                            "type": "agent",
+                        }
 
                     node_state.status = "success"
                     node_state.output = output
@@ -367,7 +456,7 @@ class LangGraphWorkflowEngine:
         """Create a trigger execution node function."""
 
         async def trigger_node(state: WorkflowState) -> WorkflowState:
-            node_id = str(node_config.get("id", "unknown"))
+            node_id = str(node_config.get("node_id", "unknown"))
             trigger_type = node_config.get("trigger_type", "webhook")
 
             # Node execution - just store output at end, don't update intermediate state
@@ -384,7 +473,7 @@ class LangGraphWorkflowEngine:
         """Create a placeholder node for unknown types."""
 
         async def placeholder_node(state: WorkflowState) -> WorkflowState:
-            node_id = str(node_config.get("id", "unknown"))
+            node_id = str(node_config.get("node_id", "unknown"))
             node_type = str(node_config.get("type", "unknown"))
 
             # Node execution - just store output at end, don't update intermediate state

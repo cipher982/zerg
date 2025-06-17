@@ -1,3 +1,5 @@
+from typing import Any
+from typing import Dict
 from typing import List
 
 from fastapi import APIRouter
@@ -5,6 +7,7 @@ from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Response
 from fastapi import status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from zerg.crud import crud
@@ -25,6 +28,12 @@ router = APIRouter(
 )
 
 
+class CanvasDataUpdate(BaseModel):
+    """Schema for updating workflow canvas data (nodes and edges)"""
+
+    canvas_data: Dict[str, Any]
+
+
 @router.post("/", response_model=Workflow)
 def create_workflow(
     *,
@@ -42,6 +51,66 @@ def create_workflow(
         description=workflow_in.description,
         canvas_data=workflow_in.canvas_data,
     )
+    return workflow
+
+
+@router.get("/current", response_model=Workflow)
+def get_current_workflow(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get the user's current working workflow.
+    Creates a default workflow if none exists.
+    """
+    # Get most recent workflow
+    workflows = crud.get_workflows(db, owner_id=current_user.id, skip=0, limit=1)
+
+    if workflows:
+        return workflows[0]
+
+    # Create default workflow if none exists
+    workflow = crud.create_workflow(
+        db=db,
+        owner_id=current_user.id,
+        name="My Workflow",
+        description="",
+        canvas_data={"nodes": [], "edges": []},
+    )
+    return workflow
+
+
+@router.patch("/current/canvas-data", response_model=Workflow)
+def update_current_workflow_canvas_data(
+    *,
+    db: Session = Depends(get_db),
+    payload: CanvasDataUpdate,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update the canvas_data for the user's current workflow.
+    Creates a default workflow if none exists.
+    """
+    # Get most recent workflow
+    workflows = crud.get_workflows(db, owner_id=current_user.id, skip=0, limit=1)
+
+    if workflows:
+        workflow = workflows[0]
+    else:
+        # Create default workflow if none exists
+        workflow = crud.create_workflow(
+            db=db,
+            owner_id=current_user.id,
+            name="My Workflow",
+            description="",
+            canvas_data={"nodes": [], "edges": []},
+        )
+
+    # Update the canvas_data
+    workflow.canvas_data = payload.canvas_data
+    db.commit()
+    db.refresh(workflow)
+
     return workflow
 
 

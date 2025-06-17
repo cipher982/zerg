@@ -548,21 +548,10 @@ fn initialize_data_loading() {
             }
         }); // The borrow is dropped when this block ends
         
-        // Create a default workflow if none exists (fast to fun!)
+        // Canvas workflow will be loaded when user switches to Canvas tab
         state::APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            if state.workflows.is_empty() {
-                let workflow_id = state.create_workflow("My Canvas Workflow".to_string());
-                web_sys::console::log_1(&format!("🎨 Created default canvas workflow '{}' - ready for connections!", "My Canvas Workflow").into());
-                // Ensure this is set as the current workflow for immediate use
-                state.current_workflow_id = Some(workflow_id);
-            } else if state.current_workflow_id.is_none() {
-                // If workflows exist but no current one is set, pick the first one
-                if let Some(first_workflow_id) = state.workflows.keys().next().cloned() {
-                    state.current_workflow_id = Some(first_workflow_id);
-                    web_sys::console::log_1(&"🎨 Set first workflow as current - ready for connections!".into());
-                }
-            }
+            let state = state.borrow();
+            // No need for default workflow creation - backend handles this
             
             // If we have an agent selected in chat view, load their threads
             if state.active_view == storage::ActiveView::ChatView {

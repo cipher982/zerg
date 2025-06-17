@@ -379,9 +379,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::CreateWorkflow { name } => {
-            let workflow_id = state.create_workflow(name.clone());
-            web_sys::console::log_1(&format!("Created new workflow '{}' with ID: {}", name, workflow_id).into());
-            state.state_modified = true;
+            // Don't create local workflow here - let update.rs handle the API call
+            // and WorkflowCreated message will update the state properly
+            state.creating_workflow = true;
+            cmds.push(Command::CreateWorkflowApi { name: name.clone() });
 
             // Refresh tab bar UI
             cmds.push(Command::UpdateUI(Box::new(|| {

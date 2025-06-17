@@ -12,6 +12,7 @@ use crate::models::{
     ApiThread,
     ApiThreadMessage,
     Trigger,
+    CanvasNode,
 };
 use crate::models::ApiAgentRun;
 
@@ -773,7 +774,11 @@ impl AppState {
         web_sys::console::log_1(&format!("Node created with dimensions: {}x{} at position ({}, {})", 
             node.width, node.height, node.x, node.y).into());
         
-        self.nodes.insert(id.clone(), node);
+        self.nodes.insert(id.clone(), node.clone());
+        
+        // Add node to current workflow structure
+        self.add_node_to_current_workflow(node);
+        
         self.state_modified = true; // Mark state as modified
         
         // If this is a user input node, update the latest_user_input_id
@@ -798,16 +803,33 @@ impl AppState {
     /// `agent_id`.  The function ensures the `agent_id_to_node_id` mapping is
     /// updated so other parts of the frontend can perform O(1) look-ups.
     pub fn add_agent_node(&mut self, agent_id: u32, text: String, x: f64, y: f64) -> String {
-        // Delegates to the generic `add_node()` but afterwards injects the
-        // agent-specific metadata and mapping.
+        // Create the node manually to avoid double workflow updates
+        let node_id = format!("node_{}", self.nodes.len());
+        web_sys::console::log_1(&format!("Creating agent node: id={}, agent_id={}, text={}", node_id, agent_id, text).into());
+        
+        let node = Node {
+            node_id: node_id.clone(),
+            agent_id: Some(agent_id),
+            x,
+            y,
+            width: 200.0,
+            height: 80.0,
+            color: "#2ecc71".to_string(), // Green for agent nodes
+            text,
+            node_type: NodeType::AgentIdentity,
+            parent_id: None,
+            is_selected: false,
+            is_dragging: false,
+            exec_status: None,
+        };
 
-        let node_id = self.add_node(text, x, y, NodeType::AgentIdentity);
-
-        if let Some(node) = self.nodes.get_mut(&node_id) {
-            node.agent_id = Some(agent_id);
-        }
-
+        self.nodes.insert(node_id.clone(), node.clone());
+        
+        // Add node to current workflow structure with correct agent_id
+        self.add_node_to_current_workflow(node);
+        
         self.agent_id_to_node_id.insert(agent_id, node_id.clone());
+        self.state_modified = true;
 
         node_id
     }
@@ -1499,12 +1521,93 @@ impl AppState {
             exec_status: None,
         };
 
-        self.nodes.insert(node_id.clone(), node);
+        self.nodes.insert(node_id.clone(), node.clone());
+        
+        // Add node to current workflow structure
+        self.add_node_to_current_workflow(node);
+        
         self.state_modified = true;
 
         node_id
     }
     
+    /// Adds a node to the current workflow's structure (for backend sync)
+    fn add_node_to_current_workflow(&mut self, node: Node) {
+        if let Some(workflow_id) = self.current_workflow_id {
+            if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
+                // Convert Node to CanvasNode for workflow storage
+                let canvas_node = CanvasNode {
+                    node_id: node.node_id.clone(),
+                    agent_id: node.agent_id,
+                    x: node.x,
+                    y: node.y,
+                    width: node.width,
+                    height: node.height,
+                    color: node.color,
+                    text: node.text,
+                    node_type: node.node_type,
+                    parent_id: node.parent_id,
+                    is_selected: node.is_selected,
+                    is_dragging: node.is_dragging,
+                    exec_status: node.exec_status,
+                };
+                
+                // Remove any existing node with the same ID and add the new one
+                workflow.nodes.retain(|n| n.node_id != node.node_id);
+                workflow.nodes.push(canvas_node);
+                
+                web_sys::console::log_1(&format!("📋 Added node {} to workflow (total: {} nodes, {} edges)", 
+                    node.node_id, workflow.nodes.len(), workflow.edges.len()).into());
+            } else {
+                web_sys::console::log_1(&"⚠️ Current workflow not found, creating default workflow for node".into());
+                // Create a default workflow if it doesn't exist
+                let default_workflow = Workflow {
+                    id: workflow_id,
+                    name: "My Canvas Workflow".to_string(),
+                    nodes: vec![CanvasNode {
+                        node_id: node.node_id.clone(),
+                        agent_id: node.agent_id,
+                        x: node.x,
+                        y: node.y,
+                        width: node.width,
+                        height: node.height,
+                        color: node.color,
+                        text: node.text,
+                        node_type: node.node_type,
+                        parent_id: node.parent_id,
+                        is_selected: node.is_selected,
+                        is_dragging: node.is_dragging,
+                        exec_status: node.exec_status,
+                    }],
+                    edges: Vec::new(),
+                };
+                self.workflows.insert(workflow_id, default_workflow);
+            }
+        } else {
+            web_sys::console::log_1(&"📋 No current workflow, creating new workflow for node".into());
+            // Create a new workflow for this node
+            let new_workflow_id = self.create_workflow("My Canvas Workflow".to_string());
+            if let Some(workflow) = self.workflows.get_mut(&new_workflow_id) {
+                let canvas_node = CanvasNode {
+                    node_id: node.node_id.clone(),
+                    agent_id: node.agent_id,
+                    x: node.x,
+                    y: node.y,
+                    width: node.width,
+                    height: node.height,
+                    color: node.color,
+                    text: node.text,
+                    node_type: node.node_type,
+                    parent_id: node.parent_id,
+                    is_selected: node.is_selected,
+                    is_dragging: node.is_dragging,
+                    exec_status: node.exec_status,
+                };
+                workflow.nodes.push(canvas_node);
+            }
+        }
+    }
+
     /// Creates a new workflow
     pub fn create_workflow(&mut self, name: String) -> u32 {
         // Generate a new workflow ID (simply use the current timestamp for now)
@@ -1685,7 +1788,8 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::FetchAgents |
             cmd @ Command::FetchAgentRuns(_) |
             cmd @ Command::FetchAgentDetails(_) => crate::command_executors::execute_fetch_command(cmd),
-            cmd @ Command::FetchWorkflows => crate::command_executors::execute_fetch_command(cmd),
+            cmd @ Command::FetchWorkflows |
+            cmd @ Command::FetchCurrentWorkflow => crate::command_executors::execute_fetch_command(cmd),
             cmd @ Command::FetchExecutionHistory { .. } => crate::command_executors::execute_fetch_command(cmd),
             cmd @ Command::CreateWorkflowApi { .. } |
             cmd @ Command::DeleteWorkflowApi { .. } |

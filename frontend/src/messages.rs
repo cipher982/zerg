@@ -156,6 +156,7 @@ pub enum Message {
     WorkflowsLoaded(Vec<crate::models::Workflow>),
     /// Workflow successfully created via backend
     WorkflowCreated(crate::models::Workflow),
+    CurrentWorkflowLoaded(crate::models::Workflow),
     /// Workflow was deleted (soft delete)
     WorkflowDeleted { workflow_id: u32 },
     /// Workflow renamed / updated
@@ -598,6 +599,9 @@ pub enum Command {
 
     /// Fetch workflows (visual canvas definitions)
     FetchWorkflows,
+
+    /// Fetch current working workflow (creates if none exists)
+    FetchCurrentWorkflow,
 
     /// Fetch execution history for workflow
     FetchExecutionHistory { workflow_id: u32 },
