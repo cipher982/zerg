@@ -442,16 +442,15 @@ fn draw_connection_handles(context: &CanvasRenderingContext2d, node: &Node, hove
     context.save();
     
     let handle_radius = 6.0;
-    let handle_color = "#64748b"; // Gray color
-    let handle_hover_color = "#3b82f6"; // Blue when hovering
+    let input_handle_color = "#22c55e"; // Green for input
+    let output_handle_color = "#3b82f6"; // Blue for output
+    let handle_hover_color = "#f59e0b"; // Orange when hovering
     let handle_hover_radius = 8.0; // Larger when hovering
     
-    // Calculate handle positions (top, right, bottom, left)
+    // Calculate handle positions (input/output)
     let handles = [
-        (node.x + node.width / 2.0, node.y, "top"), // Top
-        (node.x + node.width, node.y + node.height / 2.0, "right"), // Right  
-        (node.x + node.width / 2.0, node.y + node.height, "bottom"), // Bottom
-        (node.x, node.y + node.height / 2.0, "left"), // Left
+        (node.x + node.width / 2.0, node.y, "input"), // Top = Input
+        (node.x + node.width / 2.0, node.y + node.height, "output"), // Bottom = Output
     ];
     
     for (x, y, position) in handles.iter() {
@@ -463,7 +462,8 @@ fn draw_connection_handles(context: &CanvasRenderingContext2d, node: &Node, hove
         };
         
         let current_radius = if is_hovered { handle_hover_radius } else { handle_radius };
-        let current_color = if is_hovered { handle_hover_color } else { handle_color };
+        let base_color = if *position == "input" { input_handle_color } else { output_handle_color };
+        let current_color = if is_hovered { handle_hover_color } else { base_color };
         
         // Draw handle background
         context.begin_path();
