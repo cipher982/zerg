@@ -1531,34 +1531,32 @@ impl AppState {
             label,
         };
         
-        web_sys::console::log_1(&format!("Creating edge {} from {} to {}", edge_id, from_node_id, to_node_id).into());
-        web_sys::console::log_1(&format!("Current workflow ID: {:?}", self.current_workflow_id).into());
-        web_sys::console::log_1(&format!("Available workflows: {:?}", self.workflows.keys().collect::<Vec<_>>()).into());
+        web_sys::console::log_1(&format!("🔗 Connecting {} → {}", from_node_id, to_node_id).into());
         
         // If we have a current workflow, add this edge to it
         if let Some(workflow_id) = self.current_workflow_id {
             if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
                 workflow.edges.push(edge);
-                web_sys::console::log_1(&format!("Added edge to workflow {}. Total edges: {}", workflow_id, workflow.edges.len()).into());
+                web_sys::console::log_1(&format!("✅ Connection saved! ({} total)", workflow.edges.len()).into());
             } else {
-                web_sys::console::error_1(&format!("Workflow {} not found! Creating default workflow.", workflow_id).into());
+                web_sys::console::log_1(&format!("📋 Auto-creating workflow for your canvas connections...", ).into());
                 // Create a default workflow if it doesn't exist
                 let default_workflow = Workflow {
                     id: workflow_id,
-                    name: "Default Workflow".to_string(),
+                    name: "My Canvas Workflow".to_string(),
                     nodes: Vec::new(),
                     edges: vec![edge],
                 };
                 self.workflows.insert(workflow_id, default_workflow);
-                web_sys::console::log_1(&format!("Created default workflow {} with first edge", workflow_id).into());
+                web_sys::console::log_1(&format!("✅ Created workflow '{}' - your connections will be saved here!", "My Canvas Workflow").into());
             }
         } else {
-            web_sys::console::error_1(&"No current workflow ID set! Creating new default workflow.".into());
+            web_sys::console::log_1(&"📋 Creating your first canvas workflow...".into());
             // Create a new default workflow
-            let new_workflow_id = self.create_workflow("Default Workflow".to_string());
+            let new_workflow_id = self.create_workflow("My Canvas Workflow".to_string());
             if let Some(workflow) = self.workflows.get_mut(&new_workflow_id) {
                 workflow.edges.push(edge);
-                web_sys::console::log_1(&format!("Created new default workflow {} with first edge", new_workflow_id).into());
+                web_sys::console::log_1(&format!("✅ Created '{}' - start building your workflow!", "My Canvas Workflow").into());
             }
         }
         
