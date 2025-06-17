@@ -54,6 +54,9 @@ pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
     // diagnose backend or network issues immediately instead of silently
     // falling back to stale client-side data.
 
+    // TEMPORARILY DISABLED: localStorage persistence to avoid frontend/backend sync conflicts
+    // The WebSocket-based backend persistence is much more reliable and eliminates race conditions
+    /*
     let window = web_sys::window().expect("no global window exists");
     let local_storage = window.local_storage()?.expect("no local storage exists");
     
@@ -63,6 +66,7 @@ pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
     
     // Save workflows and CanvasNodes
     save_workflows(app_state)?;
+    */
     
     Ok(())
 }
@@ -663,7 +667,10 @@ pub(crate) fn fix_stub_nodes() {
 }
 
 // Save workflows to localStorage
-pub fn save_workflows(app_state: &AppState) -> Result<(), JsValue> {
+pub fn save_workflows(_app_state: &AppState) -> Result<(), JsValue> {
+    // TEMPORARILY DISABLED: localStorage workflow persistence to avoid sync conflicts
+    // WebSocket-based backend persistence handles this more reliably
+    /*
     let window = web_sys::window().expect("no global window exists");
     let local_storage = window.local_storage()?.expect("no local storage exists");
     
@@ -679,12 +686,16 @@ pub fn save_workflows(app_state: &AppState) -> Result<(), JsValue> {
     } else {
         local_storage.remove_item("current_workflow_id")?;
     }
+    */
     
     Ok(())
 }
 
 // Load workflows from localStorage
-pub fn load_workflows(app_state: &mut AppState) -> Result<(), JsValue> {
+pub fn load_workflows(_app_state: &mut AppState) -> Result<(), JsValue> {
+    // TEMPORARILY DISABLED: localStorage workflow loading to avoid sync conflicts
+    // Backend API calls handle workflow loading more reliably
+    /*
     let window = web_sys::window().expect("no global window exists");
     let local_storage = window.local_storage()?.expect("no local storage exists");
     
@@ -716,6 +727,8 @@ pub fn load_workflows(app_state: &mut AppState) -> Result<(), JsValue> {
             }
         }
     }
+    */
     
+    web_sys::console::log_1(&"Workflows will be loaded from backend API instead of localStorage".into());
     Ok(())
 } 
