@@ -189,6 +189,12 @@ impl ApiClient {
     // Workflow execution – run & status
     // -------------------------------------------------------------------
 
+    /// Get the user's current working workflow. Creates one if none exists.
+    pub async fn get_current_workflow() -> Result<String, JsValue> {
+        let url = format!("{}/api/workflows/current", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
     /// Start an execution for the given workflow ID.  Returns the JSON
     /// response from the backend which contains at least
     /// `{ "execution_id": <u32>, "status": "running" }`.
@@ -467,6 +473,13 @@ impl ApiClient {
         Self::fetch_json(&url, "PATCH", Some(payload_json))
             .await
             .map(|_| ())
+    }
+
+    /// Update canvas data (nodes and edges) for current workflow
+    pub async fn patch_workflow_canvas_data(payload_json: &str) -> Result<String, JsValue> {
+        let base = Self::api_base_url();
+        let url = format!("{}/api/workflows/current/canvas-data", base);
+        Self::fetch_json(&url, "PATCH", Some(payload_json)).await
     }
 
     // Helper function to make fetch requests

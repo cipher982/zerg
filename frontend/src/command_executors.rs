@@ -91,6 +91,23 @@ pub fn execute_fetch_command(cmd: Command) {
             });
         },
 
+        Command::FetchCurrentWorkflow => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::get_current_workflow().await {
+                    Ok(json_str) => {
+                        match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
+                            Ok(api_wf) => {
+                                let workflow: crate::models::Workflow = api_wf.into();
+                                dispatch_global_message(Message::CurrentWorkflowLoaded(workflow));
+                            },
+                            Err(e) => web_sys::console::error_1(&format!("Failed to parse current workflow: {:?}", e).into()),
+                        }
+                    }
+                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch current workflow: {:?}", e).into()),
+                }
+            });
+        },
+
         // ---------------- Workflow CRUD commands -------------------
 
         Command::CreateWorkflowApi { name } => {

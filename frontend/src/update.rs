@@ -266,10 +266,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 }
             })));
             
-            // If switching to Canvas, always fetch agents (will trigger shelf update when loaded)
+            // If switching to Canvas, always fetch agents and current workflow
             if view_clone_for_shelf == crate::storage::ActiveView::Canvas {
                 commands.push(Command::FetchAgents);
-                commands.push(Command::FetchWorkflows);
+                commands.push(Command::FetchCurrentWorkflow);
             }
         },
        
@@ -618,6 +618,21 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     let _ = crate::components::workflow_switcher::refresh(&doc);
                 }
             })));
+        }
+
+        Message::CurrentWorkflowLoaded(wf) => {
+            let wf_id = wf.id;
+            state.workflows.insert(wf_id, wf.clone());
+            state.current_workflow_id = Some(wf_id);
+            
+            // Load the workflow's nodes onto the canvas
+            state.nodes.clear();
+            for node in &wf.nodes {
+                state.nodes.insert(node.node_id.clone(), node.clone());
+            }
+            
+            needs_refresh = true;
+            web_sys::console::log_1(&format!("🎨 Loaded current workflow '{}' - ready for connections!", wf.name).into());
         }
 
         // (ExecutionFinished & AppendExecutionLog handled in dedicated arms

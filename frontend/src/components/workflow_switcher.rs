@@ -300,7 +300,6 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     {
         let dropdown_menu_clone = dropdown_menu.clone();
         let dropdown_toggle_clone = dropdown_toggle.clone();
-        let doc_clone = document.clone();
 
         let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: web_sys::MouseEvent| {
             e.stop_propagation();
@@ -362,44 +361,26 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     }
 
     bar_el.append_child(&list_el)?;
-    bar_el.append_child(&actions_el);
+    bar_el.append_child(&actions_el)?;
 
-    // Insert bar into the main content area of the canvas layout
-    // Try multiple locations in order of preference
-    if let Some(main_content) = document.get_element_by_id("main-content-area") {
-        web_sys::console::log_1(&"WORKFLOW_SWITCHER: Inserting into main-content-area".into());
-        // Insert at the top of main content area, before canvas container
-        main_content.insert_before(&bar_el, main_content.first_child().as_ref())?;
-    } else if let Some(app_container) = document.get_element_by_id("app-container") {
-        web_sys::console::log_1(&"WORKFLOW_SWITCHER: Fallback - inserting into app-container".into());
-        // Create main-content-area if it doesn't exist and we're in canvas view
-        if app_container.class_list().contains("canvas-view") {
-            let main_content = document.create_element("div")?;
-            main_content.set_id("main-content-area");
-            main_content.set_class_name("main-content-area");
-            
-            // Move existing children to main content area
-            while let Some(child) = app_container.first_child() {
-                if let Some(element) = child.dyn_ref::<web_sys::Element>() {
-                    // Don't move the agent shelf
-                    if element.id() == "agent-shelf" {
-                        break;
-                    }
-                }
-                main_content.append_child(&child)?;
-            }
-            
-            app_container.append_child(&main_content)?;
-            main_content.insert_before(&bar_el, main_content.first_child().as_ref())?;
-        } else {
-            // Not in canvas view, use old behavior
-            app_container.insert_before(&bar_el, app_container.first_child().as_ref())?;
-        }
-    } else {
-        web_sys::console::log_1(&"WORKFLOW_SWITCHER: Last resort - inserting into body".into());
-        // Last resort fallback
-        document.body().unwrap().append_child(&bar_el)?;
-    }
+    // ------------------------------------------------------------------
+    // Deterministic insertion: the canvas page **must** have already
+    // created <div id="main-content-area">.  If it is missing we surface
+    // an error instead of silently falling back to other containers.
+    // ------------------------------------------------------------------
+
+    debug_assert!(
+        document.get_element_by_id("main-content-area").is_some(),
+        "Canvas layout must initialise main-content-area before workflow_switcher::init() is called",
+    );
+
+    let main_content = document
+        .get_element_by_id("main-content-area")
+        .ok_or_else(|| JsValue::from_str("main-content-area missing – canvas layout not initialised"))?;
+
+    // Insert the bar at the very top of the main content column.
+    web_sys::console::log_1(&"WORKFLOW_SWITCHER: Inserting into main-content-area".into());
+    main_content.insert_before(&bar_el, main_content.first_child().as_ref())?;
 
     refresh(document)?;
 
