@@ -525,29 +525,41 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
 
         Message::EndConnectionDrag { end_x, end_y } => {
             if state.connection_drag_active {
-                // Check if we're dropping on another node (not just handles)
-                if let Some((source_node_id, _source_handle)) = state.connection_drag_start.clone() {
-                    // First check if we're dropping on a node (more permissive)
-                    if let Some((target_node_id, _, _)) = state.find_node_at_position(*end_x, *end_y) {
-                        if target_node_id != source_node_id {
-                            // Create connection when dropping on any part of a different node
-                            let edge_id = state.add_edge(source_node_id.clone(), target_node_id.clone(), None);
-                            web_sys::console::log_1(&format!("Created connection via drag from {} to {} (edge ID: {})", source_node_id, target_node_id, edge_id).into());
-                            state.state_modified = true;
-                        } else {
-                            web_sys::console::log_1(&"Cannot connect node to itself".into());
-                        }
-                    } else {
-                        // If not dropped on a node, check if dropped on a specific handle (fallback for precise targeting)
-                        for (target_node_id, _) in &state.nodes.clone() {
-                            if target_node_id != &source_node_id {
-                                if let Some(_target_handle) = state.get_handle_at_point(target_node_id, *end_x, *end_y) {
-                                    // Create connection
+                // Check if we're dropping on another node handle with validation
+                if let Some((source_node_id, source_handle)) = state.connection_drag_start.clone() {
+                    // Check if dropped on a specific handle (precise targeting)
+                    let mut connection_created = false;
+                    for (target_node_id, _) in &state.nodes.clone() {
+                        if target_node_id != &source_node_id {
+                            if let Some(target_handle) = state.get_handle_at_point(target_node_id, *end_x, *end_y) {
+                                // Validate the connection before creating
+                                if state.is_valid_connection(&source_handle, &target_handle, &source_node_id, target_node_id) {
                                     let edge_id = state.add_edge(source_node_id.clone(), target_node_id.clone(), None);
-                                    web_sys::console::log_1(&format!("Created connection via handle drag from {} to {} (edge ID: {})", source_node_id, target_node_id, edge_id).into());
+                                    web_sys::console::log_1(&format!("Created valid connection from {} ({}) to {} ({}) (edge ID: {})", source_node_id, source_handle, target_node_id, target_handle, edge_id).into());
                                     state.state_modified = true;
-                                    break;
+                                    connection_created = true;
+                                } else {
+                                    web_sys::console::log_1(&format!("Invalid connection: {} ({}) to {} ({})", source_node_id, source_handle, target_node_id, target_handle).into());
                                 }
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Fallback: if not dropped on a handle, check if dropped on a node (auto-route to input)
+                    if !connection_created {
+                        if let Some((target_node_id, _, _)) = state.find_node_at_position(*end_x, *end_y) {
+                            if target_node_id != source_node_id {
+                                // Auto-route: output -> input only
+                                if state.is_valid_connection(&source_handle, "input", &source_node_id, &target_node_id) {
+                                    let edge_id = state.add_edge(source_node_id.clone(), target_node_id.clone(), None);
+                                    web_sys::console::log_1(&format!("Created auto-routed connection from {} ({}) to {} (input) (edge ID: {})", source_node_id, source_handle, target_node_id, edge_id).into());
+                                    state.state_modified = true;
+                                } else {
+                                    web_sys::console::log_1(&format!("Invalid auto-route connection: {} ({}) to {} (input)", source_node_id, source_handle, target_node_id).into());
+                                }
+                            } else {
+                                web_sys::console::log_1(&"Cannot connect node to itself".into());
                             }
                         }
                     }

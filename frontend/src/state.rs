@@ -675,10 +675,8 @@ impl AppState {
         if let Some(node) = self.nodes.get(node_id) {
             let handle_radius = 6.0;
             let handles = [
-                (node.x + node.width / 2.0, node.y, "top"),
-                (node.x + node.width, node.y + node.height / 2.0, "right"),
-                (node.x + node.width / 2.0, node.y + node.height, "bottom"),
-                (node.x, node.y + node.height / 2.0, "left"),
+                (node.x + node.width / 2.0, node.y, "input"),           // Top = Input
+                (node.x + node.width / 2.0, node.y + node.height, "output"), // Bottom = Output
             ];
             
             for (hx, hy, position) in handles.iter() {
@@ -691,6 +689,20 @@ impl AppState {
             }
         }
         None
+    }
+
+    /// Validate if a connection from source handle to target handle is allowed
+    pub fn is_valid_connection(&self, from_handle: &str, to_handle: &str, from_node_id: &str, to_node_id: &str) -> bool {
+        // Prevent self-connections
+        if from_node_id == to_node_id {
+            return false;
+        }
+        
+        // Only allow output -> input connections
+        match (from_handle, to_handle) {
+            ("output", "input") => true,
+            _ => false,
+        }
     }
 
     /// Update mouse position and check for handle hover states
