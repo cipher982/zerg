@@ -1532,7 +1532,7 @@ impl AppState {
     }
     
     /// Adds a node to the current workflow's structure (for backend sync)
-    fn add_node_to_current_workflow(&mut self, node: Node) {
+    pub fn add_node_to_current_workflow(&mut self, node: Node) {
         if let Some(workflow_id) = self.current_workflow_id {
             if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
                 // Convert Node to CanvasNode for workflow storage
@@ -1558,6 +1558,8 @@ impl AppState {
                 
                 web_sys::console::log_1(&format!("📋 Added node {} to workflow (total: {} nodes, {} edges)", 
                     node.node_id, workflow.nodes.len(), workflow.edges.len()).into());
+                web_sys::console::log_1(&format!("🔍 Workflow structure: nodes={:?}", 
+                    workflow.nodes.iter().map(|n| &n.node_id).collect::<Vec<_>>()).into());
             } else {
                 web_sys::console::log_1(&"⚠️ Current workflow not found, creating default workflow for node".into());
                 // Create a default workflow if it doesn't exist

@@ -790,6 +790,8 @@ pub fn save_canvas_data_to_api(app_state: &AppState) {
 
     let payload_str = payload.to_string();
     
+    web_sys::console::log_1(&format!("🚀 Sending canvas data to API: {}", payload_str).into());
+    
     spawn_local(async move {
         match crate::network::ApiClient::patch_workflow_canvas_data(&payload_str).await {
             Ok(_) => {
