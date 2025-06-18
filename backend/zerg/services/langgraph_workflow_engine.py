@@ -170,7 +170,7 @@ class LangGraphWorkflowEngine:
 
         nodes = canvas_data.get("nodes", [])
         edges = canvas_data.get("edges", [])
-        
+
         logger.info(f"[LangGraphEngine] Raw canvas_data: {canvas_data}")
         logger.info(f"[LangGraphEngine] Extracted nodes: {nodes}")
         logger.info(f"[LangGraphEngine] Extracted edges: {edges}")
@@ -202,7 +202,7 @@ class LangGraphWorkflowEngine:
 
         # Get all valid node IDs for validation
         valid_node_ids = {str(node.get("node_id", "unknown")) for node in nodes}
-        
+
         logger.info(f"[LangGraphEngine] Valid node IDs: {valid_node_ids}")
         logger.info(f"[LangGraphEngine] Edges to process: {edges}")
 
@@ -225,7 +225,7 @@ class LangGraphWorkflowEngine:
         for edge in edges:
             source = str(edge.get("from_node_id", ""))
             target = str(edge.get("to_node_id", ""))
-            
+
             # Validate both source and target exist
             if source and target:
                 if source not in valid_node_ids:
@@ -234,7 +234,7 @@ class LangGraphWorkflowEngine:
                 if target not in valid_node_ids:
                     logger.warning(f"[LangGraphEngine] Skipping edge - target node not found: {target}")
                     continue
-                    
+
                 logger.info(f"[LangGraphEngine] Adding edge: {source} -> {target}")
                 workflow.add_edge(source, target)
 
@@ -393,7 +393,9 @@ class LangGraphWorkflowEngine:
                     )
 
                     user_message = node_config.get("message", "Execute this task")
-                    crud.create_thread_message(db=db, thread_id=thread.id, role="user", content=user_message, processed=False)
+                    crud.create_thread_message(
+                        db=db, thread_id=thread.id, role="user", content=user_message, processed=False
+                    )
 
                     runner = AgentRunner(agent)
                     created_messages = await runner.run_thread(db, thread)

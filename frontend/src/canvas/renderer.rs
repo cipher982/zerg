@@ -267,11 +267,18 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             context.set_shadow_offset_x(0.0);
             context.set_shadow_offset_y(0.0);
 
-            // Accent bar (top)
+            // Accent bar (top) - color based on execution status
+            let accent_color = match node.exec_status {
+                Some(NodeExecStatus::Running) => "#fbbf24", // amber-400
+                Some(NodeExecStatus::Success) => "#22c55e", // green-500
+                Some(NodeExecStatus::Failed) => "#ef4444",  // red-500
+                _ => "#38bdf8", // sky-400 (default)
+            };
+            
             context.begin_path();
             context.move_to(node.x, node.y + 6.0);
             context.line_to(node.x + node.width, node.y + 6.0);
-            context.set_stroke_style_str("#38bdf8");
+            context.set_stroke_style_str(accent_color);
             context.set_line_width(4.0);
             context.stroke();
 
@@ -306,13 +313,33 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             context.set_fill_style_str("#64748b");
             let _ = context.fill_text(server_name, node.x + 48.0, node.y + 50.0);
 
-            // Connection status indicator (top-right)
+            // Execution status indicator (top-right)
             let status_x = node.x + node.width - 20.0;
             let status_y = node.y + 18.0;
             context.begin_path();
             let _ = context.arc(status_x, status_y, 5.0, 0.0, 2.0 * std::f64::consts::PI);
-            context.set_fill_style_str("#10b981"); // Green for connected - this would be dynamic
+            
+            let status_color = match node.exec_status {
+                Some(NodeExecStatus::Running) => "#fbbf24", // amber-400
+                Some(NodeExecStatus::Success) => "#22c55e", // green-500
+                Some(NodeExecStatus::Failed) => "#ef4444",  // red-500
+                _ => "#94a3b8", // slate-400 (idle)
+            };
+            
+            context.set_fill_style_str(status_color);
             context.fill();
+            
+            // Add pulsing effect for running status
+            if node.exec_status == Some(NodeExecStatus::Running) {
+                let timestamp = js_sys::Date::now() as f64;
+                let pulse = (timestamp / 500.0).sin() * 0.3 + 0.7;
+                context.set_global_alpha(pulse);
+                context.begin_path();
+                let _ = context.arc(status_x, status_y, 8.0, 0.0, 2.0 * std::f64::consts::PI);
+                context.set_fill_style_str("rgba(251, 191, 36, 0.4)");
+                context.fill();
+                context.set_global_alpha(1.0);
+            }
 
             context.restore();
         },

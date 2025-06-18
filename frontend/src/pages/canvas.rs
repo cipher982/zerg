@@ -83,6 +83,12 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
         web_sys::console::error_1(&format!("Failed to initialize workflow switcher: {:?}", e).into());
     }
     
+    // Initialize the execution results panel
+    web_sys::console::log_1(&"CANVAS: Initializing execution results panel".into());
+    if let Err(e) = crate::components::execution_results_panel::create_results_panel(document) {
+        web_sys::console::error_1(&format!("Failed to initialize execution results panel: {:?}", e).into());
+    }
+    
     // Initialize the particle system for the canvas background via message dispatch
     crate::state::dispatch_global_message(crate::messages::Message::InitializeParticleSystem {
         width: crate::state::APP_STATE.with(|state| state.borrow().canvas_width),
