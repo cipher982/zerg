@@ -481,8 +481,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 status: crate::state::ExecPhase::Running,
             });
             
-            // Refresh the results panel to show execution start
-            let _ = crate::components::execution_results_panel::refresh_results_panel();
+            // Refresh results panel for execution start via command  
+            commands.push(Command::UpdateUI(Box::new(|| {
+                let _ = crate::components::execution_results_panel::refresh_results_panel();
+            })));
 
             let topic = format!("workflow_execution:{}", execution_id);
             let topic_manager_rc = state.topic_manager.clone();
@@ -689,8 +691,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
             needs_refresh = true;
             
-            // Refresh the results panel to show execution completion
-            let _ = crate::components::execution_results_panel::refresh_results_panel();
+            // Refresh the results panel via command
+            commands.push(Command::UpdateUI(Box::new(|| {
+                let _ = crate::components::execution_results_panel::refresh_results_panel();
+            })));
         }
 
         Message::AppendExecutionLog { execution_id, node_id, stream, text } => {
@@ -698,12 +702,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 if exec.execution_id == 0 || exec.execution_id == execution_id {
                     state.execution_logs.push(crate::state::ExecutionLog { node_id: node_id.clone(), stream: stream.clone(), text: text.clone() });
                     needs_refresh = true;
-                    
-                    // Refresh the results panel to show new log output
-                    let _ = crate::components::execution_results_panel::refresh_results_panel();
                 }
             }
 
+            // Refresh results panel for log updates via command
+            commands.push(Command::UpdateUI(Box::new(|| {
+                let _ = crate::components::execution_results_panel::refresh_results_panel();
+            })));
+            
             // Live append means drawer needs repaint if open
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
