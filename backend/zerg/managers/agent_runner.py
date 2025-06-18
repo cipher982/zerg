@@ -97,8 +97,13 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
     async def run_thread(self, db: Session, thread: ThreadModel) -> Sequence[AgentModel]:
         """Process unprocessed messages and return created assistant message rows."""
 
+        logger.info(f"[AgentRunner] Starting run_thread for thread {thread.id}, agent {self.agent.id}")
+
         original_msgs = self.thread_service.get_thread_messages_as_langchain(db, thread.id)
+        logger.info(f"[AgentRunner] Retrieved {len(original_msgs)} original messages from thread")
+
         unprocessed_rows = crud.get_unprocessed_messages(db, thread.id)
+        logger.info(f"[AgentRunner] Found {len(unprocessed_rows)} unprocessed messages")
 
         if not unprocessed_rows:
             logger.info("No unprocessed messages for thread %s", thread.id)
@@ -110,6 +115,7 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
                 "thread_id": str(thread.id),
             }
         }
+        logger.info(f"[AgentRunner] LangGraph config: {config}")
 
         # ------------------------------------------------------------------
         # Token-streaming context handling: set the *current* thread so the
@@ -120,16 +126,23 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
 
         # Set the context var and keep the **token** so we can restore safely
         _ctx_token = set_current_thread_id(thread.id)
+        logger.info("[AgentRunner] Set current thread ID context token")
 
         try:
+            logger.info(f"[AgentRunner] Calling runnable.ainvoke with {len(original_msgs)} messages")
             # Use **async** invoke with the entrypoint
             # Pass the messages list directly to the function
             # For Functional API, we use .ainvoke method with the config
             # The entrypoint function will return the full message history
             updated_messages = await self._runnable.ainvoke(original_msgs, config)
+            logger.info(f"[AgentRunner] Runnable completed. Received {len(updated_messages)} total messages")
+        except Exception as e:
+            logger.exception(f"[AgentRunner] Exception during runnable.ainvoke: {e}")
+            raise
         finally:
             # Reset context so unrelated calls aren't attributed to this thread
             set_current_thread_id(None)
+            logger.info("[AgentRunner] Reset current thread ID context")
 
         # Extract only the new messages since our last context
         # The zerg_react_agent returns ALL messages including the history
@@ -139,20 +152,32 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
             return []
 
         new_messages = updated_messages[len(original_msgs) :]
+        logger.info(f"[AgentRunner] Extracted {len(new_messages)} new messages")
+
+        # Log each new message for debugging
+        for i, msg in enumerate(new_messages):
+            msg_type = type(msg).__name__
+            role = getattr(msg, "role", "unknown")
+            content_len = len(getattr(msg, "content", ""))
+            logger.info(f"[AgentRunner] New message {i}: {msg_type}, role={role}, content_length={content_len}")
 
         # Persist the assistant & tool messages
+        logger.info(f"[AgentRunner] Saving {len(new_messages)} new messages to database")
         created_rows = self.thread_service.save_new_messages(
             db,
             thread_id=thread.id,
             messages=new_messages,
             processed=True,
         )
+        logger.info(f"[AgentRunner] Saved {len(created_rows)} message rows to database")
 
         # Mark user messages processed
+        logger.info(f"[AgentRunner] Marking {len(unprocessed_rows)} user messages as processed")
         self.thread_service.mark_messages_processed(db, (row.id for row in unprocessed_rows))
 
         # Touch timestamp
         self.thread_service.touch_thread_timestamp(db, thread.id)
+        logger.info("[AgentRunner] Updated thread timestamp")
 
         # ------------------------------------------------------------------
         # Safety net – if we *had* unprocessed user messages but the runnable
@@ -163,12 +188,15 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
         # ------------------------------------------------------------------
 
         if unprocessed_rows and not created_rows:
-            raise RuntimeError("Agent produced no messages despite pending user input.")
+            error_msg = "Agent produced no messages despite pending user input."
+            logger.error(f"[AgentRunner] {error_msg}")
+            raise RuntimeError(error_msg)
 
         # Return *all* created rows so callers can decide how to emit them
         # over WebSocket (assistant **and** tool messages).  The caller can
         # easily derive subsets by inspecting the ``role`` field.
 
+        logger.info(f"[AgentRunner] run_thread completed successfully. Returning {len(created_rows)} created rows")
         return created_rows
 
     # No synchronous wrapper – all call-sites should be async going forward.
