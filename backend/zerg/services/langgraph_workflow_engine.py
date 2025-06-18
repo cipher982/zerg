@@ -20,7 +20,10 @@ from typing import List
 from typing import TypedDict
 from typing import Union
 
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.checkpoint.memory import MemorySaver
+
+# TODO: Fix imports for proper SQLite checkpointing
+# from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import END
 from langgraph.graph import START
 from langgraph.graph import StateGraph
@@ -89,49 +92,72 @@ class LangGraphWorkflowEngine:
 
             try:
                 # Use checkpointer context manager
-                async with AsyncSqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
-                    # Build LangGraph from canvas_data
-                    graph = self._build_langgraph(workflow.canvas_data, execution.id, checkpointer)
+                # TODO: Fix for proper SQLite checkpointing
+                checkpointer = MemorySaver()
+                # async with AsyncSqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
+                # Build LangGraph from canvas_data
+                graph = self._build_langgraph(workflow.canvas_data, execution.id, checkpointer)
 
-                    # Execute the graph with checkpointing
-                    initial_state = WorkflowState(
-                        execution_id=execution.id,
-                        node_outputs={},
-                        completed_nodes=[],
-                        error=None,
-                    )
+                # Execute the graph with checkpointing
+                initial_state = WorkflowState(
+                    execution_id=execution.id,
+                    node_outputs={},
+                    completed_nodes=[],
+                    error=None,
+                )
 
-                    # Use thread_id for checkpoint isolation
-                    config = {"configurable": {"thread_id": f"workflow_{execution.id}"}}
+                # Use thread_id for checkpoint isolation
+                config = {"configurable": {"thread_id": f"workflow_{execution.id}"}}
 
-                    # Stream execution for real-time updates
-                    final_state = None
-                    node_count = 0
+                # Stream execution for real-time updates
+                final_state = None
+                node_count = 0
+                chunk_count = 0
 
-                    logger.info(f"[LangGraphEngine] Starting streaming execution – workflow_id={workflow_id}")
+                logger.info(f"[LangGraphEngine] Starting streaming execution – workflow_id={workflow_id}")
+                logger.info(f"[LangGraphEngine] Initial state: {initial_state}")
+                logger.info(f"[LangGraphEngine] LangGraph config: {config}")
 
-                    async for chunk in graph.astream(initial_state, config):
-                        # Each chunk contains state updates as nodes complete
-                        if chunk:
-                            final_state = chunk
-                            current_completed = len(chunk.get("completed_nodes", []))
+                async for chunk in graph.astream(initial_state, config):
+                    chunk_count += 1
+                    logger.info(f"[LangGraphEngine] Received chunk #{chunk_count}: {chunk}")
 
-                            # Log progress for new completed nodes
-                            if current_completed > node_count:
-                                newly_completed = current_completed - node_count
-                                node_count = current_completed
+                    # Each chunk contains state updates as nodes complete
+                    # LangGraph returns chunks with node_id as key: {'node_id': {'completed_nodes': [...], 'node_outputs': {...}}}
+                    if chunk:
+                        # Process each node's state update in the chunk
+                        for node_id, state_update in chunk.items():
+                            if isinstance(state_update, dict):
                                 logger.info(
-                                    f"[LangGraphEngine] Progress update: {newly_completed} new nodes "
-                                    "completed ({node_count} total)"
+                                    f"[LangGraphEngine] Processing state update from node {node_id}: {state_update}"
                                 )
+                                final_state = state_update
+                                current_completed = len(state_update.get("completed_nodes", []))
 
-                            # Publish streaming progress event
-                            self._publish_streaming_progress(
-                                execution_id=execution.id,
-                                completed_nodes=chunk.get("completed_nodes", []),
-                                node_outputs=chunk.get("node_outputs", {}),
-                                error=chunk.get("error"),
-                            )
+                                # Log progress for new completed nodes
+                                if current_completed > node_count:
+                                    newly_completed = current_completed - node_count
+                                    node_count = current_completed
+                                    logger.info(
+                                        f"[LangGraphEngine] Progress update: {newly_completed} new nodes "
+                                        f"completed ({node_count} total)"
+                                    )
+                                    completed_nodes = state_update.get("completed_nodes", [])
+                                    if newly_completed > 0 and len(completed_nodes) >= newly_completed:
+                                        newly_completed_nodes = completed_nodes[-newly_completed:]
+                                        logger.info(f"[LangGraphEngine] Newly completed nodes: {newly_completed_nodes}")
+
+                                # Publish streaming progress event
+                                self._publish_streaming_progress(
+                                    execution_id=execution.id,
+                                    completed_nodes=state_update.get("completed_nodes", []),
+                                    node_outputs=state_update.get("node_outputs", {}),
+                                    error=state_update.get("error"),
+                                )
+                    else:
+                        logger.warning(f"[LangGraphEngine] Received empty chunk #{chunk_count}")
+
+                logger.info(f"[LangGraphEngine] Streaming completed after {chunk_count} chunks")
 
                 # Log completion summary
                 completed_count = len(final_state.get("completed_nodes", [])) if final_state else 0
@@ -184,17 +210,25 @@ class LangGraphWorkflowEngine:
             node_id = str(node.get("node_id", "unknown"))
             node_type = str(node.get("node_type", "unknown")).lower()
 
+            logger.info(f"[LangGraphEngine] Processing node: {node_id} (type={node_type})")
+            logger.info(f"[LangGraphEngine] Full node data: {node}")
+
             # Create node execution function based on type
             if node_type == "tool":
+                logger.info(f"[LangGraphEngine] Creating tool node for {node_id}")
                 node_func = self._create_tool_node(node)
             elif node_type == "agentidentity" or node_type == "agent":
+                logger.info(f"[LangGraphEngine] Creating agent node for {node_id} (agent_id={node.get('agent_id')})")
                 node_func = self._create_agent_node(node)
             elif node_type == "trigger":
+                logger.info(f"[LangGraphEngine] Creating trigger node for {node_id}")
                 node_func = self._create_trigger_node(node)
             else:
+                logger.info(f"[LangGraphEngine] Creating placeholder node for {node_id} (unknown type: {node_type})")
                 node_func = self._create_placeholder_node(node)
 
             workflow.add_node(node_id, node_func)
+            logger.info(f"[LangGraphEngine] Added node {node_id} to LangGraph workflow")
 
         # Add edges between nodes
         start_nodes = []
@@ -217,14 +251,20 @@ class LangGraphWorkflowEngine:
             if node_id not in source_nodes:
                 end_nodes.append(node_id)
 
+        logger.info(f"[LangGraphEngine] Start nodes (no incoming edges): {start_nodes}")
+        logger.info(f"[LangGraphEngine] End nodes (no outgoing edges): {end_nodes}")
+
         # Connect START to all start nodes
         for start_node in start_nodes:
+            logger.info(f"[LangGraphEngine] Adding edge: START -> {start_node}")
             workflow.add_edge(START, start_node)
 
         # Add internal edges - with validation
         for edge in edges:
             source = str(edge.get("from_node_id", ""))
             target = str(edge.get("to_node_id", ""))
+
+            logger.info(f"[LangGraphEngine] Processing edge: {source} -> {target}")
 
             # Validate both source and target exist
             if source and target:
@@ -235,12 +275,17 @@ class LangGraphWorkflowEngine:
                     logger.warning(f"[LangGraphEngine] Skipping edge - target node not found: {target}")
                     continue
 
-                logger.info(f"[LangGraphEngine] Adding edge: {source} -> {target}")
+                logger.info(f"[LangGraphEngine] Adding valid edge: {source} -> {target}")
                 workflow.add_edge(source, target)
+            else:
+                logger.warning(f"[LangGraphEngine] Skipping edge - missing source or target: {edge}")
 
         # Connect all end nodes to END
         for end_node in end_nodes:
+            logger.info(f"[LangGraphEngine] Adding edge: {end_node} -> END")
             workflow.add_edge(end_node, END)
+
+        logger.info("[LangGraphEngine] Graph construction complete. Compiling with checkpointer...")
 
         return workflow.compile(checkpointer=checkpointer)
 
@@ -365,6 +410,11 @@ class LangGraphWorkflowEngine:
             node_id = str(node_config.get("node_id", "unknown"))
             agent_id = node_config.get("agent_id")
 
+            logger.info(
+                f"[AgentNode] Starting execution – node_id={node_id}, agent_id={agent_id}, execution_id={state['execution_id']}"
+            )
+            logger.info(f"[AgentNode] Full node_config: {node_config}")
+
             # Node execution - just store output at end, don't update intermediate state
 
             session_factory = get_session_factory()
@@ -374,6 +424,7 @@ class LangGraphWorkflowEngine:
                 )
                 db.add(node_state)
                 db.commit()
+                logger.info("[AgentNode] Created node_state in DB with status 'running'")
 
                 self._publish_node_event(
                     execution_id=state["execution_id"], node_id=node_id, status="running", output=None, error=None
@@ -381,34 +432,58 @@ class LangGraphWorkflowEngine:
 
                 try:
                     # Get agent
+                    logger.info(f"[AgentNode] Querying database for agent_id={agent_id}")
                     agent = db.query(Agent).filter_by(id=agent_id).first()
                     if not agent:
-                        raise ValueError(f"Agent {agent_id} not found")
+                        error_msg = f"Agent {agent_id} not found in database"
+                        logger.error(f"[AgentNode] {error_msg}")
+                        raise ValueError(error_msg)
+
+                    logger.info(f"[AgentNode] Found agent: {agent.name} (id={agent.id})")
 
                     # Create thread and execute
+                    logger.info(f"[AgentNode] Creating thread for agent_id={agent_id}")
                     thread = crud.create_thread(
                         db=db,
                         agent_id=agent_id,
                         title=f"Workflow execution {state['execution_id']}",
                     )
+                    logger.info(f"[AgentNode] Created thread with id={thread.id}")
 
                     user_message = node_config.get("message", "Execute this task")
+                    logger.info(f"[AgentNode] Creating user message: '{user_message}'")
                     crud.create_thread_message(
                         db=db, thread_id=thread.id, role="user", content=user_message, processed=False
                     )
+                    logger.info("[AgentNode] Created thread message in DB")
 
+                    logger.info(f"[AgentNode] Initializing AgentRunner for agent {agent.id}")
                     runner = AgentRunner(agent)
+                    logger.info("[AgentNode] AgentRunner initialized, calling run_thread...")
+
                     created_messages = await runner.run_thread(db, thread)
+                    logger.info(
+                        f"[AgentNode] AgentRunner.run_thread() completed. Created {len(created_messages)} messages"
+                    )
+
+                    for i, msg in enumerate(created_messages):
+                        logger.info(
+                            f"[AgentNode] Message {i}: role={msg.role}, content_length={len(msg.content) if hasattr(msg, 'content') else 0}"
+                        )
 
                     assistant_messages = [msg for msg in created_messages if msg.role == "assistant"]
+                    logger.info(f"[AgentNode] Filtered to {len(assistant_messages)} assistant messages")
 
                     # Check if this agent connects to tool nodes
                     connects_to_tools = self._has_outgoing_tool_connections(node_id)
+                    logger.info(f"[AgentNode] Agent connects to tools: {connects_to_tools}")
 
                     if connects_to_tools and assistant_messages:
                         # Extract tool calls from the last assistant message
                         last_message = assistant_messages[-1]
+                        logger.info("[AgentNode] Checking last assistant message for tool calls...")
                         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+                            logger.info(f"[AgentNode] Found {len(last_message.tool_calls)} tool calls")
                             # Output structured tool calls for connected tool nodes
                             output = {
                                 "agent_id": agent_id,
@@ -425,6 +500,7 @@ class LangGraphWorkflowEngine:
                                 "type": "agent_with_tools",
                             }
                         else:
+                            logger.info("[AgentNode] No tool calls found, using regular agent response")
                             # Fallback: if agent didn't make tool calls, output response
                             result = (
                                 last_message.content if hasattr(last_message, "content") else "No response generated"
@@ -438,6 +514,9 @@ class LangGraphWorkflowEngine:
                             }
                     else:
                         # Normal agent output when not connected to tools
+                        logger.info(
+                            "[AgentNode] Using normal agent output (no tool connections or no assistant messages)"
+                        )
                         result = assistant_messages[-1].content if assistant_messages else "No response generated"
                         output = {
                             "agent_id": agent_id,
@@ -447,29 +526,40 @@ class LangGraphWorkflowEngine:
                             "type": "agent",
                         }
 
+                    logger.info(f"[AgentNode] Final output: {output}")
+
                     node_state.status = "success"
                     node_state.output = output
                     db.commit()
+                    logger.info("[AgentNode] Updated node_state to 'success' in DB")
 
                     self._publish_node_event(
                         execution_id=state["execution_id"], node_id=node_id, status="success", output=output, error=None
                     )
 
                     # Return only the changes to state
-                    return {"node_outputs": {node_id: output}, "completed_nodes": [node_id]}
+                    state_update = {"node_outputs": {node_id: output}, "completed_nodes": [node_id]}
+                    logger.info(f"[AgentNode] Returning state update: {state_update}")
+                    return state_update
 
                 except Exception as e:
+                    error_msg = f"Exception in agent node {node_id} (agent_id={agent_id}): {e}"
+                    logger.exception(f"[AgentNode] {error_msg}")
+
                     node_state.status = "failed"
                     node_state.error = str(e)
                     db.commit()
+                    logger.error("[AgentNode] Updated node_state to 'failed' in DB")
 
                     self._publish_node_event(
                         execution_id=state["execution_id"], node_id=node_id, status="failed", output=None, error=str(e)
                     )
 
+                    logger.error("[AgentNode] Re-raising exception to fail workflow execution")
                     raise  # Re-raise without modifying state
 
             # Should not reach here
+            logger.warning("[AgentNode] Reached unexpected code path, returning empty state")
             return {}
 
         return agent_node
