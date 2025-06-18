@@ -457,7 +457,10 @@ pub fn create_node_from_palette(state: &mut AppState, palette_node: &PaletteNode
         is_dragging: false,
         exec_status: None,
     };
-    state.nodes.insert(node_id.clone(), node);
+    state.nodes.insert(node_id.clone(), node.clone());
+    
+    // Add node to current workflow structure (same as agent nodes)
+    state.add_node_to_current_workflow(node);
 
     web_sys::console::log_1(&format!("Created node {} at ({}, {})", node_id, world_x, world_y).into());
 

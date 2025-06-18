@@ -56,7 +56,7 @@ class WorkflowState(TypedDict):
     node_outputs: Annotated[Dict[str, Any], merge_dicts]  # Node outputs keyed by node_id
     completed_nodes: Annotated[List[str], operator.add]  # Track completed nodes
     error: Union[str, None]
-    db_session_factory: Any  # Pass session factory through state
+    # Note: db_session_factory removed - not serializable for checkpointing
 
 
 class LangGraphWorkflowEngine:
@@ -99,7 +99,6 @@ class LangGraphWorkflowEngine:
                         node_outputs={},
                         completed_nodes=[],
                         error=None,
-                        db_session_factory=session_factory,
                     )
 
                     # Use thread_id for checkpoint isolation
@@ -171,6 +170,10 @@ class LangGraphWorkflowEngine:
 
         nodes = canvas_data.get("nodes", [])
         edges = canvas_data.get("edges", [])
+        
+        logger.info(f"[LangGraphEngine] Raw canvas_data: {canvas_data}")
+        logger.info(f"[LangGraphEngine] Extracted nodes: {nodes}")
+        logger.info(f"[LangGraphEngine] Extracted edges: {edges}")
 
         # Store for use in node creation functions
         self._current_nodes = nodes
@@ -197,6 +200,12 @@ class LangGraphWorkflowEngine:
         start_nodes = []
         end_nodes = []
 
+        # Get all valid node IDs for validation
+        valid_node_ids = {str(node.get("node_id", "unknown")) for node in nodes}
+        
+        logger.info(f"[LangGraphEngine] Valid node IDs: {valid_node_ids}")
+        logger.info(f"[LangGraphEngine] Edges to process: {edges}")
+
         # Find nodes with no incoming edges (start nodes)
         target_nodes = {str(edge.get("to_node_id", "")) for edge in edges}
         source_nodes = {str(edge.get("from_node_id", "")) for edge in edges}
@@ -212,11 +221,21 @@ class LangGraphWorkflowEngine:
         for start_node in start_nodes:
             workflow.add_edge(START, start_node)
 
-        # Add internal edges
+        # Add internal edges - with validation
         for edge in edges:
             source = str(edge.get("from_node_id", ""))
             target = str(edge.get("to_node_id", ""))
+            
+            # Validate both source and target exist
             if source and target:
+                if source not in valid_node_ids:
+                    logger.warning(f"[LangGraphEngine] Skipping edge - source node not found: {source}")
+                    continue
+                if target not in valid_node_ids:
+                    logger.warning(f"[LangGraphEngine] Skipping edge - target node not found: {target}")
+                    continue
+                    
+                logger.info(f"[LangGraphEngine] Adding edge: {source} -> {target}")
                 workflow.add_edge(source, target)
 
         # Connect all end nodes to END
@@ -285,7 +304,8 @@ class LangGraphWorkflowEngine:
             # Node execution - just store output at end, don't update intermediate state
 
             # Create node execution state
-            with state["db_session_factory"]() as db:
+            session_factory = get_session_factory()
+            with session_factory() as db:
                 node_state = NodeExecutionState(
                     workflow_execution_id=state["execution_id"], node_id=node_id, status="running"
                 )
@@ -347,7 +367,8 @@ class LangGraphWorkflowEngine:
 
             # Node execution - just store output at end, don't update intermediate state
 
-            with state["db_session_factory"]() as db:
+            session_factory = get_session_factory()
+            with session_factory() as db:
                 node_state = NodeExecutionState(
                     workflow_execution_id=state["execution_id"], node_id=node_id, status="running"
                 )
@@ -367,13 +388,12 @@ class LangGraphWorkflowEngine:
                     # Create thread and execute
                     thread = crud.create_thread(
                         db=db,
-                        user_id=1,  # TODO: Get from context
-                        thread_type="workflow",
+                        agent_id=agent_id,
                         title=f"Workflow execution {state['execution_id']}",
                     )
 
                     user_message = node_config.get("message", "Execute this task")
-                    crud.create_message(db=db, thread_id=thread.id, role="user", content=user_message, processed=False)
+                    crud.create_thread_message(db=db, thread_id=thread.id, role="user", content=user_message, processed=False)
 
                     runner = AgentRunner(agent)
                     created_messages = await runner.run_thread(db, thread)

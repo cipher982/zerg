@@ -547,7 +547,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     
     // Create options with passive: true
     let mut options = AddEventListenerOptions::new();
-    options.passive(false); // Allow preventDefault inside wheel handler
+    options.set_passive(false); // Allow preventDefault inside wheel handler
     
     // Add wheel event listener with passive option
     canvas_wheel.add_event_listener_with_callback_and_add_event_listener_options(
