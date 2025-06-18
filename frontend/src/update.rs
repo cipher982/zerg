@@ -483,7 +483,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             
             // Refresh results panel for execution start via command  
             commands.push(Command::UpdateUI(Box::new(|| {
-                let _ = crate::components::execution_results_panel::refresh_results_panel();
+                // (results panel removed)
             })));
 
             let topic = format!("workflow_execution:{}", execution_id);
@@ -693,7 +693,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             
             // Refresh the results panel via command
             commands.push(Command::UpdateUI(Box::new(|| {
-                let _ = crate::components::execution_results_panel::refresh_results_panel();
+                // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
             })));
         }
 
@@ -706,9 +706,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             }
 
             // Refresh results panel for log updates via command
-            commands.push(Command::UpdateUI(Box::new(|| {
-                let _ = crate::components::execution_results_panel::refresh_results_panel();
-            })));
+            // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
             
             // Live append means drawer needs repaint if open
             commands.push(Command::UpdateUI(Box::new(|| {

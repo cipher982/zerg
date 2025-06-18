@@ -4,26 +4,29 @@
 
 .execution-results-panel {
     position: fixed;
+    top: 0;
+    right: 0;
     bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(90vw, 800px);
+    left: auto;
+    width: min(30vw, 400px);
     background: var(--dark-card);
     border: 1px solid var(--border-subtle);
-    border-bottom: none;
-    border-radius: 12px 12px 0 0;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    border-left: none;
+    border-radius: 0 0 0 12px;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
     z-index: 100;
-    transition: transform 0.3s ease;
+    transition: width 0.3s ease, transform 0.3s ease;
+    transform: none;
 }
 
-.execution-results-panel.collapsed {
-    transform: translateX(-50%) translateY(calc(100% - 50px));
-}
+/* .execution-results-panel.collapsed {
+    transform: none;
+} */
 
-.execution-results-panel.collapsed .results-panel-content {
+/* collapse hide disabled: always show panel content */
+/* .execution-results-panel.collapsed .results-panel-content {
     display: none;
-}
+} */
 
 /* Panel Header */
 .results-panel-header {

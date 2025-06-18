@@ -205,8 +205,12 @@ class LangGraphWorkflowEngine:
         self._current_nodes = nodes
         self._current_edges = edges
 
-        # Add all nodes to the graph
-        for node in nodes:
+        # Filter nodes to only include those reachable from trigger nodes
+        connected_nodes = self._get_connected_nodes(nodes, edges)
+        logger.info(f"[LangGraphEngine] Filtered to connected nodes: {[n.get('node_id') for n in connected_nodes]}")
+
+        # Add only connected nodes to the graph
+        for node in connected_nodes:
             node_id = str(node.get("node_id", "unknown"))
             node_type = str(node.get("node_type", "unknown")).lower()
 
@@ -288,6 +292,66 @@ class LangGraphWorkflowEngine:
         logger.info("[LangGraphEngine] Graph construction complete. Compiling with checkpointer...")
 
         return workflow.compile(checkpointer=checkpointer)
+
+    def _get_connected_nodes(self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Filter nodes to only include those reachable from trigger nodes."""
+        if not nodes:
+            return []
+
+        # Find all trigger nodes (these are always included)
+        trigger_nodes = []
+        non_trigger_nodes = []
+
+        for node in nodes:
+            node_type = str(node.get("node_type", "")).lower()
+            if node_type == "trigger":
+                trigger_nodes.append(node)
+            else:
+                non_trigger_nodes.append(node)
+
+        # If no trigger nodes, return empty list (nothing can execute)
+        if not trigger_nodes:
+            logger.warning("[LangGraphEngine] No trigger nodes found - no nodes will execute")
+            return []
+
+        # Build adjacency graph from edges
+        graph = {}
+        for edge in edges:
+            source = str(edge.get("from_node_id", ""))
+            target = str(edge.get("to_node_id", ""))
+            if source and target:
+                if source not in graph:
+                    graph[source] = []
+                graph[source].append(target)
+
+        # Find all nodes reachable from trigger nodes using BFS
+        reachable = set()
+        queue = []
+
+        # Start with all trigger nodes
+        for trigger_node in trigger_nodes:
+            trigger_id = str(trigger_node.get("node_id", ""))
+            reachable.add(trigger_id)
+            queue.append(trigger_id)
+
+        # BFS to find all reachable nodes
+        while queue:
+            current = queue.pop(0)
+            if current in graph:
+                for neighbor in graph[current]:
+                    if neighbor not in reachable:
+                        reachable.add(neighbor)
+                        queue.append(neighbor)
+
+        # Filter original nodes list to only include reachable nodes
+        connected_nodes = []
+        for node in nodes:
+            node_id = str(node.get("node_id", ""))
+            if node_id in reachable:
+                connected_nodes.append(node)
+
+        logger.info(f"[LangGraphEngine] Reachable node IDs: {reachable}")
+        return connected_nodes
 
     def _get_node_type_by_id(self, node_id: str) -> str:
         """Get the type of a node by its ID."""
