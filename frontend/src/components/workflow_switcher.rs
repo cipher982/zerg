@@ -473,6 +473,7 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
 /// Adds one of: `running`, `success`, `failed` or removes all for idle.
 pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
     use crate::state::{APP_STATE, ExecPhase};
+    use crate::models::NodeExecStatus;
 
     if let Some(btn) = document.get_element_by_id("run-workflow-btn") {
         let class_list = btn.class_list();
@@ -480,20 +481,49 @@ pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
         let _ = class_list.remove_1("success");
         let _ = class_list.remove_1("failed");
 
-        let phase_opt = APP_STATE.with(|st| st.borrow().current_execution.clone().map(|e| e.status));
+        let (phase_opt, progress_info) = APP_STATE.with(|st| {
+            let state = st.borrow();
+            let phase = state.current_execution.clone().map(|e| e.status);
+            
+            // Count node progress for enhanced feedback
+            let total_nodes = state.nodes.len();
+            let running_nodes = state.nodes.values().filter(|n| n.exec_status == Some(NodeExecStatus::Running)).count();
+            let completed_nodes = state.nodes.values().filter(|n| matches!(n.exec_status, Some(NodeExecStatus::Success) | Some(NodeExecStatus::Failed))).count();
+            
+            (phase, (total_nodes, running_nodes, completed_nodes))
+        });
+
+        let (total_nodes, running_nodes, completed_nodes) = progress_info;
 
         if let Some(phase) = phase_opt {
             match phase {
                 ExecPhase::Running | ExecPhase::Starting => {
                     let _ = class_list.add_1("running");
+                    
+                    // Update button text with progress
+                    if total_nodes > 0 {
+                        let progress_text = if running_nodes > 0 {
+                            format!("▶︎ Running... ({}/{})", completed_nodes, total_nodes)
+                        } else {
+                            "▶︎ Starting...".to_string()
+                        };
+                        btn.set_inner_html(&progress_text);
+                    } else {
+                        btn.set_inner_html("▶︎ Running...");
+                    }
                 }
                 ExecPhase::Success => {
                     let _ = class_list.add_1("success");
+                    btn.set_inner_html("✅ Complete");
                 }
                 ExecPhase::Failed => {
                     let _ = class_list.add_1("failed");
+                    btn.set_inner_html("❌ Failed");
                 }
             }
+        } else {
+            // Reset to default state
+            btn.set_inner_html("▶︎ Run");
         }
     }
 

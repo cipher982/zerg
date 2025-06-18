@@ -303,6 +303,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     }
                 }
                 state.state_modified = true;
+                
+                // Refresh the results panel to show updated node status
+                let _ = crate::components::execution_results_panel::refresh_results_panel();
             }
             true
         }
