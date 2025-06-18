@@ -916,7 +916,8 @@ impl AppState {
             
             // Draw canvas nodes (new structure)
             for (_, node) in &self.nodes {
-                renderer::draw_node(&context, node, &self.agents, &self.selected_node_id, &self.connection_source_node, self.connection_mode, &self.hovered_handle);
+                let is_reachable = self.is_node_reachable_from_trigger(&node.node_id);
+                renderer::draw_node(&context, node, &self.agents, &self.selected_node_id, &self.connection_source_node, self.connection_mode, &self.hovered_handle, is_reachable);
             }
         }
     }
@@ -1531,6 +1532,39 @@ impl AppState {
         node_id
     }
     
+    /// Check if a node is connected to other nodes (has incoming or outgoing edges)
+    pub fn is_node_connected(&self, node_id: &str) -> bool {
+        if let Some(workflow_id) = self.current_workflow_id {
+            if let Some(workflow) = self.workflows.get(&workflow_id) {
+                // Check if the node has any incoming or outgoing edges
+                return workflow.edges.iter().any(|edge| {
+                    edge.from_node_id == node_id || edge.to_node_id == node_id
+                });
+            }
+        }
+        false
+    }
+    
+    /// Check if a node is reachable from a trigger node (part of execution path)
+    pub fn is_node_reachable_from_trigger(&self, node_id: &str) -> bool {
+        if let Some(workflow_id) = self.current_workflow_id {
+            if let Some(workflow) = self.workflows.get(&workflow_id) {
+                // Find all trigger nodes
+                let trigger_nodes: Vec<&str> = workflow.nodes.iter()
+                    .filter(|node| matches!(node.node_type, crate::models::NodeType::Trigger { .. }))
+                    .map(|node| node.node_id.as_str())
+                    .collect();
+                
+                // For now, simple check: is node connected to anything OR is a trigger itself
+                let is_trigger = trigger_nodes.contains(&node_id);
+                let is_connected = self.is_node_connected(node_id);
+                
+                return is_trigger || is_connected;
+            }
+        }
+        false
+    }
+
     /// Adds a node to the current workflow's structure (for backend sync)
     pub fn add_node_to_current_workflow(&mut self, node: Node) {
         if let Some(workflow_id) = self.current_workflow_id {
@@ -1655,6 +1689,9 @@ impl AppState {
             if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
                 workflow.edges.push(edge);
                 web_sys::console::log_1(&format!("✅ Connection saved! ({} total)", workflow.edges.len()).into());
+                
+                // TODO: Trigger immediate graph rebuild in backend
+                // self.trigger_graph_rebuild();
             } else {
                 web_sys::console::log_1(&format!("📋 Auto-creating workflow for your canvas connections...", ).into());
                 // Create a default workflow if it doesn't exist
@@ -1666,6 +1703,9 @@ impl AppState {
                 };
                 self.workflows.insert(workflow_id, default_workflow);
                 web_sys::console::log_1(&format!("✅ Created workflow '{}' - your connections will be saved here!", "My Canvas Workflow").into());
+                
+                // TODO: Trigger immediate graph rebuild in backend
+                // self.trigger_graph_rebuild();
             }
         } else {
             web_sys::console::log_1(&"📋 Creating your first canvas workflow...".into());
@@ -1681,6 +1721,15 @@ impl AppState {
         
         // Return the new edge's ID
         edge_id
+    }
+    
+    /// Trigger immediate graph rebuild in backend by sending canvas data
+    #[allow(dead_code)]
+    fn trigger_graph_rebuild(&self) {
+        web_sys::console::log_1(&"🔄 Triggering graph rebuild in backend...".into());
+        
+        // TODO: Implement graph rebuild trigger
+        // Need to add proper message type and canvas data structure
     }
 }
 

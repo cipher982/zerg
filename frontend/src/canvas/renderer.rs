@@ -49,9 +49,10 @@ pub fn draw_nodes(state: &mut AppState) {
         // Draw connection preview line if dragging
         draw_connection_preview(state, &context);
         
-        // Draw all nodes
+        // Draw all nodes with connectivity information
         for (_, node) in &state.nodes.clone() {
-            draw_node(&context, &node, &state.agents, &state.selected_node_id, &state.connection_source_node, state.connection_mode, &state.hovered_handle);
+            let is_reachable = state.is_node_reachable_from_trigger(&node.node_id);
+            draw_node(&context, &node, &state.agents, &state.selected_node_id, &state.connection_source_node, state.connection_mode, &state.hovered_handle, is_reachable);
         }
         
         // Restore original context
@@ -150,7 +151,13 @@ fn draw_connection_line(context: &CanvasRenderingContext2d, from_node: &crate::m
     super::shapes::draw_arrow(context, end_x, end_y, 0.0, -1.0);
 }
 
-pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashMap<u32, ApiAgent>, selected_node_id: &Option<String>, connection_source_node: &Option<String>, connection_mode: bool, hovered_handle: &Option<(String, String)>) {
+pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashMap<u32, ApiAgent>, selected_node_id: &Option<String>, connection_source_node: &Option<String>, connection_mode: bool, hovered_handle: &Option<(String, String)>, is_reachable: bool) {
+    // Apply visual greying for unreachable nodes
+    context.save();
+    if !is_reachable {
+        context.set_global_alpha(0.4); // Make unconnected nodes semi-transparent
+    }
+    
     // Draw the appropriate node shape based on type
     match &node.node_type {
         NodeType::UserInput => {
@@ -462,6 +469,9 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
     
     // Draw the text content of the node
     shapes::draw_node_text(context, node);
+    
+    // Restore context (for alpha changes)
+    context.restore();
 }
 
 /// Draw small circular connection handles on the edges of nodes

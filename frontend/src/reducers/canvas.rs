@@ -306,7 +306,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 
                 // Refresh results panel for node status updates via command
                 cmds.push(Command::UpdateUI(Box::new(|| {
-                    let _ = crate::components::execution_results_panel::refresh_results_panel();
+                    // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
                 })));
             }
             true
