@@ -389,6 +389,12 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
 
 /// Rebuild the tab list from current AppState
 pub fn refresh(document: &Document) -> Result<(), JsValue> {
+    // Only refresh workflow bar if we're in canvas view (main-content-area exists)
+    if document.get_element_by_id("main-content-area").is_none() {
+        // Not in canvas view, skip workflow bar refresh
+        return Ok(());
+    }
+    
     // Make sure workflow bar is initialized first
     let workflow_bar = match document.get_element_by_id("workflow-bar") {
         Some(bar) => bar,
