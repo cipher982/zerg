@@ -238,17 +238,21 @@ class LangGraphWorkflowEngine:
         start_nodes = []
         end_nodes = []
 
-        # Get all valid node IDs for validation
-        valid_node_ids = {str(node.get("node_id", "unknown")) for node in nodes}
+        # Get all valid node IDs for validation (only connected nodes)
+        valid_node_ids = {str(node.get("node_id", "unknown")) for node in connected_nodes}
 
         logger.info(f"[LangGraphEngine] Valid node IDs: {valid_node_ids}")
         logger.info(f"[LangGraphEngine] Edges to process: {edges}")
 
-        # Find nodes with no incoming edges (start nodes)
-        target_nodes = {str(edge.get("to_node_id", "")) for edge in edges}
-        source_nodes = {str(edge.get("from_node_id", "")) for edge in edges}
+        # Find nodes with no incoming edges (start nodes) - only from connected nodes
+        target_nodes = {
+            str(edge.get("to_node_id", "")) for edge in edges if str(edge.get("to_node_id", "")) in valid_node_ids
+        }
+        source_nodes = {
+            str(edge.get("from_node_id", "")) for edge in edges if str(edge.get("from_node_id", "")) in valid_node_ids
+        }
 
-        for node in nodes:
+        for node in connected_nodes:
             node_id = str(node.get("node_id", "unknown"))
             if node_id not in target_nodes:
                 start_nodes.append(node_id)

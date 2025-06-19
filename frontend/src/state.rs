@@ -775,6 +775,7 @@ impl AppState {
             node.width, node.height, node.x, node.y).into());
         
         self.nodes.insert(id.clone(), node.clone());
+        web_sys::console::log_1(&format!("DEBUG: Added node {} to nodes map (type: {:?})", id, node.node_type).into());
         
         // Add node to current workflow structure
         self.add_node_to_current_workflow(node);
@@ -824,6 +825,7 @@ impl AppState {
         };
 
         self.nodes.insert(node_id.clone(), node.clone());
+        web_sys::console::log_1(&format!("DEBUG: Added agent node {} to nodes map (agent_id: {:?}, type: {:?})", node_id, agent_id, node.node_type).into());
         
         // Add node to current workflow structure with correct agent_id
         self.add_node_to_current_workflow(node);

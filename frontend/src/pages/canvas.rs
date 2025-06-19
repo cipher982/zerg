@@ -158,6 +158,62 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     Ok(())
 }
 
+/// Ensure a trigger node exists in the current canvas state
+/// This function should be called every time the canvas view is activated
+pub fn ensure_trigger_node_exists() {
+    web_sys::console::log_1(&"CANVAS: Checking for trigger node".into());
+    
+    let should_add_trigger = crate::state::APP_STATE.with(|s| {
+        let st = s.borrow();
+        web_sys::console::log_1(&format!("CANVAS: nodes in state = {}", st.nodes.len()).into());
+        
+        // Check if there's already a trigger node
+        let has_trigger = st.nodes.values().any(|node| {
+            matches!(node.node_type, crate::models::NodeType::Trigger { .. })
+        });
+        
+        web_sys::console::log_1(&format!("CANVAS: has trigger node = {}", has_trigger).into());
+        !has_trigger
+    });
+    
+    if should_add_trigger {
+        web_sys::console::log_1(&"CANVAS: Adding default trigger node".into());
+        
+        // Calculate position: top 1/3, center of viewport
+        let (trigger_x, trigger_y) = crate::state::APP_STATE.with(|s| {
+            let st = s.borrow();
+            let viewport_width = if st.canvas_width > 0.0 { st.canvas_width } else { 800.0 };
+            let viewport_height = if st.canvas_height > 0.0 { st.canvas_height } else { 600.0 };
+            
+            let x = st.viewport_x + (viewport_width / st.zoom_level) / 2.0 - 100.0; // Center horizontally
+            let y = st.viewport_y + (viewport_height / st.zoom_level) / 3.0 - 40.0;  // Top 1/3
+            (x, y)
+        });
+        
+        // Create default manual trigger node
+        use crate::models::{NodeType, TriggerType, TriggerConfig};
+        let trigger_config = TriggerConfig {
+            params: std::collections::HashMap::new(),
+            enabled: true,
+            filters: Vec::new(),
+        };
+        
+        let trigger_node_type = NodeType::Trigger {
+            trigger_type: TriggerType::Manual,
+            config: trigger_config,
+        };
+        
+        crate::state::dispatch_global_message(crate::messages::Message::AddNode {
+            text: "▶ Start".to_string(),
+            x: trigger_x,
+            y: trigger_y,
+            node_type: trigger_node_type,
+        });
+    } else {
+        web_sys::console::log_1(&"CANVAS: Trigger node already exists, skipping creation".into());
+    }
+}
+
 /// Unmount the canvas view by removing it from the DOM
 /// This function is called when switching away from the canvas view
 #[allow(dead_code)]
