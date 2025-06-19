@@ -93,6 +93,9 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
             if let Some(app_container) = document.get_element_by_id("app-container") {
                 app_container.set_class_name("canvas-view");
             }
+            
+            // Ensure trigger node exists every time we switch to Canvas view
+            crate::pages::canvas::ensure_trigger_node_exists();
         },
         ActiveView::Profile => {
             if !crate::pages::profile::is_profile_mounted(document) {

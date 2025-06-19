@@ -402,9 +402,15 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::SelectWorkflow { workflow_id } => {
             state.current_workflow_id = Some(*workflow_id);
+            web_sys::console::log_1(&format!("DEBUG: SelectWorkflow {} - clearing {} nodes", workflow_id, state.nodes.len()).into());
+            for (id, node) in &state.nodes {
+                web_sys::console::log_1(&format!("DEBUG: Clearing node {} (type: {:?})", id, node.node_type).into());
+            }
             state.nodes.clear();
             if let Some(workflow) = state.workflows.get(workflow_id) {
+                web_sys::console::log_1(&format!("DEBUG: Repopulating with {} workflow nodes", workflow.nodes.len()).into());
                 for node in &workflow.nodes {
+                    web_sys::console::log_1(&format!("DEBUG: Restoring node {} (type: {:?})", node.node_id, node.node_type).into());
                     state.nodes.insert(node.node_id.clone(), node.clone());
                 }
             }
