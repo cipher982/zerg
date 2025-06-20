@@ -36,6 +36,26 @@ class ScheduleWorkflowPayload(BaseModel):
     trigger_config: dict = Field(default_factory=dict)
 
 
+@router.post("/{workflow_id}/reserve")
+async def reserve_workflow_execution(
+    workflow_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Reserve an execution ID for a workflow without starting execution.
+    This allows the frontend to subscribe to WebSocket messages before execution starts.
+    """
+    workflow = crud.get_workflow(db, workflow_id)
+    if not workflow or workflow.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    # Create execution record with "reserved" status
+    execution = crud.create_workflow_execution(db, workflow_id=workflow_id, status="reserved", triggered_by="manual")
+
+    return {"execution_id": execution.id, "status": "reserved"}
+
+
 @router.post("/{workflow_id}/start")
 async def start_workflow_execution(
     workflow_id: int,
@@ -44,13 +64,51 @@ async def start_workflow_execution(
 ):
     """
     Start a new execution of a workflow using LangGraph engine.
+    Uses the original synchronous approach.
     """
     workflow = crud.get_workflow(db, workflow_id)
     if not workflow or workflow.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    # Execute workflow with LangGraph engine
+    # Execute workflow with LangGraph engine (original approach)
     execution_id = await langgraph_workflow_engine.execute_workflow(workflow_id)
+
+    return {"execution_id": execution_id, "status": "running"}
+
+
+@router.post("/executions/{execution_id}/start")
+async def start_reserved_execution(
+    execution_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Start a previously reserved execution.
+    """
+    execution = crud.get_workflow_execution(db, execution_id)
+    if not execution or execution.workflow.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    if execution.status != "reserved":
+        raise HTTPException(status_code=400, detail="Execution is not in reserved state")
+
+    # Update status to running
+    execution.status = "running"
+    db.commit()
+
+    # Start execution asynchronously using ensure_future for proper task management
+    import asyncio
+
+    async def run_execution():
+        try:
+            await langgraph_workflow_engine.execute_workflow_with_id(execution.workflow_id, execution_id)
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.error(f"Background execution failed for execution {execution_id}: {e}")
+
+    asyncio.ensure_future(run_execution())
 
     return {"execution_id": execution_id, "status": "running"}
 
