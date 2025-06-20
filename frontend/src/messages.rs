@@ -298,6 +298,16 @@ pub enum Message {
         workflow_id: u32,
     },
 
+    /// Reserve an execution ID and subscribe to its WebSocket topic
+    ReserveWorkflowExecution {
+        workflow_id: u32,
+    },
+    
+    /// Start a previously reserved execution
+    StartReservedExecution {
+        execution_id: u32,
+    },
+
     // -------------------------------------------------------------------
     // Workflow execution streaming
     // -------------------------------------------------------------------
@@ -618,6 +628,12 @@ pub enum Command {
     // ---------------- Workflow execution -----------------------------
     /// POST /workflow-executions/{workflow_id}/start
     StartWorkflowExecutionApi { workflow_id: u32 },
+    
+    /// POST /workflow-executions/{workflow_id}/reserve
+    ReserveWorkflowExecutionApi { workflow_id: u32 },
+    
+    /// POST /workflow-executions/executions/{execution_id}/start
+    StartReservedExecutionApi { execution_id: u32 },
 
     // ---------------- Workflow scheduling -----------------------------
     /// POST /workflow-executions/{workflow_id}/schedule

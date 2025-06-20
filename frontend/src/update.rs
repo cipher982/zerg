@@ -543,7 +543,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 status: crate::state::ExecPhase::Starting,
             });
             state.execution_logs.clear();
-            commands.push(Command::StartWorkflowExecutionApi { workflow_id });
+            
+            // Use the new reserve-first approach to avoid race conditions
+            commands.push(Command::ReserveWorkflowExecutionApi { workflow_id });
 
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
@@ -554,6 +556,34 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
                     let _ = crate::components::log_drawer::refresh(&doc);
+                }
+            })));
+        }
+
+        // -------------------------------------------------------------------
+        // Reserve workflow execution – get execution ID without starting
+        // -------------------------------------------------------------------
+        Message::ReserveWorkflowExecution { workflow_id } => {
+            // This message is not used directly, as the reserve operation
+            // is handled by the ReserveWorkflowExecutionApi command
+            commands.push(Command::ReserveWorkflowExecutionApi { workflow_id });
+        }
+
+        // -------------------------------------------------------------------
+        // Start reserved execution – begin execution of previously reserved ID
+        // -------------------------------------------------------------------
+        Message::StartReservedExecution { execution_id } => {
+            // Update the execution status to running
+            if let Some(exec) = &mut state.current_execution {
+                exec.execution_id = execution_id;
+                exec.status = crate::state::ExecPhase::Running;
+            }
+            
+            commands.push(Command::StartReservedExecutionApi { execution_id });
+            
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
                 }
             })));
         }
