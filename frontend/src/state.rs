@@ -1848,6 +1848,8 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::DeleteWorkflowApi { .. } |
             cmd @ Command::RenameWorkflowApi { .. } |
             cmd @ Command::StartWorkflowExecutionApi { .. } |
+            cmd @ Command::ReserveWorkflowExecutionApi { .. } |
+            cmd @ Command::StartReservedExecutionApi { .. } |
             cmd @ Command::ScheduleWorkflowApi { .. } |
             cmd @ Command::UnscheduleWorkflowApi { .. } |
             cmd @ Command::CheckWorkflowScheduleApi { .. } => crate::command_executors::execute_fetch_command(cmd),

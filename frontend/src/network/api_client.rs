@@ -208,6 +208,29 @@ impl ApiClient {
         Self::fetch_json(&url, "POST", None).await
     }
 
+    /// Reserve an execution ID for a workflow without starting execution.
+    /// This allows the frontend to subscribe to WebSocket messages before execution starts.
+    pub async fn reserve_workflow_execution(workflow_id: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/{}/reserve",
+            Self::api_base_url(),
+            workflow_id
+        );
+
+        Self::fetch_json(&url, "POST", None).await
+    }
+
+    /// Start a previously reserved execution.
+    pub async fn start_reserved_execution(execution_id: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/executions/{}/start",
+            Self::api_base_url(),
+            execution_id
+        );
+
+        Self::fetch_json(&url, "POST", None).await
+    }
+
     // Get all agents
     pub async fn get_agents_scoped(scope: &str) -> Result<String, JsValue> {
         let url = format!("{}/api/agents?scope={}", Self::api_base_url(), scope);

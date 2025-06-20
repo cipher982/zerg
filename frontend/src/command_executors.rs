@@ -193,6 +193,50 @@ pub fn execute_fetch_command(cmd: Command) {
         }
 
         // -----------------------------------------------------------
+        // Reserve workflow execution – get execution ID and subscribe before starting
+        // -----------------------------------------------------------
+        Command::ReserveWorkflowExecutionApi { workflow_id } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::reserve_workflow_execution(workflow_id).await {
+                    Ok(json_str) => {
+                        // Expected response: { "execution_id": 123, "status": "reserved" }
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                            if let Some(exec_id_val) = val.get("execution_id") {
+                                if let Some(exec_id_u64) = exec_id_val.as_u64() {
+                                    let exec_id = exec_id_u64 as u32;
+                                    // Subscribe to the reserved execution first
+                                    crate::state::dispatch_global_message(crate::messages::Message::SubscribeWorkflowExecution { execution_id: exec_id });
+                                    // Then start the execution
+                                    crate::state::dispatch_global_message(crate::messages::Message::StartReservedExecution { execution_id: exec_id });
+                                }
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Error toast already shown by ApiClient::format_http_error
+                    }
+                }
+            });
+        }
+
+        // -----------------------------------------------------------
+        // Start reserved execution
+        // -----------------------------------------------------------  
+        Command::StartReservedExecutionApi { execution_id } => {
+            wasm_bindgen_futures::spawn_local(async move {
+                match ApiClient::start_reserved_execution(execution_id).await {
+                    Ok(_json_str) => {
+                        // Execution started successfully
+                        web_sys::console::log_1(&format!("✅ Reserved execution {} started", execution_id).into());
+                    }
+                    Err(_) => {
+                        // Error toast already shown by ApiClient::format_http_error
+                    }
+                }
+            });
+        }
+
+        // -----------------------------------------------------------
         // Workflow Scheduling commands
         // -----------------------------------------------------------
         Command::ScheduleWorkflowApi { workflow_id, cron_expression } => {
