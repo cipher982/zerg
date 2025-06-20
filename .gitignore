@@ -191,3 +191,4 @@ backend/zerg/ws_schema/
 frontend/generated/
 node_modules/
 test-results/
+e2e/*.png
