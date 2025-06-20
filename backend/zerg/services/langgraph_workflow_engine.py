@@ -65,6 +65,53 @@ class WorkflowState(TypedDict):
 class LangGraphWorkflowEngine:
     """LangGraph-based workflow execution engine."""
 
+    async def execute_workflow_with_id(
+        self, workflow_id: int, execution_id: int, trigger_type: str = "manual", trigger_config: Dict[str, Any] = None
+    ) -> None:
+        """Execute workflow using an existing execution record."""
+
+        logger.info(
+            "[LangGraphEngine] Starting execution with existing ID – workflow_id=%s execution_id=%s",
+            workflow_id,
+            execution_id,
+        )
+
+        session_factory = get_session_factory()
+
+        with session_factory() as db:
+            # Get workflow
+            workflow: Union[Workflow, None] = db.query(Workflow).filter_by(id=workflow_id, is_active=True).first()
+            if workflow is None:
+                raise ValueError("Workflow not found or inactive")
+
+            # Get existing execution record
+            execution: Union[WorkflowExecution, None] = db.query(WorkflowExecution).filter_by(id=execution_id).first()
+            if execution is None:
+                raise ValueError("Execution record not found")
+
+            try:
+                # Execute the workflow using the existing execution_id
+                await self._execute_workflow_internal(workflow, execution, db)
+            except Exception as e:
+                logger.error(f"[LangGraphEngine] Execution failed: {e}")
+                # Update execution status to failed
+                execution.status = "failed"
+                execution.finished_at = datetime.now(timezone.utc)
+                execution.error = str(e)
+                db.commit()
+
+                # Publish failure event
+                await event_bus.publish(
+                    EventType.EXECUTION_FINISHED,
+                    {
+                        "execution_id": execution.id,
+                        "status": "failed",
+                        "error": str(e),
+                        "duration_ms": int((execution.finished_at - execution.started_at).total_seconds() * 1000),
+                    },
+                )
+                raise
+
     async def execute_workflow(
         self, workflow_id: int, trigger_type: str = "manual", trigger_config: Dict[str, Any] = None
     ) -> int:
@@ -91,88 +138,8 @@ class LangGraphWorkflowEngine:
             db.commit()
 
             try:
-                # Use checkpointer context manager
-                # TODO: Fix for proper SQLite checkpointing
-                checkpointer = MemorySaver()
-                # async with AsyncSqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
-                # Build LangGraph from canvas_data
-                graph = self._build_langgraph(workflow.canvas_data, execution.id, checkpointer)
-
-                # Execute the graph with checkpointing
-                initial_state = WorkflowState(
-                    execution_id=execution.id,
-                    node_outputs={},
-                    completed_nodes=[],
-                    error=None,
-                )
-
-                # Use thread_id for checkpoint isolation
-                config = {"configurable": {"thread_id": f"workflow_{execution.id}"}}
-
-                # Stream execution for real-time updates
-                final_state = None
-                node_count = 0
-                chunk_count = 0
-
-                logger.info(f"[LangGraphEngine] Starting streaming execution – workflow_id={workflow_id}")
-                logger.info(f"[LangGraphEngine] Initial state: {initial_state}")
-                logger.info(f"[LangGraphEngine] LangGraph config: {config}")
-
-                async for chunk in graph.astream(initial_state, config):
-                    chunk_count += 1
-                    logger.info(f"[LangGraphEngine] Received chunk #{chunk_count}: {chunk}")
-
-                    # Each chunk contains state updates as nodes complete
-                    # LangGraph returns chunks with node_id as key: {'node_id': {'completed_nodes': [...], 'node_outputs': {...}}}
-                    if chunk:
-                        # Process each node's state update in the chunk
-                        for node_id, state_update in chunk.items():
-                            if isinstance(state_update, dict):
-                                logger.info(
-                                    f"[LangGraphEngine] Processing state update from node {node_id}: {state_update}"
-                                )
-                                final_state = state_update
-                                current_completed = len(state_update.get("completed_nodes", []))
-
-                                # Log progress for new completed nodes
-                                if current_completed > node_count:
-                                    newly_completed = current_completed - node_count
-                                    node_count = current_completed
-                                    logger.info(
-                                        f"[LangGraphEngine] Progress update: {newly_completed} new nodes "
-                                        f"completed ({node_count} total)"
-                                    )
-                                    completed_nodes = state_update.get("completed_nodes", [])
-                                    if newly_completed > 0 and len(completed_nodes) >= newly_completed:
-                                        newly_completed_nodes = completed_nodes[-newly_completed:]
-                                        logger.info(f"[LangGraphEngine] Newly completed nodes: {newly_completed_nodes}")
-
-                                # Publish streaming progress event
-                                self._publish_streaming_progress(
-                                    execution_id=execution.id,
-                                    completed_nodes=state_update.get("completed_nodes", []),
-                                    node_outputs=state_update.get("node_outputs", {}),
-                                    error=state_update.get("error"),
-                                )
-                    else:
-                        logger.warning(f"[LangGraphEngine] Received empty chunk #{chunk_count}")
-
-                logger.info(f"[LangGraphEngine] Streaming completed after {chunk_count} chunks")
-
-                # Log completion summary
-                completed_count = len(final_state.get("completed_nodes", [])) if final_state else 0
-                logger.info(f"[LangGraphEngine] Streaming execution completed – {completed_count} nodes executed")
-
-                # Mark as successful
-                execution.status = "success"
-                execution.finished_at = datetime.now(timezone.utc)
-                db.commit()
-
-                self._publish_execution_finished(
-                    execution_id=execution.id, status="success", error=None, duration_ms=self._duration_ms(execution)
-                )
-
-                logger.info("[LangGraphEngine] Execution completed – execution_id=%s", execution.id)
+                # Execute the workflow using the execution record
+                await self._execute_workflow_internal(workflow, execution, db)
                 return execution.id
 
             except Exception as e:
@@ -188,6 +155,90 @@ class LangGraphWorkflowEngine:
 
                 logger.exception("[LangGraphEngine] Execution failed – execution_id=%s", execution.id)
                 raise
+
+    async def _execute_workflow_internal(self, workflow: Workflow, execution: WorkflowExecution, db) -> None:
+        """Internal method to execute workflow with existing execution record."""
+        # Use checkpointer context manager
+        # TODO: Fix for proper SQLite checkpointing
+        checkpointer = MemorySaver()
+        # async with AsyncSqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
+        # Build LangGraph from canvas_data
+        graph = self._build_langgraph(workflow.canvas_data, execution.id, checkpointer)
+
+        # Execute the graph with checkpointing
+        initial_state = WorkflowState(
+            execution_id=execution.id,
+            node_outputs={},
+            completed_nodes=[],
+            error=None,
+        )
+
+        # Use thread_id for checkpoint isolation
+        config = {"configurable": {"thread_id": f"workflow_{execution.id}"}}
+
+        # Stream execution for real-time updates
+        final_state = None
+        node_count = 0
+        chunk_count = 0
+
+        logger.info(f"[LangGraphEngine] Starting streaming execution – workflow_id={workflow.id}")
+        logger.info(f"[LangGraphEngine] Initial state: {initial_state}")
+        logger.info(f"[LangGraphEngine] LangGraph config: {config}")
+
+        async for chunk in graph.astream(initial_state, config):
+            chunk_count += 1
+            logger.info(f"[LangGraphEngine] Received chunk #{chunk_count}: {chunk}")
+
+            # Each chunk contains state updates as nodes complete.
+            # LangGraph returns chunks in the form:
+            # {'node_id': {'completed_nodes': [...], 'node_outputs': {...}}}
+            if chunk:
+                # Process each node's state update in the chunk
+                for node_id, state_update in chunk.items():
+                    if isinstance(state_update, dict):
+                        logger.info(f"[LangGraphEngine] Processing state update from node {node_id}: {state_update}")
+                        final_state = state_update
+                        current_completed = len(state_update.get("completed_nodes", []))
+
+                        # Log progress for new completed nodes
+                        if current_completed > node_count:
+                            newly_completed = current_completed - node_count
+                            node_count = current_completed
+                            logger.info(
+                                f"[LangGraphEngine] Progress update: {newly_completed} new nodes "
+                                f"completed ({node_count} total)"
+                            )
+                            completed_nodes = state_update.get("completed_nodes", [])
+                            if newly_completed > 0 and len(completed_nodes) >= newly_completed:
+                                newly_completed_nodes = completed_nodes[-newly_completed:]
+                                logger.info(f"[LangGraphEngine] Newly completed nodes: {newly_completed_nodes}")
+
+                        # Publish streaming progress event
+                        self._publish_streaming_progress(
+                            execution_id=execution.id,
+                            completed_nodes=state_update.get("completed_nodes", []),
+                            node_outputs=state_update.get("node_outputs", {}),
+                            error=state_update.get("error"),
+                        )
+            else:
+                logger.warning(f"[LangGraphEngine] Received empty chunk #{chunk_count}")
+
+        logger.info(f"[LangGraphEngine] Streaming completed after {chunk_count} chunks")
+
+        # Log completion summary
+        completed_count = len(final_state.get("completed_nodes", [])) if final_state else 0
+        logger.info(f"[LangGraphEngine] Streaming execution completed – {completed_count} nodes executed")
+
+        # Mark as successful
+        execution.status = "success"
+        execution.finished_at = datetime.now(timezone.utc)
+        db.commit()
+
+        self._publish_execution_finished(
+            execution_id=execution.id, status="success", error=None, duration_ms=self._duration_ms(execution)
+        )
+
+        logger.info("[LangGraphEngine] Execution completed – execution_id=%s", execution.id)
 
     def _build_langgraph(self, canvas_data: Dict[str, Any], execution_id: int, checkpointer) -> StateGraph:
         """Convert canvas_data to LangGraph StateGraph."""
@@ -212,7 +263,14 @@ class LangGraphWorkflowEngine:
         # Add only connected nodes to the graph
         for node in connected_nodes:
             node_id = str(node.get("node_id", "unknown"))
-            node_type = str(node.get("node_type", "unknown")).lower()
+            node_type_raw = node.get("node_type", "unknown")
+            # Handle both string and dict formats for node_type
+            if isinstance(node_type_raw, dict):
+                # Frontend sends {"Trigger": {...}} or {"Tool": {...}} format
+                node_type = list(node_type_raw.keys())[0].lower() if node_type_raw else "unknown"
+            else:
+                # Fallback for string format
+                node_type = str(node_type_raw).lower()
 
             logger.info(f"[LangGraphEngine] Processing node: {node_id} (type={node_type})")
             logger.info(f"[LangGraphEngine] Full node data: {node}")
@@ -307,7 +365,15 @@ class LangGraphWorkflowEngine:
         non_trigger_nodes = []
 
         for node in nodes:
-            node_type = str(node.get("node_type", "")).lower()
+            node_type_raw = node.get("node_type", "")
+            # Handle both string and dict formats for node_type
+            if isinstance(node_type_raw, dict):
+                # Frontend sends {"Trigger": {...}} format
+                node_type = list(node_type_raw.keys())[0].lower() if node_type_raw else ""
+            else:
+                # Fallback for string format
+                node_type = str(node_type_raw).lower()
+
             if node_type == "trigger":
                 trigger_nodes.append(node)
             else:
@@ -361,7 +427,14 @@ class LangGraphWorkflowEngine:
         """Get the type of a node by its ID."""
         for node in self._current_nodes:
             if str(node.get("node_id", "")) == node_id:
-                return str(node.get("node_type", "unknown")).lower()
+                node_type_raw = node.get("node_type", "unknown")
+                # Handle both string and dict formats for node_type
+                if isinstance(node_type_raw, dict):
+                    # Frontend sends {"Trigger": {...}} format
+                    return list(node_type_raw.keys())[0].lower() if node_type_raw else "unknown"
+                else:
+                    # Fallback for string format
+                    return str(node_type_raw).lower()
         return "unknown"
 
     def _has_outgoing_tool_connections(self, node_id: str) -> bool:
@@ -391,8 +464,21 @@ class LangGraphWorkflowEngine:
 
         async def tool_node(state: WorkflowState) -> WorkflowState:
             node_id = str(node_config.get("node_id", "unknown"))
-            tool_name = node_config.get("tool_name") or node_config.get("name", "")
-            tool_params = node_config.get("parameters", {})
+
+            # Extract tool name from node_type structure or fallback fields
+            tool_name = ""
+            tool_params = {}
+
+            node_type_raw = node_config.get("node_type", {})
+            if isinstance(node_type_raw, dict) and "Tool" in node_type_raw:
+                # Frontend sends {"Tool": {"tool_name": "...", "config": {...}}} format
+                tool_info = node_type_raw["Tool"]
+                tool_name = tool_info.get("tool_name", "")
+                tool_params = tool_info.get("config", {}).get("static_params", {})
+            else:
+                # Fallback for other formats
+                tool_name = node_config.get("tool_name") or node_config.get("name", "")
+                tool_params = node_config.get("parameters", {})
 
             # Check if this tool node has incoming connections from agents
             connected_agent_ids = self._get_connected_agent_ids(node_id)
@@ -479,7 +565,10 @@ class LangGraphWorkflowEngine:
             agent_id = node_config.get("agent_id")
 
             logger.info(
-                f"[AgentNode] Starting execution – node_id={node_id}, agent_id={agent_id}, execution_id={state['execution_id']}"
+                (
+                    f"[AgentNode] Starting execution – node_id={node_id}, agent_id={agent_id}, "
+                    f"execution_id={state['execution_id']}"
+                )
             )
             logger.info(f"[AgentNode] Full node_config: {node_config}")
 
@@ -536,7 +625,10 @@ class LangGraphWorkflowEngine:
 
                     for i, msg in enumerate(created_messages):
                         logger.info(
-                            f"[AgentNode] Message {i}: role={msg.role}, content_length={len(msg.content) if hasattr(msg, 'content') else 0}"
+                            (
+                                f"[AgentNode] Message {i}: role={msg.role}, "
+                                f"content_length={len(msg.content) if hasattr(msg, 'content') else 0}"
+                            )
                         )
 
                     assistant_messages = [msg for msg in created_messages if msg.role == "assistant"]
