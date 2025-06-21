@@ -13,22 +13,9 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             true
         }
         Message::CreateAgentWithDetails { name, agent_id, system_instructions: _system_instructions, task_instructions: _task_instructions } => {
-            // Calculate center position for the new agent
-            let viewport_width = if state.canvas_width > 0.0 { state.canvas_width } else { 800.0 };
-            let viewport_height = if state.canvas_height > 0.0 { state.canvas_height } else { 600.0 };
-
-            let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - crate::constants::DEFAULT_NODE_WIDTH / 2.0;
-            let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - crate::constants::DEFAULT_NODE_HEIGHT / 2.0;
-
-            // Create and add the node via the new helper that keeps the
-            // agent<->node mapping up-to-date.
-            let node_id = state.add_agent_node(*agent_id, name.to_string(), x, y);
-
-            // Log the new node ID - make it clear this is a visual node representing an agent
-            web_sys::console::log_1(&format!("Created visual node with ID: {} for agent {}", node_id, agent_id).into());
-
-            // Draw the nodes on canvas
-            state.mark_dirty();
+            // DO NOT automatically create canvas nodes for dashboard-created agents
+            // Users should drag them from the shelf to the canvas when needed
+            web_sys::console::log_1(&format!("Agent {} created - available in shelf for dragging to canvas", name).into());
 
             // After creating the agent, immediately create a default thread
             commands.push(Command::SendMessage(crate::messages::Message::CreateThread(*agent_id, crate::constants::DEFAULT_THREAD_TITLE.to_string())));

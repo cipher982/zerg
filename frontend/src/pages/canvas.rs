@@ -83,6 +83,10 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
         web_sys::console::error_1(&format!("Failed to initialize workflow switcher: {:?}", e).into());
     }
     
+    // Initialize the execution results panel
+    web_sys::console::log_1(&"CANVAS: Initializing execution results panel".into());
+    // Removed execution results panel initialization.
+    
     // Initialize the particle system for the canvas background via message dispatch
     crate::state::dispatch_global_message(crate::messages::Message::InitializeParticleSystem {
         width: crate::state::APP_STATE.with(|state| state.borrow().canvas_width),
@@ -92,13 +96,88 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     web_sys::console::log_1(&"CANVAS: Setup canvas drawing (no state borrowed)".into());
 
     // ------------------------------------------------------------------
-    // Diagnostics – log how many nodes are currently in APP_STATE so we can
-    // confirm whether layout hydration happened before the canvas mounts.
+    // Auto-place trigger node if canvas is empty (with delay to ensure canvas setup is complete)
     // ------------------------------------------------------------------
-    crate::state::APP_STATE.with(|s| {
+    let should_add_trigger = crate::state::APP_STATE.with(|s| {
         let st = s.borrow();
         web_sys::console::log_1(&format!("CANVAS: nodes in state = {}", st.nodes.len()).into());
+        
+        // Check if there's already a trigger node
+        let has_trigger = st.nodes.values().any(|node| {
+            matches!(node.node_type, crate::models::NodeType::Trigger { .. })
+        });
+        
+        !has_trigger
     });
+    
+    if should_add_trigger {
+        web_sys::console::log_1(&"CANVAS: Scheduling trigger node creation".into());
+        
+        // Use setTimeout to ensure canvas is fully rendered before adding trigger node
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+        
+        let closure = Closure::wrap(Box::new(move || {
+            web_sys::console::log_1(&"CANVAS: Adding delayed trigger node".into());
+            
+            // Double-check we still need a trigger node
+            let still_need_trigger = crate::state::APP_STATE.with(|s| {
+                let st = s.borrow();
+                !st.nodes.values().any(|node| {
+                    matches!(node.node_type, crate::models::NodeType::Trigger { .. })
+                })
+            });
+            
+            if still_need_trigger {
+                // Calculate position: top 1/3, center of viewport
+                let (trigger_x, trigger_y) = crate::state::APP_STATE.with(|s| {
+                    let st = s.borrow();
+                    let viewport_width = if st.canvas_width > 0.0 { st.canvas_width } else { 800.0 };
+                    let viewport_height = if st.canvas_height > 0.0 { st.canvas_height } else { 600.0 };
+                    
+                    let x = st.viewport_x + (viewport_width / st.zoom_level) / 2.0 - 100.0; // Center horizontally
+                    let y = st.viewport_y + (viewport_height / st.zoom_level) / 3.0 - 40.0;  // Top 1/3
+                    (x, y)
+                });
+                
+                // Create default manual trigger node
+                use crate::models::{NodeType, TriggerType, TriggerConfig};
+                let trigger_config = TriggerConfig {
+                    params: std::collections::HashMap::new(),
+                    enabled: true,
+                    filters: Vec::new(),
+                };
+                
+                let trigger_node_type = NodeType::Trigger {
+                    trigger_type: TriggerType::Manual,
+                    config: trigger_config,
+                };
+                
+                crate::state::dispatch_global_message(crate::messages::Message::AddNode {
+                    text: "▶ Start".to_string(),
+                    x: trigger_x,
+                    y: trigger_y,
+                    node_type: trigger_node_type,
+                });
+                
+                web_sys::console::log_1(&"CANVAS: Trigger node created successfully".into());
+            } else {
+                web_sys::console::log_1(&"CANVAS: Trigger node already exists, skipping".into());
+            }
+        }) as Box<dyn FnMut()>);
+        
+        // Schedule for next tick to allow canvas to stabilize
+        web_sys::window()
+            .unwrap()
+            .set_timeout_with_callback_and_timeout_and_arguments(
+                closure.as_ref().unchecked_ref(),
+                100, // 100ms delay
+                &js_sys::Array::new(),
+            )
+            .expect("Failed to set timeout");
+        
+        closure.forget(); // Important: prevent closure from being dropped
+    }
     // Set up canvas resizing and drawing (without borrowing APP_STATE)
     if let Some(canvas_elem) = document.get_element_by_id("node-canvas") {
         if let Ok(canvas) = canvas_elem.dyn_into::<web_sys::HtmlCanvasElement>() {
@@ -111,6 +190,62 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     
     web_sys::console::log_1(&"CANVAS: Mount complete".into());
     Ok(())
+}
+
+/// Ensure a trigger node exists in the current canvas state
+/// This function should be called every time the canvas view is activated
+pub fn ensure_trigger_node_exists() {
+    web_sys::console::log_1(&"CANVAS: Checking for trigger node".into());
+    
+    let should_add_trigger = crate::state::APP_STATE.with(|s| {
+        let st = s.borrow();
+        web_sys::console::log_1(&format!("CANVAS: nodes in state = {}", st.nodes.len()).into());
+        
+        // Check if there's already a trigger node
+        let has_trigger = st.nodes.values().any(|node| {
+            matches!(node.node_type, crate::models::NodeType::Trigger { .. })
+        });
+        
+        web_sys::console::log_1(&format!("CANVAS: has trigger node = {}", has_trigger).into());
+        !has_trigger
+    });
+    
+    if should_add_trigger {
+        web_sys::console::log_1(&"CANVAS: Adding default trigger node".into());
+        
+        // Calculate position: top 1/3, center of viewport
+        let (trigger_x, trigger_y) = crate::state::APP_STATE.with(|s| {
+            let st = s.borrow();
+            let viewport_width = if st.canvas_width > 0.0 { st.canvas_width } else { 800.0 };
+            let viewport_height = if st.canvas_height > 0.0 { st.canvas_height } else { 600.0 };
+            
+            let x = st.viewport_x + (viewport_width / st.zoom_level) / 2.0 - 100.0; // Center horizontally
+            let y = st.viewport_y + (viewport_height / st.zoom_level) / 3.0 - 40.0;  // Top 1/3
+            (x, y)
+        });
+        
+        // Create default manual trigger node
+        use crate::models::{NodeType, TriggerType, TriggerConfig};
+        let trigger_config = TriggerConfig {
+            params: std::collections::HashMap::new(),
+            enabled: true,
+            filters: Vec::new(),
+        };
+        
+        let trigger_node_type = NodeType::Trigger {
+            trigger_type: TriggerType::Manual,
+            config: trigger_config,
+        };
+        
+        crate::state::dispatch_global_message(crate::messages::Message::AddNode {
+            text: "▶ Start".to_string(),
+            x: trigger_x,
+            y: trigger_y,
+            node_type: trigger_node_type,
+        });
+    } else {
+        web_sys::console::log_1(&"CANVAS: Trigger node already exists, skipping creation".into());
+    }
 }
 
 /// Unmount the canvas view by removing it from the DOM

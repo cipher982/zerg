@@ -811,6 +811,25 @@ def get_workflow_executions(db: Session, workflow_id: int, skip: int = 0, limit:
     return db.query(WorkflowExecution).filter_by(workflow_id=workflow_id).offset(skip).limit(limit).all()
 
 
+def create_workflow_execution(db: Session, *, workflow_id: int, status: str = "running", triggered_by: str = "manual"):
+    """Create a new workflow execution record."""
+    from datetime import datetime
+    from datetime import timezone
+
+    from zerg.models.models import WorkflowExecution
+
+    execution = WorkflowExecution(
+        workflow_id=workflow_id,
+        status=status,
+        started_at=datetime.now(timezone.utc),
+        triggered_by=triggered_by,
+    )
+    db.add(execution)
+    db.commit()
+    db.refresh(execution)
+    return execution
+
+
 # -------------------------------------------------------------------
 # Workflow Template CRUD operations
 # -------------------------------------------------------------------

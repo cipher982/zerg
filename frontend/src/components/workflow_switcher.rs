@@ -22,15 +22,16 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     bar_el.set_attribute("id", "workflow-bar")?;
     bar_el.set_attribute("class", "workflow-bar")?;
 
-    // Inject run-button CSS once
-    if document.get_element_by_id("run-btn-style").is_none() {
+    // Inject toolbar button CSS once
+    if document.get_element_by_id("toolbar-btn-style").is_none() {
         let style_el = document.create_element("style")?;
-        style_el.set_attribute("id", "run-btn-style")?;
+        style_el.set_attribute("id", "toolbar-btn-style")?;
         style_el.set_text_content(Some(r#"
 .run-btn.running{pointer-events:none;animation:spin 1s linear infinite;}
 .run-btn.success{color:#6bff92;}
 .run-btn.failed{color:#ff4e4e;}
 @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
+.toolbar-btn.active{background-color:#3b82f6;color:white;box-shadow:0 0 10px rgba(59, 130, 246, 0.5);}
 "#));
         document.body().unwrap().append_child(&style_el)?;
     }
@@ -144,6 +145,22 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
         cb.forget();
     }
     actions_el.append_child(&center_btn)?;
+
+    // Connection mode toggle button
+    let connect_btn = document.create_element("button")?;
+    connect_btn.set_attribute("type", "button")?;
+    connect_btn.set_inner_html("🔗");
+    connect_btn.set_attribute("class", "toolbar-btn")?;
+    connect_btn.set_attribute("id", "connection-mode-btn")?;
+    connect_btn.set_attribute("title", "Toggle Connection Mode")?;
+    {
+        let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+            dispatch_global_message(Message::ToggleConnectionMode);
+        }));
+        connect_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+        cb.forget();
+    }
+    actions_el.append_child(&connect_btn)?;
 
     // Template Gallery button 📋
     let gallery_btn = document.create_element("button")?;
@@ -283,7 +300,6 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     {
         let dropdown_menu_clone = dropdown_menu.clone();
         let dropdown_toggle_clone = dropdown_toggle.clone();
-        let doc_clone = document.clone();
 
         let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |e: web_sys::MouseEvent| {
             e.stop_propagation();
@@ -345,44 +361,26 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     }
 
     bar_el.append_child(&list_el)?;
-    bar_el.append_child(&actions_el);
+    bar_el.append_child(&actions_el)?;
 
-    // Insert bar into the main content area of the canvas layout
-    // Try multiple locations in order of preference
-    if let Some(main_content) = document.get_element_by_id("main-content-area") {
-        web_sys::console::log_1(&"WORKFLOW_SWITCHER: Inserting into main-content-area".into());
-        // Insert at the top of main content area, before canvas container
-        main_content.insert_before(&bar_el, main_content.first_child().as_ref())?;
-    } else if let Some(app_container) = document.get_element_by_id("app-container") {
-        web_sys::console::log_1(&"WORKFLOW_SWITCHER: Fallback - inserting into app-container".into());
-        // Create main-content-area if it doesn't exist and we're in canvas view
-        if app_container.class_list().contains("canvas-view") {
-            let main_content = document.create_element("div")?;
-            main_content.set_id("main-content-area");
-            main_content.set_class_name("main-content-area");
-            
-            // Move existing children to main content area
-            while let Some(child) = app_container.first_child() {
-                if let Some(element) = child.dyn_ref::<web_sys::Element>() {
-                    // Don't move the agent shelf
-                    if element.id() == "agent-shelf" {
-                        break;
-                    }
-                }
-                main_content.append_child(&child)?;
-            }
-            
-            app_container.append_child(&main_content)?;
-            main_content.insert_before(&bar_el, main_content.first_child().as_ref())?;
-        } else {
-            // Not in canvas view, use old behavior
-            app_container.insert_before(&bar_el, app_container.first_child().as_ref())?;
-        }
-    } else {
-        web_sys::console::log_1(&"WORKFLOW_SWITCHER: Last resort - inserting into body".into());
-        // Last resort fallback
-        document.body().unwrap().append_child(&bar_el)?;
-    }
+    // ------------------------------------------------------------------
+    // Deterministic insertion: the canvas page **must** have already
+    // created <div id="main-content-area">.  If it is missing we surface
+    // an error instead of silently falling back to other containers.
+    // ------------------------------------------------------------------
+
+    debug_assert!(
+        document.get_element_by_id("main-content-area").is_some(),
+        "Canvas layout must initialise main-content-area before workflow_switcher::init() is called",
+    );
+
+    let main_content = document
+        .get_element_by_id("main-content-area")
+        .ok_or_else(|| JsValue::from_str("main-content-area missing – canvas layout not initialised"))?;
+
+    // Insert the bar at the very top of the main content column.
+    web_sys::console::log_1(&"WORKFLOW_SWITCHER: Inserting into main-content-area".into());
+    main_content.insert_before(&bar_el, main_content.first_child().as_ref())?;
 
     refresh(document)?;
 
@@ -391,6 +389,12 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
 
 /// Rebuild the tab list from current AppState
 pub fn refresh(document: &Document) -> Result<(), JsValue> {
+    // Only refresh workflow bar if we're in canvas view (main-content-area exists)
+    if document.get_element_by_id("main-content-area").is_none() {
+        // Not in canvas view, skip workflow bar refresh
+        return Ok(());
+    }
+    
     // Make sure workflow bar is initialized first
     let workflow_bar = match document.get_element_by_id("workflow-bar") {
         Some(bar) => bar,
@@ -475,6 +479,7 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
 /// Adds one of: `running`, `success`, `failed` or removes all for idle.
 pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
     use crate::state::{APP_STATE, ExecPhase};
+    use crate::models::NodeExecStatus;
 
     if let Some(btn) = document.get_element_by_id("run-workflow-btn") {
         let class_list = btn.class_list();
@@ -482,20 +487,49 @@ pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
         let _ = class_list.remove_1("success");
         let _ = class_list.remove_1("failed");
 
-        let phase_opt = APP_STATE.with(|st| st.borrow().current_execution.clone().map(|e| e.status));
+        let (phase_opt, progress_info) = APP_STATE.with(|st| {
+            let state = st.borrow();
+            let phase = state.current_execution.clone().map(|e| e.status);
+            
+            // Count node progress for enhanced feedback
+            let total_nodes = state.nodes.len();
+            let running_nodes = state.nodes.values().filter(|n| n.exec_status == Some(NodeExecStatus::Running)).count();
+            let completed_nodes = state.nodes.values().filter(|n| matches!(n.exec_status, Some(NodeExecStatus::Success) | Some(NodeExecStatus::Failed))).count();
+            
+            (phase, (total_nodes, running_nodes, completed_nodes))
+        });
+
+        let (total_nodes, running_nodes, completed_nodes) = progress_info;
 
         if let Some(phase) = phase_opt {
             match phase {
                 ExecPhase::Running | ExecPhase::Starting => {
                     let _ = class_list.add_1("running");
+                    
+                    // Update button text with progress
+                    if total_nodes > 0 {
+                        let progress_text = if running_nodes > 0 {
+                            format!("▶︎ Running... ({}/{})", completed_nodes, total_nodes)
+                        } else {
+                            "▶︎ Starting...".to_string()
+                        };
+                        btn.set_inner_html(&progress_text);
+                    } else {
+                        btn.set_inner_html("▶︎ Running...");
+                    }
                 }
                 ExecPhase::Success => {
                     let _ = class_list.add_1("success");
+                    btn.set_inner_html("✅ Complete");
                 }
                 ExecPhase::Failed => {
                     let _ = class_list.add_1("failed");
+                    btn.set_inner_html("❌ Failed");
                 }
             }
+        } else {
+            // Reset to default state
+            btn.set_inner_html("▶︎ Run");
         }
     }
 
@@ -696,4 +730,20 @@ fn show_schedule_modal(workflow_id: u32) {
             let _ = html_input.focus();
         }
     }
+}
+
+/// Update connection mode button visual state
+pub fn update_connection_button(document: &Document) -> Result<(), JsValue> {
+    if let Some(btn) = document.get_element_by_id("connection-mode-btn") {
+        let is_active = APP_STATE.with(|state| state.borrow().connection_mode);
+        
+        if is_active {
+            btn.set_attribute("class", "toolbar-btn active")?;
+            btn.set_attribute("title", "Exit Connection Mode (Click nodes to connect them)")?;
+        } else {
+            btn.set_attribute("class", "toolbar-btn")?;
+            btn.set_attribute("title", "Toggle Connection Mode")?;
+        }
+    }
+    Ok(())
 }

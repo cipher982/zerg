@@ -548,12 +548,10 @@ fn initialize_data_loading() {
             }
         }); // The borrow is dropped when this block ends
         
-        // Create a default workflow if none exists
+        // Canvas workflow will be loaded when user switches to Canvas tab
         state::APP_STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            if state.workflows.is_empty() {
-                state.create_workflow("Default Workflow".to_string());
-            }
+            let state = state.borrow();
+            // No need for default workflow creation - backend handles this
             
             // If we have an agent selected in chat view, load their threads
             if state.active_view == storage::ActiveView::ChatView {
@@ -655,4 +653,45 @@ fn setup_auto_save_timer(interval_ms: i32) -> Result<(), JsValue> {
     auto_save_callback.forget();
     
     Ok(())
+}
+
+// Debug helpers for e2e tests - expose app state info
+use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+pub fn debug_get_node_count() -> usize {
+    crate::state::APP_STATE.with(|state| {
+        let state_ref = state.borrow();
+        let count = state_ref.nodes.len();
+        web_sys::console::log_1(&format!("debug_get_node_count: found {} nodes", count).into());
+        
+        // Log all node IDs for debugging
+        let node_ids: Vec<String> = state_ref.nodes.keys().cloned().collect();
+        web_sys::console::log_1(&format!("debug_get_node_count: node IDs = {:?}", node_ids).into());
+        
+        count
+    })
+}
+
+#[wasm_bindgen]
+pub fn debug_has_trigger_node() -> bool {
+    crate::state::APP_STATE.with(|state| {
+        state.borrow().nodes.values().any(|node| {
+            matches!(node.node_type, crate::models::NodeType::Trigger { .. })
+        })
+    })
+}
+
+#[wasm_bindgen]
+pub fn debug_get_trigger_node_info() -> String {
+    crate::state::APP_STATE.with(|state| {
+        let state = state.borrow();
+        for node in state.nodes.values() {
+            if let crate::models::NodeType::Trigger { trigger_type, .. } = &node.node_type {
+                return format!("{{\"id\":\"{}\",\"text\":\"{}\",\"x\":{},\"y\":{},\"trigger_type\":\"{:?}\"}}", 
+                    node.node_id, node.text, node.x, node.y, trigger_type);
+            }
+        }
+        "null".to_string()
+    })
 }

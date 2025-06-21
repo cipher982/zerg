@@ -14,8 +14,8 @@ from typing import Dict
 from apscheduler.triggers.cron import CronTrigger
 from zerg.crud import crud
 from zerg.database import get_session_factory
+from zerg.services.langgraph_workflow_engine import langgraph_workflow_engine
 from zerg.services.scheduler_service import scheduler_service
-from zerg.services.workflow_engine import workflow_execution_engine
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ class WorkflowScheduler:
         try:
             # Add trigger context to indicate this is a scheduled execution
             # This allows the workflow engine to track the execution source
-            execution_id = await workflow_execution_engine.execute_workflow(
+            execution_id = await langgraph_workflow_engine.execute_workflow(
                 workflow_id, trigger_type="schedule", trigger_config=trigger_config
             )
 

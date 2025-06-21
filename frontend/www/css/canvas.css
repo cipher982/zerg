@@ -4,35 +4,20 @@
 
 
 /* ------------------------------------------------------------------ */
-/* Root container – in the refactor each view got its *own* root id.    */
-/* We mirror the old #app-container styles for #canvas-root so the flex */
-/* behaviour (fill viewport, below header) is restored.                */
+/* Root container – unified styles for app-container and canvas-root    */
 /* ------------------------------------------------------------------ */
 
-#app-container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  padding-top: 108px; /* header + tabs */
-  box-sizing: border-box;
-  /* Changed from hidden → visible to prevent popover clipping */
-  overflow: visible;
-}
-
-#app-container.canvas-view {
-  flex-direction: row;
-}
-
+#app-container,
 #canvas-root {
   display: flex;
   flex-direction: column;
   height: 100vh;
   padding-top: 108px; /* header (60) + tabs (48) */
   box-sizing: border-box;
-  /* Same change – avoid clipping dropdown */
-  overflow: visible;
+  overflow: visible; /* Allow dropdowns to escape stacking context */
 }
 
+#app-container.canvas-view,
 #canvas-root.canvas-view {
   flex-direction: row;
 }
@@ -41,8 +26,6 @@
   flex: 1;
   min-height: 0;
   display: flex;
-  /* overflow: hidden;  Removed to allow dropdowns to escape stacking context */
-  /* Dark neutral surface – previously light grey created unwanted white box */
   background: var(--dark-lighter);
   position: relative;
   padding: 0;
@@ -58,7 +41,6 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  /* overflow: hidden;  Removed to allow dropdowns to escape stacking context */
 }
 
 /* Light grid overlay */
@@ -132,14 +114,13 @@
 #workflow-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   height: 40px;
   background: var(--dark-card);
   border-bottom: 1px solid var(--border-color);
   padding: 0 var(--spacing-md);
   overflow-x: auto;
   flex-shrink: 0;
-  /* Sit above the canvas itself so dropdowns are never occluded */
   position: relative;
   z-index: var(--z-toolbar);
 }
@@ -206,7 +187,7 @@ body.space-pan #node-canvas {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: 16px;
+  margin-left: auto;
 }
 
 .toolbar-btn {
