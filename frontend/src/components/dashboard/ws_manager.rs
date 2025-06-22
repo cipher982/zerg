@@ -138,6 +138,39 @@ impl DashboardWsManager {
                     return; // handled
                 }
 
+                Ok(WsMessage::ExecutionFinished { data }) => {
+                    crate::state::dispatch_global_message(
+                        crate::messages::Message::ExecutionFinished {
+                            execution_id: data.execution_id,
+                            status: data.status.clone(),
+                            error: data.error.clone(),
+                        },
+                    );
+                    return; // handled
+                }
+
+                Ok(WsMessage::NodeState { data }) => {
+                    crate::state::dispatch_global_message(
+                        crate::messages::Message::UpdateNodeStatus {
+                            node_id: data.node_id.clone(),
+                            status: data.status.clone(),
+                        },
+                    );
+                    return; // handled
+                }
+
+                Ok(WsMessage::NodeLog { data }) => {
+                    crate::state::dispatch_global_message(
+                        crate::messages::Message::AppendExecutionLog {
+                            execution_id: data.execution_id,
+                            node_id: data.node_id.clone(),
+                            stream: data.stream.clone(),
+                            text: data.text.clone(),
+                        },
+                    );
+                    return; // handled
+                }
+
                 _ => {
                     web_sys::console::warn_1(&"DashboardWsManager: unhandled WS message".into());
                 }

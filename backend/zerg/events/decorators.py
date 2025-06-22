@@ -1,6 +1,7 @@
 """Decorators for event handling."""
 
 import functools
+from datetime import datetime
 from typing import Any
 from typing import Callable
 
@@ -28,7 +29,13 @@ def publish_event(event_type: EventType):
                 # Convert result to dict if it's a model
                 if hasattr(result, "__table__"):
                     # For SQLAlchemy models
-                    event_data = {column.name: getattr(result, column.name) for column in result.__table__.columns}
+                    event_data = {}
+                    for column in result.__table__.columns:
+                        value = getattr(result, column.name)
+                        # Convert datetime objects to ISO string for JSON serialization
+                        if isinstance(value, datetime):
+                            value = value.isoformat()
+                        event_data[column.name] = value
                 elif hasattr(result, "dict"):
                     # For Pydantic models
                     event_data = result.dict()
