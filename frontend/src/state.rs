@@ -12,6 +12,7 @@ use crate::models::{
     ApiThread,
     ApiThreadMessage,
     Trigger,
+    CanvasNode,
 };
 use crate::models::ApiAgentRun;
 
@@ -25,7 +26,7 @@ use crate::messages::{Message, Command};
 //  Workflow execution helper structs (UI state only)
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum ExecPhase {
     Starting,
     Running,
@@ -261,6 +262,17 @@ pub struct AppState {
     pub clicked_node_id: Option<String>,
     // Flag to track if we're dragging an agent
     pub is_dragging_agent: bool,
+    // Connection creation mode
+    pub connection_mode: bool,
+    pub connection_source_node: Option<String>,
+    // Connection handle dragging
+    pub connection_drag_active: bool,
+    pub connection_drag_start: Option<(String, String)>, // (node_id, handle_position)
+    pub connection_drag_current: Option<(f64, f64)>, // Current mouse position
+    // Mouse tracking for hover effects
+    pub mouse_x: f64,
+    pub mouse_y: f64,
+    pub hovered_handle: Option<(String, String)>, // (node_id, handle_position)
     // Track the active view (Dashboard, Canvas, or ChatView)
     pub active_view: ActiveView,
 
@@ -495,6 +507,14 @@ impl AppState {
             selected_node_id: None,
             clicked_node_id: None,
             is_dragging_agent: false,
+            connection_mode: false,
+            connection_source_node: None,
+            connection_drag_active: false,
+            connection_drag_start: None,
+            connection_drag_current: None,
+            mouse_x: 0.0,
+            mouse_y: 0.0,
+            hovered_handle: None,
             active_view: ActiveView::ChatView,
 
             dashboard_scope: {
@@ -650,6 +670,63 @@ impl AppState {
         self.dirty = true;
     }
 
+    /// Check if a point (x, y) is on a connection handle of the given node
+    /// Returns Some(handle_position) if hit, None otherwise
+    pub fn get_handle_at_point(&self, node_id: &str, x: f64, y: f64) -> Option<String> {
+        if let Some(node) = self.nodes.get(node_id) {
+            let handle_radius = 6.0;
+            let handles = [
+                (node.x + node.width / 2.0, node.y, "input"),           // Top = Input
+                (node.x + node.width / 2.0, node.y + node.height, "output"), // Bottom = Output
+            ];
+            
+            for (hx, hy, position) in handles.iter() {
+                let dx = x - hx;
+                let dy = y - hy;
+                let distance = (dx * dx + dy * dy).sqrt();
+                if distance <= handle_radius {
+                    return Some(position.to_string());
+                }
+            }
+        }
+        None
+    }
+
+    /// Validate if a connection from source handle to target handle is allowed
+    pub fn is_valid_connection(&self, from_handle: &str, to_handle: &str, from_node_id: &str, to_node_id: &str) -> bool {
+        // Prevent self-connections
+        if from_node_id == to_node_id {
+            return false;
+        }
+        
+        // Only allow output -> input connections
+        match (from_handle, to_handle) {
+            ("output", "input") => true,
+            _ => false,
+        }
+    }
+
+    /// Update mouse position and check for handle hover states
+    pub fn update_mouse_position(&mut self, x: f64, y: f64) {
+        self.mouse_x = x;
+        self.mouse_y = y;
+        
+        // Check if we're hovering over any handle
+        let mut found_hover = None;
+        for (node_id, _) in &self.nodes {
+            if let Some(handle_pos) = self.get_handle_at_point(node_id, x, y) {
+                found_hover = Some((node_id.clone(), handle_pos));
+                break;
+            }
+        }
+        
+        // Update hover state if it changed
+        if self.hovered_handle != found_hover {
+            self.hovered_handle = found_hover;
+            self.mark_dirty(); // Trigger redraw for hover effect
+        }
+    }
+
     /// Return the assistant message id that is **currently being streamed**
     /// for the given `thread_id`, if known.
     pub fn current_assistant_id(&self, thread_id: u32) -> Option<u32> {
@@ -697,7 +774,12 @@ impl AppState {
         web_sys::console::log_1(&format!("Node created with dimensions: {}x{} at position ({}, {})", 
             node.width, node.height, node.x, node.y).into());
         
-        self.nodes.insert(id.clone(), node);
+        self.nodes.insert(id.clone(), node.clone());
+        web_sys::console::log_1(&format!("DEBUG: Added node {} to nodes map (type: {:?})", id, node.node_type).into());
+        
+        // Add node to current workflow structure
+        self.add_node_to_current_workflow(node);
+        
         self.state_modified = true; // Mark state as modified
         
         // If this is a user input node, update the latest_user_input_id
@@ -722,16 +804,34 @@ impl AppState {
     /// `agent_id`.  The function ensures the `agent_id_to_node_id` mapping is
     /// updated so other parts of the frontend can perform O(1) look-ups.
     pub fn add_agent_node(&mut self, agent_id: u32, text: String, x: f64, y: f64) -> String {
-        // Delegates to the generic `add_node()` but afterwards injects the
-        // agent-specific metadata and mapping.
+        // Create the node manually to avoid double workflow updates
+        let node_id = format!("node_{}", self.nodes.len());
+        web_sys::console::log_1(&format!("Creating agent node: id={}, agent_id={}, text={}", node_id, agent_id, text).into());
+        
+        let node = Node {
+            node_id: node_id.clone(),
+            agent_id: Some(agent_id),
+            x,
+            y,
+            width: 200.0,
+            height: 80.0,
+            color: "#2ecc71".to_string(), // Green for agent nodes
+            text,
+            node_type: NodeType::AgentIdentity,
+            parent_id: None,
+            is_selected: false,
+            is_dragging: false,
+            exec_status: None,
+        };
 
-        let node_id = self.add_node(text, x, y, NodeType::AgentIdentity);
-
-        if let Some(node) = self.nodes.get_mut(&node_id) {
-            node.agent_id = Some(agent_id);
-        }
-
+        self.nodes.insert(node_id.clone(), node.clone());
+        web_sys::console::log_1(&format!("DEBUG: Added agent node {} to nodes map (agent_id: {:?}, type: {:?})", node_id, agent_id, node.node_type).into());
+        
+        // Add node to current workflow structure with correct agent_id
+        self.add_node_to_current_workflow(node);
+        
         self.agent_id_to_node_id.insert(agent_id, node_id.clone());
+        self.state_modified = true;
 
         node_id
     }
@@ -814,23 +914,13 @@ impl AppState {
             context.set_fill_style_str(crate::constants::CANVAS_BACKGROUND_COLOR);
             context.fill_rect(0.0, 0.0, canvas.width() as f64, canvas.height() as f64);
             
-            // Apply transformations for viewport
-            context.save();
-            context.translate(-self.viewport_x, -self.viewport_y).unwrap();
-            context.scale(self.zoom_level, self.zoom_level).unwrap();
+            // No viewport transformations needed since viewport is fixed at (0,0) and zoom is 1.0
             
             // Draw canvas nodes (new structure)
             for (_, node) in &self.nodes {
-                renderer::draw_node(&context, node, &self.agents);
+                let is_reachable = self.is_node_reachable_from_trigger(&node.node_id);
+                renderer::draw_node(&context, node, &self.agents, &self.selected_node_id, &self.connection_source_node, self.connection_mode, &self.hovered_handle, is_reachable);
             }
-            
-            // Draw legacy nodes (for backward compatibility - will be removed later)
-            for (_, node) in &self.nodes {
-                renderer::draw_node(&context, node, &self.agents);
-            }
-            
-            // Restore the canvas context to its original state
-            context.restore();
         }
     }
     
@@ -859,17 +949,15 @@ impl AppState {
     }
     
     pub fn find_node_at_position(&self, x: f64, y: f64) -> Option<(String, f64, f64)> {
-        // Apply viewport transformation to the coordinates
-        let adjusted_x = x / self.zoom_level + self.viewport_x;
-        let adjusted_y = y / self.zoom_level + self.viewport_y;
+        // No viewport transformation needed since viewport is fixed at (0,0) and zoom is 1.0
         
-        // First, check in nodes (new structure)
+        // Check in nodes
         for (id, node) in &self.nodes {
-            if adjusted_x >= node.x && 
-               adjusted_x <= node.x + node.width &&
-               adjusted_y >= node.y && 
-               adjusted_y <= node.y + node.height {
-                return Some((id.clone(), adjusted_x - node.x, adjusted_y - node.y));
+            if x >= node.x && 
+               x <= node.x + node.width &&
+               y >= node.y && 
+               y <= node.y + node.height {
+                return Some((id.clone(), x - node.x, y - node.y));
             }
         }
         
@@ -1436,12 +1524,128 @@ impl AppState {
             exec_status: None,
         };
 
-        self.nodes.insert(node_id.clone(), node);
+        self.nodes.insert(node_id.clone(), node.clone());
+        
+        // Add node to current workflow structure
+        self.add_node_to_current_workflow(node);
+        
         self.state_modified = true;
 
         node_id
     }
     
+    /// Check if a node is connected to other nodes (has incoming or outgoing edges)
+    pub fn is_node_connected(&self, node_id: &str) -> bool {
+        if let Some(workflow_id) = self.current_workflow_id {
+            if let Some(workflow) = self.workflows.get(&workflow_id) {
+                // Check if the node has any incoming or outgoing edges
+                return workflow.edges.iter().any(|edge| {
+                    edge.from_node_id == node_id || edge.to_node_id == node_id
+                });
+            }
+        }
+        false
+    }
+    
+    /// Check if a node is reachable from a trigger node (part of execution path)
+    pub fn is_node_reachable_from_trigger(&self, node_id: &str) -> bool {
+        if let Some(workflow_id) = self.current_workflow_id {
+            if let Some(workflow) = self.workflows.get(&workflow_id) {
+                // Find all trigger nodes
+                let trigger_nodes: Vec<&str> = workflow.nodes.iter()
+                    .filter(|node| matches!(node.node_type, crate::models::NodeType::Trigger { .. }))
+                    .map(|node| node.node_id.as_str())
+                    .collect();
+                
+                // For now, simple check: is node connected to anything OR is a trigger itself
+                let is_trigger = trigger_nodes.contains(&node_id);
+                let is_connected = self.is_node_connected(node_id);
+                
+                return is_trigger || is_connected;
+            }
+        }
+        false
+    }
+
+    /// Adds a node to the current workflow's structure (for backend sync)
+    pub fn add_node_to_current_workflow(&mut self, node: Node) {
+        if let Some(workflow_id) = self.current_workflow_id {
+            if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
+                // Convert Node to CanvasNode for workflow storage
+                let canvas_node = CanvasNode {
+                    node_id: node.node_id.clone(),
+                    agent_id: node.agent_id,
+                    x: node.x,
+                    y: node.y,
+                    width: node.width,
+                    height: node.height,
+                    color: node.color,
+                    text: node.text,
+                    node_type: node.node_type,
+                    parent_id: node.parent_id,
+                    is_selected: node.is_selected,
+                    is_dragging: node.is_dragging,
+                    exec_status: node.exec_status,
+                };
+                
+                // Remove any existing node with the same ID and add the new one
+                workflow.nodes.retain(|n| n.node_id != node.node_id);
+                workflow.nodes.push(canvas_node);
+                
+                web_sys::console::log_1(&format!("📋 Added node {} to workflow (total: {} nodes, {} edges)", 
+                    node.node_id, workflow.nodes.len(), workflow.edges.len()).into());
+                web_sys::console::log_1(&format!("🔍 Workflow structure: nodes={:?}", 
+                    workflow.nodes.iter().map(|n| &n.node_id).collect::<Vec<_>>()).into());
+            } else {
+                web_sys::console::log_1(&"⚠️ Current workflow not found, creating default workflow for node".into());
+                // Create a default workflow if it doesn't exist
+                let default_workflow = Workflow {
+                    id: workflow_id,
+                    name: "My Canvas Workflow".to_string(),
+                    nodes: vec![CanvasNode {
+                        node_id: node.node_id.clone(),
+                        agent_id: node.agent_id,
+                        x: node.x,
+                        y: node.y,
+                        width: node.width,
+                        height: node.height,
+                        color: node.color,
+                        text: node.text,
+                        node_type: node.node_type,
+                        parent_id: node.parent_id,
+                        is_selected: node.is_selected,
+                        is_dragging: node.is_dragging,
+                        exec_status: node.exec_status,
+                    }],
+                    edges: Vec::new(),
+                };
+                self.workflows.insert(workflow_id, default_workflow);
+            }
+        } else {
+            web_sys::console::log_1(&"📋 No current workflow, creating new workflow for node".into());
+            // Create a new workflow for this node
+            let new_workflow_id = self.create_workflow("My Canvas Workflow".to_string());
+            if let Some(workflow) = self.workflows.get_mut(&new_workflow_id) {
+                let canvas_node = CanvasNode {
+                    node_id: node.node_id.clone(),
+                    agent_id: node.agent_id,
+                    x: node.x,
+                    y: node.y,
+                    width: node.width,
+                    height: node.height,
+                    color: node.color,
+                    text: node.text,
+                    node_type: node.node_type,
+                    parent_id: node.parent_id,
+                    is_selected: node.is_selected,
+                    is_dragging: node.is_dragging,
+                    exec_status: node.exec_status,
+                };
+                workflow.nodes.push(canvas_node);
+            }
+        }
+    }
+
     /// Creates a new workflow
     pub fn create_workflow(&mut self, name: String) -> u32 {
         // Generate a new workflow ID (simply use the current timestamp for now)
@@ -1475,15 +1679,43 @@ impl AppState {
         // Create the new edge
         let edge = Edge {
             id: edge_id.clone(),
-            from_node_id,
-            to_node_id,
+            from_node_id: from_node_id.clone(),
+            to_node_id: to_node_id.clone(),
             label,
         };
+        
+        web_sys::console::log_1(&format!("🔗 Connecting {} → {}", from_node_id, to_node_id).into());
         
         // If we have a current workflow, add this edge to it
         if let Some(workflow_id) = self.current_workflow_id {
             if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
                 workflow.edges.push(edge);
+                web_sys::console::log_1(&format!("✅ Connection saved! ({} total)", workflow.edges.len()).into());
+                
+                // TODO: Trigger immediate graph rebuild in backend
+                // self.trigger_graph_rebuild();
+            } else {
+                web_sys::console::log_1(&format!("📋 Auto-creating workflow for your canvas connections...", ).into());
+                // Create a default workflow if it doesn't exist
+                let default_workflow = Workflow {
+                    id: workflow_id,
+                    name: "My Canvas Workflow".to_string(),
+                    nodes: Vec::new(),
+                    edges: vec![edge],
+                };
+                self.workflows.insert(workflow_id, default_workflow);
+                web_sys::console::log_1(&format!("✅ Created workflow '{}' - your connections will be saved here!", "My Canvas Workflow").into());
+                
+                // TODO: Trigger immediate graph rebuild in backend
+                // self.trigger_graph_rebuild();
+            }
+        } else {
+            web_sys::console::log_1(&"📋 Creating your first canvas workflow...".into());
+            // Create a new default workflow
+            let new_workflow_id = self.create_workflow("My Canvas Workflow".to_string());
+            if let Some(workflow) = self.workflows.get_mut(&new_workflow_id) {
+                workflow.edges.push(edge);
+                web_sys::console::log_1(&format!("✅ Created '{}' - start building your workflow!", "My Canvas Workflow").into());
             }
         }
         
@@ -1491,6 +1723,15 @@ impl AppState {
         
         // Return the new edge's ID
         edge_id
+    }
+    
+    /// Trigger immediate graph rebuild in backend by sending canvas data
+    #[allow(dead_code)]
+    fn trigger_graph_rebuild(&self) {
+        web_sys::console::log_1(&"🔄 Triggering graph rebuild in backend...".into());
+        
+        // TODO: Implement graph rebuild trigger
+        // Need to add proper message type and canvas data structure
     }
 }
 
@@ -1600,12 +1841,15 @@ pub fn dispatch_global_message(msg: crate::messages::Message) {
             cmd @ Command::FetchAgents |
             cmd @ Command::FetchAgentRuns(_) |
             cmd @ Command::FetchAgentDetails(_) => crate::command_executors::execute_fetch_command(cmd),
-            cmd @ Command::FetchWorkflows => crate::command_executors::execute_fetch_command(cmd),
+            cmd @ Command::FetchWorkflows |
+            cmd @ Command::FetchCurrentWorkflow => crate::command_executors::execute_fetch_command(cmd),
             cmd @ Command::FetchExecutionHistory { .. } => crate::command_executors::execute_fetch_command(cmd),
             cmd @ Command::CreateWorkflowApi { .. } |
             cmd @ Command::DeleteWorkflowApi { .. } |
             cmd @ Command::RenameWorkflowApi { .. } |
             cmd @ Command::StartWorkflowExecutionApi { .. } |
+            cmd @ Command::ReserveWorkflowExecutionApi { .. } |
+            cmd @ Command::StartReservedExecutionApi { .. } |
             cmd @ Command::ScheduleWorkflowApi { .. } |
             cmd @ Command::UnscheduleWorkflowApi { .. } |
             cmd @ Command::CheckWorkflowScheduleApi { .. } => crate::command_executors::execute_fetch_command(cmd),

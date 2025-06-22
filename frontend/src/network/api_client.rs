@@ -189,6 +189,12 @@ impl ApiClient {
     // Workflow execution – run & status
     // -------------------------------------------------------------------
 
+    /// Get the user's current working workflow. Creates one if none exists.
+    pub async fn get_current_workflow() -> Result<String, JsValue> {
+        let url = format!("{}/api/workflows/current", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
     /// Start an execution for the given workflow ID.  Returns the JSON
     /// response from the backend which contains at least
     /// `{ "execution_id": <u32>, "status": "running" }`.
@@ -197,6 +203,29 @@ impl ApiClient {
             "{}/api/workflow-executions/{}/start",
             Self::api_base_url(),
             workflow_id
+        );
+
+        Self::fetch_json(&url, "POST", None).await
+    }
+
+    /// Reserve an execution ID for a workflow without starting execution.
+    /// This allows the frontend to subscribe to WebSocket messages before execution starts.
+    pub async fn reserve_workflow_execution(workflow_id: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/{}/reserve",
+            Self::api_base_url(),
+            workflow_id
+        );
+
+        Self::fetch_json(&url, "POST", None).await
+    }
+
+    /// Start a previously reserved execution.
+    pub async fn start_reserved_execution(execution_id: u32) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/workflow-executions/executions/{}/start",
+            Self::api_base_url(),
+            execution_id
         );
 
         Self::fetch_json(&url, "POST", None).await
@@ -467,6 +496,13 @@ impl ApiClient {
         Self::fetch_json(&url, "PATCH", Some(payload_json))
             .await
             .map(|_| ())
+    }
+
+    /// Update canvas data (nodes and edges) for current workflow
+    pub async fn patch_workflow_canvas_data(payload_json: &str) -> Result<String, JsValue> {
+        let base = Self::api_base_url();
+        let url = format!("{}/api/workflows/current/canvas-data", base);
+        Self::fetch_json(&url, "PATCH", Some(payload_json)).await
     }
 
     // Helper function to make fetch requests
@@ -751,9 +787,9 @@ pub fn load_agents() {
                                                         }
                                                     }
                                                         
-                                                        // Now that we have loaded agents, check if we need to create nodes for them
-                                                        // Only create nodes for agents that don't already have one
-                                                        create_nodes_for_agents(&mut state);
+                                                        // DO NOT automatically create canvas nodes for agents
+                                                        // Agents should only appear on canvas when explicitly dragged from shelf
+                                                        // create_nodes_for_agents(&mut state); // DISABLED - causes auto-canvas bug
                                                         
                                                         state.data_loaded = true;
                                                         state.api_load_attempted = true;

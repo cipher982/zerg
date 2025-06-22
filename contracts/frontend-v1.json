@@ -21,6 +21,35 @@
           "type": "thread_history"
         }
       }
+    },
+    {
+      "description": "subscribe to finished workflow_execution → receive execution_finished snapshot",
+      "request": {
+        "body": {
+          "message_id": "test-workflow-1",
+          "topics": [
+            "workflow_execution:123"
+          ],
+          "type": "subscribe"
+        },
+        "subtype": "text",
+        "type": "websocket"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "duration_ms": 1500,
+            "error": null,
+            "execution_id": 123,
+            "status": "success"
+          },
+          "req_id": "test-workflow-1",
+          "topic": "workflow_execution:123",
+          "ts": 1234567890,
+          "type": "execution_finished",
+          "v": 1
+        }
+      }
     }
   ],
   "metadata": {

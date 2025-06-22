@@ -355,6 +355,81 @@ async def _subscribe_user(client_id: str, user_id: int, message_id: str, db: Ses
         await send_error(client_id, "Failed to subscribe to user", message_id)
 
 
+async def _subscribe_workflow_execution(client_id: str, execution_id: int, message_id: str, db: Session) -> None:
+    """Subscribe to workflow execution events.
+
+    Args:
+        client_id: The client ID subscribing
+        execution_id: The workflow execution ID to subscribe to (can be future execution)
+        message_id: Message ID for correlation
+        db: Database session
+    """
+    try:
+        # Subscribe to workflow execution topic (execution may not exist yet)
+        # This allows subscribing before execution starts
+        topic = f"workflow_execution:{execution_id}"
+        await topic_manager.subscribe_to_topic(client_id, topic)
+
+        logger.info("Client %s subscribed to workflow execution topic %s", client_id, topic)
+
+        # ------------------------------------------------------------------
+        # Send *current* execution status snapshot so late subscribers still
+        # receive the final state even when the run already finished.
+        # ------------------------------------------------------------------
+
+        try:
+            execution = crud.get_workflow_execution(db, execution_id)
+        except Exception:
+            execution = None
+
+        # Log execution check for debugging
+        logger.info(
+            "Checking execution %s - found: %s, status: %s",
+            execution_id,
+            execution is not None,
+            execution.status if execution else "None",
+        )
+
+        if execution is not None and execution.status in {"success", "failed", "cancelled"}:
+            # Prepare payload mirroring the live EXECUTION_FINISHED event so
+            # the frontend can reuse the same handler logic.
+            duration_ms: Optional[int]
+            if execution.started_at and execution.finished_at:
+                delta = execution.finished_at - execution.started_at
+                duration_ms = int(delta.total_seconds() * 1000)
+            else:
+                duration_ms = None
+
+            payload = {
+                "execution_id": execution.id,
+                "status": execution.status,
+                "error": execution.error,
+                "duration_ms": duration_ms,
+            }
+
+            # Wrap into envelope so it complies with the WebSocket protocol
+            envelope = Envelope.create(
+                message_type="execution_finished",
+                topic=topic,
+                data=payload,
+                req_id=message_id,
+            )
+
+            logger.info("Sending snapshot execution_finished to client %s for execution %s", client_id, execution_id)
+
+            await send_to_client(
+                client_id,
+                jsonable_encoder(envelope),
+                topic=topic,
+            )
+
+            logger.info("Snapshot sent successfully")
+
+    except Exception as e:
+        logger.error(f"Error in _subscribe_workflow_execution: {str(e)}")
+        await send_error(client_id, "Failed to subscribe to workflow execution", message_id)
+
+
 async def handle_subscribe(client_id: str, message: Dict[str, Any], db: Session) -> None:
     """Handle topic subscription requests.
 
@@ -377,6 +452,8 @@ async def handle_subscribe(client_id: str, message: Dict[str, Any], db: Session)
                     await _subscribe_agent(client_id, int(topic_id), subscribe_msg.message_id, db)
                 elif topic_type == "user":
                     await _subscribe_user(client_id, int(topic_id), subscribe_msg.message_id, db)
+                elif topic_type == "workflow_execution":
+                    await _subscribe_workflow_execution(client_id, int(topic_id), subscribe_msg.message_id, db)
                 else:
                     await send_error(
                         client_id,

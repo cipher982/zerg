@@ -266,10 +266,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 }
             })));
             
-            // If switching to Canvas, always fetch agents (will trigger shelf update when loaded)
+            // If switching to Canvas, always fetch agents and current workflow
             if view_clone_for_shelf == crate::storage::ActiveView::Canvas {
                 commands.push(Command::FetchAgents);
-                commands.push(Command::FetchWorkflows);
+                commands.push(Command::FetchCurrentWorkflow);
             }
         },
        
@@ -480,6 +480,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 execution_id,
                 status: crate::state::ExecPhase::Running,
             });
+            
+            // Refresh results panel for execution start via command  
+            commands.push(Command::UpdateUI(Box::new(|| {
+                // (results panel removed)
+            })));
 
             let topic = format!("workflow_execution:{}", execution_id);
             let topic_manager_rc = state.topic_manager.clone();
@@ -491,7 +496,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
                 let handler: crate::network::topic_manager::TopicHandler = Rc::new(RefCell::new(move |payload: serde_json::Value| {
                     use crate::network::ws_schema::WsMessage;
-                    if let Ok(parsed) = serde_json::from_value::<WsMessage>(payload) {
+                    if let Ok(parsed) = serde_json::from_value::<WsMessage>(payload.clone()) {
                         match parsed {
                             WsMessage::NodeState { data } => {
                                 crate::state::dispatch_global_message(Message::UpdateNodeStatus {
@@ -514,12 +519,16 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                                     text: data.text.clone(),
                                 });
                             }
-                            _ => {}
+                            _ => {
+                                // Other message types not handled by this subscription
+                            }
                         }
+                    } else {
+                        web_sys::console::error_1(&format!("WorkflowExecution failed to parse WsMessage from: {}", payload).into());
                     }
                 }));
 
-                let _ = tm.subscribe(topic, handler);
+                let _ = tm.subscribe(topic.clone(), handler);
             })));
 
             commands.push(Command::UpdateUI(Box::new(|| {
@@ -538,7 +547,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 status: crate::state::ExecPhase::Starting,
             });
             state.execution_logs.clear();
-            commands.push(Command::StartWorkflowExecutionApi { workflow_id });
+            
+            // Use the new reserve-first approach to avoid race conditions
+            commands.push(Command::ReserveWorkflowExecutionApi { workflow_id });
 
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
@@ -549,6 +560,34 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
                     let _ = crate::components::log_drawer::refresh(&doc);
+                }
+            })));
+        }
+
+        // -------------------------------------------------------------------
+        // Reserve workflow execution – get execution ID without starting
+        // -------------------------------------------------------------------
+        Message::ReserveWorkflowExecution { workflow_id } => {
+            // This message is not used directly, as the reserve operation
+            // is handled by the ReserveWorkflowExecutionApi command
+            commands.push(Command::ReserveWorkflowExecutionApi { workflow_id });
+        }
+
+        // -------------------------------------------------------------------
+        // Start reserved execution – begin execution of previously reserved ID
+        // -------------------------------------------------------------------
+        Message::StartReservedExecution { execution_id } => {
+            // Update the execution status to running
+            if let Some(exec) = &mut state.current_execution {
+                exec.execution_id = execution_id;
+                exec.status = crate::state::ExecPhase::Running;
+            }
+            
+            commands.push(Command::StartReservedExecutionApi { execution_id });
+            
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
                 }
             })));
         }
@@ -620,6 +659,21 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             })));
         }
 
+        Message::CurrentWorkflowLoaded(wf) => {
+            let wf_id = wf.id;
+            state.workflows.insert(wf_id, wf.clone());
+            state.current_workflow_id = Some(wf_id);
+            
+            // Load the workflow's nodes onto the canvas
+            state.nodes.clear();
+            for node in &wf.nodes {
+                state.nodes.insert(node.node_id.clone(), node.clone());
+            }
+            
+            needs_refresh = true;
+            web_sys::console::log_1(&format!("🎨 Loaded current workflow '{}' - ready for connections!", wf.name).into());
+        }
+
         // (ExecutionFinished & AppendExecutionLog handled in dedicated arms
         // below.  Any UI refresh logic is appended there to avoid duplicate
         // pattern matches that caused unreachable-pattern warnings.)
@@ -670,6 +724,14 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 });
             }
             needs_refresh = true;
+            
+            // Refresh the results panel via command
+            commands.push(Command::UpdateUI(Box::new(|| {
+                // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
+                }
+            })));
         }
 
         Message::AppendExecutionLog { execution_id, node_id, stream, text } => {
@@ -680,6 +742,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 }
             }
 
+            // Refresh results panel for log updates via command
+            // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
+            
             // Live append means drawer needs repaint if open
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
@@ -813,6 +878,13 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             })));
         }
         Message::AddEdge { .. } |
+        Message::ToggleConnectionMode |
+        Message::SelectNodeForConnection { .. } |
+        Message::CreateConnectionFromSelected { .. } |
+        Message::ClearNodeSelection |
+        Message::StartConnectionDrag { .. } |
+        Message::UpdateConnectionDrag { .. } |
+        Message::EndConnectionDrag { .. } |
         Message::GenerateCanvasFromAgents => {
             // These are handled by the canvas reducer which returns early
             unreachable!("Canvas messages should be handled by the canvas reducer")
