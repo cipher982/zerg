@@ -319,6 +319,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                         let _ = crate::components::agent_shelf::refresh_agent_shelf(&doc_ref);
                      }
                 })));
+            } else {
             }
 
             // Schedule a general UI refresh for other views or broader updates
@@ -395,8 +396,8 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
 
             state.state_modified = true;
 
-            // Add a command to refresh the agents list after state is updated
-            commands.push(Command::SendMessage(crate::messages::Message::RefreshAgentsFromAPI));
+            // No need to refresh agents from API again - we just successfully added them to canvas
+            // This was causing an infinite loop
             true
         }
         Message::AgentDeletionFailure { agent_id, error } => {

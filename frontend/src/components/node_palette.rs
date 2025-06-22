@@ -70,8 +70,20 @@ impl NodePalette {
                 .push(node);
         }
 
-        // Render categories
-        for (category_name, category_nodes) in categories.iter() {
+        // Render categories in a consistent order (HashMap iteration is non-deterministic)
+        let mut sorted_categories: Vec<_> = categories.iter().collect();
+        sorted_categories.sort_by(|a, b| {
+            // Define a specific order for categories
+            let order = |cat: &str| match cat {
+                "Triggers" => 0,
+                "I/O Tools" => 1, 
+                "Optional Tools" => 2,
+                _ => 999 // Unknown categories go last
+            };
+            order(a.0).cmp(&order(b.0))
+        });
+        
+        for (category_name, category_nodes) in sorted_categories {
             self.render_category(document, container, category_name, category_nodes)?;
         }
 
