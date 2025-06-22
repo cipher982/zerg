@@ -7,9 +7,57 @@ test.describe('Simple Run Button Test', () => {
 
   test('Run button with just trigger node', async ({ page }) => {
     console.log('🚀 Testing run button with trigger node only');
+    
+    // Capture browser console logs
+    page.on('console', msg => {
+      console.log(`BROWSER: ${msg.type()}: ${msg.text()}`);
+    });
+
+    // Set up WebSocket monitoring BEFORE navigation
+    const wsMessages: any[] = [];
+    let wsConnected = false;
+    let wsUrl = '';
+    
+    page.on('websocket', ws => {
+      wsUrl = ws.url();
+      console.log(`🔌 WebSocket connection attempt: ${wsUrl}`);
+      wsConnected = true;
+      
+      ws.on('framereceived', event => {
+        const payload = event.payload?.toString() || '';
+        wsMessages.push({ type: 'received', data: payload });
+        
+        // Log execution_finished messages in full
+        if (payload.includes('execution_finished')) {
+          console.log('🎯 EXECUTION_FINISHED MESSAGE:', payload);
+        } else {
+          console.log(`📥 WS received: ${payload.substring(0, 100)}...`);
+        }
+      });
+      
+      ws.on('framesent', event => {
+        const payload = event.payload?.toString() || '';
+        console.log(`📤 WS sent: ${payload.substring(0, 100)}...`);
+        wsMessages.push({ type: 'sent', data: payload });
+        
+        // Log subscription messages specifically
+        if (payload.includes('workflow_execution')) {
+          console.log('📌 SUBSCRIPTION MESSAGE:', payload);
+        }
+      });
+      
+      ws.on('close', () => {
+        console.log('❌ WebSocket closed');
+      });
+    });
 
     // Navigate to canvas
     await page.goto('/');
+    
+    // Wait for app initialization
+    await page.waitForTimeout(2000);
+    console.log(`🔍 WebSocket status after nav: connected=${wsConnected}, url=${wsUrl}`);
+    
     const canvasTab = page.getByTestId('global-canvas-tab');
     if (await canvasTab.count() > 0) {
       await canvasTab.click();
@@ -31,20 +79,10 @@ test.describe('Simple Run Button Test', () => {
     const initialText = await runButton.textContent();
     console.log(`🔘 Initial run button text: "${initialText}"`);
 
-    // Set up WebSocket message logging
-    page.on('websocket', ws => {
-      console.log(`🔌 WebSocket connection: ${ws.url()}`);
-      ws.on('framereceived', event => {
-        console.log(`📥 WebSocket message received: ${event.payload}`);
-      });
-      ws.on('framesent', event => {
-        console.log(`📤 WebSocket message sent: ${event.payload}`);
-      });
-    });
-
     // Click run button
     console.log('🎯 Clicking run button...');
     await runButton.click();
+    
 
     // Wait for button to show "Starting..." 
     try {
@@ -81,6 +119,10 @@ test.describe('Simple Run Button Test', () => {
         return (window as any).consoleMessages || [];
       });
       console.log('📝 Console logs:', logs);
+      console.log('📨 WebSocket messages captured:', wsMessages.length);
+      wsMessages.forEach((msg, i) => {
+        console.log(`  ${i}: ${msg.type} - ${JSON.stringify(msg.data).substring(0, 100)}...`);
+      });
       
       // Take screenshot
       await page.screenshot({ path: 'run-button-stuck.png', fullPage: true });
