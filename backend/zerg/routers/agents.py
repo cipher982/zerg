@@ -142,7 +142,7 @@ async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(
             system_instructions=agent.system_instructions,
             task_instructions=agent.task_instructions,
             model=agent.model,
-            status=agent.status,
+            status=agent.status.value if agent.status else None,
             schedule=agent.schedule,
             config=agent.config,
         )

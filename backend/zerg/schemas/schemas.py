@@ -10,6 +10,8 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 from pydantic import BaseModel
 
+from zerg.models.enums import AgentStatus
+
 
 # Agent schemas
 class AgentBase(BaseModel):
@@ -32,7 +34,7 @@ class AgentUpdate(BaseModel):
     system_instructions: Optional[str] = None
     task_instructions: Optional[str] = None
     model: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[AgentStatus] = None
     schedule: Optional[str] = None
     config: Optional[Dict[str, Any]] = None
     last_error: Optional[str] = None
