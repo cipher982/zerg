@@ -496,7 +496,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
                 let handler: crate::network::topic_manager::TopicHandler = Rc::new(RefCell::new(move |payload: serde_json::Value| {
                     use crate::network::ws_schema::WsMessage;
-                    if let Ok(parsed) = serde_json::from_value::<WsMessage>(payload) {
+                    if let Ok(parsed) = serde_json::from_value::<WsMessage>(payload.clone()) {
                         match parsed {
                             WsMessage::NodeState { data } => {
                                 crate::state::dispatch_global_message(Message::UpdateNodeStatus {
@@ -519,12 +519,16 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                                     text: data.text.clone(),
                                 });
                             }
-                            _ => {}
+                            _ => {
+                                // Other message types not handled by this subscription
+                            }
                         }
+                    } else {
+                        web_sys::console::error_1(&format!("WorkflowExecution failed to parse WsMessage from: {}", payload).into());
                     }
                 }));
 
-                let _ = tm.subscribe(topic, handler);
+                let _ = tm.subscribe(topic.clone(), handler);
             })));
 
             commands.push(Command::UpdateUI(Box::new(|| {
@@ -724,6 +728,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // Refresh the results panel via command
             commands.push(Command::UpdateUI(Box::new(|| {
                 // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
+                }
             })));
         }
 

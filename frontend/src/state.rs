@@ -26,7 +26,7 @@ use crate::messages::{Message, Command};
 //  Workflow execution helper structs (UI state only)
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum ExecPhase {
     Starting,
     Running,

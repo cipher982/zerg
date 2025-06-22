@@ -59,7 +59,6 @@ impl TopicManager {
         // If it's the first time we're interested in this topic, subscribe via WebSocket
         if is_new_topic_subscription {
             self.subscribed_topics.insert(topic.clone());
-            web_sys::console::log_1(&format!("Sending subscribe request for topic: {}", topic).into());
 
             let msg = create_subscribe(vec![topic]);
             let msg_json = serde_json::to_string(&msg).map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
@@ -68,8 +67,6 @@ impl TopicManager {
                 Ok(client) => client.send_serialized_message(&msg_json)?,
                 Err(_) => return Err(JsValue::from_str("Failed to borrow WsClient for subscribe")),
             }
-        } else {
-            web_sys::console::log_1(&format!("Adding additional handler for already subscribed topic: {}", topic).into());
         }
 
         Ok(())
@@ -181,25 +178,43 @@ impl TopicManager {
 
             use serde_json::{json, Value};
 
-            let mut merged = match envelope.data {
-                Value::Object(map) => map,
-                other => {
-                    // In the unlikely case `data` is not an object pass the
-                    // original envelope for debugging – downstream will log
-                    // an error for unmatched shape.
-                    self.dispatch_to_topic_handlers(&envelope.topic, json!({
-                        "type": envelope.r#type,
-                        "data": other,
-                    }));
-                    return;
-                }
-            };
+            // For certain message types, we need to preserve the nested structure
+            // instead of flattening. This matches what the WsMessage enum expects.
+            let message_type = envelope.r#type.to_lowercase();
+            let needs_data_wrapper = matches!(
+                message_type.as_str(),
+                "execution_finished" | "node_state" | "node_log" | "user_update"
+            );
 
-            // Insert the `type` discriminator (always lower-case to match
-            // `WsMessage` discriminators and avoid a huge alias list).
-            merged.insert("type".to_string(), Value::String(envelope.r#type.to_lowercase()));
+            if needs_data_wrapper {
+                // Keep the data nested as expected by WsMessage enum variants
+                let wrapped = json!({
+                    "type": message_type,
+                    "data": envelope.data,
+                });
+                self.dispatch_to_topic_handlers(&envelope.topic, wrapped);
+            } else {
+                // Original flattening behavior for other message types
+                let mut merged = match envelope.data {
+                    Value::Object(map) => map,
+                    other => {
+                        // In the unlikely case `data` is not an object pass the
+                        // original envelope for debugging – downstream will log
+                        // an error for unmatched shape.
+                        self.dispatch_to_topic_handlers(&envelope.topic, json!({
+                            "type": envelope.r#type,
+                            "data": other,
+                        }));
+                        return;
+                    }
+                };
 
-            self.dispatch_to_topic_handlers(&envelope.topic, Value::Object(merged));
+                // Insert the `type` discriminator (always lower-case to match
+                // `WsMessage` discriminators and avoid a huge alias list).
+                merged.insert("type".to_string(), Value::String(message_type));
+
+                self.dispatch_to_topic_handlers(&envelope.topic, Value::Object(merged));
+            }
         } else {
             // Fallback to v1 parsing
             use crate::network::ws_schema::WsMessage;

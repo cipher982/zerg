@@ -33,6 +33,33 @@ fn main() {
                         "messages": []
                     }
                 }
+            },
+            {
+                "description": "subscribe to finished workflow_execution → receive execution_finished snapshot",
+                "request": {
+                    "type": "websocket",
+                    "subtype": "text",
+                    "body": {
+                        "type": "subscribe",
+                        "topics": ["workflow_execution:123"],
+                        "message_id": "test-workflow-1"
+                    }
+                },
+                "response": {
+                    "body": {
+                        "v": 1,
+                        "type": "execution_finished",
+                        "topic": "workflow_execution:123",
+                        "req_id": "test-workflow-1",
+                        "ts": 1234567890,
+                        "data": {
+                            "execution_id": 123,
+                            "status": "success",
+                            "error": null,
+                            "duration_ms": 1500
+                        }
+                    }
+                }
             }
         ],
         "metadata": {
