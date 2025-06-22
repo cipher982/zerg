@@ -273,40 +273,56 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
 
                 node.color = color.to_string();
                 node.exec_status = Some(exec_status);
+                
+                // Only update agent status for agent-backed nodes with valid workflow execution statuses
                 if let Some(agent_id) = node.agent_id {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
-                        // Map node execution status to valid agent status
-                        let agent_status = match status.as_str() {
-                            "running" | "processing" => "running",
-                            "success" | "complete" => "idle",  // Node completed, agent goes back to idle
-                            "failed" | "error" => "error",
-                            _ => "idle",
+                        // Only update agent status for legitimate workflow execution status changes
+                        // that come from the backend workflow engine, not UI-only updates
+                        let should_update_agent_status = match status.as_str() {
+                            "running" | "success" | "failed" => true,  // Valid workflow execution statuses
+                            _ => false,  // Skip UI-only statuses like "processing", "complete", etc.
                         };
-                        agent.status = Some(agent_status.to_string());
-                        let update = crate::models::ApiAgentUpdate {
-                            name: None,
-                            status: Some(agent_status.to_string()),
-                            system_instructions: None,
-                            task_instructions: None,
-                            model: None,
-                            schedule: None,
-                            config: None,
-                            last_error: None,
-                        };
-                        let agent_id_clone = agent_id;
-                        let update_clone = update.clone();
-                        wasm_bindgen_futures::spawn_local(async move {
-                            match serde_json::to_string(&update_clone) {
-                                Ok(json_str) => {
-                                    if let Err(e) = crate::network::ApiClient::update_agent(agent_id_clone, &json_str).await {
-                                        web_sys::console::error_1(&format!("Failed to update agent: {:?}", e).into());
+                        
+                        if should_update_agent_status {
+                            // Map node execution status to valid agent status
+                            let agent_status = match status.as_str() {
+                                "running" => "running",
+                                "success" => "idle",  // Node completed, agent goes back to idle
+                                "failed" => "error",
+                                _ => return true,  // Should not reach here due to filter above
+                            };
+                            
+                            web_sys::console::log_1(&format!("Updating agent {} status from '{}' to '{}' due to node {} workflow execution", agent_id, agent.status.as_ref().unwrap_or(&"unknown".to_string()), agent_status, node_id).into());
+                            
+                            agent.status = Some(agent_status.to_string());
+                            let update = crate::models::ApiAgentUpdate {
+                                name: None,
+                                status: Some(agent_status.to_string()),
+                                system_instructions: None,
+                                task_instructions: None,
+                                model: None,
+                                schedule: None,
+                                config: None,
+                                last_error: None,
+                            };
+                            let agent_id_clone = agent_id;
+                            let update_clone = update.clone();
+                            wasm_bindgen_futures::spawn_local(async move {
+                                match serde_json::to_string(&update_clone) {
+                                    Ok(json_str) => {
+                                        if let Err(e) = crate::network::ApiClient::update_agent(agent_id_clone, &json_str).await {
+                                            web_sys::console::error_1(&format!("Failed to update agent: {:?}", e).into());
+                                        }
+                                    }
+                                    Err(e) => {
+                                        web_sys::console::error_1(&format!("Failed to serialize agent update: {}", e).into());
                                     }
                                 }
-                                Err(e) => {
-                                    web_sys::console::error_1(&format!("Failed to serialize agent update: {}", e).into());
-                                }
-                            }
-                        });
+                            });
+                        } else {
+                            web_sys::console::log_1(&format!("Skipping agent status update for node {} with status '{}' (not a workflow execution status)", node_id, status).into());
+                        }
                     }
                 }
                 state.state_modified = true;
