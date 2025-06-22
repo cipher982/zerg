@@ -241,7 +241,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 node.color = "#c8e6c9".to_string();
                 if let Some(agent_id) = node.agent_id {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
-                        agent.status = Some("complete".to_string());
+                        agent.status = Some("idle".to_string());
                     }
                 }
                 let parent_id = node.parent_id.clone();
@@ -275,10 +275,17 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 node.exec_status = Some(exec_status);
                 if let Some(agent_id) = node.agent_id {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
-                        agent.status = Some(status.clone());
+                        // Map node execution status to valid agent status
+                        let agent_status = match status.as_str() {
+                            "running" | "processing" => "running",
+                            "success" | "complete" => "idle",  // Node completed, agent goes back to idle
+                            "failed" | "error" => "error",
+                            _ => "idle",
+                        };
+                        agent.status = Some(agent_status.to_string());
                         let update = crate::models::ApiAgentUpdate {
                             name: None,
-                            status: Some(status.clone()),
+                            status: Some(agent_status.to_string()),
                             system_instructions: None,
                             task_instructions: None,
                             model: None,
