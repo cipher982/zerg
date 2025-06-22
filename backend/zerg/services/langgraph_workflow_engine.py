@@ -825,12 +825,13 @@ class LangGraphWorkflowEngine:
     ):
         """Publish execution finished event."""
 
+        logger.info("Publishing execution_finished event for execution %s with status %s", execution_id, status)
+
         payload = {
             "execution_id": execution_id,
             "status": status,
             "error": error,
             "duration_ms": duration_ms,
-            "event_type": EventType.EXECUTION_FINISHED,
         }
 
         try:
