@@ -335,8 +335,15 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::AnimationTick => {
-            // Always mark dirty to keep animations running smoothly
-            state.mark_dirty();
+            // Only mark dirty if there are actual animations or updates that need rendering
+            let needs_animation = !state.running_runs.is_empty() || 
+                                  state.connection_drag_active || 
+                                  state.dragging.is_some() ||
+                                  state.canvas_dragging;
+            
+            if needs_animation {
+                state.mark_dirty();
+            }
 
             if state.dirty {
                 state.dirty = false;

@@ -68,6 +68,7 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
 
     let _ = actions_el.append_child(&run_btn);
 
+
     // --------------------------------------------------------------------
     // Schedule (⏰) button – schedule workflow execution
     // --------------------------------------------------------------------
@@ -379,7 +380,6 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
         .ok_or_else(|| JsValue::from_str("main-content-area missing – canvas layout not initialised"))?;
 
     // Insert the bar at the very top of the main content column.
-    web_sys::console::log_1(&"WORKFLOW_SWITCHER: Inserting into main-content-area".into());
     main_content.insert_before(&bar_el, main_content.first_child().as_ref())?;
 
     refresh(document)?;
@@ -389,11 +389,13 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
 
 /// Rebuild the tab list from current AppState
 pub fn refresh(document: &Document) -> Result<(), JsValue> {
+    
     // Only refresh workflow bar if we're in canvas view (main-content-area exists)
     if document.get_element_by_id("main-content-area").is_none() {
         // Not in canvas view, skip workflow bar refresh
         return Ok(());
     }
+    
     
     // Make sure workflow bar is initialized first
     let workflow_bar = match document.get_element_by_id("workflow-bar") {
@@ -471,7 +473,7 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
     
     // Update workflow buttons (plus button, delete buttons) loading states
     update_workflow_buttons(document)?;
-
+    
     Ok(())
 }
 
@@ -480,6 +482,7 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
 pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
     use crate::state::{APP_STATE, ExecPhase};
     use crate::models::NodeExecStatus;
+    
 
     if let Some(btn) = document.get_element_by_id("run-workflow-btn") {
         let class_list = btn.class_list();
@@ -506,7 +509,7 @@ pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
                 ExecPhase::Running | ExecPhase::Starting => {
                     let _ = class_list.add_1("running");
                     
-                    // Update button text with progress
+                    // Update button text with progress during execution only
                     if total_nodes > 0 {
                         let progress_text = if running_nodes > 0 {
                             format!("▶︎ Running... ({}/{})", completed_nodes, total_nodes)
@@ -518,23 +521,21 @@ pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
                         btn.set_inner_html("▶︎ Running...");
                     }
                 }
-                ExecPhase::Success => {
-                    let _ = class_list.add_1("success");
-                    btn.set_inner_html("✅ Complete");
-                }
-                ExecPhase::Failed => {
-                    let _ = class_list.add_1("failed");
-                    btn.set_inner_html("❌ Failed");
+                ExecPhase::Success | ExecPhase::Failed => {
+                    // Button returns to normal state after completion
+                    // Status is communicated via toast notifications and results panel
+                    btn.set_inner_html("▶︎ Run");
                 }
             }
         } else {
-            // Reset to default state
+            // Default state
             btn.set_inner_html("▶︎ Run");
         }
     }
 
     Ok(())
 }
+
 
 /// Update the plus button visual state based on workflow loading states
 pub fn update_workflow_buttons(document: &Document) -> Result<(), JsValue> {

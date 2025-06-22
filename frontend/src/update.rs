@@ -706,6 +706,23 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // -------------------------------------------------------------------
 
         Message::ExecutionFinished { execution_id, status, error } => {
+            // Show toast notification for completion
+            let status_msg = if status == "success" {
+                "Workflow completed successfully"
+            } else {
+                "Workflow execution failed"
+            };
+            
+            if status == "success" {
+                crate::toast::success(status_msg);
+            } else {
+                crate::toast::error(status_msg);
+            }
+            
+            // Status feedback is handled purely by toast notifications
+            // No UI elements are added/modified to avoid layout shifts
+            
+            // Update execution status for internal tracking, but don't affect run button
             if let Some(exec) = &mut state.current_execution {
                 if exec.execution_id == 0 || exec.execution_id == execution_id {
                     exec.execution_id = execution_id;

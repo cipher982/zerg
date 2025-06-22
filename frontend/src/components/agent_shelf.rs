@@ -6,7 +6,6 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, HtmlElement, DragEvent};
-
 use crate::state::APP_STATE;
 
 /// Public helper that (re-)creates the Agent Shelf DOM element and appends it to the
@@ -43,6 +42,7 @@ fn create_root_element(document: &Document) -> Result<Element, JsValue> {
 
 /// Internal – clears and repopulates the shelf with the current set of agents.
 fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), JsValue> {
+    
     // Clear current children.
     shelf_el.set_inner_html("");
     
@@ -73,7 +73,11 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
             shelf_el.append_child(&empty_msg).unwrap();
             return;
         }
-        for agent in state.agents.values() {
+        // Sort agents by name to ensure consistent ordering (HashMap iteration is non-deterministic)
+        let mut sorted_agents: Vec<_> = state.agents.values().collect();
+        sorted_agents.sort_by(|a, b| a.name.cmp(&b.name));
+        
+        for agent in sorted_agents {
             if let Some(agent_id) = agent.id {
                 // Create a simple pill element.
                 let pill: HtmlElement = document.create_element("div").unwrap().dyn_into().unwrap();
@@ -149,8 +153,6 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
                             }
                         }
                         
-                        // Log the drag start for debugging
-                        web_sys::console::log_1(&format!("Drag started for agent: {}", agent_name_for_drag).into());
                     });
                     pill.add_event_listener_with_callback("dragstart", dragstart_closure.as_ref().unchecked_ref()).unwrap();
                     dragstart_closure.forget();
@@ -190,6 +192,5 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
     // Render the node palette into the shelf
     let palette = crate::components::node_palette::NodePalette::new();
     let _ = palette.render_into(document, &node_palette_container);
-
     Ok(())
 }
