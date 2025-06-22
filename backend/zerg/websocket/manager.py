@@ -528,6 +528,7 @@ class TopicConnectionManager:
         if exec_id is None:
             return
         topic = f"workflow_execution:{exec_id}"
+        logger.info("Broadcasting execution_finished for execution %s to topic %s", exec_id, topic)
         await self.broadcast_to_topic(topic, {"type": "execution_finished", "data": jsonable_encoder(data)})
 
     # ------------------------------------------------------------------

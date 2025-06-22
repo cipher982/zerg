@@ -382,6 +382,14 @@ async def _subscribe_workflow_execution(client_id: str, execution_id: int, messa
         except Exception:
             execution = None
 
+        # Log execution check for debugging
+        logger.info(
+            "Checking execution %s - found: %s, status: %s",
+            execution_id,
+            execution is not None,
+            execution.status if execution else "None",
+        )
+
         if execution is not None and execution.status in {"success", "failed", "cancelled"}:
             # Prepare payload mirroring the live EXECUTION_FINISHED event so
             # the frontend can reuse the same handler logic.
@@ -407,11 +415,15 @@ async def _subscribe_workflow_execution(client_id: str, execution_id: int, messa
                 req_id=message_id,
             )
 
+            logger.info("Sending snapshot execution_finished to client %s for execution %s", client_id, execution_id)
+
             await send_to_client(
                 client_id,
                 jsonable_encoder(envelope),
                 topic=topic,
             )
+
+            logger.info("Snapshot sent successfully")
 
     except Exception as e:
         logger.error(f"Error in _subscribe_workflow_execution: {str(e)}")
