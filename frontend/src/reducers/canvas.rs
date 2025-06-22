@@ -124,8 +124,26 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::CanvasNodeClicked { node_id } => {
-            if let Some(agent_id) = state.nodes.get(node_id).and_then(|n| n.agent_id) {
-                cmds.push(Command::SendMessage(Message::EditAgent(agent_id)));
+            if state.connection_mode {
+                // Handle connection mode clicks
+                if let Some(source_node_id) = &state.connection_source_node {
+                    if source_node_id != node_id {
+                        // Create connection from source to clicked node
+                        cmds.push(Command::SendMessage(Message::CreateConnectionFromSelected {
+                            target_node_id: node_id.clone()
+                        }));
+                    }
+                } else {
+                    // Select this node as connection source
+                    cmds.push(Command::SendMessage(Message::SelectNodeForConnection {
+                        node_id: node_id.clone()
+                    }));
+                }
+            } else {
+                // Normal click behavior - open agent config
+                if let Some(agent_id) = state.nodes.get(node_id).and_then(|n| n.agent_id) {
+                    cmds.push(Command::SendMessage(Message::EditAgent(agent_id)));
+                }
             }
             true
         }
@@ -285,6 +303,11 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     }
                 }
                 state.state_modified = true;
+                
+                // Refresh results panel for node status updates via command
+                cmds.push(Command::UpdateUI(Box::new(|| {
+                    // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
+                })));
             }
             true
         }
@@ -361,9 +384,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::CreateWorkflow { name } => {
-            let workflow_id = state.create_workflow(name.clone());
-            web_sys::console::log_1(&format!("Created new workflow '{}' with ID: {}", name, workflow_id).into());
-            state.state_modified = true;
+            // Don't create local workflow here - let update.rs handle the API call
+            // and WorkflowCreated message will update the state properly
+            state.creating_workflow = true;
+            cmds.push(Command::CreateWorkflowApi { name: name.clone() });
 
             // Refresh tab bar UI
             cmds.push(Command::UpdateUI(Box::new(|| {
@@ -378,9 +402,15 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::SelectWorkflow { workflow_id } => {
             state.current_workflow_id = Some(*workflow_id);
+            web_sys::console::log_1(&format!("DEBUG: SelectWorkflow {} - clearing {} nodes", workflow_id, state.nodes.len()).into());
+            for (id, node) in &state.nodes {
+                web_sys::console::log_1(&format!("DEBUG: Clearing node {} (type: {:?})", id, node.node_type).into());
+            }
             state.nodes.clear();
             if let Some(workflow) = state.workflows.get(workflow_id) {
+                web_sys::console::log_1(&format!("DEBUG: Repopulating with {} workflow nodes", workflow.nodes.len()).into());
                 for node in &workflow.nodes {
+                    web_sys::console::log_1(&format!("DEBUG: Restoring node {} (type: {:?})", node.node_id, node.node_type).into());
                     state.nodes.insert(node.node_id.clone(), node.clone());
                 }
             }
@@ -425,6 +455,137 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             }
             true
         }
+
+        // Connection mode handlers
+        Message::ToggleConnectionMode => {
+            state.connection_mode = !state.connection_mode;
+            if !state.connection_mode {
+                // Clear selection when exiting connection mode
+                state.connection_source_node = None;
+                state.selected_node_id = None;
+            }
+            web_sys::console::log_1(&format!("Connection mode: {}", state.connection_mode).into());
+            state.mark_dirty();
+            
+            // Update button appearance
+            cmds.push(Command::UpdateUI(Box::new(|| {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = crate::components::workflow_switcher::update_connection_button(&doc);
+                }
+            })));
+            
+            true
+        }
+
+        Message::SelectNodeForConnection { node_id } => {
+            if state.connection_mode {
+                state.connection_source_node = Some(node_id.clone());
+                state.selected_node_id = Some(node_id.clone());
+                web_sys::console::log_1(&format!("Selected node {} as connection source", node_id).into());
+                state.mark_dirty();
+            }
+            true
+        }
+
+        Message::CreateConnectionFromSelected { target_node_id } => {
+            if state.connection_mode {
+                if let Some(source_node_id) = state.connection_source_node.clone() {
+                    if source_node_id != *target_node_id {
+                        let edge_id = state.add_edge(source_node_id.clone(), target_node_id.clone(), None);
+                        web_sys::console::log_1(&format!("Created connection from {} to {} (edge ID: {})", source_node_id, target_node_id, edge_id).into());
+                        state.mark_dirty();
+                        state.state_modified = true;
+                        
+                        // Clear selection after creating connection
+                        state.connection_source_node = None;
+                        state.selected_node_id = None;
+                    } else {
+                        web_sys::console::log_1(&"Cannot connect node to itself".into());
+                    }
+                } else {
+                    web_sys::console::log_1(&"No source node selected for connection".into());
+                }
+            }
+            true
+        }
+
+        Message::ClearNodeSelection => {
+            state.connection_source_node = None;
+            state.selected_node_id = None;
+            web_sys::console::log_1(&"Cleared node selection".into());
+            state.mark_dirty();
+            true
+        }
+
+        // Connection handle dragging handlers
+        Message::StartConnectionDrag { node_id, handle_position, start_x, start_y } => {
+            state.connection_drag_active = true;
+            state.connection_drag_start = Some((node_id.clone(), handle_position.clone()));
+            state.connection_drag_current = Some((*start_x, *start_y));
+            web_sys::console::log_1(&format!("Started connection drag from {} handle of node {}", handle_position, node_id).into());
+            state.mark_dirty();
+            true
+        }
+
+        Message::UpdateConnectionDrag { current_x, current_y } => {
+            if state.connection_drag_active {
+                state.connection_drag_current = Some((*current_x, *current_y));
+                state.mark_dirty(); // Repaint to show preview line
+            }
+            true
+        }
+
+        Message::EndConnectionDrag { end_x, end_y } => {
+            if state.connection_drag_active {
+                // Check if we're dropping on another node handle with validation
+                if let Some((source_node_id, source_handle)) = state.connection_drag_start.clone() {
+                    // Check if dropped on a specific handle (precise targeting)
+                    let mut connection_created = false;
+                    for (target_node_id, _) in &state.nodes.clone() {
+                        if target_node_id != &source_node_id {
+                            if let Some(target_handle) = state.get_handle_at_point(target_node_id, *end_x, *end_y) {
+                                // Validate the connection before creating
+                                if state.is_valid_connection(&source_handle, &target_handle, &source_node_id, target_node_id) {
+                                    let edge_id = state.add_edge(source_node_id.clone(), target_node_id.clone(), None);
+                                    web_sys::console::log_1(&format!("Created valid connection from {} ({}) to {} ({}) (edge ID: {})", source_node_id, source_handle, target_node_id, target_handle, edge_id).into());
+                                    state.state_modified = true;
+                                    connection_created = true;
+                                } else {
+                                    web_sys::console::log_1(&format!("Invalid connection: {} ({}) to {} ({})", source_node_id, source_handle, target_node_id, target_handle).into());
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // Fallback: if not dropped on a handle, check if dropped on a node (auto-route to input)
+                    if !connection_created {
+                        if let Some((target_node_id, _, _)) = state.find_node_at_position(*end_x, *end_y) {
+                            if target_node_id != source_node_id {
+                                // Auto-route: output -> input only
+                                if state.is_valid_connection(&source_handle, "input", &source_node_id, &target_node_id) {
+                                    let edge_id = state.add_edge(source_node_id.clone(), target_node_id.clone(), None);
+                                    web_sys::console::log_1(&format!("Created auto-routed connection from {} ({}) to {} (input) (edge ID: {})", source_node_id, source_handle, target_node_id, edge_id).into());
+                                    state.state_modified = true;
+                                } else {
+                                    web_sys::console::log_1(&format!("Invalid auto-route connection: {} ({}) to {} (input)", source_node_id, source_handle, target_node_id).into());
+                                }
+                            } else {
+                                web_sys::console::log_1(&"Cannot connect node to itself".into());
+                            }
+                        }
+                    }
+                }
+                
+                // Clear drag state
+                state.connection_drag_active = false;
+                state.connection_drag_start = None;
+                state.connection_drag_current = None;
+            }
+            state.mark_dirty();
+            true
+        }
+
         _ => false,
     }
 }

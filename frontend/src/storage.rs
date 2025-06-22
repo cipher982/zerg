@@ -54,6 +54,9 @@ pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
     // diagnose backend or network issues immediately instead of silently
     // falling back to stale client-side data.
 
+    // TEMPORARILY DISABLED: localStorage persistence to avoid frontend/backend sync conflicts
+    // The WebSocket-based backend persistence is much more reliable and eliminates race conditions
+    /*
     let window = web_sys::window().expect("no global window exists");
     let local_storage = window.local_storage()?.expect("no local storage exists");
     
@@ -63,6 +66,7 @@ pub fn save_state(app_state: &AppState) -> Result<(), JsValue> {
     
     // Save workflows and CanvasNodes
     save_workflows(app_state)?;
+    */
     
     Ok(())
 }
@@ -296,6 +300,11 @@ pub fn save_state_to_api(app_state: &AppState) {
     // We intentionally removed the legacy localStorage fallback so that any
     // save failures become immediately visible during development instead of
     // being masked by stale client-side data.
+
+    // ------------------------------------------------------------------
+    // Save canvas structure data to workflow - this is critical for LangGraph
+    // ------------------------------------------------------------------
+    save_canvas_data_to_api(app_state);
 
     // ------------------------------------------------------------------
     // Debounce network save – PATCH /api/graph/layout
@@ -625,11 +634,12 @@ pub(crate) fn fix_stub_nodes() {
         }
 
         // Collect candidate placeholder node ids first.
+        // Only convert nodes that are actually stub nodes (text starts with "node_")
         let candidate_ids: Vec<String> = st
             .nodes
             .iter()
             .filter_map(|(id, n)| {
-                if n.agent_id.is_none() {
+                if n.agent_id.is_none() && n.text.starts_with("node_") {
                     Some(id.clone())
                 } else {
                     None
@@ -662,7 +672,10 @@ pub(crate) fn fix_stub_nodes() {
 }
 
 // Save workflows to localStorage
-pub fn save_workflows(app_state: &AppState) -> Result<(), JsValue> {
+pub fn save_workflows(_app_state: &AppState) -> Result<(), JsValue> {
+    // TEMPORARILY DISABLED: localStorage workflow persistence to avoid sync conflicts
+    // WebSocket-based backend persistence handles this more reliably
+    /*
     let window = web_sys::window().expect("no global window exists");
     let local_storage = window.local_storage()?.expect("no local storage exists");
     
@@ -678,12 +691,16 @@ pub fn save_workflows(app_state: &AppState) -> Result<(), JsValue> {
     } else {
         local_storage.remove_item("current_workflow_id")?;
     }
+    */
     
     Ok(())
 }
 
 // Load workflows from localStorage
-pub fn load_workflows(app_state: &mut AppState) -> Result<(), JsValue> {
+pub fn load_workflows(_app_state: &mut AppState) -> Result<(), JsValue> {
+    // TEMPORARILY DISABLED: localStorage workflow loading to avoid sync conflicts
+    // Backend API calls handle workflow loading more reliably
+    /*
     let window = web_sys::window().expect("no global window exists");
     let local_storage = window.local_storage()?.expect("no local storage exists");
     
@@ -715,6 +732,74 @@ pub fn load_workflows(app_state: &mut AppState) -> Result<(), JsValue> {
             }
         }
     }
+    */
     
+    web_sys::console::log_1(&"Workflows will be loaded from backend API instead of localStorage".into());
     Ok(())
+}
+
+/// Save canvas structure data (nodes and edges) to current workflow
+pub fn save_canvas_data_to_api(app_state: &AppState) {
+    // Skip if dragging to avoid too many API calls
+    if app_state.is_dragging_agent || app_state.canvas_dragging {
+        return;
+    }
+
+    // Get current workflow data
+    let canvas_data = if let Some(workflow_id) = app_state.current_workflow_id {
+        if let Some(workflow) = app_state.workflows.get(&workflow_id) {
+            serde_json::json!({
+                "nodes": workflow.nodes,
+                "edges": workflow.edges
+            })
+        } else {
+            // If no workflow exists but we have a current_workflow_id, 
+            // we should still send the current state
+            serde_json::json!({
+                "nodes": Vec::<crate::models::CanvasNode>::new(),
+                "edges": Vec::<crate::models::Edge>::new()
+            })
+        }
+    } else {
+        // No current workflow, create empty structure
+        serde_json::json!({
+            "nodes": Vec::<crate::models::CanvasNode>::new(),
+            "edges": Vec::<crate::models::Edge>::new()
+        })
+    };
+
+    // Only save if we have actual content to save
+    let has_nodes = canvas_data.get("nodes")
+        .and_then(|n| n.as_array())
+        .map(|arr| !arr.is_empty())
+        .unwrap_or(false);
+    
+    let has_edges = canvas_data.get("edges")
+        .and_then(|e| e.as_array())
+        .map(|arr| !arr.is_empty())
+        .unwrap_or(false);
+
+    if !has_nodes && !has_edges {
+        // Don't spam API with empty canvas data unless it's the first save
+        return;
+    }
+
+    let payload = serde_json::json!({
+        "canvas_data": canvas_data
+    });
+
+    let payload_str = payload.to_string();
+    
+    web_sys::console::log_1(&format!("🚀 Sending canvas data to API: {}", payload_str).into());
+    
+    spawn_local(async move {
+        match crate::network::ApiClient::patch_workflow_canvas_data(&payload_str).await {
+            Ok(_) => {
+                web_sys::console::log_1(&"✅ Canvas structure saved to workflow".into());
+            }
+            Err(e) => {
+                web_sys::console::error_1(&format!("❌ Failed to save canvas structure: {:?}", e).into());
+            }
+        }
+    });
 } 

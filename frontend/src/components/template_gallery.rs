@@ -164,8 +164,9 @@ pub fn refresh_templates_grid(document: &Document) -> Result<(), JsValue> {
     // Clear existing content
     grid.set_inner_html("");
 
-    // Get templates from state
+    // Get templates from state - safe to borrow here as this is UI-initiated refresh
     let (templates, categories, loading) = APP_STATE.with(|state| {
+        // This refresh is only called from UI events, not during state updates
         let s = state.borrow();
         (s.templates.clone(), s.template_categories.clone(), s.templates_loading)
     });

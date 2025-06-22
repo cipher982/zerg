@@ -65,6 +65,9 @@ implemented as *fully functional* LangGraph runnables.
 • **ReAct-style LangGraph agents** – cached runnable compilation, tool calls
   executed concurrently with `asyncio.gather`.
 
+• **Streaming workflow execution** – visual workflows stream progress in real-time
+  with SQLite checkpointing for durability and resumability.
+
 • **SEO snapshotting** – Node + Playwright captures static HTML and serves it
   to crawlers; humans get the live WASM SPA.
 
@@ -569,7 +572,8 @@ After launching the frontend (http://localhost:8002):
 
 • **Multi-Agent Orchestration**  
   - LangGraph foundation enables agents to chain operations and share state
-  - Agents can be composed into larger workflows
+  - Visual workflows with real-time streaming and persistent checkpointing
+  - Agents can be composed into larger workflows with human-in-the-loop approval
 
 • **Advanced Agent Plugins**  
   - Agents bridging to external services, e.g. sending emails or reading logs.  

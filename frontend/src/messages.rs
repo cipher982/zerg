@@ -99,6 +99,32 @@ pub enum Message {
         label: Option<String>,
     },
 
+    // Connection creation UI
+    ToggleConnectionMode,               // Toggle connection creation mode
+    SelectNodeForConnection {           // Select a node for connection
+        node_id: String,
+    },
+    CreateConnectionFromSelected {      // Create connection from selected node to target
+        target_node_id: String,
+    },
+    ClearNodeSelection,                 // Clear current node selection
+
+    // Connection handle dragging
+    StartConnectionDrag {               // Start dragging from a connection handle
+        node_id: String,
+        handle_position: String,
+        start_x: f64,
+        start_y: f64,
+    },
+    UpdateConnectionDrag {              // Update connection drag position
+        current_x: f64,
+        current_y: f64,
+    },
+    EndConnectionDrag {                 // End connection drag
+        end_x: f64,
+        end_y: f64,
+    },
+
     // Workflow rename/delete actions coming from UI
     RenameWorkflow {
         workflow_id: u32,
@@ -130,6 +156,7 @@ pub enum Message {
     WorkflowsLoaded(Vec<crate::models::Workflow>),
     /// Workflow successfully created via backend
     WorkflowCreated(crate::models::Workflow),
+    CurrentWorkflowLoaded(crate::models::Workflow),
     /// Workflow was deleted (soft delete)
     WorkflowDeleted { workflow_id: u32 },
     /// Workflow renamed / updated
@@ -269,6 +296,16 @@ pub enum Message {
     /// User clicked Run – initiate backend execution and subscribe to progress.
     StartWorkflowExecution {
         workflow_id: u32,
+    },
+
+    /// Reserve an execution ID and subscribe to its WebSocket topic
+    ReserveWorkflowExecution {
+        workflow_id: u32,
+    },
+    
+    /// Start a previously reserved execution
+    StartReservedExecution {
+        execution_id: u32,
     },
 
     // -------------------------------------------------------------------
@@ -573,6 +610,9 @@ pub enum Command {
     /// Fetch workflows (visual canvas definitions)
     FetchWorkflows,
 
+    /// Fetch current working workflow (creates if none exists)
+    FetchCurrentWorkflow,
+
     /// Fetch execution history for workflow
     FetchExecutionHistory { workflow_id: u32 },
 
@@ -588,6 +628,12 @@ pub enum Command {
     // ---------------- Workflow execution -----------------------------
     /// POST /workflow-executions/{workflow_id}/start
     StartWorkflowExecutionApi { workflow_id: u32 },
+    
+    /// POST /workflow-executions/{workflow_id}/reserve
+    ReserveWorkflowExecutionApi { workflow_id: u32 },
+    
+    /// POST /workflow-executions/executions/{execution_id}/start
+    StartReservedExecutionApi { execution_id: u32 },
 
     // ---------------- Workflow scheduling -----------------------------
     /// POST /workflow-executions/{workflow_id}/schedule

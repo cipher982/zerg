@@ -19,6 +19,7 @@ pub mod trigger_config_modal;
 pub mod workflow_switcher;
 pub mod log_drawer;
 pub mod execution_sidebar;
+/* Removed: pub mod execution_results_panel; */
 pub mod template_gallery;
 
 // utilities
