@@ -8,7 +8,7 @@ from zerg.models.models import Agent
 # Tests assume Python ≥3.12 – full union syntax available.
 
 
-def _details_url(agent_id: int, include: str | None = None) -> str:
+def _details_url(agent_id: int, include=None) -> str:
     if include is None:
         return f"/api/agents/{agent_id}/details"
     return f"/api/agents/{agent_id}/details?include={include}"

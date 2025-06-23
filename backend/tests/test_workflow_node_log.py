@@ -5,7 +5,7 @@ import asyncio
 from sqlalchemy.orm import Session
 
 from zerg.models.models import Workflow
-from zerg.services.workflow_engine import workflow_execution_engine
+from zerg.services.langgraph_workflow_engine import langgraph_workflow_engine as workflow_execution_engine
 
 
 def _insert_workflow(db: Session, *, name: str, canvas_data: dict):
