@@ -336,11 +336,20 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::AnimationTick => {
-            // Only mark dirty if there are actual animations or updates that need rendering
+            // Check if there are active animations or continuous background animations that need rendering
+            let has_background_particles = state.particle_system.is_some();
+            let has_connection_lines = state.current_workflow_id
+                .and_then(|wf_id| state.workflows.get(&wf_id))
+                .map(|wf| !wf.edges.is_empty())
+                .unwrap_or(false) || 
+                state.nodes.values().any(|node| node.parent_id.is_some());
+            
             let needs_animation = !state.running_runs.is_empty() || 
                                   state.connection_drag_active || 
                                   state.dragging.is_some() ||
-                                  state.canvas_dragging;
+                                  state.canvas_dragging ||
+                                  has_background_particles ||
+                                  has_connection_lines;
             
             if needs_animation {
                 state.mark_dirty();
