@@ -1,0 +1,131 @@
+asyncapi: 3.0.0
+
+info:
+  title: Zerg Tool Registry Contract
+  version: 1.0.0
+  description: |
+    Tool definitions and contracts for cross-service validation.
+    Ensures frontend tool references match backend tool registry.
+
+defaultContentType: application/json
+
+# ---------------------------------------------------------------------------
+# Tool Registry Schema Components
+# ---------------------------------------------------------------------------
+
+components:
+  schemas:
+    ToolName:
+      type: string
+      description: Built-in tool names available in the registry
+      enum:
+        - http_request
+        - math_eval
+        - get_current_time
+        - datetime_diff
+        - generate_uuid
+
+    ServerName:
+      type: string
+      description: Server/module names for tools
+      enum:
+        - http
+        - math
+        - datetime
+        - uuid
+
+    ToolDefinition:
+      type: object
+      description: Complete tool definition with metadata
+      properties:
+        name:
+          $ref: '#/components/schemas/ToolName'
+        server_name:
+          $ref: '#/components/schemas/ServerName'
+        description:
+          type: string
+        parameters:
+          type: object
+          description: Tool parameter schema (from LangChain StructuredTool)
+        visibility:
+          $ref: '#/components/schemas/ToolVisibility'
+      required:
+        - name
+        - server_name
+        - description
+
+    ToolVisibility:
+      type: string
+      description: Tool visibility settings
+      enum:
+        - AlwaysExternal
+        - Internal
+        - OptionalExternal
+
+    # Tool-to-server mapping for validation
+    ToolRegistry:
+      type: object
+      description: Registry mapping tools to their servers
+      properties:
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolDefinition'
+        tool_mappings:
+          type: object
+          description: Tool name to server mapping
+          properties:
+            http_request:
+              const: http
+            math_eval:
+              const: math
+            get_current_time:
+              const: datetime
+            datetime_diff:
+              const: datetime
+            generate_uuid:
+              const: uuid
+          required:
+            - http_request
+            - math_eval
+            - get_current_time
+            - datetime_diff
+            - generate_uuid
+
+# ---------------------------------------------------------------------------
+# Contract Validation Messages  
+# ---------------------------------------------------------------------------
+
+  messages:
+    ToolAvailabilityContract:
+      description: Contract for tool availability validation
+      payload:
+        type: object
+        properties:
+          expected_tools:
+            type: array
+            items:
+              $ref: '#/components/schemas/ToolName'
+          version:
+            type: string
+        required:
+          - expected_tools
+          - version
+
+    ToolSignatureContract:
+      description: Contract for tool parameter validation
+      payload:
+        type: object
+        properties:
+          tool_name:
+            $ref: '#/components/schemas/ToolName'
+          expected_parameters:
+            type: array
+            items:
+              type: string
+          version:
+            type: string
+        required:
+          - tool_name
+          - expected_parameters
+          - version

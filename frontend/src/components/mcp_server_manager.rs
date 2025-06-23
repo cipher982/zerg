@@ -179,7 +179,7 @@ impl MCPServerManager {
         let builtin_tools = [
             "Date/Time (get_current_time)",
             "Math (math_eval)", 
-            "HTTP Requests (http_get)",
+            "HTTP Requests (http_request)",
         ];
 
         for tool in &builtin_tools {

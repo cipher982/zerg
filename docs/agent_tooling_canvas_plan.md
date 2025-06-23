@@ -94,7 +94,7 @@ Double-clicking an Agent opens a side-panel (or nested canvas) streaming every L
 | ID | Task | Status |
 |----|-------|--------|
 | A-1 | Implement `ToolRegistry` & migrate `get_current_time` | [x] |
-| A-2 | Add built-in tools (`http_get`, `math_eval`, `uuid`, `datetime_diff`) | [x] |
+| A-2 | Add built-in tools (`http_request`, `math_eval`, `uuid`, `datetime_diff`) | [x] |
 | A-3 | Schema migration – `allowed_tools` column | [x] |
 | A-4 | Update agent factory to honour allow-list | [x] |
 
@@ -133,7 +133,7 @@ Double-clicking an Agent opens a side-panel (or nested canvas) streaming every L
 MCP (Model Context Protocol) provides a standardized way to connect to external tool providers, perfectly aligning with our plugin system needs:
 
 1. **Built-in Tools** (Phase A) ✅ - Fast, reliable, always available
-   - `get_current_time`, `math_eval`, `http_get`, etc.
+   - `get_current_time`, `math_eval`, `http_request`, etc.
    - Directly integrated into our tool registry
 
 2. **MCP Tools** (Phase C) - Extensible ecosystem

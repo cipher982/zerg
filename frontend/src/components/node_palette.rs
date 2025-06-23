@@ -2,6 +2,7 @@ use web_sys::{Document, Element, MouseEvent, DragEvent};
 use wasm_bindgen::{JsCast, JsValue};
 use crate::models::{NodeType, TriggerType, TriggerConfig, ToolConfig, ToolVisibility};
 use crate::state::{APP_STATE, AppState};
+use crate::generated::{ToolName, ServerName};
 use std::collections::HashMap;
 
 /// Node palette component for dragging tools and triggers onto the canvas
@@ -299,8 +300,8 @@ impl NodePalette {
             icon: "🌐".to_string(),
             category: "I/O Tools".to_string(),
             node_type: NodeType::Tool {
-                tool_name: "http_request".to_string(),
-                server_name: "http".to_string(),
+                tool_name: ToolName::HttpRequest.as_str().to_string(),
+                server_name: ServerName::Http.as_str().to_string(),
                 config: ToolConfig {
                     static_params: HashMap::new(),
                     input_mappings: HashMap::new(),
