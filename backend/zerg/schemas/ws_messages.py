@@ -235,3 +235,78 @@ OutgoingMessage = Union[
     AgentStateMessage,  # Add agent state
     AgentEventMessage,  # Add agent event
 ]
+
+
+# ==============================================================================
+# MESSAGE ENVELOPE HELPER - Eliminate isinstance() code smell
+# ==============================================================================
+
+
+class MessageEnvelopeHelper:
+    """Helper class to detect and handle message envelopes without isinstance() checks."""
+
+    @staticmethod
+    def is_enveloped(message: Any) -> bool:
+        """
+        Check if message is already enveloped using schema validation.
+
+        Replaces: isinstance(message, dict) and "v" in message and "topic" in message and "ts" in message
+        """
+        try:
+            # Try to parse as envelope - if it works, it's enveloped
+            Envelope.model_validate(message)
+            return True
+        except Exception:
+            # If parsing fails, it's not a valid envelope
+            return False
+
+    @staticmethod
+    def parse_message(message: Any) -> tuple[bool, Union[Envelope, Dict[str, Any]]]:
+        """
+        Parse incoming message and return (is_enveloped, parsed_message).
+
+        Returns:
+            - (True, Envelope) if message is already properly enveloped
+            - (False, dict) if message needs to be enveloped
+        """
+        try:
+            envelope = Envelope.model_validate(message)
+            return True, envelope
+        except Exception:
+            # Not enveloped, return as raw dict for wrapping
+            if isinstance(message, dict):
+                return False, message
+            else:
+                # Convert non-dict to dict format
+                return False, {"data": message, "type": "UNKNOWN"}
+
+    @staticmethod
+    def ensure_envelope(message: Any, topic: Optional[str] = None, req_id: Optional[str] = None) -> Envelope:
+        """
+        Ensure message is properly enveloped, creating envelope if needed.
+
+        This replaces the manual envelope detection and wrapping logic.
+        """
+        is_enveloped, parsed = MessageEnvelopeHelper.parse_message(message)
+
+        if is_enveloped:
+            # Already enveloped, return as-is
+            return parsed
+
+        # Need to create envelope
+        if not isinstance(parsed, dict):
+            parsed = {"data": parsed, "type": "UNKNOWN"}
+
+        # Determine target topic
+        target_topic = topic or parsed.get("topic", "system")
+
+        # Determine message type
+        message_type = str(parsed.get("type", "UNKNOWN")).upper()
+
+        # Extract data payload
+        if "data" in parsed and "type" in parsed:
+            message_data = parsed["data"]
+        else:
+            message_data = parsed
+
+        return Envelope.create(message_type=message_type, topic=target_topic, data=message_data, req_id=req_id)

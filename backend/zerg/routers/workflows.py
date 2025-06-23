@@ -20,6 +20,7 @@ from zerg.routers.graph_layout import LayoutUpdate
 from zerg.schemas.schemas import Workflow
 from zerg.schemas.schemas import WorkflowBase
 from zerg.schemas.schemas import WorkflowCreate
+from zerg.services.canvas_transformer import CanvasTransformer
 from zerg.services.workflow_validator import WorkflowValidator
 
 router = APIRouter(
@@ -52,8 +53,11 @@ def validate_workflow(
     """
     Validate workflow canvas data without saving.
     """
+    # Transform frontend data to canonical format
+    canvas = CanvasTransformer.from_frontend(payload.canvas_data)
+
     validator = WorkflowValidator()
-    result = validator.validate_workflow(payload.canvas_data)
+    result = validator.validate_workflow(canvas)
 
     return ValidationResponse(
         is_valid=result.is_valid,
@@ -78,9 +82,12 @@ def create_workflow(
     """
     Create new workflow with validation.
     """
+    # Transform frontend data to canonical format
+    canvas = CanvasTransformer.from_frontend(workflow_in.canvas_data)
+
     # Validate canvas data before creating
     validator = WorkflowValidator()
-    validation_result = validator.validate_workflow(workflow_in.canvas_data)
+    validation_result = validator.validate_workflow(canvas)
 
     if not validation_result.is_valid:
         error_messages = [f"{error.code}: {error.message}" for error in validation_result.errors]
@@ -104,12 +111,15 @@ def create_workflow(
             },
         )
 
+    # Store canonical format in database
+    canonical_canvas_data = CanvasTransformer.to_database(canvas)
+
     workflow = crud.create_workflow(
         db=db,
         owner_id=current_user.id,
         name=workflow_in.name,
         description=workflow_in.description,
-        canvas_data=workflow_in.canvas_data,
+        canvas_data=canonical_canvas_data,
     )
     return workflow
 

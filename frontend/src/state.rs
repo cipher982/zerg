@@ -766,6 +766,7 @@ impl AppState {
             is_selected: false,
             is_dragging: false,
             exec_status: None,
+            transition_animation: None,
         };
         
         web_sys::console::log_1(&format!("Node created with dimensions: {}x{} at position ({}, {})", 
@@ -819,6 +820,7 @@ impl AppState {
             is_selected: false,
             is_dragging: false,
             exec_status: None,
+            transition_animation: None,
         };
 
         self.nodes.insert(node_id.clone(), node.clone());
@@ -873,6 +875,7 @@ impl AppState {
             exec_status: None,
             is_selected: false,
             is_dragging: false,
+            transition_animation: None,
         };
         
         self.nodes.insert(response_id.clone(), node);
@@ -1519,6 +1522,7 @@ impl AppState {
             is_selected: false,
             is_dragging: false,
             exec_status: None,
+            transition_animation: None,
         };
 
         self.nodes.insert(node_id.clone(), node.clone());
@@ -1583,6 +1587,7 @@ impl AppState {
                     is_selected: node.is_selected,
                     is_dragging: node.is_dragging,
                     exec_status: node.exec_status,
+                    transition_animation: node.transition_animation,
                 };
                 
                 // Remove any existing node with the same ID and add the new one
@@ -1613,6 +1618,7 @@ impl AppState {
                         is_selected: node.is_selected,
                         is_dragging: node.is_dragging,
                         exec_status: node.exec_status,
+                        transition_animation: node.transition_animation,
                     }],
                     edges: Vec::new(),
                 };
@@ -1637,6 +1643,7 @@ impl AppState {
                     is_selected: node.is_selected,
                     is_dragging: node.is_dragging,
                     exec_status: node.exec_status,
+                    transition_animation: node.transition_animation,
                 };
                 workflow.nodes.push(canvas_node);
             }

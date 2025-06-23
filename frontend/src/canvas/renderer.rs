@@ -1,5 +1,5 @@
 use web_sys::{CanvasRenderingContext2d};
-use crate::models::{Node, NodeType, ApiAgent, NodeExecStatus};
+use crate::models::{Node, NodeType, ApiAgent, NodeExecStatus, TransitionType};
 use crate::state::AppState;
 use crate::constants::*;
 use super::shapes;
@@ -86,6 +86,64 @@ fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
     }
 }
 
+/// Apply transition animation effects to a node
+fn apply_transition_effects(context: &CanvasRenderingContext2d, node: &Node) {
+    if let Some(animation) = &node.transition_animation {
+        let now = js_sys::Date::now();
+        let elapsed = now - animation.start_time;
+        let progress = (elapsed / animation.duration).min(1.0);
+        
+        match animation.animation_type {
+            TransitionType::SuccessFlash => {
+                // Flash effect: bright glow that fades out
+                let intensity = (1.0 - progress) * 0.8;
+                if intensity > 0.0 {
+                    context.save();
+                    context.set_shadow_color(&format!("rgba(34, 197, 94, {})", intensity));
+                    context.set_shadow_blur(20.0 * intensity);
+                    context.set_global_alpha(intensity);
+                    
+                    // Draw bright overlay
+                    context.set_fill_style_str(&format!("rgba(34, 197, 94, {})", intensity * 0.3));
+                    crate::canvas::shapes::draw_rounded_rect_path(context, node);
+                    context.fill();
+                    
+                    context.restore();
+                }
+            },
+            TransitionType::ErrorShake => {
+                // Shake effect: horizontal oscillation
+                if progress < 1.0 {
+                    let shake_amplitude = 3.0 * (1.0 - progress);
+                    let shake_frequency = 20.0;
+                    let shake_offset = shake_amplitude * (elapsed / 1000.0 * shake_frequency * 2.0 * std::f64::consts::PI).sin();
+                    
+                    context.save();
+                    context.translate(shake_offset, 0.0).ok();
+                    
+                    // Add red glow during shake
+                    context.set_shadow_color(&format!("rgba(239, 68, 68, {})", 0.6 * (1.0 - progress)));
+                    context.set_shadow_blur(10.0);
+                }
+            }
+        }
+    }
+}
+
+/// Restore context after transition effects
+fn restore_after_transition_effects(context: &CanvasRenderingContext2d, node: &Node) {
+    if let Some(animation) = &node.transition_animation {
+        if matches!(animation.animation_type, TransitionType::ErrorShake) {
+            let now = js_sys::Date::now();
+            let elapsed = now - animation.start_time;
+            let progress = (elapsed / animation.duration).min(1.0);
+            if progress < 1.0 {
+                context.restore();
+            }
+        }
+    }
+}
+
 /// Draw a connection line between two nodes with animation
 /// The animation flows from from_node to to_node (source → destination)
 fn draw_connection_line(context: &CanvasRenderingContext2d, from_node: &crate::models::Node, to_node: &crate::models::Node, animation_offset: &f64) {
@@ -165,6 +223,9 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
     if !is_reachable {
         context.set_global_alpha(0.4); // Make unconnected nodes semi-transparent
     }
+    
+    // Apply transition animation effects
+    apply_transition_effects(context, node);
     
     // Draw the appropriate node shape based on type
     match &node.node_type {
@@ -378,11 +439,18 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             context.set_shadow_offset_x(0.0);
             context.set_shadow_offset_y(0.0);
 
-            // Accent bar (top)
+            // Accent bar (top) - color based on execution status
+            let accent_color = match node.exec_status {
+                Some(NodeExecStatus::Running) => "#fbbf24", // amber-400
+                Some(NodeExecStatus::Success) => "#22c55e", // green-500
+                Some(NodeExecStatus::Failed) => "#ef4444",  // red-500
+                _ => "#10b981", // emerald-500 (default green)
+            };
+            
             context.begin_path();
             context.move_to(node.x, node.y + 6.0);
             context.line_to(node.x + node.width, node.y + 6.0);
-            context.set_stroke_style_str("#10b981");
+            context.set_stroke_style_str(accent_color);
             context.set_line_width(4.0);
             context.stroke();
 
@@ -417,13 +485,33 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
             context.set_fill_style_str("#047857");
             let _ = context.fill_text("Trigger", node.x + 48.0, node.y + 50.0);
 
-            // Status indicator (top-right)
+            // Execution status indicator (top-right)
             let status_x = node.x + node.width - 20.0;
             let status_y = node.y + 18.0;
             context.begin_path();
             let _ = context.arc(status_x, status_y, 5.0, 0.0, 2.0 * std::f64::consts::PI);
-            context.set_fill_style_str("#10b981");
+            
+            let status_color = match node.exec_status {
+                Some(NodeExecStatus::Running) => "#fbbf24", // amber-400
+                Some(NodeExecStatus::Success) => "#22c55e", // green-500
+                Some(NodeExecStatus::Failed) => "#ef4444",  // red-500
+                _ => "#10b981", // emerald-500 (default green)
+            };
+            
+            context.set_fill_style_str(status_color);
             context.fill();
+            
+            // Add pulsing effect for running status
+            if node.exec_status == Some(NodeExecStatus::Running) {
+                let timestamp = js_sys::Date::now() as f64;
+                let pulse = (timestamp / 500.0).sin() * 0.3 + 0.7;
+                context.set_global_alpha(pulse);
+                context.begin_path();
+                let _ = context.arc(status_x, status_y, 8.0, 0.0, 2.0 * std::f64::consts::PI);
+                context.set_fill_style_str("rgba(251, 191, 36, 0.4)");
+                context.fill();
+                context.set_global_alpha(1.0);
+            }
 
             context.restore();
         },
@@ -477,6 +565,9 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
     
     // Draw the text content of the node
     shapes::draw_node_text(context, node);
+    
+    // Restore any transition effects before final context restore
+    restore_after_transition_effects(context, node);
     
     // Restore context (for alpha changes)
     context.restore();

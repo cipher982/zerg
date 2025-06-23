@@ -172,6 +172,7 @@ fn try_load_layout_from_api() {
                                                 is_selected: false,
                                                 is_dragging: false,
                                                 exec_status: None,
+                                                transition_animation: None,
                                             });
                                         }
                                     }

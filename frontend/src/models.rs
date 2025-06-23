@@ -203,6 +203,10 @@ pub struct CanvasNode {
     /// None means the node has never been executed in the current run.
     #[serde(skip, default)]
     pub exec_status: Option<NodeExecStatus>,
+
+    /// Animation state for transition effects (success flash, error shake, etc.)
+    #[serde(skip, default)]
+    pub transition_animation: Option<TransitionAnimation>,
 }
 
 /// Execution status emitted via WebSocket (running/success/failed).
@@ -212,6 +216,21 @@ pub enum NodeExecStatus {
     Running,
     Success,
     Failed,
+}
+
+/// Transition animation state for visual effects on status changes
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TransitionAnimation {
+    pub animation_type: TransitionType,
+    pub start_time: f64,
+    pub duration: f64,
+}
+
+/// Types of transition animations
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TransitionType {
+    SuccessFlash,
+    ErrorShake,
 }
 
 // -----------------------------------------------------------------------------

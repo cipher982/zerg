@@ -16,7 +16,7 @@ async def test_workflow_execution_subscription_snapshot(db: Session):
     """Test that subscribing to a finished workflow execution returns a snapshot."""
 
     # Create a finished workflow execution
-    workflow = crud.create_workflow(db, name="Test Workflow", description="Test", created_by=1)
+    workflow = crud.create_workflow(db, owner_id=1, name="Test Workflow", description="Test", canvas_data={})
     execution = crud.create_workflow_execution(db, workflow_id=workflow.id, status="success", triggered_by="manual")
     # Update it to have finished timestamps
     execution.status = "success"
