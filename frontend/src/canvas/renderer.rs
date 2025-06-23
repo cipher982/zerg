@@ -113,7 +113,7 @@ fn draw_connection_line(context: &CanvasRenderingContext2d, from_node: &crate::m
         end_x, end_y
     );
 
-    // Check if either node is running for glow effect
+    // Check if either node is running for enhanced glow effect
     let from_running = from_node.exec_status == Some(crate::models::NodeExecStatus::Running);
     let to_running = to_node.exec_status == Some(crate::models::NodeExecStatus::Running);
     let glow_active = from_running || to_running;
@@ -137,9 +137,16 @@ fn draw_connection_line(context: &CanvasRenderingContext2d, from_node: &crate::m
         let _ = context.set_line_dash(&dash_arr);
         context.set_line_dash_offset(*animation_offset);
     } else {
-        // Default connection style
+        // Default connection style with subtle animation
         context.set_stroke_style_str("#95a5a6");
         context.set_line_width(2.0);
+        
+        // Add subtle animated dashes to all connection lines
+        let dash_arr = js_sys::Array::new();
+        dash_arr.push(&8_f64.into());
+        dash_arr.push(&4_f64.into());
+        let _ = context.set_line_dash(&dash_arr);
+        context.set_line_dash_offset(*animation_offset * 0.3); // Slower animation for idle lines
     }
     
     context.stroke();
