@@ -72,3 +72,14 @@ repos:
         language: system
         entry: scripts/asyncapi-validate.sh
         pass_filenames: false
+
+# ---------------------------------------------------------------------------
+# Tool contract validation – ensures tool schema matches backend registry
+# ---------------------------------------------------------------------------
+
+      - id: tool-contract-validation
+        name: Tool contract validation
+        language: system
+        entry: python3 scripts/validate_tool_contracts_only.py
+        pass_filenames: false
+        files: ^(asyncapi/tools\.yml|backend/zerg/tools/builtin/.*\.py|frontend/src/components/node_palette\.rs)$

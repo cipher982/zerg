@@ -98,7 +98,7 @@ async def execute_mcp_tool(server_url: str, tool_name: str, args: dict):
 │ Built-in Tools ✓                                │
 │ • Date/Time (get_current_time)                  │
 │ • Math (math_eval)                              │
-│ • HTTP Requests (http_get)                      │
+│ • HTTP Requests (http_request)                      │
 │                                                 │
 │ ─────────────────────────────────────           │
 │                                                 │
@@ -136,7 +136,7 @@ Available Tools
 ├── 🛠️ Built-in (Always Available)
 │   ├── ☑️ get_current_time
 │   ├── ☑️ math_eval
-│   └── ☑️ http_get
+│   └── ☑️ http_request
 └── 🌐 From MCP Servers
     ├── github
     │   ├── ☐ create_issue
@@ -327,7 +327,7 @@ POST /api/agents/{agent_id}/mcp-servers
 ```http
 GET /api/agents/{agent_id}/available-tools
 {
-  "builtin": ["get_current_time", "math_eval", "http_get"],
+  "builtin": ["get_current_time", "math_eval", "http_request"],
   "mcp": {
     "github": ["create_issue", "search_repositories"],
     "custom": ["internal_tool_1", "internal_tool_2"]

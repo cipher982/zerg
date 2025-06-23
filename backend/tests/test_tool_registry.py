@@ -68,7 +68,9 @@ class TestToolRegistry:
         # Create tools directly as StructuredTool instances
         from langchain_core.tools import StructuredTool
 
-        http_get_tool = StructuredTool.from_function(func=lambda: "http_get", name="http_get", description="HTTP GET")
+        http_request_tool = StructuredTool.from_function(
+            func=lambda: "http_request", name="http_request", description="HTTP Request"
+        )
         http_post_tool = StructuredTool.from_function(
             func=lambda: "http_post", name="http_post", description="HTTP POST"
         )
@@ -76,15 +78,15 @@ class TestToolRegistry:
             func=lambda: "math_eval", name="math_eval", description="Math eval"
         )
 
-        test_registry.register(http_get_tool)
+        test_registry.register(http_request_tool)
         test_registry.register(http_post_tool)
         test_registry.register(math_eval_tool)
 
         # Test with specific allowlist
-        tools = test_registry.filter_tools_by_allowlist(["http_get", "math_eval"])
+        tools = test_registry.filter_tools_by_allowlist(["http_request", "math_eval"])
         tool_names = [t.name for t in tools]
         assert len(tools) == 2
-        assert "http_get" in tool_names
+        assert "http_request" in tool_names
         assert "math_eval" in tool_names
         assert "http_post" not in tool_names
 
@@ -92,7 +94,7 @@ class TestToolRegistry:
         tools = test_registry.filter_tools_by_allowlist(["http_*"])
         tool_names = [t.name for t in tools]
         assert len(tools) == 2
-        assert "http_get" in tool_names
+        assert "http_request" in tool_names
         assert "http_post" in tool_names
         assert "math_eval" not in tool_names
 
@@ -119,7 +121,7 @@ class TestBuiltinTools:
         expected_tools = [
             "get_current_time",
             "datetime_diff",
-            "http_get",
+            "http_request",
             "math_eval",
             "generate_uuid",
         ]

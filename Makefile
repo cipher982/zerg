@@ -9,7 +9,7 @@ F_PORT ?= 8002
 # Command templates
 PY_UVICORN = uv run python -m uvicorn zerg.main:app
 
-.PHONY: help backend frontend dev stop test e2e compose
+.PHONY: help backend frontend dev stop test e2e compose tool-code-gen tool-validate tool-check tool-code-diff-check
 
 # ---------------------------------------------------------------------------
 # Help – `make` or `make help`
@@ -21,9 +21,15 @@ help:
 	@echo "make frontend  # start web-app on port $(F_PORT)"
 	@echo "make dev       # start backend + frontend together"
 	@echo "make stop      # kill anything on $(B_PORT) $(F_PORT)"
-	@echo "make test      # backend & frontend unit tests"
+	@echo "make test      # backend & frontend unit tests + tool contracts"
 	@echo "make e2e       # full Playwright E2E suite"
 	@echo "make compose   # (optional) docker-compose up --build"
+	@echo ""
+	@echo "Tool Contract System:"
+	@echo "make tool-code-gen        # generate Rust/Python types from schema"
+	@echo "make tool-validate        # validate backend registry matches schema"
+	@echo "make tool-check           # full tool contract validation (both above)"
+	@echo "make tool-code-diff-check # verify generated code is up-to-date (CI)"
 	@echo ""
 
 # ---------------------------------------------------------------------------
@@ -54,6 +60,7 @@ stop:
 
 test:
 	./scripts/validate-asyncapi.sh
+	$(MAKE) tool-check
 	cd backend  && ./run_backend_tests.sh
 	- cd frontend && ./run_frontend_tests.sh || echo "[make test] 🟡 Frontend tests skipped (no browser / wasm-pack failure)"
 
@@ -86,6 +93,28 @@ pact-capture:
 pact-verify:
 	cd backend && ./run_backend_tests.sh -q -k pact_contracts || true
 	@echo "✅ Pact verification finished (skip flag when pact_verifier missing)"
+
+# ---------------------------------------------------------------------------
+# Tool contract generation / verification
+# ---------------------------------------------------------------------------
+
+tool-code-gen:
+	@echo "🛠  Generating tool types from schema..."
+	python3 scripts/generate_tool_types.py asyncapi/tools.yml
+
+# Verify that generated code is up to date (for CI)
+tool-code-diff-check: tool-code-gen
+	@echo "🔍 Checking if tool definitions are up to date..."
+	git diff --ignore-space-at-eol --exit-code frontend/src/generated/tool_definitions.rs backend/zerg/tools/generated/tool_definitions.py || (echo "\n❌ Tool contract drift – commit the generated changes" && exit 1)
+	@echo "✅ Tool contracts are up to date"
+
+tool-validate:
+	@echo "🔍 Validating tool registry contracts..."
+	python3 scripts/validate_tool_contracts.py
+
+# Combined target for full tool contract checking
+tool-check: tool-code-diff-check tool-validate
+	@echo "✅ All tool contracts validated"
 
 # ---------------------------------------------------------------------------
 # Container stack – optional, used by CI or when you prefer isolation
