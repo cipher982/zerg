@@ -87,6 +87,7 @@ fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
 }
 
 /// Draw a connection line between two nodes with animation
+/// The animation flows from from_node to to_node (source → destination)
 fn draw_connection_line(context: &CanvasRenderingContext2d, from_node: &crate::models::Node, to_node: &crate::models::Node, animation_offset: &f64) {
     context.begin_path();
     
@@ -135,7 +136,7 @@ fn draw_connection_line(context: &CanvasRenderingContext2d, from_node: &crate::m
         dash_arr.push(&10_f64.into());
         dash_arr.push(&6_f64.into());
         let _ = context.set_line_dash(&dash_arr);
-        context.set_line_dash_offset(*animation_offset);
+        context.set_line_dash_offset(-*animation_offset); // Negative for forward flow
     } else {
         // Default connection style with subtle animation
         context.set_stroke_style_str("#95a5a6");
@@ -146,7 +147,7 @@ fn draw_connection_line(context: &CanvasRenderingContext2d, from_node: &crate::m
         dash_arr.push(&8_f64.into());
         dash_arr.push(&4_f64.into());
         let _ = context.set_line_dash(&dash_arr);
-        context.set_line_dash_offset(*animation_offset * 0.3); // Slower animation for idle lines
+        context.set_line_dash_offset(-*animation_offset * 0.3); // Negative for forward flow, slower animation for idle lines
     }
     
     context.stroke();
