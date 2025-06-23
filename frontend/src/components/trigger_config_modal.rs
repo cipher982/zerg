@@ -122,7 +122,7 @@ impl TriggerConfigModal {
             
             TriggerType::Manual => {
                 body_html.push_str("<div class='form-group text-center p-4'>");
-                body_html.push_str("<p class='mb-4 text-gray-600'>This trigger must be started manually using the Run button.</p>");
+                body_html.push_str("<p class='mb-4 text-gray-600'>This trigger must be started manually using the Run button in the toolbar.</p>");
                 body_html.push_str("<p class='text-sm text-gray-500'>No additional configuration needed.</p>");
                 body_html.push_str("</div>");
             }

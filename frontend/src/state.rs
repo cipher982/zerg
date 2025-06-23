@@ -260,8 +260,6 @@ pub struct AppState {
     pub selected_node_id: Option<String>,
     // Track node ID on mousedown to detect clicks on mouseup
     pub clicked_node_id: Option<String>,
-    // Flag to track if we're dragging an agent
-    pub is_dragging_agent: bool,
     // Connection creation mode
     pub connection_mode: bool,
     pub connection_source_node: Option<String>,
@@ -506,7 +504,6 @@ impl AppState {
             last_modified_ms: 0,
             selected_node_id: None,
             clicked_node_id: None,
-            is_dragging_agent: false,
             connection_mode: false,
             connection_source_node: None,
             connection_drag_active: false,
