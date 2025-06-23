@@ -5,7 +5,7 @@ import asyncio
 from fastapi.testclient import TestClient
 
 from zerg.models.models import Workflow
-from zerg.services.workflow_engine import workflow_execution_engine
+from zerg.services.langgraph_workflow_engine import langgraph_workflow_engine as workflow_execution_engine
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -47,7 +47,7 @@ def test_cancel_running_execution(client: TestClient, db_session, monkeypatch):
     db_session.commit()
 
     # Monkeypatch placeholder execute to sleep longer
-    from zerg.services import workflow_engine as _we_mod
+    from zerg.services import langgraph_workflow_engine as _we_mod
 
     def _slow_execute(node_type, node_payload):
         import time

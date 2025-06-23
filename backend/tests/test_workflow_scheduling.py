@@ -9,7 +9,7 @@ import pytest
 
 from zerg.models.models import Workflow
 from zerg.models.models import WorkflowExecution
-from zerg.services.workflow_engine import workflow_execution_engine
+from zerg.services.langgraph_workflow_engine import langgraph_workflow_engine as workflow_execution_engine
 from zerg.services.workflow_scheduler import workflow_scheduler
 
 
@@ -132,7 +132,7 @@ class TestWorkflowEngineScheduling:
         db_session.commit()
 
         # Mock the workflow scheduler
-        with patch("zerg.services.workflow_engine.workflow_scheduler") as mock_wf_scheduler:
+        with patch("zerg.services.langgraph_workflow_engine.workflow_scheduler") as mock_wf_scheduler:
             # Make the async method return a coroutine that resolves to True
             async def mock_schedule_workflow(*args, **kwargs):
                 return True

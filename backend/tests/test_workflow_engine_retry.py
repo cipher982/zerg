@@ -5,7 +5,7 @@ import asyncio
 from sqlalchemy.orm import Session
 
 from zerg.models.models import Workflow
-from zerg.services.workflow_engine import workflow_execution_engine
+from zerg.services.langgraph_workflow_engine import langgraph_workflow_engine as workflow_execution_engine
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -41,7 +41,7 @@ def test_retry_succeeds_within_limit(db_session):  # `db_session` fixture from c
 
     wf = _insert_workflow(db_session, name="wf-retry-ok", canvas_data=canvas)
 
-    execution_id = asyncio.run(_run_execution(wf.id))
+    asyncio.run(_run_execution(wf.id))
 
     # Reload and assert execution success
     db_session.expire_all()
@@ -65,7 +65,7 @@ def test_retry_exhausted_marks_failed(db_session):
 
     wf = _insert_workflow(db_session, name="wf-retry-fail", canvas_data=canvas)
 
-    execution_id = asyncio.run(_run_execution(wf.id))
+    asyncio.run(_run_execution(wf.id))
 
     db_session.expire_all()
     execution = db_session.get(Workflow, wf.id).executions[-1]

@@ -20,6 +20,7 @@ from zerg.routers.graph_layout import LayoutUpdate
 from zerg.schemas.schemas import Workflow
 from zerg.schemas.schemas import WorkflowBase
 from zerg.schemas.schemas import WorkflowCreate
+from zerg.services.workflow_validator import WorkflowValidator
 
 router = APIRouter(
     prefix="/workflows",
@@ -34,6 +35,39 @@ class CanvasDataUpdate(BaseModel):
     canvas_data: Dict[str, Any]
 
 
+class ValidationResponse(BaseModel):
+    """Response for workflow validation."""
+
+    is_valid: bool
+    errors: List[Dict[str, Any]]
+    warnings: List[Dict[str, Any]]
+
+
+@router.post("/validate", response_model=ValidationResponse)
+def validate_workflow(
+    *,
+    payload: CanvasDataUpdate,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Validate workflow canvas data without saving.
+    """
+    validator = WorkflowValidator()
+    result = validator.validate_workflow(payload.canvas_data)
+
+    return ValidationResponse(
+        is_valid=result.is_valid,
+        errors=[
+            {"code": error.code, "message": error.message, "node_id": error.node_id, "severity": error.severity}
+            for error in result.errors
+        ],
+        warnings=[
+            {"code": warning.code, "message": warning.message, "node_id": warning.node_id, "severity": warning.severity}
+            for warning in result.warnings
+        ],
+    )
+
+
 @router.post("/", response_model=Workflow)
 def create_workflow(
     *,
@@ -42,8 +76,34 @@ def create_workflow(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Create new workflow.
+    Create new workflow with validation.
     """
+    # Validate canvas data before creating
+    validator = WorkflowValidator()
+    validation_result = validator.validate_workflow(workflow_in.canvas_data)
+
+    if not validation_result.is_valid:
+        error_messages = [f"{error.code}: {error.message}" for error in validation_result.errors]
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "Workflow validation failed",
+                "errors": error_messages,
+                "validation_result": {
+                    "is_valid": False,
+                    "errors": [
+                        {
+                            "code": error.code,
+                            "message": error.message,
+                            "node_id": error.node_id,
+                            "severity": error.severity,
+                        }
+                        for error in validation_result.errors
+                    ],
+                },
+            },
+        )
+
     workflow = crud.create_workflow(
         db=db,
         owner_id=current_user.id,
@@ -88,9 +148,35 @@ def update_current_workflow_canvas_data(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Update the canvas_data for the user's current workflow.
+    Update the canvas_data for the user's current workflow with validation.
     Creates a default workflow if none exists.
     """
+    # Validate canvas data before updating
+    validator = WorkflowValidator()
+    validation_result = validator.validate_workflow(payload.canvas_data)
+
+    if not validation_result.is_valid:
+        error_messages = [f"{error.code}: {error.message}" for error in validation_result.errors]
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "message": "Workflow validation failed",
+                "errors": error_messages,
+                "validation_result": {
+                    "is_valid": False,
+                    "errors": [
+                        {
+                            "code": error.code,
+                            "message": error.message,
+                            "node_id": error.node_id,
+                            "severity": error.severity,
+                        }
+                        for error in validation_result.errors
+                    ],
+                },
+            },
+        )
+
     # Get most recent workflow
     workflows = crud.get_workflows(db, owner_id=current_user.id, skip=0, limit=1)
 
