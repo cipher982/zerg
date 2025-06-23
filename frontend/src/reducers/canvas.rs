@@ -275,6 +275,27 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 node.color = color.to_string();
                 node.exec_status = Some(exec_status);
                 
+                // Start transition animations for success/error states
+                match exec_status {
+                    NodeExecStatus::Success => {
+                        let now = js_sys::Date::now();
+                        node.transition_animation = Some(crate::models::TransitionAnimation {
+                            animation_type: crate::models::TransitionType::SuccessFlash,
+                            start_time: now,
+                            duration: 1000.0, // 1 second flash
+                        });
+                    },
+                    NodeExecStatus::Failed => {
+                        let now = js_sys::Date::now();
+                        node.transition_animation = Some(crate::models::TransitionAnimation {
+                            animation_type: crate::models::TransitionType::ErrorShake,
+                            start_time: now,
+                            duration: 800.0, // 0.8 second shake
+                        });
+                    },
+                    _ => {}
+                }
+                
                 // Only update agent status for agent-backed nodes with valid workflow execution statuses
                 if let Some(agent_id) = node.agent_id {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
@@ -344,12 +365,27 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 .unwrap_or(false) || 
                 state.nodes.values().any(|node| node.parent_id.is_some());
             
+            // Clean up expired transition animations and check if any are still active
+            let now = js_sys::Date::now();
+            let mut has_transition_animations = false;
+            for node in state.nodes.values_mut() {
+                if let Some(animation) = &node.transition_animation {
+                    let elapsed = now - animation.start_time;
+                    if elapsed >= animation.duration {
+                        node.transition_animation = None;
+                    } else {
+                        has_transition_animations = true;
+                    }
+                }
+            }
+            
             let needs_animation = !state.running_runs.is_empty() || 
                                   state.connection_drag_active || 
                                   state.dragging.is_some() ||
                                   state.canvas_dragging ||
                                   has_background_particles ||
-                                  has_connection_lines;
+                                  has_connection_lines ||
+                                  has_transition_animations;
             
             if needs_animation {
                 state.mark_dirty();

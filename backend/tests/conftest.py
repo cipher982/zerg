@@ -224,29 +224,8 @@ try:
 except Exception:  # pragma: no cover – defensive; tests still proceed
     pass
 
-# Patch StateGraph.compile to return our fake runnable – this avoids spinning
-# up actual tool execution yet still keeps the graph building logic intact.
-
-real_state_graph_cls = langgraph.graph.StateGraph
-
-
-class _PassthroughStateGraph(real_state_graph_cls):
-    """Subclass that behaves identically except *compile()* returns stub."""
-
-    def compile(self):  # type: ignore[override]
-        from langchain_core.messages import AIMessage
-
-        class _Runnable:
-            def invoke(self, _state):
-                return {"messages": [AIMessage(content="stub-response")]}
-
-            async def ainvoke(self, _state):  # noqa: D401 – async counterpart
-                return {"messages": [AIMessage(content="stub-response")]}
-
-        return _Runnable()
-
-
-langgraph.graph.StateGraph = _PassthroughStateGraph
+# Don't stub LangGraph StateGraph - let it execute real workflows
+# We'll stub only the LLM calls within AgentRunner instead
 
 # Patch ChatOpenAI so no external network call happens
 # Replace with async-friendly stub so that code under test can *await* LLM responses.
@@ -263,6 +242,8 @@ import sys as _sys
 _zr_module = _sys.modules.get("zerg.agents_def.zerg_react_agent")
 if _zr_module is not None:  # pragma: no cover – depends on import order
     _zr_module.ChatOpenAI = _StubChatOpenAI  # type: ignore[attr-defined]
+
+# Don't mock AgentRunner globally - let individual tests mock it if needed
 
 # Import app after all engine setup and mocks are in place
 from zerg.main import app  # noqa: E402

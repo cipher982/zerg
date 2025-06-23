@@ -37,6 +37,9 @@ from zerg.models.models import Agent
 from zerg.models.models import NodeExecutionState
 from zerg.models.models import Workflow
 from zerg.models.models import WorkflowExecution
+from zerg.schemas.workflow_schema import NodeTypeHelper
+from zerg.schemas.workflow_schema import WorkflowCanvas
+from zerg.services.canvas_transformer import CanvasTransformer
 from zerg.tools.registry import get_registry
 
 logger = logging.getLogger(__name__)
@@ -158,12 +161,29 @@ class LangGraphWorkflowEngine:
 
     async def _execute_workflow_internal(self, workflow: Workflow, execution: WorkflowExecution, db) -> None:
         """Internal method to execute workflow with existing execution record."""
+        # Transform canvas data first
+        canvas = CanvasTransformer.from_database(workflow.canvas_data)
+
+        # Handle empty workflows gracefully - complete immediately
+        if not canvas.nodes:
+            logger.info(f"[LangGraphEngine] Empty workflow {workflow.id} - completing immediately")
+            execution.status = "success"
+            execution.finished_at = datetime.now(timezone.utc)
+            db.commit()
+
+            # Publish completion event
+            event_bus.publish(
+                EventType.EXECUTION_FINISHED,
+                {"execution_id": execution.id, "workflow_id": workflow.id, "status": "success"},
+            )
+            return
+
         # Use checkpointer context manager
         # TODO: Fix for proper SQLite checkpointing
         checkpointer = MemorySaver()
         # async with AsyncSqliteSaver.from_conn_string("checkpoints.db") as checkpointer:
         # Build LangGraph from canvas_data
-        graph = self._build_langgraph(workflow.canvas_data, execution.id, checkpointer)
+        graph = self._build_langgraph(canvas, execution.id, checkpointer)
 
         # Execute the graph with checkpointing
         initial_state = WorkflowState(
@@ -195,7 +215,8 @@ class LangGraphWorkflowEngine:
             if chunk:
                 # Process each node's state update in the chunk
                 for node_id, state_update in chunk.items():
-                    if isinstance(state_update, dict):
+                    # State updates should always be dicts from LangGraph, but check defensively
+                    if state_update and hasattr(state_update, "get"):
                         logger.info(f"[LangGraphEngine] Processing state update from node {node_id}: {state_update}")
                         final_state = state_update
                         current_completed = len(state_update.get("completed_nodes", []))
@@ -240,17 +261,16 @@ class LangGraphWorkflowEngine:
 
         logger.info("[LangGraphEngine] Execution completed – execution_id=%s", execution.id)
 
-    def _build_langgraph(self, canvas_data: Dict[str, Any], execution_id: int, checkpointer) -> StateGraph:
-        """Convert canvas_data to LangGraph StateGraph."""
+    def _build_langgraph(self, canvas: WorkflowCanvas, execution_id: int, checkpointer) -> StateGraph:
+        """Convert WorkflowCanvas to LangGraph StateGraph."""
 
         workflow = StateGraph(WorkflowState)
 
-        nodes = canvas_data.get("nodes", [])
-        edges = canvas_data.get("edges", [])
+        nodes = canvas.nodes
+        edges = canvas.edges
 
-        logger.info(f"[LangGraphEngine] Raw canvas_data: {canvas_data}")
-        logger.info(f"[LangGraphEngine] Extracted nodes: {nodes}")
-        logger.info(f"[LangGraphEngine] Extracted edges: {edges}")
+        logger.info(f"[LangGraphEngine] Canvas nodes: {[n.node_id for n in nodes]}")
+        logger.info(f"[LangGraphEngine] Canvas edges: {[(e.from_node_id, e.to_node_id) for e in edges]}")
 
         # Store for use in node creation functions
         self._current_nodes = nodes
@@ -258,29 +278,24 @@ class LangGraphWorkflowEngine:
 
         # Filter nodes to only include those reachable from trigger nodes
         connected_nodes = self._get_connected_nodes(nodes, edges)
-        logger.info(f"[LangGraphEngine] Filtered to connected nodes: {[n.get('node_id') for n in connected_nodes]}")
+        logger.info(f"[LangGraphEngine] Filtered to connected nodes: {[n.node_id for n in connected_nodes]}")
 
         # Add only connected nodes to the graph
         for node in connected_nodes:
-            node_id = str(node.get("node_id", "unknown"))
-            node_type_raw = node.get("node_type", "unknown")
-            # Handle both string and dict formats for node_type
-            if isinstance(node_type_raw, dict):
-                # Frontend sends {"Trigger": {...}} or {"Tool": {...}} format
-                node_type = list(node_type_raw.keys())[0].lower() if node_type_raw else "unknown"
-            else:
-                # Fallback for string format
-                node_type = str(node_type_raw).lower()
+            node_id = node.node_id
+            node_type_raw = node.node_type
+            # Use clean NodeTypeHelper instead of isinstance checks
+            node_type, typed_config = NodeTypeHelper.parse_node_type(node_type_raw)
 
             logger.info(f"[LangGraphEngine] Processing node: {node_id} (type={node_type})")
-            logger.info(f"[LangGraphEngine] Full node data: {node}")
 
             # Create node execution function based on type
             if node_type == "tool":
                 logger.info(f"[LangGraphEngine] Creating tool node for {node_id}")
                 node_func = self._create_tool_node(node)
             elif node_type == "agentidentity" or node_type == "agent":
-                logger.info(f"[LangGraphEngine] Creating agent node for {node_id} (agent_id={node.get('agent_id')})")
+                agent_id = node.config.get("agent_id") if node.config else None
+                logger.info(f"[LangGraphEngine] Creating agent node for {node_id} (agent_id={agent_id})")
                 node_func = self._create_agent_node(node)
             elif node_type == "trigger":
                 logger.info(f"[LangGraphEngine] Creating trigger node for {node_id}")
@@ -297,21 +312,17 @@ class LangGraphWorkflowEngine:
         end_nodes = []
 
         # Get all valid node IDs for validation (only connected nodes)
-        valid_node_ids = {str(node.get("node_id", "unknown")) for node in connected_nodes}
+        valid_node_ids = {node.node_id for node in connected_nodes}
 
         logger.info(f"[LangGraphEngine] Valid node IDs: {valid_node_ids}")
         logger.info(f"[LangGraphEngine] Edges to process: {edges}")
 
         # Find nodes with no incoming edges (start nodes) - only from connected nodes
-        target_nodes = {
-            str(edge.get("to_node_id", "")) for edge in edges if str(edge.get("to_node_id", "")) in valid_node_ids
-        }
-        source_nodes = {
-            str(edge.get("from_node_id", "")) for edge in edges if str(edge.get("from_node_id", "")) in valid_node_ids
-        }
+        target_nodes = {edge.to_node_id for edge in edges if edge.to_node_id in valid_node_ids}
+        source_nodes = {edge.from_node_id for edge in edges if edge.from_node_id in valid_node_ids}
 
         for node in connected_nodes:
-            node_id = str(node.get("node_id", "unknown"))
+            node_id = node.node_id
             if node_id not in target_nodes:
                 start_nodes.append(node_id)
             if node_id not in source_nodes:
@@ -327,24 +338,21 @@ class LangGraphWorkflowEngine:
 
         # Add internal edges - with validation
         for edge in edges:
-            source = str(edge.get("from_node_id", ""))
-            target = str(edge.get("to_node_id", ""))
+            source = edge.from_node_id
+            target = edge.to_node_id
 
             logger.info(f"[LangGraphEngine] Processing edge: {source} -> {target}")
 
             # Validate both source and target exist
-            if source and target:
-                if source not in valid_node_ids:
-                    logger.warning(f"[LangGraphEngine] Skipping edge - source node not found: {source}")
-                    continue
-                if target not in valid_node_ids:
-                    logger.warning(f"[LangGraphEngine] Skipping edge - target node not found: {target}")
-                    continue
+            if source not in valid_node_ids:
+                logger.warning(f"[LangGraphEngine] Skipping edge - source node not found: {source}")
+                continue
+            if target not in valid_node_ids:
+                logger.warning(f"[LangGraphEngine] Skipping edge - target node not found: {target}")
+                continue
 
-                logger.info(f"[LangGraphEngine] Adding valid edge: {source} -> {target}")
-                workflow.add_edge(source, target)
-            else:
-                logger.warning(f"[LangGraphEngine] Skipping edge - missing source or target: {edge}")
+            logger.info(f"[LangGraphEngine] Adding valid edge: {source} -> {target}")
+            workflow.add_edge(source, target)
 
         # Connect all end nodes to END
         for end_node in end_nodes:
@@ -355,8 +363,8 @@ class LangGraphWorkflowEngine:
 
         return workflow.compile(checkpointer=checkpointer)
 
-    def _get_connected_nodes(self, nodes: List[Dict[str, Any]], edges: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Filter nodes to only include those reachable from trigger nodes."""
+    def _get_connected_nodes(self, nodes: List, edges: List) -> List:
+        """Filter nodes to only include those reachable from trigger nodes or all nodes for manual execution."""
         if not nodes:
             return []
 
@@ -365,30 +373,25 @@ class LangGraphWorkflowEngine:
         non_trigger_nodes = []
 
         for node in nodes:
-            node_type_raw = node.get("node_type", "")
-            # Handle both string and dict formats for node_type
-            if isinstance(node_type_raw, dict):
-                # Frontend sends {"Trigger": {...}} format
-                node_type = list(node_type_raw.keys())[0].lower() if node_type_raw else ""
-            else:
-                # Fallback for string format
-                node_type = str(node_type_raw).lower()
+            node_type_raw = node.node_type
+            # Use clean NodeTypeHelper instead of isinstance checks
+            node_type, typed_config = NodeTypeHelper.parse_node_type(node_type_raw)
 
             if node_type == "trigger":
                 trigger_nodes.append(node)
             else:
                 non_trigger_nodes.append(node)
 
-        # If no trigger nodes, return empty list (nothing can execute)
+        # If no trigger nodes, for manual execution include all nodes
         if not trigger_nodes:
-            logger.warning("[LangGraphEngine] No trigger nodes found - no nodes will execute")
-            return []
+            logger.info("[LangGraphEngine] No trigger nodes found - including all nodes for execution")
+            return nodes
 
         # Build adjacency graph from edges
         graph = {}
         for edge in edges:
-            source = str(edge.get("from_node_id", ""))
-            target = str(edge.get("to_node_id", ""))
+            source = edge.from_node_id
+            target = edge.to_node_id
             if source and target:
                 if source not in graph:
                     graph[source] = []
@@ -400,7 +403,7 @@ class LangGraphWorkflowEngine:
 
         # Start with all trigger nodes
         for trigger_node in trigger_nodes:
-            trigger_id = str(trigger_node.get("node_id", ""))
+            trigger_id = trigger_node.node_id
             reachable.add(trigger_id)
             queue.append(trigger_id)
 
@@ -416,7 +419,7 @@ class LangGraphWorkflowEngine:
         # Filter original nodes list to only include reachable nodes
         connected_nodes = []
         for node in nodes:
-            node_id = str(node.get("node_id", ""))
+            node_id = node.node_id
             if node_id in reachable:
                 connected_nodes.append(node)
 
@@ -426,59 +429,50 @@ class LangGraphWorkflowEngine:
     def _get_node_type_by_id(self, node_id: str) -> str:
         """Get the type of a node by its ID."""
         for node in self._current_nodes:
-            if str(node.get("node_id", "")) == node_id:
-                node_type_raw = node.get("node_type", "unknown")
-                # Handle both string and dict formats for node_type
-                if isinstance(node_type_raw, dict):
-                    # Frontend sends {"Trigger": {...}} format
-                    return list(node_type_raw.keys())[0].lower() if node_type_raw else "unknown"
-                else:
-                    # Fallback for string format
-                    return str(node_type_raw).lower()
+            if node.node_id == node_id:
+                # Use clean NodeTypeHelper instead of isinstance checks
+                node_type, _ = NodeTypeHelper.parse_node_type(node.node_type)
+                return node_type
         return "unknown"
 
     def _has_outgoing_tool_connections(self, node_id: str) -> bool:
         """Check if a node has outgoing connections to tool nodes."""
-        outgoing_edges = [edge for edge in self._current_edges if str(edge.get("from_node_id", "")) == node_id]
-        return any(self._get_node_type_by_id(str(edge.get("to_node_id", ""))) == "tool" for edge in outgoing_edges)
+        outgoing_edges = [edge for edge in self._current_edges if edge.from_node_id == node_id]
+        return any(self._get_node_type_by_id(edge.to_node_id) == "tool" for edge in outgoing_edges)
 
     def _has_incoming_agent_connections(self, node_id: str) -> bool:
         """Check if a node has incoming connections from agent nodes."""
-        incoming_edges = [edge for edge in self._current_edges if str(edge.get("to_node_id", "")) == node_id]
+        incoming_edges = [edge for edge in self._current_edges if edge.to_node_id == node_id]
         return any(
-            self._get_node_type_by_id(str(edge.get("from_node_id", ""))) in ["agent", "agentidentity"]
-            for edge in incoming_edges
+            self._get_node_type_by_id(edge.from_node_id) in ["agent", "agentidentity"] for edge in incoming_edges
         )
 
     def _get_connected_agent_ids(self, node_id: str) -> List[str]:
         """Get the IDs of agent nodes connected to this node."""
-        incoming_edges = [edge for edge in self._current_edges if str(edge.get("to_node_id", "")) == node_id]
+        incoming_edges = [edge for edge in self._current_edges if edge.to_node_id == node_id]
         return [
-            str(edge.get("from_node_id", ""))
+            edge.from_node_id
             for edge in incoming_edges
-            if self._get_node_type_by_id(str(edge.get("from_node_id", ""))) in ["agent", "agentidentity"]
+            if self._get_node_type_by_id(edge.from_node_id) in ["agent", "agentidentity"]
         ]
 
-    def _create_tool_node(self, node_config: Dict[str, Any]):
+    def _create_tool_node(self, node_config):
         """Create a tool execution node function."""
 
         async def tool_node(state: WorkflowState) -> WorkflowState:
-            node_id = str(node_config.get("node_id", "unknown"))
+            node_id = node_config.node_id
 
-            # Extract tool name from node_type structure or fallback fields
-            tool_name = ""
-            tool_params = {}
+            # Extract tool configuration using clean NodeTypeHelper
+            node_type, typed_config = NodeTypeHelper.parse_node_type(node_config.node_type)
 
-            node_type_raw = node_config.get("node_type", {})
-            if isinstance(node_type_raw, dict) and "Tool" in node_type_raw:
-                # Frontend sends {"Tool": {"tool_name": "...", "config": {...}}} format
-                tool_info = node_type_raw["Tool"]
-                tool_name = tool_info.get("tool_name", "")
-                tool_params = tool_info.get("config", {}).get("static_params", {})
+            if node_type == "tool" and typed_config:
+                # Use typed configuration from schema
+                tool_name = typed_config.tool_name
+                tool_params = typed_config.static_params
             else:
-                # Fallback for other formats
-                tool_name = node_config.get("tool_name") or node_config.get("name", "")
-                tool_params = node_config.get("parameters", {})
+                # Fallback for other formats or missing config
+                tool_name = node_config.config.get("tool_name") or node_config.config.get("name", "")
+                tool_params = node_config.config.get("parameters", {})
 
             # Check if this tool node has incoming connections from agents
             connected_agent_ids = self._get_connected_agent_ids(node_id)
@@ -557,12 +551,12 @@ class LangGraphWorkflowEngine:
 
         return tool_node
 
-    def _create_agent_node(self, node_config: Dict[str, Any]):
+    def _create_agent_node(self, node_config):
         """Create an agent execution node function."""
 
         async def agent_node(state: WorkflowState) -> WorkflowState:
-            node_id = str(node_config.get("node_id", "unknown"))
-            agent_id = node_config.get("agent_id")
+            node_id = node_config.node_id
+            agent_id = node_config.config.get("agent_id")
 
             logger.info(
                 (
@@ -570,7 +564,6 @@ class LangGraphWorkflowEngine:
                     f"execution_id={state['execution_id']}"
                 )
             )
-            logger.info(f"[AgentNode] Full node_config: {node_config}")
 
             # Node execution - just store output at end, don't update intermediate state
 
@@ -607,7 +600,7 @@ class LangGraphWorkflowEngine:
                     )
                     logger.info(f"[AgentNode] Created thread with id={thread.id}")
 
-                    user_message = node_config.get("message", "Execute this task")
+                    user_message = node_config.config.get("message", "Execute this task")
                     logger.info(f"[AgentNode] Creating user message: '{user_message}'")
                     crud.create_thread_message(
                         db=db, thread_id=thread.id, role="user", content=user_message, processed=False
@@ -724,12 +717,12 @@ class LangGraphWorkflowEngine:
 
         return agent_node
 
-    def _create_trigger_node(self, node_config: Dict[str, Any]):
+    def _create_trigger_node(self, node_config):
         """Create a trigger execution node function."""
 
         async def trigger_node(state: WorkflowState) -> WorkflowState:
-            node_id = str(node_config.get("node_id", "unknown"))
-            trigger_type = node_config.get("trigger_type", "webhook")
+            node_id = node_config.node_id
+            trigger_type = node_config.config.get("trigger_type", "webhook")
 
             # Node execution - just store output at end, don't update intermediate state
 
@@ -741,22 +734,65 @@ class LangGraphWorkflowEngine:
 
         return trigger_node
 
-    def _create_placeholder_node(self, node_config: Dict[str, Any]):
+    def _create_placeholder_node(self, node_config):
         """Create a placeholder node for unknown types."""
 
         async def placeholder_node(state: WorkflowState) -> WorkflowState:
-            node_id = str(node_config.get("node_id", "unknown"))
-            node_type = str(node_config.get("type", "unknown"))
+            node_id = node_config.node_id
+            node_type = str(node_config.node_type)
 
-            # Node execution - just store output at end, don't update intermediate state
+            logger.info(f"[LangGraphEngine] *** PLACEHOLDER NODE {node_id} EXECUTING ***")
 
-            # Simulate execution
-            await asyncio.sleep(0.1)
+            # Create node execution state
+            session_factory = get_session_factory()
+            with session_factory() as db:
+                node_state = NodeExecutionState(
+                    workflow_execution_id=state["execution_id"], node_id=node_id, status="running"
+                )
+                db.add(node_state)
+                db.commit()
 
-            output = {"result": f"{node_type}_executed", "type": "placeholder"}
+                self._publish_node_event(
+                    execution_id=state["execution_id"], node_id=node_id, status="running", output=None, error=None
+                )
 
-            # Return only the changes to state
-            return {"node_outputs": {node_id: output}, "completed_nodes": [node_id]}
+                try:
+                    # Simulate execution
+                    await asyncio.sleep(0.1)
+
+                    output = {"result": f"{node_type}_executed", "type": "placeholder"}
+
+                    # Update node state to success
+                    node_state.status = "success"
+                    node_state.output = output
+                    db.commit()
+
+                    self._publish_node_event(
+                        execution_id=state["execution_id"], node_id=node_id, status="success", output=output, error=None
+                    )
+
+                    # Return only the changes to state
+                    return {"node_outputs": {node_id: output}, "completed_nodes": [node_id]}
+
+                except Exception as e:
+                    error_msg = str(e)
+                    logger.error(f"[LangGraphEngine] Placeholder node {node_id} failed: {error_msg}")
+
+                    # Update node state to failed
+                    node_state.status = "failed"
+                    node_state.error = error_msg
+                    db.commit()
+
+                    self._publish_node_event(
+                        execution_id=state["execution_id"],
+                        node_id=node_id,
+                        status="failed",
+                        output=None,
+                        error=error_msg,
+                    )
+
+                    # Return error state
+                    return {"error": error_msg}
 
         return placeholder_node
 
@@ -788,6 +824,35 @@ class LangGraphWorkflowEngine:
             asyncio.set_event_loop(loop)
             try:
                 loop.run_until_complete(event_bus.publish(EventType.NODE_STATE_CHANGED, payload))
+            finally:
+                loop.close()
+
+    def _publish_node_log(
+        self,
+        *,
+        execution_id: int,
+        node_id: str,
+        stream: str,
+        text: str,
+    ) -> None:
+        """Publish NODE_LOG event carrying a single log line."""
+
+        payload = {
+            "execution_id": execution_id,
+            "node_id": node_id,
+            "stream": stream,
+            "text": text,
+            "event_type": EventType.NODE_LOG,
+        }
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(event_bus.publish(EventType.NODE_LOG, payload))
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(event_bus.publish(EventType.NODE_LOG, payload))
             finally:
                 loop.close()
 

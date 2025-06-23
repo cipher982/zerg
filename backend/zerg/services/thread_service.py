@@ -12,9 +12,13 @@ our schema details.
 """
 
 import logging
+from typing import Any
+from typing import Callable
+from typing import Dict
 from typing import Iterable
 from typing import List
 from typing import Optional
+from typing import Type
 
 from langchain_core.messages import AIMessage
 from langchain_core.messages import BaseMessage
@@ -66,36 +70,81 @@ def _db_to_langchain(msg_row: ThreadMessageModel) -> BaseMessage:  # pragma: no 
     return AIMessage(content=msg_row.content)
 
 
+# ==============================================================================
+# MESSAGE CONVERTER - Eliminate isinstance() chain code smell
+# ==============================================================================
+
+
+class LangChainMessageConverter:
+    """Clean message converter that eliminates isinstance chain patterns."""
+
+    # Registry of message type converters
+    _converters: Dict[Type[BaseMessage], Callable[[BaseMessage], Dict[str, Any]]] = {}
+
+    @classmethod
+    def register_converter(cls, message_type: Type[BaseMessage]) -> Callable:
+        """Decorator to register a message converter function."""
+
+        def decorator(converter_func: Callable[[BaseMessage], Dict[str, Any]]) -> Callable:
+            cls._converters[message_type] = converter_func
+            return converter_func
+
+        return decorator
+
+    @classmethod
+    def to_create_kwargs(cls, msg: BaseMessage) -> Dict[str, Any]:
+        """Convert a LangChain message to crud.create_thread_message kwargs."""
+        message_type = type(msg)
+
+        # Look up converter in registry
+        converter = cls._converters.get(message_type)
+        if converter:
+            return converter(msg)
+
+        # Fallback: check if it's a subclass of any registered type
+        for registered_type, converter_func in cls._converters.items():
+            if isinstance(msg, registered_type):
+                return converter_func(msg)
+
+        raise TypeError(f"Unsupported message type: {message_type}")
+
+
+# Register converters for each LangChain message type
+@LangChainMessageConverter.register_converter(SystemMessage)
+def _convert_system_message(msg: SystemMessage) -> Dict[str, Any]:
+    return {"role": "system", "content": msg.content}
+
+
+@LangChainMessageConverter.register_converter(HumanMessage)
+def _convert_human_message(msg: HumanMessage) -> Dict[str, Any]:
+    return {"role": "user", "content": msg.content}
+
+
+@LangChainMessageConverter.register_converter(AIMessage)
+def _convert_ai_message(msg: AIMessage) -> Dict[str, Any]:
+    return {
+        "role": "assistant",
+        "content": msg.content or "",
+        "tool_calls": getattr(msg, "tool_calls", None),
+    }
+
+
+@LangChainMessageConverter.register_converter(ToolMessage)
+def _convert_tool_message(msg: ToolMessage) -> Dict[str, Any]:
+    return {
+        "role": "tool",
+        "content": msg.content,
+        "tool_call_id": msg.tool_call_id,
+        "name": msg.name,
+    }
+
+
 def _langchain_to_create_kwargs(msg: BaseMessage):  # pragma: no cover
-    """Convert a LangChain message into kwargs for *crud.create_thread_message*."""
+    """Convert a LangChain message into kwargs for *crud.create_thread_message*.
 
-    from langchain_core.messages import AIMessage
-    from langchain_core.messages import HumanMessage
-    from langchain_core.messages import SystemMessage
-    from langchain_core.messages import ToolMessage
-
-    if isinstance(msg, SystemMessage):
-        return {"role": "system", "content": msg.content}
-
-    if isinstance(msg, HumanMessage):
-        return {"role": "user", "content": msg.content}
-
-    if isinstance(msg, AIMessage):
-        return {
-            "role": "assistant",
-            "content": msg.content or "",
-            "tool_calls": getattr(msg, "tool_calls", None),
-        }
-
-    if isinstance(msg, ToolMessage):
-        return {
-            "role": "tool",
-            "content": msg.content,
-            "tool_call_id": msg.tool_call_id,
-            "name": msg.name,
-        }
-
-    raise TypeError(f"Unsupported message type: {type(msg)}")
+    CLEAN VERSION: Uses registry pattern instead of isinstance chain.
+    """
+    return LangChainMessageConverter.to_create_kwargs(msg)
 
 
 # ---------------------------------------------------------------------------

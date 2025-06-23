@@ -1,17 +1,18 @@
 """
-Workflow Graph Validation Service.
+Clean Workflow Graph Validation Service.
 
-Combines LangGraph's built-in validation with additional checks
-for comprehensive workflow validation.
+Clean implementation that works with canonical WorkflowCanvas schema.
+No defensive programming - assumes clean data format.
 """
 
 import logging
 from dataclasses import dataclass
-from typing import Any
-from typing import Dict
 from typing import List
 
 from langgraph.checkpoint.memory import MemorySaver
+
+from zerg.schemas.workflow_schema import NodeTypeHelper
+from zerg.schemas.workflow_schema import WorkflowCanvas
 
 logger = logging.getLogger(__name__)
 
@@ -43,19 +44,19 @@ class ValidationResult:
 
 class WorkflowValidator:
     """
-    Comprehensive workflow validation combining LangGraph validation
-    with custom business logic checks.
+    Clean workflow validator that assumes canonical data format.
+    No defensive programming needed - schema is guaranteed by Pydantic.
     """
 
     def __init__(self):
-        self.max_nodes = 100
-        self.max_edges = 500
-        self.max_depth = 20
+        self.max_nodes = 1000
+        self.max_edges = 5000
+        self.max_depth = 50
 
-    def validate_workflow(self, canvas_data: Dict[str, Any]) -> ValidationResult:
+    def validate_workflow(self, canvas: WorkflowCanvas) -> ValidationResult:
         """
         Validate workflow using multi-layer approach:
-        1. Custom structural validation
+        1. Structural validation
         2. LangGraph compilation validation
         3. Business logic validation
         """
@@ -63,15 +64,14 @@ class WorkflowValidator:
         warnings = []
 
         try:
-            # Layer 1: Custom structural validation
-            structural_errors = self._validate_structure(canvas_data)
+            # Layer 1: Structural validation
+            structural_errors = self._validate_structure(canvas)
             errors.extend(structural_errors)
 
             # Layer 2: LangGraph compilation validation
-            # Only proceed if structure is basically valid
             if not structural_errors:
                 try:
-                    langgraph_errors = self._validate_with_langgraph(canvas_data)
+                    langgraph_errors = self._validate_with_langgraph(canvas)
                     errors.extend(langgraph_errors)
                 except Exception as e:
                     errors.append(
@@ -80,8 +80,8 @@ class WorkflowValidator:
                         )
                     )
 
-            # Layer 3: Business logic validation (warnings mostly)
-            business_warnings = self._validate_business_logic(canvas_data)
+            # Layer 3: Business logic validation
+            business_warnings = self._validate_business_logic(canvas)
             warnings.extend(business_warnings)
 
         except Exception as e:
@@ -92,83 +92,75 @@ class WorkflowValidator:
 
         return ValidationResult(is_valid=len(errors) == 0, errors=errors, warnings=warnings)
 
-    def _validate_structure(self, canvas_data: Dict[str, Any]) -> List[ValidationError]:
-        """Validate basic structure and limits."""
+    def _validate_structure(self, canvas: WorkflowCanvas) -> List[ValidationError]:
+        """Validate basic structure and limits - clean implementation."""
         errors = []
 
-        # Check required fields
-        if not isinstance(canvas_data, dict):
-            errors.append(ValidationError(code="INVALID_CANVAS_DATA", message="Canvas data must be a dictionary"))
-            return errors
-
-        nodes = canvas_data.get("nodes", [])
-        edges = canvas_data.get("edges", [])
-
-        # Check limits
-        if len(nodes) > self.max_nodes:
+        # Size limits
+        if len(canvas.nodes) > self.max_nodes:
             errors.append(
                 ValidationError(
-                    code="TOO_MANY_NODES", message=f"Workflow has {len(nodes)} nodes, maximum is {self.max_nodes}"
+                    code="TOO_MANY_NODES",
+                    message=f"Workflow has {len(canvas.nodes)} nodes, maximum is {self.max_nodes}",
                 )
             )
 
-        if len(edges) > self.max_edges:
+        if len(canvas.edges) > self.max_edges:
             errors.append(
                 ValidationError(
-                    code="TOO_MANY_EDGES", message=f"Workflow has {len(edges)} edges, maximum is {self.max_edges}"
+                    code="TOO_MANY_EDGES",
+                    message=f"Workflow has {len(canvas.edges)} edges, maximum is {self.max_edges}",
                 )
             )
 
-        # Validate nodes
-        node_errors = self._validate_nodes(nodes)
+        # Node validation
+        node_errors = self._validate_nodes(canvas)
         errors.extend(node_errors)
 
-        # Validate edges
-        edge_errors = self._validate_edges(edges, nodes)
+        # Edge validation
+        edge_errors = self._validate_edges(canvas)
         errors.extend(edge_errors)
+
+        # Cycle detection moved to business logic validation (warnings)
 
         return errors
 
-    def _validate_nodes(self, nodes: List[Dict[str, Any]]) -> List[ValidationError]:
-        """Validate individual nodes."""
+    def _validate_nodes(self, canvas: WorkflowCanvas) -> List[ValidationError]:
+        """Validate nodes - clean implementation."""
         errors = []
         node_ids = set()
 
-        for node in nodes:
-            node_id = node.get("node_id")
-
+        for node in canvas.nodes:
             # Check for duplicate node IDs
-            if node_id in node_ids:
-                errors.append(
-                    ValidationError(code="DUPLICATE_NODE_ID", message=f"Duplicate node ID: {node_id}", node_id=node_id)
-                )
-            node_ids.add(node_id)
-
-            # Validate node type and configuration
-            node_type = node.get("node_type")
-            if not node_type:
+            if node.node_id in node_ids:
                 errors.append(
                     ValidationError(
-                        code="MISSING_NODE_TYPE", message=f"Node {node_id} missing node_type", node_id=node_id
+                        code="DUPLICATE_NODE_ID", message=f"Duplicate node ID: {node.node_id}", node_id=node.node_id
                     )
                 )
-                continue
+            node_ids.add(node.node_id)
 
-            # Validate based on node type
-            if isinstance(node_type, dict):
-                type_key = list(node_type.keys())[0].lower() if node_type else "unknown"
+            # Validate node type using clean NodeTypeHelper
+            node_type, typed_config = NodeTypeHelper.parse_node_type(node.node_type)
 
-                if type_key == "tool":
-                    tool_errors = self._validate_tool_node(node_id, node_type["Tool"])
-                    errors.extend(tool_errors)
-                elif type_key in ["agent", "agentidentity"]:
-                    agent_errors = self._validate_agent_node(node_id, node)
-                    errors.extend(agent_errors)
+            if node_type == "tool":
+                # Extract tool config - handle both typed config and dict format
+                if typed_config:
+                    # Use typed config object
+                    tool_errors = self._validate_tool_node_typed(node.node_id, typed_config)
+                else:
+                    # Fallback to dictionary format
+                    tool_config = node.node_type.get("Tool", {}) if isinstance(node.node_type, dict) else {}
+                    tool_errors = self._validate_tool_node(node.node_id, tool_config)
+                errors.extend(tool_errors)
+            elif node_type in ["agent", "agentidentity"]:
+                agent_errors = self._validate_agent_node(node.node_id, node)
+                errors.extend(agent_errors)
 
         return errors
 
-    def _validate_tool_node(self, node_id: str, tool_config: Dict[str, Any]) -> List[ValidationError]:
-        """Validate tool node configuration."""
+    def _validate_tool_node(self, node_id: str, tool_config: dict) -> List[ValidationError]:
+        """Validate tool node configuration (dictionary format)."""
         errors = []
 
         tool_name = tool_config.get("tool_name")
@@ -178,226 +170,225 @@ class WorkflowValidator:
                     code="MISSING_TOOL_NAME", message=f"Tool node {node_id} missing tool_name", node_id=node_id
                 )
             )
+            return errors
 
-        # Validate against our tool contracts!
-        if tool_name:
-            from zerg.tools.generated.tool_definitions import list_all_tools
+        # Validate tool exists using tool contracts
+        return self._validate_tool_exists(node_id, tool_name)
 
-            valid_tools = list_all_tools()
-            if tool_name not in valid_tools:
-                errors.append(
-                    ValidationError(
-                        code="INVALID_TOOL_NAME",
-                        message=f"Tool node {node_id} uses invalid tool '{tool_name}'. Valid tools: {valid_tools}",
-                        node_id=node_id,
-                    )
+    def _validate_tool_node_typed(self, node_id: str, tool_config) -> List[ValidationError]:
+        """Validate tool node configuration (typed ToolNodeType format)."""
+        errors = []
+
+        tool_name = tool_config.tool_name
+        if not tool_name:
+            errors.append(
+                ValidationError(
+                    code="MISSING_TOOL_NAME", message=f"Tool node {node_id} missing tool_name", node_id=node_id
                 )
+            )
+            return errors
+
+        # Validate tool exists using tool contracts
+        return self._validate_tool_exists(node_id, tool_name)
+
+    def _validate_tool_exists(self, node_id: str, tool_name: str) -> List[ValidationError]:
+        """Validate that the specified tool exists in our tool registry."""
+        errors = []
+
+        # Validate against tool contracts
+        if tool_name:
+            try:
+                from zerg.tools.generated.tool_definitions import list_all_tools
+
+                valid_tools = list_all_tools()
+                if tool_name not in valid_tools:
+                    errors.append(
+                        ValidationError(
+                            code="INVALID_TOOL_NAME",
+                            message=f"Tool node {node_id} uses invalid tool '{tool_name}'. Valid tools: {valid_tools}",
+                            node_id=node_id,
+                        )
+                    )
+            except ImportError:
+                # Tool definitions not available - skip validation
+                pass
 
         return errors
 
-    def _validate_agent_node(self, node_id: str, node: Dict[str, Any]) -> List[ValidationError]:
+    def _validate_agent_node(self, node_id: str, node) -> List[ValidationError]:
         """Validate agent node configuration."""
         errors = []
 
-        agent_id = node.get("agent_id")
+        # Check for required agent_id in config
+        agent_id = None
+        if hasattr(node, "config") and node.config:
+            agent_id = node.config.get("agent_id")
+
         if not agent_id:
             errors.append(
                 ValidationError(
-                    code="MISSING_AGENT_ID", message=f"Agent node {node_id} missing agent_id", node_id=node_id
+                    code="MISSING_AGENT_ID", message=f"Agent node {node_id} missing required agent_id", node_id=node_id
                 )
             )
 
         return errors
 
-    def _validate_edges(self, edges: List[Dict[str, Any]], nodes: List[Dict[str, Any]]) -> List[ValidationError]:
+    def _validate_edges(self, canvas: WorkflowCanvas) -> List[ValidationError]:
         """Validate edges between nodes."""
         errors = []
+        node_ids = canvas.get_node_ids()
 
-        node_ids = {node.get("node_id") for node in nodes}
-
-        for i, edge in enumerate(edges):
-            from_id = edge.get("from_node_id")
-            to_id = edge.get("to_node_id")
-
-            if from_id not in node_ids:
+        for edge in canvas.edges:
+            if edge.from_node_id not in node_ids:
                 errors.append(
                     ValidationError(
-                        code="INVALID_EDGE_SOURCE", message=f"Edge {i} references non-existent source node: {from_id}"
+                        code="INVALID_EDGE_SOURCE", message=f"Edge source node '{edge.from_node_id}' does not exist"
                     )
                 )
 
-            if to_id not in node_ids:
+            if edge.to_node_id not in node_ids:
                 errors.append(
                     ValidationError(
-                        code="INVALID_EDGE_TARGET", message=f"Edge {i} references non-existent target node: {to_id}"
+                        code="INVALID_EDGE_TARGET", message=f"Edge target node '{edge.to_node_id}' does not exist"
                     )
                 )
 
         return errors
 
-    def _validate_with_langgraph(self, canvas_data: Dict[str, Any]) -> List[ValidationError]:
-        """Use LangGraph compilation to catch additional issues."""
+    def _validate_with_langgraph(self, canvas: WorkflowCanvas) -> List[ValidationError]:
+        """Validate by attempting LangGraph compilation."""
         errors = []
 
         try:
-            # Import the workflow engine's method to convert canvas_data to LangGraph
-            from zerg.services.langgraph_workflow_engine import LangGraphWorkflowEngine
+            from typing import TypedDict
 
-            # Create a dummy engine instance to use its graph building logic
-            engine = LangGraphWorkflowEngine()
+            from langgraph.graph import StateGraph
 
-            # Try to build and compile the graph
-            # Handle different LangGraph API versions gracefully
-            try:
-                engine._build_langgraph(canvas_data, execution_id=0, checkpointer=MemorySaver())
-                # If we get here, LangGraph validation passed
-            except TypeError as te:
-                if "checkpointer" in str(te):
-                    # Try without checkpointer for older/different LangGraph versions
-                    try:
-                        # Build graph directly without using the engine's method
-                        from langgraph.graph import StateGraph
+            # Simple state for validation
+            class TestState(TypedDict):
+                data: str
 
-                        from zerg.services.langgraph_workflow_engine import WorkflowState
+            workflow = StateGraph(TestState)
 
-                        workflow = StateGraph(WorkflowState)
-                        nodes = canvas_data.get("nodes", [])
+            # Add nodes - clean, no defensive programming
+            for node in canvas.nodes:
+                workflow.add_node(node.node_id, lambda x: x)
 
-                        # Simple validation - just try to add nodes and edges
-                        for node in nodes:
-                            node_id = str(node.get("node_id", "unknown"))
-                            workflow.add_node(node_id, lambda x: x)
+            # Add edges - clean, no defensive programming
+            for edge in canvas.edges:
+                workflow.add_edge(edge.from_node_id, edge.to_node_id)
 
-                        edges = canvas_data.get("edges", [])
-                        for edge in edges:
-                            from_id = str(edge.get("from_node_id", ""))
-                            to_id = str(edge.get("to_node_id", ""))
-                            if from_id and to_id:
-                                workflow.add_edge(from_id, to_id)
+            # Try to compile
+            checkpointer = MemorySaver()
+            workflow.compile(checkpointer=checkpointer)
 
-                        # Try basic compilation
-                        workflow.compile()
-
-                    except Exception as inner_e:
-                        raise inner_e
-                else:
-                    raise te
-
-        except ValueError as e:
-            # LangGraph validation errors
-            error_msg = str(e)
-            if "entrypoint" in error_msg:
-                errors.append(
-                    ValidationError(
-                        code="NO_ENTRYPOINT", message="Workflow must have at least one trigger node or edge from START"
-                    )
-                )
-            elif "unknown node" in error_msg:
-                errors.append(
-                    ValidationError(
-                        code="UNKNOWN_NODE_REFERENCE", message=f"Edge references non-existent node: {error_msg}"
-                    )
-                )
-            else:
-                errors.append(ValidationError(code="LANGGRAPH_VALIDATION_ERROR", message=error_msg))
         except Exception as e:
-            errors.append(ValidationError(code="LANGGRAPH_BUILD_ERROR", message=f"Failed to build LangGraph: {str(e)}"))
+            errors.append(
+                ValidationError(code="LANGGRAPH_VALIDATION_FAILED", message=f"LangGraph validation failed: {str(e)}")
+            )
 
         return errors
 
-    def _validate_business_logic(self, canvas_data: Dict[str, Any]) -> List[ValidationError]:
-        """Validate business logic and best practices (mostly warnings)."""
+    def _validate_business_logic(self, canvas: WorkflowCanvas) -> List[ValidationError]:
+        """Business logic validation - returns warnings."""
         warnings = []
 
-        nodes = canvas_data.get("nodes", [])
-        edges = canvas_data.get("edges", [])
+        # Check for trigger nodes using clean NodeTypeHelper
+        has_trigger = any(NodeTypeHelper.is_trigger_type(node.node_type) for node in canvas.nodes)
 
-        # Check for orphaned nodes
-        orphaned = self._find_orphaned_nodes(nodes, edges)
-        for node_id in orphaned:
-            warnings.append(
-                ValidationError(
-                    code="ORPHANED_NODE",
-                    message=f"Node {node_id} is not connected to any other nodes",
-                    node_id=node_id,
-                    severity="warning",
-                )
-            )
-
-        # Check for potential cycles
-        cycles = self._detect_cycles(nodes, edges)
-        if cycles:
-            warnings.append(
-                ValidationError(
-                    code="POTENTIAL_CYCLE", message=f"Workflow may contain cycles: {cycles}", severity="warning"
-                )
-            )
-
-        # Check for missing trigger nodes
-        has_trigger = any(
-            isinstance(node.get("node_type"), dict)
-            and "trigger" in str(list(node.get("node_type", {}).keys())[0]).lower()
-            for node in nodes
-        )
         if not has_trigger:
             warnings.append(
                 ValidationError(
                     code="NO_TRIGGER_NODE",
-                    message="Workflow has no trigger nodes - it may never execute",
+                    message="Workflow has no trigger nodes - may not execute automatically",
                     severity="warning",
                 )
             )
 
+        # Check for orphaned nodes
+        orphaned = self._find_orphaned_nodes(canvas)
+        for orphaned_node in orphaned:
+            warnings.append(
+                ValidationError(
+                    code="ORPHANED_NODE",
+                    message=f"Node '{orphaned_node}' is not connected to workflow",
+                    node_id=orphaned_node,
+                    severity="warning",
+                )
+            )
+
+        # Cycle detection (only for reasonable sizes)
+        if len(canvas.nodes) <= 500:
+            cycles = self._detect_cycles(canvas)
+            if cycles:
+                warnings.append(
+                    ValidationError(
+                        code="POTENTIAL_CYCLE",
+                        message=f"Workflow contains cycles: {', '.join(cycles[:3])}",
+                        severity="warning",
+                    )
+                )
+
         return warnings
 
-    def _find_orphaned_nodes(self, nodes: List[Dict], edges: List[Dict]) -> List[str]:
+    def _find_orphaned_nodes(self, canvas: WorkflowCanvas) -> List[str]:
         """Find nodes that are not connected to anything."""
-        node_ids = {node.get("node_id") for node in nodes}
+        node_ids = canvas.get_node_ids()
         connected_ids = set()
 
-        for edge in edges:
-            connected_ids.add(edge.get("from_node_id"))
-            connected_ids.add(edge.get("to_node_id"))
+        for edge in canvas.edges:
+            connected_ids.add(edge.from_node_id)
+            connected_ids.add(edge.to_node_id)
 
         return list(node_ids - connected_ids)
 
-    def _detect_cycles(self, nodes: List[Dict], edges: List[Dict]) -> List[str]:
-        """Simple cycle detection using DFS."""
+    def _detect_cycles(self, canvas: WorkflowCanvas) -> List[str]:
+        """Simple cycle detection using iterative DFS."""
         # Build adjacency list
-        graph = {}
-        for node in nodes:
-            graph[node.get("node_id")] = []
+        graph = {node.node_id: [] for node in canvas.nodes}
 
-        for edge in edges:
-            from_id = edge.get("from_node_id")
-            to_id = edge.get("to_node_id")
-            if from_id in graph:
-                graph[from_id].append(to_id)
+        for edge in canvas.edges:
+            if edge.from_node_id in graph:
+                graph[edge.from_node_id].append(edge.to_node_id)
 
         # DFS cycle detection
-        visited = set()
-        rec_stack = set()
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color = {node_id: WHITE for node_id in graph}
         cycles = []
 
-        def dfs(node_id, path):
-            if node_id in rec_stack:
-                cycle_start = path.index(node_id)
-                cycles.append(" -> ".join(path[cycle_start:] + [node_id]))
-                return
+        def has_cycle_from(start):
+            stack = [(start, iter(graph.get(start, [])))]
+            path = []
 
-            if node_id in visited:
-                return
+            while stack:
+                node, children = stack[-1]
+                if color[node] == WHITE:
+                    color[node] = GRAY
+                    path.append(node)
 
-            visited.add(node_id)
-            rec_stack.add(node_id)
+                try:
+                    child = next(children)
+                    if child in graph:
+                        if color[child] == GRAY:
+                            # Found cycle
+                            cycle_start = path.index(child)
+                            cycle_path = path[cycle_start:] + [child]
+                            cycles.append(" -> ".join(cycle_path))
+                            return True
+                        elif color[child] == WHITE:
+                            stack.append((child, iter(graph.get(child, []))))
+                except StopIteration:
+                    # No more children
+                    stack.pop()
+                    if path and path[-1] == node:
+                        path.pop()
+                        color[node] = BLACK
 
-            for neighbor in graph.get(node_id, []):
-                dfs(neighbor, path + [node_id])
-
-            rec_stack.remove(node_id)
+            return False
 
         for node_id in graph:
-            if node_id not in visited:
-                dfs(node_id, [])
+            if color[node_id] == WHITE:
+                if has_cycle_from(node_id):
+                    break  # Found at least one cycle
 
-        return cycles[:3]  # Limit to first 3 cycles found
+        return cycles[:3]  # Limit to first 3 cycles

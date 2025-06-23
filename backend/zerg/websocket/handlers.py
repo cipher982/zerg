@@ -24,6 +24,7 @@ from zerg.schemas.ws_messages import AgentStateMessage
 # ---------------------------------------------------------------------------
 from zerg.schemas.ws_messages import Envelope
 from zerg.schemas.ws_messages import ErrorMessage
+from zerg.schemas.ws_messages import MessageEnvelopeHelper
 from zerg.schemas.ws_messages import MessageType
 from zerg.schemas.ws_messages import PingMessage
 from zerg.schemas.ws_messages import PongMessage
@@ -97,38 +98,16 @@ async def send_to_client(
     # Envelope structure is mandatory – wrap any payload that does not yet
     # include the required keys.
 
-    is_already_enveloped = isinstance(message, dict) and "v" in message and "topic" in message and "ts" in message
-
+    # Use MessageEnvelopeHelper instead of isinstance checks
     try:
-        if not is_already_enveloped:
-            from zerg.schemas.ws_messages import Envelope  # local to avoid cycles
+        # Extract req_id if available from the original message
+        req_id = None
+        if isinstance(message, dict):
+            req_id = message.get("message_id")
 
-            # Determine target topic – caller-supplied *topic* overrides any
-            # guess derived from the payload.
-            _topic: Optional[str] = topic or message.get("topic")
-            if _topic is None:
-                # Fallback to system-wide channel to avoid schema rejection.
-                _topic = "system"
+        envelope = MessageEnvelopeHelper.ensure_envelope(message=message, topic=topic, req_id=req_id)
 
-            message_type = str(message.get("type", "UNKNOWN")).upper()
-
-            # If message already has proper structure (type + data fields),
-            # use its data field; otherwise use entire message as data
-            if "data" in message and "type" in message:
-                message_data = message["data"]
-            else:
-                message_data = message
-
-            envelope = Envelope.create(
-                message_type=message_type,
-                topic=_topic,
-                data=message_data,
-                req_id=message.get("message_id"),  # echo if available
-            )
-
-            payload = envelope.model_dump()
-        else:
-            payload = message
+        payload = envelope.model_dump()
 
         await topic_manager.active_connections[client_id].send_json(payload)  # type: ignore[arg-type]
         return True
