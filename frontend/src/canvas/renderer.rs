@@ -389,7 +389,7 @@ pub fn draw_node(context: &CanvasRenderingContext2d, node: &Node, agents: &HashM
                 crate::models::TriggerType::Webhook => ("🔗", "Webhook"),
                 crate::models::TriggerType::Schedule => ("⏰", "Schedule"),
                 crate::models::TriggerType::Email => ("📧", "Email"),
-                crate::models::TriggerType::Manual => ("👆", "Manual"),
+                crate::models::TriggerType::Manual => ("", "Manual"),
             };
 
             // Icon

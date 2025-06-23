@@ -121,11 +121,16 @@ pub fn draw_thought_bubble(context: &CanvasRenderingContext2d, node: &Node) {
 
 pub fn draw_node_text(context: &CanvasRenderingContext2d, node: &Node) {
     use crate::models::NodeType;
-    
+
+    // Do not draw node.text for trigger nodes to avoid duplicated text
+    if let NodeType::Trigger { .. } = node.node_type {
+        return;
+    }
+
     let text = &node.text;
-    
+
     context.save();
-    
+
     // Different text positioning based on node type
     let (x, y, max_width) = match node.node_type {
         NodeType::AgentIdentity => {
@@ -143,30 +148,30 @@ pub fn draw_node_text(context: &CanvasRenderingContext2d, node: &Node) {
             (x, y, max_width)
         }
     };
-    
+
     // Text configuration
     context.set_font("13px system-ui, -apple-system, sans-serif");
     context.set_fill_style_str(NODE_TEXT_COLOR);
     context.set_text_align("left");
     context.set_text_baseline("top");
-    
+
     let line_height = 16.0;
-    
+
     // Split by words
     let words = text.split_whitespace().collect::<Vec<&str>>();
     let mut current_line = String::new();
     let mut current_y = y;
-    
+
     for word in words {
         let test_line = if current_line.is_empty() {
             word.to_string()
         } else {
             format!("{} {}", current_line, word)
         };
-        
+
         let test_metrics = context.measure_text(&test_line).unwrap();
         let test_width = test_metrics.width();
-        
+
         if test_width > max_width && !current_line.is_empty() {
             // Draw the current line and start a new one
             context.fill_text(&current_line, x, current_y).unwrap();
@@ -176,12 +181,12 @@ pub fn draw_node_text(context: &CanvasRenderingContext2d, node: &Node) {
             current_line = test_line;
         }
     }
-    
+
     // Draw the last line
     if !current_line.is_empty() {
         context.fill_text(&current_line, x, current_y).unwrap();
     }
-    
+
     context.restore();
 }
 

@@ -288,11 +288,11 @@ pub fn save_state_to_api(app_state: &AppState) {
     // If a drag is still in progress we don’t schedule a save – StopDragging
     // will call us again.  This avoids enqueuing dozens of timers while the
     // user moves the mouse.
-    // Skip persistence if the user is actively dragging **either** an agent
+    // Skip persistence if the user is actively dragging **either** any
     // node *or* the entire canvas viewport.  A fresh call will be issued by
     // the `StopDragging` / `StopCanvasDrag` handlers once the pointer is
     // released so no data is lost.
-    if app_state.is_dragging_agent || app_state.canvas_dragging {
+    if app_state.dragging.is_some() || app_state.canvas_dragging {
         return;
     }
 
@@ -741,7 +741,7 @@ pub fn load_workflows(_app_state: &mut AppState) -> Result<(), JsValue> {
 /// Save canvas structure data (nodes and edges) to current workflow
 pub fn save_canvas_data_to_api(app_state: &AppState) {
     // Skip if dragging to avoid too many API calls
-    if app_state.is_dragging_agent || app_state.canvas_dragging {
+    if app_state.dragging.is_some() || app_state.canvas_dragging {
         return;
     }
 

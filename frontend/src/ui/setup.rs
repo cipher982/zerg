@@ -100,7 +100,6 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
 
                 // Force-clear dragging flags so persistence logic emits the
                 // final PATCH even if the user closes the tab mid-drag.
-                st.is_dragging_agent = false;
                 st.canvas_dragging = false;
 
                 // Force a persistence attempt even if `state_modified` was

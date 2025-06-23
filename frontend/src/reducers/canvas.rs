@@ -36,9 +36,12 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::UpdateNodePosition { node_id, x, y } => {
             state.update_node_position(node_id, *x, *y);
-            if !state.is_dragging_agent {
+            // Always mark dirty for visual updates during dragging
+            state.mark_dirty();
+            // Only mark state as modified (triggering API saves) if not currently dragging
+            // This prevents spam of PATCH requests during drag operations for all node types
+            if state.dragging.is_none() {
                 state.state_modified = true;
-                state.mark_dirty();
             }
             true
         }
@@ -151,18 +154,16 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.mark_dirty();
             true
         }
-        Message::StartDragging { node_id, offset_x, offset_y, start_x, start_y, is_agent } => {
+        Message::StartDragging { node_id, offset_x, offset_y, start_x, start_y, is_agent: _ } => {
             state.dragging = Some(node_id.clone());
             state.drag_offset_x = *offset_x;
             state.drag_offset_y = *offset_y;
-            state.is_dragging_agent = *is_agent;
             state.drag_start_x = *start_x;
             state.drag_start_y = *start_y;
             true
         }
         Message::StopDragging => {
             state.dragging = None;
-            state.is_dragging_agent = false;
             state.state_modified = true;
             let _ = state.save_if_modified();
             true

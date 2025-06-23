@@ -154,7 +154,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
                 };
                 
                 crate::state::dispatch_global_message(crate::messages::Message::AddNode {
-                    text: "▶ Start".to_string(),
+                    text: "Manual Trigger".to_string(),
                     x: trigger_x,
                     y: trigger_y,
                     node_type: trigger_node_type,
@@ -238,7 +238,7 @@ pub fn ensure_trigger_node_exists() {
         };
         
         crate::state::dispatch_global_message(crate::messages::Message::AddNode {
-            text: "▶ Start".to_string(),
+            text: "Manual Trigger".to_string(),
             x: trigger_x,
             y: trigger_y,
             node_type: trigger_node_type,
