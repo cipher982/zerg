@@ -556,7 +556,7 @@ class LangGraphWorkflowEngine:
 
         async def agent_node(state: WorkflowState) -> WorkflowState:
             node_id = node_config.node_id
-            agent_id = node_config.config.get("agent_id")
+            agent_id = node_config.config.get("agent_id") if node_config.config else None
 
             logger.info(
                 (
