@@ -473,7 +473,7 @@ class TopicConnectionManager:
         topic = f"agent:{agent_id}"
 
         # Extract event_type before serialization to avoid duplication in envelope
-        event_type = data.get("event_type", "agent_event")
+        event_type = data["event_type"]
 
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
@@ -490,7 +490,7 @@ class TopicConnectionManager:
         topic = f"thread:{thread_id}"
 
         # Extract event_type before serialization to avoid duplication in envelope
-        event_type = data.get("event_type", "thread_event")
+        event_type = data["event_type"]
 
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
@@ -510,14 +510,12 @@ class TopicConnectionManager:
 
     async def _handle_user_event(self, data: Dict[str, Any]) -> None:
         """Forward user events to `user:{id}` topic so other tabs update."""
-        user_id = data.get("id")
-        if user_id is None:
-            return
+        user_id = data["id"]
 
         topic = f"user:{user_id}"
 
         # Extract event_type before serialization to avoid duplication in envelope
-        event_type = data.get("event_type", "user_update")
+        event_type = data["event_type"]
 
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
@@ -532,14 +530,12 @@ class TopicConnectionManager:
     async def _handle_node_state_event(self, data: Dict[str, Any]) -> None:
         """Broadcast per-node state changes during workflow execution."""
 
-        execution_id = data.get("execution_id")
-        if execution_id is None:
-            return
+        execution_id = data["execution_id"]
 
         topic = f"workflow_execution:{execution_id}"
 
         # Extract event_type before serialization to avoid duplication in envelope
-        event_type = data.get("event_type", "node_state")
+        event_type = data["event_type"]
 
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
@@ -552,13 +548,11 @@ class TopicConnectionManager:
     # ------------------------------------------------------------------
 
     async def _handle_execution_finished(self, data: Dict[str, Any]) -> None:
-        exec_id = data.get("execution_id")
-        if exec_id is None:
-            return
+        exec_id = data["execution_id"]
         topic = f"workflow_execution:{exec_id}"
 
         # Extract event_type before serialization to avoid duplication in envelope
-        event_type = data.get("event_type", "execution_finished")
+        event_type = data["event_type"]
 
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
@@ -571,13 +565,11 @@ class TopicConnectionManager:
     # ------------------------------------------------------------------
 
     async def _handle_node_log(self, data: Dict[str, Any]) -> None:
-        exec_id = data.get("execution_id")
-        if exec_id is None:
-            return
+        exec_id = data["execution_id"]
         topic = f"workflow_execution:{exec_id}"
 
         # Extract event_type before serialization to avoid duplication in envelope
-        event_type = data.get("event_type", "node_log")
+        event_type = data["event_type"]
 
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
