@@ -132,14 +132,14 @@ mod tests {
     
     #[test]
     fn test_tool_name_roundtrip() {
-        for tool in [
-            ToolName::HttpRequest,
-            ToolName::HttpGet,
-            ToolName::MathEval,
-            ToolName::GetCurrentTime,
-            ToolName::DatetimeDiff,
-            ToolName::GenerateUuid,
-        ] {
+        for tool in ["""
+    
+    # Generate test cases dynamically from actual tool names
+    for tool in tool_names:
+        variant_name = ''.join(word.capitalize() for word in tool.split('_'))
+        rust_code += f"            ToolName::{variant_name},\n"
+    
+    rust_code += """        ] {
             let s = tool.as_str();
             assert_eq!(ToolName::from_str(s), Some(tool));
         }
@@ -154,14 +154,15 @@ mod tests {
     }
     
     #[test]
-    fn test_tool_server_mapping() {
-        assert_eq!(ToolName::HttpRequest.server_name(), ServerName::Http);
-        assert_eq!(ToolName::HttpGet.server_name(), ServerName::Http);
-        assert_eq!(ToolName::MathEval.server_name(), ServerName::Math);
-        assert_eq!(ToolName::GetCurrentTime.server_name(), ServerName::Datetime);
-        assert_eq!(ToolName::DatetimeDiff.server_name(), ServerName::Datetime);
-        assert_eq!(ToolName::GenerateUuid.server_name(), ServerName::Uuid);
-    }
+    fn test_tool_server_mapping() {"""
+    
+    # Generate test cases dynamically from actual tool mappings
+    for tool_name, server_info in tool_mappings.items():
+        tool_variant = ''.join(word.capitalize() for word in tool_name.split('_'))
+        server_variant = server_info['const'].capitalize()
+        rust_code += f"        assert_eq!(ToolName::{tool_variant}.server_name(), ServerName::{server_variant});\n"
+    
+    rust_code += """    }
 }
 """
     

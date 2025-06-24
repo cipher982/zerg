@@ -3,7 +3,7 @@
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
-use web_sys::{Document, Element, HtmlElement};
+use web_sys::{Document, Element};
 
 use crate::state::{APP_STATE, dispatch_global_message};
 use crate::messages::Message;
