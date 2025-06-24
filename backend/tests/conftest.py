@@ -643,3 +643,25 @@ def _shutdown_email_trigger_service():
     except RuntimeError:
         # event-loop already closed by pytest – no action needed
         pass
+
+
+# ---------------------------------------------------------------------------
+# Tool registry cleanup (autouse for every test)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_tool_registry():  # noqa: D401 – internal helper
+    """Clear runtime-registered tools before & after each test.
+
+    Several tests register mock tools on-the-fly.  Without cleanup later
+    tests would see duplicates which either raise validation errors or –
+    worse – make failures flaky and hard to trace.
+    """
+
+    from zerg.tools.registry import get_registry
+
+    reg = get_registry()
+    reg.clear_runtime_tools()
+    yield
+    reg.clear_runtime_tools()
