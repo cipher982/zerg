@@ -514,14 +514,11 @@ class TopicConnectionManager:
 
         topic = f"user:{user_id}"
 
-        # Extract event_type before serialization to avoid duplication in envelope
-        event_type = data["event_type"]
-
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
         serialized_data = jsonable_encoder(clean_data)
 
-        await self.broadcast_to_topic(topic, {"type": event_type, "data": serialized_data})
+        await self.broadcast_to_topic(topic, {"type": "user_update", "data": serialized_data})
 
     # ------------------------------------------------------------------
     # Workflow execution node updates
@@ -534,14 +531,11 @@ class TopicConnectionManager:
 
         topic = f"workflow_execution:{execution_id}"
 
-        # Extract event_type before serialization to avoid duplication in envelope
-        event_type = data["event_type"]
-
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
         serialized_data = jsonable_encoder(clean_data)
 
-        await self.broadcast_to_topic(topic, {"type": event_type, "data": serialized_data})
+        await self.broadcast_to_topic(topic, {"type": "node_state", "data": serialized_data})
 
     # ------------------------------------------------------------------
     # Execution finished
@@ -551,14 +545,11 @@ class TopicConnectionManager:
         exec_id = data["execution_id"]
         topic = f"workflow_execution:{exec_id}"
 
-        # Extract event_type before serialization to avoid duplication in envelope
-        event_type = data["event_type"]
-
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
 
         logger.info("Broadcasting execution_finished for execution %s to topic %s", exec_id, topic)
-        await self.broadcast_to_topic(topic, {"type": event_type, "data": jsonable_encoder(clean_data)})
+        await self.broadcast_to_topic(topic, {"type": "execution_finished", "data": jsonable_encoder(clean_data)})
 
     # ------------------------------------------------------------------
     # Node log streaming
@@ -568,13 +559,10 @@ class TopicConnectionManager:
         exec_id = data["execution_id"]
         topic = f"workflow_execution:{exec_id}"
 
-        # Extract event_type before serialization to avoid duplication in envelope
-        event_type = data["event_type"]
-
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
 
-        await self.broadcast_to_topic(topic, {"type": event_type, "data": jsonable_encoder(clean_data)})
+        await self.broadcast_to_topic(topic, {"type": "node_log", "data": jsonable_encoder(clean_data)})
 
 
 # Create a global instance of the new connection manager

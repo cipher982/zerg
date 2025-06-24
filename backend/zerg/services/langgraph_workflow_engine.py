@@ -172,9 +172,14 @@ class LangGraphWorkflowEngine:
             db.commit()
 
             # Publish completion event
-            event_bus.publish(
+            await event_bus.publish(
                 EventType.EXECUTION_FINISHED,
-                {"execution_id": execution.id, "workflow_id": workflow.id, "status": "success"},
+                {
+                    "execution_id": execution.id,
+                    "workflow_id": workflow.id,
+                    "status": "success",
+                    "event_type": EventType.EXECUTION_FINISHED,
+                },
             )
             return
 
@@ -897,6 +902,7 @@ class LangGraphWorkflowEngine:
             "status": status,
             "error": error,
             "duration_ms": duration_ms,
+            "event_type": EventType.EXECUTION_FINISHED,
         }
 
         try:
