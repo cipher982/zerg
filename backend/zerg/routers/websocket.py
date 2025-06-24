@@ -33,9 +33,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-from typing import Optional
-
-
 def get_websocket_session(session_factory: Optional[sessionmaker] = None) -> Session:
     """Create a new database session for WebSocket handlers.
 

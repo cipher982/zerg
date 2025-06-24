@@ -27,7 +27,8 @@ the *"push to HTTPS"* option.  Validation is **always enabled** unless the
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
+from typing import Optional
 
 from fastapi import APIRouter
 from fastapi import Depends
