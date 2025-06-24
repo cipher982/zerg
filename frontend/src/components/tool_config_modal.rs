@@ -16,7 +16,7 @@ impl ToolConfigModal {
         let (modal, modal_content) = crate::components::modal::ensure_modal(document, "tool-config-modal")?;
 
         // Only allow opening for tool nodes
-        let (tool_name, server_name, config) = match &node.node_type {
+        let (tool_name, _server_name, config) = match &node.node_type {
             NodeType::Tool { tool_name, server_name, config, .. } => (tool_name, server_name, config),
             _ => return Err(JsValue::from_str("Not a tool node")),
         };

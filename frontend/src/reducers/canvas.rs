@@ -92,8 +92,8 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::ShowToolConfigModal { node_id } => {
             if let Some(node) = state.nodes.get(node_id) {
-                if let NodeType::Tool { tool_name, server_name, config, .. } = &node.node_type {
-                    let description = state.available_mcp_tools.values()
+                if let NodeType::Tool { tool_name, server_name, .. } = &node.node_type {
+                    let _description = state.available_mcp_tools.values()
                         .flat_map(|tools| tools.iter())
                         .find(|t| &t.name == tool_name && &t.server_name == server_name)
                         .and_then(|t| t.description.clone())
