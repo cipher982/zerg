@@ -99,9 +99,7 @@ mod tests {
     
     #[test]
     fn test_tool_name_roundtrip() {
-        for tool in [
-            ToolName::HttpRequest,
-            ToolName::HttpGet,
+        for tool in [            ToolName::HttpRequest,
             ToolName::MathEval,
             ToolName::GetCurrentTime,
             ToolName::DatetimeDiff,
@@ -121,9 +119,7 @@ mod tests {
     }
     
     #[test]
-    fn test_tool_server_mapping() {
-        assert_eq!(ToolName::HttpRequest.server_name(), ServerName::Http);
-        assert_eq!(ToolName::HttpGet.server_name(), ServerName::Http);
+    fn test_tool_server_mapping() {        assert_eq!(ToolName::HttpRequest.server_name(), ServerName::Http);
         assert_eq!(ToolName::MathEval.server_name(), ServerName::Math);
         assert_eq!(ToolName::GetCurrentTime.server_name(), ServerName::Datetime);
         assert_eq!(ToolName::DatetimeDiff.server_name(), ServerName::Datetime);

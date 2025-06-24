@@ -6,8 +6,6 @@
 
 use crate::state::AppState;
 use crate::messages::{Message, Command};
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
 
 /// Returns `true` when the message was handled by the chat reducer.
 pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> bool {

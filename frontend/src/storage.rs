@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 use serde_json::{to_string, from_str};
 use crate::state::AppState;
-use crate::models::{Node, Workflow, ApiAgent};
+use crate::models::{Node, ApiAgent};
 use std::collections::HashMap;
 use crate::network::ApiClient;
 use crate::network::ui_updates::update_layout_status;

@@ -657,7 +657,6 @@ fn setup_auto_save_timer(interval_ms: i32) -> Result<(), JsValue> {
 }
 
 // Debug helpers for e2e tests - expose app state info
-use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 pub fn debug_get_node_count() -> usize {

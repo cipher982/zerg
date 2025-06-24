@@ -741,14 +741,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 });
             }
             needs_refresh = true;
-            
-            // Refresh the results panel via command
-            commands.push(Command::UpdateUI(Box::new(|| {
-                // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
-                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
-                }
-            })));
         }
 
         Message::AppendExecutionLog { execution_id, node_id, stream, text } => {
@@ -935,10 +927,13 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         state.last_modified_ms = crate::utils::now_ms();
     }
 
-    // For now, if needs_refresh is true, add a NoOp command
-    // We'll replace this with proper UI refresh commands later
+    // If needs_refresh is true, update UI components
     if needs_refresh {
-        commands.push(Command::NoOp);
+        commands.push(Command::UpdateUI(Box::new(|| {
+            if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                let _ = crate::components::workflow_switcher::update_run_button(&doc);
+            }
+        })));
     }
 
     commands

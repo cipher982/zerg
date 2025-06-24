@@ -98,7 +98,34 @@ impl DashboardWsManager {
         let handler = Rc::new(RefCell::new(|data: serde_json::Value| {
             use crate::network::ws_schema::WsMessage;
 
-            // Attempt to parse – unknown messages fall through to old fallback
+            // Handle system-level messages first (PING, PONG, ERROR)
+            if let Ok(type_value) = data.get("type").and_then(|v| v.as_str()).ok_or("no type") {
+                match type_value {
+                    "PING" => {
+                        // PING messages are handled by the WebSocket connection itself
+                        return; // handled
+                    }
+                    "PONG" => {
+                        // PONG responses are handled by the WebSocket connection itself
+                        return; // handled
+                    }
+                    "ERROR" => {
+                        if let Some(error_msg) = data.get("message").and_then(|v| v.as_str()) {
+                            web_sys::console::error_1(&format!("WebSocket error: {}", error_msg).into());
+                        } else {
+                            web_sys::console::error_1(&"WebSocket error: unknown error".into());
+                        }
+                        return; // handled
+                    }
+                    "unsubscribe_success" => {
+                        // Unsubscribe confirmations don't need special handling
+                        return; // handled
+                    }
+                    _ => {} // Continue to structured message parsing
+                }
+            }
+
+            // Attempt to parse structured messages
             match serde_json::from_value::<WsMessage>(data.clone()) {
                 Ok(WsMessage::RunUpdate { data: run }) => {
                     let run_struct: crate::models::ApiAgentRun = run.into();
@@ -171,13 +198,51 @@ impl DashboardWsManager {
                     return; // handled
                 }
 
-                _ => {
-                    web_sys::console::warn_1(&"DashboardWsManager: unhandled WS message".into());
+                Ok(WsMessage::ThreadEvent { .. }) => {
+                    // Thread events are handled by thread-specific components
+                    return; // handled
+                }
+
+                Ok(WsMessage::StreamStart(_)) => {
+                    // Stream start events are handled by thread-specific components
+                    return; // handled
+                }
+
+                Ok(WsMessage::StreamChunk(_)) => {
+                    // Stream chunk events are handled by thread-specific components
+                    return; // handled
+                }
+
+                Ok(WsMessage::StreamEnd(_)) => {
+                    // Stream end events are handled by thread-specific components
+                    return; // handled
+                }
+
+                Ok(WsMessage::AssistantId(_)) => {
+                    // Assistant ID events are handled by thread-specific components
+                    return; // handled
+                }
+
+                Ok(WsMessage::ThreadMessage { .. }) => {
+                    // Thread message events are handled by thread-specific components
+                    return; // handled
+                }
+
+                Ok(WsMessage::UserUpdate { .. }) => {
+                    // User update events are handled by profile components
+                    return; // handled
+                }
+
+                Ok(WsMessage::Unknown) => {
+                    web_sys::console::warn_1(&"DashboardWsManager: received unknown WS message type".into());
+                    return; // handled - don't fallback to polling for unknown messages
+                }
+
+                Err(e) => {
+                    web_sys::console::warn_2(&"DashboardWsManager: failed to parse WS message".into(), &format!("{:?}", e).into());
+                    return; // handled - don't fallback to polling for parse errors
                 }
             }
-
-            // Fallback – reload agents list (legacy behaviour)
-            crate::network::api_client::load_agents();
         }));
 
         self.agent_subscription_handler = Some(handler.clone());

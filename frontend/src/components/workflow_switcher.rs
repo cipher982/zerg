@@ -543,7 +543,7 @@ pub fn update_workflow_buttons(document: &Document) -> Result<(), JsValue> {
     
     // Update plus button for creation state
     if let Some(plus_btn) = document.query_selector(".plus-tab").ok().flatten() {
-        let (is_creating, deleting_id, updating_id) = APP_STATE.with(|st| {
+        let (is_creating, _deleting_id, _updating_id) = APP_STATE.with(|st| {
             let state = st.borrow();
             (state.creating_workflow, state.deleting_workflow, state.updating_workflow)
         });
