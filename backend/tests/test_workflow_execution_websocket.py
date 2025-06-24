@@ -24,7 +24,10 @@ async def test_workflow_execution_subscription_snapshot(db: Session):
     db.commit()
 
     with TestClient(app) as client:
-        with client.websocket_connect("/ws") as websocket:
+        # WebSocket endpoint is exposed under the API prefix ("/api/ws").
+        # Using the fully-qualified path avoids accidental breakage if the
+        # router is mounted under a prefix in the future.
+        with client.websocket_connect("/api/ws") as websocket:
             # Subscribe to the workflow execution
             subscribe_msg = {
                 "type": "subscribe",
@@ -36,19 +39,17 @@ async def test_workflow_execution_subscription_snapshot(db: Session):
             # We should receive a snapshot immediately
             # Wait for up to 2 seconds for the message
             messages = []
-            try:
-                # Collect messages for a short time
-                start_time = asyncio.get_event_loop().time()
-                while asyncio.get_event_loop().time() - start_time < 2.0:
-                    try:
-                        data = websocket.receive_json(timeout=0.1)
-                        messages.append(data)
-                        print(f"Received message: {json.dumps(data, indent=2)}")
-                    except Exception:
-                        # Timeout is expected, just continue
-                        await asyncio.sleep(0.05)
-            except Exception as e:
-                print(f"Error receiving messages: {e}")
+            # Collect messages for a short window (~2s) – the snapshot payload
+            # is sent immediately by the server so a short loop here is
+            # sufficient and avoids relying on *blocking* receive() calls.
+            end = asyncio.get_event_loop().time() + 2.0
+            while asyncio.get_event_loop().time() < end:
+                try:
+                    data = websocket.receive_json()
+                    messages.append(data)
+                except Exception:
+                    # No message available yet – yield control briefly.
+                    await asyncio.sleep(0.05)
 
             # Check if we got an execution_finished message
             execution_finished_msgs = [

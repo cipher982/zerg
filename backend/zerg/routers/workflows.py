@@ -80,36 +80,14 @@ def create_workflow(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Create new workflow with validation.
+    Create new workflow.
+    
+    Note: Validation is not enforced during creation to allow
+    progressive workflow building. Use /validate endpoint to
+    check validity before execution.
     """
     # Transform frontend data to canonical format
     canvas = CanvasTransformer.from_frontend(workflow_in.canvas_data)
-
-    # Validate canvas data before creating
-    validator = WorkflowValidator()
-    validation_result = validator.validate_workflow(canvas)
-
-    if not validation_result.is_valid:
-        error_messages = [f"{error.code}: {error.message}" for error in validation_result.errors]
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "message": "Workflow validation failed",
-                "errors": error_messages,
-                "validation_result": {
-                    "is_valid": False,
-                    "errors": [
-                        {
-                            "code": error.code,
-                            "message": error.message,
-                            "node_id": error.node_id,
-                            "severity": error.severity,
-                        }
-                        for error in validation_result.errors
-                    ],
-                },
-            },
-        )
 
     # Store canonical format in database
     canonical_canvas_data = CanvasTransformer.to_database(canvas)
@@ -158,35 +136,13 @@ def update_current_workflow_canvas_data(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Update the canvas_data for the user's current workflow with validation.
+    Update the canvas_data for the user's current workflow.
     Creates a default workflow if none exists.
+    
+    Note: Validation is not enforced during editing to allow
+    progressive workflow building. Use /validate endpoint to
+    check validity before execution.
     """
-    # Validate canvas data before updating
-    validator = WorkflowValidator()
-    validation_result = validator.validate_workflow(payload.canvas_data)
-
-    if not validation_result.is_valid:
-        error_messages = [f"{error.code}: {error.message}" for error in validation_result.errors]
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "message": "Workflow validation failed",
-                "errors": error_messages,
-                "validation_result": {
-                    "is_valid": False,
-                    "errors": [
-                        {
-                            "code": error.code,
-                            "message": error.message,
-                            "node_id": error.node_id,
-                            "severity": error.severity,
-                        }
-                        for error in validation_result.errors
-                    ],
-                },
-            },
-        )
-
     # Get most recent workflow
     workflows = crud.get_workflows(db, owner_id=current_user.id, skip=0, limit=1)
 

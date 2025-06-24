@@ -133,6 +133,11 @@ class ToolRegistry:
         names.update(self._tools.keys())
         return list(names)
 
+    # Test cleanup helper ------------------------------------------
+    def clear_runtime_tools(self):  # noqa: D401 – test helper
+        """Clear all runtime-registered tools (for test cleanup)."""
+        self._tools.clear()
+
     # Keep original helper name used across codebase
     def all_tools(self):  # noqa: D401 – legacy helper
         """Return **built-in + runtime-registered** tools."""
