@@ -471,8 +471,15 @@ class TopicConnectionManager:
 
         agent_id = data["id"]
         topic = f"agent:{agent_id}"
-        serialized_data = jsonable_encoder(data)
-        await self.broadcast_to_topic(topic, {"type": data.get("event_type", "agent_event"), "data": serialized_data})
+
+        # Extract event_type before serialization to avoid duplication in envelope
+        event_type = data.get("event_type", "agent_event")
+
+        # Create clean data payload without event_type (since it's in message type)
+        clean_data = {k: v for k, v in data.items() if k != "event_type"}
+        serialized_data = jsonable_encoder(clean_data)
+
+        await self.broadcast_to_topic(topic, {"type": event_type, "data": serialized_data})
 
     async def _handle_thread_event(self, data: Dict[str, Any]) -> None:
         """Handle thread-related events from the event bus."""
@@ -481,8 +488,15 @@ class TopicConnectionManager:
 
         thread_id = data["thread_id"]
         topic = f"thread:{thread_id}"
-        serialized_data = jsonable_encoder(data)
-        await self.broadcast_to_topic(topic, {"type": data.get("event_type", "thread_event"), "data": serialized_data})
+
+        # Extract event_type before serialization to avoid duplication in envelope
+        event_type = data.get("event_type", "thread_event")
+
+        # Create clean data payload without event_type (since it's in message type)
+        clean_data = {k: v for k, v in data.items() if k != "event_type"}
+        serialized_data = jsonable_encoder(clean_data)
+
+        await self.broadcast_to_topic(topic, {"type": event_type, "data": serialized_data})
 
     async def _handle_run_event(self, data: Dict[str, Any]) -> None:
         """Forward run events to the *agent:* topic so dashboards update."""
