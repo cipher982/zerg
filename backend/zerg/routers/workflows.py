@@ -158,8 +158,11 @@ def update_current_workflow_canvas_data(
             canvas_data={"nodes": [], "edges": []},
         )
 
-    # Update the canvas_data
-    workflow.canvas_data = payload.canvas_data
+    # Transform frontend data to canonical format
+    canvas = CanvasTransformer.from_frontend(payload.canvas_data)
+
+    # Store canonical format in database
+    workflow.canvas_data = CanvasTransformer.to_database(canvas)
     db.commit()
     db.refresh(workflow)
 

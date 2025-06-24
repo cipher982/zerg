@@ -14,6 +14,7 @@ from zerg.schemas.schemas import TemplateDeployRequest
 from zerg.schemas.schemas import Workflow
 from zerg.schemas.schemas import WorkflowTemplate
 from zerg.schemas.schemas import WorkflowTemplateCreate
+from zerg.services.canvas_transformer import CanvasTransformer
 
 router = APIRouter(
     prefix="/templates",
@@ -32,13 +33,17 @@ def create_template(
     """
     Create new workflow template.
     """
+    # Transform frontend data to canonical format
+    canvas = CanvasTransformer.from_frontend(template_in.canvas_data)
+    canonical_canvas_data = CanvasTransformer.to_database(canvas)
+
     template = crud.create_workflow_template(
         db=db,
         created_by=current_user.id,
         name=template_in.name,
         description=template_in.description,
         category=template_in.category,
-        canvas_data=template_in.canvas_data,
+        canvas_data=canonical_canvas_data,
         tags=template_in.tags,
         preview_image_url=template_in.preview_image_url,
     )
