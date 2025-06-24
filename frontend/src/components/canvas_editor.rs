@@ -460,8 +460,6 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     
     // Add mouse wheel event for manual zooming when auto-fit is disabled
     let canvas_wheel = canvas.clone();
-    // Create an additional clone for use inside the closure
-    let canvas_wheel_inside = canvas_wheel.clone();
     
     let wheel_handler = Closure::wrap(Box::new(move |event: web_sys::WheelEvent| {
         // ------------------------------------------------------------------
@@ -546,7 +544,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
     }) as Box<dyn FnMut(_)>);
     
     // Create options with passive: true
-    let mut options = AddEventListenerOptions::new();
+    let options = AddEventListenerOptions::new();
     options.set_passive(false); // Allow preventDefault inside wheel handler
     
     // Add wheel event listener with passive option
