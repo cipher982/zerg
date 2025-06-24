@@ -57,8 +57,8 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
     // API packet counter (hidden LED / counter that flashes on WS packets).
     let api_status = document.create_element("div")?;
     api_status.set_id("global-api-status");
-    api_status.set_class_name("");
-    api_status.set_inner_html("");
+    api_status.set_class_name("packet-counter");
+    api_status.set_inner_html("PKT: 00000000");
     status_bar.append_child(&api_status)?;
 
     // Add an (initially empty) layout status span that will be aligned to the

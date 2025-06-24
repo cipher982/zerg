@@ -92,8 +92,25 @@
     color: var(--text);
     border-top: 1px solid rgba(0,0,0,0.15);
     display: flex;
+    align-items: center;
     justify-content: space-between;
     z-index: 100;
+    min-height: 24px;
+}
+
+.status-bar .packet-counter {
+    font-family: 'Courier New', Monaco, monospace;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+    min-width: 90px;
+    text-align: center;
+}
+
+.status-bar .packet-counter.flash {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    padding: 1px 4px;
 }
 
 /* User menu / avatar (top-right) */

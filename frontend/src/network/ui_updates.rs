@@ -50,17 +50,17 @@ pub fn flash_activity() {
                 });
 
                 // Flash the LED
-                status_element.set_class_name("flash");
+                status_element.set_class_name("packet-counter flash");
                 
-                // Remove flash after 50ms
+                // Remove flash after 200ms
                 let status_clone = status_element.clone();
                 let clear_callback = Closure::wrap(Box::new(move || {
-                    status_clone.set_class_name("");
+                    status_clone.set_class_name("packet-counter");
                 }) as Box<dyn FnMut()>);
                 
                 window.set_timeout_with_callback_and_timeout_and_arguments(
                     clear_callback.as_ref().unchecked_ref(),
-                    50, // Very quick flash
+                    200, // Longer flash for better visibility
                     &Array::new(),
                 ).expect("Failed to set timeout");
                 
