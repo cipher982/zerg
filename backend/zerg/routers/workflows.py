@@ -81,7 +81,7 @@ def create_workflow(
 ):
     """
     Create new workflow.
-    
+
     Note: Validation is not enforced during creation to allow
     progressive workflow building. Use /validate endpoint to
     check validity before execution.
@@ -138,7 +138,7 @@ def update_current_workflow_canvas_data(
     """
     Update the canvas_data for the user's current workflow.
     Creates a default workflow if none exists.
-    
+
     Note: Validation is not enforced during editing to allow
     progressive workflow building. Use /validate endpoint to
     check validity before execution.

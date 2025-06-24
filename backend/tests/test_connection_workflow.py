@@ -2,7 +2,6 @@
 
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -87,10 +86,7 @@ def test_agent_connection_workflow_execution(
     execution_id = payload["execution_id"]
     assert execution_id > 0
 
-    # Wait for execution to complete
-    import time
-
-    time.sleep(2)
+    # Check execution status immediately since we're using mocked agents
 
     # Check execution status
     status_resp = client.get(f"/api/workflow-executions/{execution_id}/status", headers=auth_headers)
@@ -184,7 +180,7 @@ def test_frontend_edge_format_compatibility(
         try:
             error_data = resp.json()
             print(f"Expected failure due to tool config: {error_data}")
-        except:
+        except Exception:
             # For 500 errors, the response might not be JSON
             print(f"Expected failure due to tool config (status {resp.status_code}): {resp.text}")
         # Don't assert on error message content since it could be validation or execution error

@@ -39,8 +39,8 @@ def test_node_log_emitted(db_session):
     db_session.expire_all()
     execution = db_session.get(Workflow, wf.id).executions[-1]
     assert execution.status == "success"
-    
+
     # Verify node state was created
-    node_state = execution.node_states[0] 
+    node_state = execution.node_states[0]
     assert node_state.status == "success"
     assert node_state.node_id == "n1"
