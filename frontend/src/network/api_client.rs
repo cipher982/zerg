@@ -37,8 +37,14 @@ impl ApiClient {
     fn format_http_error(status: u16, status_text: &str, response_body: &str) -> String {
         match status {
             409 => {
-                crate::toast::error("That name is already taken. Please choose a different name.");
-                "Conflict: Resource already exists".to_string()
+                // Check if this is an agent run conflict
+                if response_body.contains("already running") {
+                    crate::toast::info("Agent is already running. Please wait for it to finish.");
+                    "Agent already running".to_string()
+                } else {
+                    crate::toast::error("That name is already taken. Please choose a different name.");
+                    "Conflict: Resource already exists".to_string()
+                }
             }
             422 => {
                 // Try to parse validation errors from response body

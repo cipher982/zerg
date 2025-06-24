@@ -226,5 +226,7 @@ async def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
     try:
         thread = await execute_agent_task(db, agent, thread_type="manual")
     except ValueError as exc:
+        if "already running" in str(exc).lower():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Agent already running") from exc
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return {"thread_id": thread.id}

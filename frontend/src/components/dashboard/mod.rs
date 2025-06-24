@@ -841,10 +841,22 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     // Run button
     let run_btn = document.create_element("button")?;
     run_btn.set_attribute("type", "button")?;
-    run_btn.set_class_name("action-btn run-btn");
+    
+    // Check if agent is currently running
+    let is_running = matches!(agent.status, AgentStatus::Running);
+    
+    if is_running {
+        run_btn.set_class_name("action-btn run-btn disabled");
+        run_btn.set_attribute("disabled", "true")?;
+        run_btn.set_attribute("title", "Agent is already running")?;
+        run_btn.set_attribute("aria-label", "Agent is already running")?;
+    } else {
+        run_btn.set_class_name("action-btn run-btn");
+        run_btn.set_attribute("title", "Run Agent")?;
+        run_btn.set_attribute("aria-label", "Run Agent")?;
+    }
+    
     run_btn.set_inner_html("<i data-feather=\"play\"></i>");
-    run_btn.set_attribute("title", "Run Agent")?;
-    run_btn.set_attribute("aria-label", "Run Agent")?;
     run_btn.set_attribute(ATTR_DATA_TESTID, &format!("run-agent-{}", agent.id))?;
     
     // Run button click handler
@@ -854,6 +866,17 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
 
     let run_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         event.stop_propagation();
+        
+        // Check if button is disabled
+        if let Some(target) = event.target() {
+            if let Ok(element) = target.dyn_into::<web_sys::HtmlElement>() {
+                if element.get_attribute("disabled").is_some() {
+                    crate::toast::info("Agent is already running. Please wait for it to finish.");
+                    return;
+                }
+            }
+        }
+        
         web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
 
         // Immediate user feedback
@@ -889,7 +912,16 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
                 },
                 Err(e) => {
                     web_sys::console::error_1(&format!("Run error for agent {}: {:?}", agent_id, e).into());
-                    crate::toast::error(&format!("Failed to run agent: {:?}", e));
+                    
+                    // If it's a 409 conflict, revert optimistic status change
+                    let error_str = format!("{:?}", e);
+                    if error_str.contains("already running") {
+                        // Reload the agent to get the actual status
+                        crate::network::api_client::reload_agent(agent_id);
+                    } else {
+                        crate::toast::error(&format!("Failed to run agent: {:?}", e));
+                    }
+                    
                     set_button_loading(&btn_clone, false);
                 }
             }
