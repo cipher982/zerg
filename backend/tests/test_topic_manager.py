@@ -124,7 +124,9 @@ class TestTopicConnectionManager:
         mock_websocket.send_json.assert_called_once()
         sent_envelope = mock_websocket.send_json.call_args[0][0]
         assert sent_envelope["type"] == EventType.AGENT_UPDATED
-        assert sent_envelope["data"] == event_data
+        # event_type should be removed from data to prevent duplication in envelope
+        expected_data = {"id": agent_id, "name": "Test Agent"}
+        assert sent_envelope["data"] == expected_data
 
     async def test_handle_thread_event(self, topic_manager, mock_websocket):
         """Test handling of thread events."""
@@ -148,7 +150,12 @@ class TestTopicConnectionManager:
         mock_websocket.send_json.assert_called_once()
         sent_env = mock_websocket.send_json.call_args[0][0]
         assert sent_env["type"] == EventType.THREAD_MESSAGE_CREATED
-        assert sent_env["data"] == event_data
+        # event_type should be removed from data to prevent duplication in envelope
+        expected_data = {
+            "thread_id": thread_id,
+            "message": {"content": "test"},
+        }
+        assert sent_env["data"] == expected_data
 
     async def test_cleanup_on_send_failure(self, topic_manager):
         """Test cleanup when sending to a client fails."""

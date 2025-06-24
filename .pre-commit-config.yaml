@@ -83,3 +83,10 @@ repos:
         entry: python3 scripts/validate_tool_contracts_only.py
         pass_filenames: false
         files: ^(asyncapi/tools\.yml|backend/zerg/tools/builtin/.*\.py|frontend/src/components/node_palette\.rs)$
+
+      - id: pact-contract-coverage
+        name: Pact WebSocket contract coverage validation
+        language: system
+        entry: bash -c 'cd frontend && ./check_pact_coverage.sh'
+        pass_filenames: false
+        files: ^(frontend/src/network/ws_schema\.rs|frontend/src/bin/contract_capture\.rs|backend/zerg/websocket/).*$
