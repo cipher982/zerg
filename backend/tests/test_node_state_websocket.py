@@ -48,6 +48,7 @@ async def test_node_state_changed_broadcast(monkeypatch):
         "status": "running",
         "output": None,
         "error": None,
+        "event_type": EventType.NODE_STATE_CHANGED,
     }
 
     await event_bus.publish(EventType.NODE_STATE_CHANGED, payload)
