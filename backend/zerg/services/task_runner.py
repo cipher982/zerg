@@ -54,6 +54,11 @@ async def execute_agent_task(db: Session, agent: AgentModel, *, thread_type: str
     thread_type
         One of ``"manual"`` (▶ Play button) or ``"scheduled"`` (cron).  The
         value is persisted on the thread row for analytics.
+
+    Raises
+    ------
+    ValueError
+        If agent has no task instructions or if agent is already running.
     """
 
     # ------------------------------------------------------------------
@@ -63,10 +68,10 @@ async def execute_agent_task(db: Session, agent: AgentModel, *, thread_type: str
         raise ValueError("Agent has no task_instructions defined")
 
     # ------------------------------------------------------------------
-    # Flip agent → running and broadcast immediately so UI shows progress.
+    # Acquire run lock atomically - prevents concurrent runs
     # ------------------------------------------------------------------
-    crud.update_agent(db, agent.id, status="running")
-    db.commit()
+    if not crud.acquire_run_lock(db, agent.id):
+        raise ValueError("Agent already running")
 
     await event_bus.publish(EventType.AGENT_UPDATED, {"id": agent.id, "status": "running"})
 

@@ -232,10 +232,17 @@ class SchedulerService:
 
             # ------------------------------------------------------------------
             # Delegate to shared helper (handles status flips & events).
+            # Scheduler runs silently skip if agent is already running.
             # ------------------------------------------------------------------
             logger.info("Running scheduled task for agent %s", agent_id)
             # Use "schedule" to match RunTrigger.schedule and CRUD trigger logic
-            thread = await execute_agent_task(db_session, agent, thread_type="schedule")
+            try:
+                thread = await execute_agent_task(db_session, agent, thread_type="schedule")
+            except ValueError as exc:
+                if "already running" in str(exc).lower():
+                    logger.info("Skipping scheduled run for agent %s - already running", agent_id)
+                    return
+                raise
 
             # ------------------------------------------------------------------
             # Update *next_run_at* after successful run so dashboards show when
