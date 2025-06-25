@@ -36,11 +36,11 @@ export class ApiClient {
   private baseUrl: string;
   private headers: Record<string, string>;
 
-  constructor(baseUrl: string = 'http://localhost:8001') {  // Use backend port 8001
+  constructor(workerId: string = '0', baseUrl: string = 'http://localhost:8001') {
     this.baseUrl = baseUrl;
     this.headers = {
       'Content-Type': 'application/json',
-      'X-Test-Worker': process.env.PW_TEST_WORKER_INDEX || process.env.PLAYWRIGHT_WORKER_INDEX || '0',
+      'X-Test-Worker': workerId,
     };
   }
 
@@ -155,4 +155,7 @@ export class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient();
+// Helper function to create an API client with the correct worker ID
+export function createApiClient(workerId: string): ApiClient {
+  return new ApiClient(workerId);
+}

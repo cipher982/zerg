@@ -1,5 +1,8 @@
 import { Page, expect } from '@playwright/test';
-import { apiClient, Agent, Thread, CreateAgentRequest, CreateThreadRequest } from './api-client';
+import { createApiClient, Agent, Thread, CreateAgentRequest, CreateThreadRequest } from './api-client';
+import { resetDatabaseForWorker } from './database-helpers';
+import { createAgentViaAPI, createMultipleAgents, cleanupAgents } from './agent-helpers';
+import { retryWithBackoff, waitForStableElement, logTestStep } from './test-utils';
 
 export interface TestContext {
   agents: Agent[];
@@ -9,19 +12,22 @@ export interface TestContext {
 /**
  * Setup helper that creates test data and returns a context object
  */
-export async function setupTestData(options: {
+export async function setupTestData(workerId: string, options: {
   agents?: CreateAgentRequest[];
   threadsPerAgent?: number;
 } = {}): Promise<TestContext> {
+  logTestStep('Setting up test data', { workerId, options });
+  
+  const apiClient = createApiClient(workerId);
   const context: TestContext = {
     agents: [],
     threads: []
   };
 
-  // Create agents
+  // Create agents using the consolidated helper
   const agentConfigs = options.agents || [{}]; // Default to one agent
   for (const agentConfig of agentConfigs) {
-    const agent = await apiClient.createAgent(agentConfig);
+    const agent = await createAgentViaAPI(workerId, agentConfig);
     context.agents.push(agent);
 
     // Create threads for this agent
@@ -35,16 +41,21 @@ export async function setupTestData(options: {
     }
   }
 
+  logTestStep('Test data setup complete', { agentCount: context.agents.length, threadCount: context.threads.length });
   return context;
 }
 
 /**
  * Cleanup helper that removes test data
  */
-export async function cleanupTestData(context: TestContext): Promise<void> {
+export async function cleanupTestData(workerId: string, context: TestContext): Promise<void> {
   if (!context) {
     return;
   }
+
+  logTestStep('Cleaning up test data', { workerId, agentCount: context.agents?.length, threadCount: context.threads?.length });
+
+  const apiClient = createApiClient(workerId);
 
   // Delete threads first (they reference agents)
   if (context.threads) {
@@ -57,16 +68,12 @@ export async function cleanupTestData(context: TestContext): Promise<void> {
     }
   }
 
-  // Delete agents
+  // Delete agents using the consolidated helper
   if (context.agents) {
-    for (const agent of context.agents) {
-      try {
-        await apiClient.deleteAgent(agent.id);
-      } catch (error) {
-        console.warn(`Failed to delete agent ${agent.id}:`, error);
-      }
-    }
+    await cleanupAgents(workerId, context.agents);
   }
+  
+  logTestStep('Test data cleanup complete');
 }
 
 /**
@@ -238,39 +245,18 @@ export async function navigateToChat(page: Page, agentId: string): Promise<void>
 
 /**
  * Reset the database to a clean state
+ * @deprecated Use resetDatabaseForWorker from database-helpers.ts instead
  */
-export async function resetDatabase(): Promise<void> {
-  let attempts = 0;
-  const maxAttempts = 3;
-  
-  while (attempts < maxAttempts) {
-    try {
-      await apiClient.resetDatabase();
-      
-      // Verify reset was successful by checking agent count
-      const agents = await apiClient.listAgents();
-      if (agents.length === 0) {
-        return;
-      }
-      
-      console.warn(`Reset attempt ${attempts + 1}: Found ${agents.length} remaining agents`);
-    } catch (error) {
-      console.warn(`Reset attempt ${attempts + 1} failed:`, error);
-    }
-    
-    attempts++;
-    if (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-  }
-  
-  throw new Error(`Failed to reset database after ${maxAttempts} attempts`);
+export async function resetDatabase(workerId: string): Promise<void> {
+  logTestStep('Resetting database (deprecated method)', { workerId });
+  await resetDatabaseForWorker(workerId);
 }
 
 /**
  * Check if the backend is healthy and responding
  */
-export async function checkBackendHealth(): Promise<boolean> {
+export async function checkBackendHealth(workerId: string = '0'): Promise<boolean> {
+  const apiClient = createApiClient(workerId);
   try {
     const response = await apiClient.healthCheck();
     return response && response.message === 'Agent Platform API is running';

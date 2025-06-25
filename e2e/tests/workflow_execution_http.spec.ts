@@ -12,17 +12,16 @@ import { test, expect } from './fixtures';
  */
 
 test.describe('Workflow Execution with HTTP Tools', () => {
-  test('Execute workflow with HTTP tool and verify requests', async ({ page }) => {
+  test('Execute workflow with HTTP tool and verify requests', async ({ page }, testInfo) => {
     console.log('🚀 Starting workflow execution test...');
     
-    const workerId = process.env.PW_TEST_WORKER_INDEX || '0';
+    const workerId = String(testInfo.workerIndex);
     console.log('📊 Worker ID:', workerId);
     
     // Step 1: Create agent for workflow
     console.log('📊 Step 1: Creating test agent...');
     const agentResponse = await page.request.post('http://localhost:8001/api/agents', {
       headers: {
-        'X-Test-Worker': workerId,
         'Content-Type': 'application/json',
       },
       data: {
@@ -42,7 +41,6 @@ test.describe('Workflow Execution with HTTP Tools', () => {
     try {
       const workflowResponse = await page.request.post('http://localhost:8001/api/workflows', {
         headers: {
-          'X-Test-Worker': workerId,
           'Content-Type': 'application/json',
         },
         data: {
@@ -87,7 +85,6 @@ test.describe('Workflow Execution with HTTP Tools', () => {
         console.log('📊 Step 3: Executing workflow...');
         const executionResponse = await page.request.post(`http://localhost:8001/api/workflows/${workflow.id}/execute`, {
           headers: {
-            'X-Test-Worker': workerId,
             'Content-Type': 'application/json',
           },
           data: {
@@ -109,9 +106,7 @@ test.describe('Workflow Execution with HTTP Tools', () => {
           while (attempts < maxAttempts) {
             await page.waitForTimeout(1000);
             
-            const statusResponse = await page.request.get(`http://localhost:8001/api/workflow-executions/${execution.id}`, {
-              headers: { 'X-Test-Worker': workerId }
-            });
+            const statusResponse = await page.request.get(`http://localhost:8001/api/workflow-executions/${execution.id}`);
             
             if (statusResponse.ok()) {
               const status = await statusResponse.json();
@@ -146,9 +141,7 @@ test.describe('Workflow Execution with HTTP Tools', () => {
     console.log('📊 Step 5: Testing direct HTTP tool usage...');
     try {
       // Check if there's a tools endpoint to test HTTP functionality
-      const toolsResponse = await page.request.get('http://localhost:8001/api/tools', {
-        headers: { 'X-Test-Worker': workerId }
-      });
+      const toolsResponse = await page.request.get('http://localhost:8001/api/tools');
       
       if (toolsResponse.ok()) {
         const tools = await toolsResponse.json();

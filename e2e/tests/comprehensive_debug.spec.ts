@@ -12,11 +12,11 @@ import { test, expect } from './fixtures';
  */
 
 test.describe('Comprehensive Debug', () => {
-  test('Complete system debug and diagnosis', async ({ page }) => {
+  test('Complete system debug and diagnosis', async ({ page }, testInfo) => {
     console.log('🔍 Starting comprehensive debug test...');
     
-    // Get the worker ID from environment
-    const workerId = process.env.PW_TEST_WORKER_INDEX || '0';
+    // Get the worker ID from test info
+    const workerId = String(testInfo.workerIndex);
     console.log('📊 Worker ID:', workerId);
     console.log('📊 NODE_ENV:', process.env.NODE_ENV);
     
@@ -41,7 +41,6 @@ test.describe('Comprehensive Debug', () => {
     try {
       const response = await page.request.get('http://localhost:8001/', {
         headers: {
-          'X-Test-Worker': workerId,
           'X-Debug-Test': 'header-test'
         }
       });
@@ -54,9 +53,7 @@ test.describe('Comprehensive Debug', () => {
     // Test 3: Agent endpoint - GET (should work)
     console.log('🔍 Test 3: Agent GET endpoint');
     try {
-      const response = await page.request.get('http://localhost:8001/api/agents', {
-        headers: { 'X-Test-Worker': workerId }
-      });
+      const response = await page.request.get('http://localhost:8001/api/agents');
       console.log('📊 Agent GET status:', response.status());
       if (response.ok()) {
         const agents = await response.json();
@@ -76,9 +73,7 @@ test.describe('Comprehensive Debug', () => {
     // Try a simpler POST endpoint first
     try {
       console.log('📊 Testing user endpoint...');
-      const userResponse = await page.request.get('http://localhost:8001/api/users/me', {
-        headers: { 'X-Test-Worker': workerId }
-      });
+      const userResponse = await page.request.get('http://localhost:8001/api/users/me');
       console.log('📊 User endpoint status:', userResponse.status());
       if (userResponse.ok()) {
         const user = await userResponse.json();
@@ -93,7 +88,6 @@ test.describe('Comprehensive Debug', () => {
     try {
       const workflowResponse = await page.request.post('http://localhost:8001/api/workflows', {
         headers: {
-          'X-Test-Worker': workerId,
           'Content-Type': 'application/json',
         },
         data: {
@@ -119,7 +113,6 @@ test.describe('Comprehensive Debug', () => {
     try {
       const agentResponse = await page.request.post('http://localhost:8001/api/agents', {
         headers: {
-          'X-Test-Worker': workerId,
           'Content-Type': 'application/json',
         },
         data: {
@@ -156,9 +149,7 @@ test.describe('Comprehensive Debug', () => {
     console.log('🔍 Test 7: Database introspection');
     try {
       // Try to access an admin endpoint that might give us database info
-      const adminResponse = await page.request.get('http://localhost:8001/api/system/health', {
-        headers: { 'X-Test-Worker': workerId }
-      });
+      const adminResponse = await page.request.get('http://localhost:8001/api/system/health');
       console.log('📊 System health status:', adminResponse.status());
       if (adminResponse.ok()) {
         const health = await adminResponse.text();
