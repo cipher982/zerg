@@ -9,7 +9,7 @@ F_PORT ?= 8002
 # Command templates
 PY_UVICORN = uv run python -m uvicorn zerg.main:app
 
-.PHONY: help backend frontend dev stop test test-all e2e e2e-comprehensive e2e-quick compose tool-code-gen tool-validate tool-check tool-code-diff-check
+.PHONY: help backend frontend dev stop test test-all e2e e2e-basic compose tool-code-gen tool-validate tool-check tool-code-diff-check
 
 # ---------------------------------------------------------------------------
 # Help – `make` or `make help`
@@ -22,10 +22,9 @@ help:
 	@echo "make dev       # start backend + frontend together"
 	@echo "make stop      # kill anything on $(B_PORT) $(F_PORT)"
 	@echo "make test      # backend & frontend unit tests + tool contracts"
-	@echo "make test-all  # complete test suite (unit + comprehensive E2E)"
-	@echo "make e2e       # standard Playwright E2E suite"
-	@echo "make e2e-comprehensive # comprehensive E2E test suite (11 categories)"
-	@echo "make e2e-quick # quick E2E validation tests only"
+	@echo "make test-all  # complete test suite (unit + full E2E)"
+	@echo "make e2e       # full E2E test suite (default)"
+	@echo "make e2e-basic # essential tests only (~3 min)"
 	@echo "make compose   # (optional) docker-compose up --build"
 	@echo ""
 	@echo "Tool Contract System:"
@@ -70,19 +69,14 @@ test:
 test-all:
 	@echo "🧪 Running complete test suite (unit + comprehensive E2E)..."
 	$(MAKE) test
-	$(MAKE) e2e-comprehensive
+	$(MAKE) e2e
 	@echo "🎉 Complete test suite finished!"
 
 e2e:
-	cd e2e && ./run_e2e_tests.sh
+	cd e2e && ./run_e2e_tests.sh --mode=full
 
-e2e-comprehensive:
-	@echo "🚀 Running comprehensive E2E test suite..."
-	cd e2e && ./run-comprehensive-tests.sh
-
-e2e-quick:
-	@echo "⚡ Running quick E2E validation..."
-	cd e2e && npx playwright test tests/agent_creation_full.spec.ts tests/comprehensive_debug.spec.ts --config=playwright.config.ts
+e2e-basic:
+	cd e2e && ./run_e2e_tests.sh --mode=basic
 
 # ---------------------------------------------------------------------------
 # AsyncAPI – code generation from spec
