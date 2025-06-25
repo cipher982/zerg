@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # ---------------------------------------------------------------------------
 # UNIFIED E2E TEST RUNNER
 # ---------------------------------------------------------------------------
@@ -88,18 +88,24 @@ echo ""
 mkdir -p "$REPORTS_DIR"
 
 # Test categories organized by mode
-declare -A TEST_CATEGORIES
-
-# Basic mode - essential tests only
-TEST_CATEGORIES[basic]="agent_creation_full.spec.ts comprehensive_debug.spec.ts canvas_complete_workflow.spec.ts"
-
-# Full mode - everything
-TEST_CATEGORIES[full]="agent_creation_full.spec.ts comprehensive_debug.spec.ts canvas_complete_workflow.spec.ts workflow_execution_http.spec.ts tool_palette_node_connections.spec.ts realtime_websocket_monitoring.spec.ts error_handling_edge_cases.spec.ts data_persistence_recovery.spec.ts performance_load_testing.spec.ts accessibility_ui_ux.spec.ts multi_user_concurrency.spec.ts"
+get_test_files() {
+    case $1 in
+        basic)
+            echo "agent_creation_full.spec.ts comprehensive_debug.spec.ts canvas_complete_workflow.spec.ts"
+            ;;
+        full)
+            echo "agent_creation_full.spec.ts comprehensive_debug.spec.ts canvas_complete_workflow.spec.ts workflow_execution_http.spec.ts tool_palette_node_connections.spec.ts realtime_websocket_monitoring.spec.ts error_handling_edge_cases.spec.ts data_persistence_recovery.spec.ts performance_load_testing.spec.ts accessibility_ui_ux.spec.ts multi_user_concurrency.spec.ts"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
 
 # Validate mode
-if [[ ! -v TEST_CATEGORIES[$MODE] ]]; then
+if [[ -z "$(get_test_files $MODE)" ]]; then
     print_color $RED "❌ Invalid mode: $MODE"
-    print_color $YELLOW "Valid modes: ${!TEST_CATEGORIES[*]}"
+    print_color $YELLOW "Valid modes: basic, full"
     exit 1
 fi
 
@@ -113,26 +119,13 @@ if ! command -v npx &> /dev/null; then
 fi
 
 # Check if Playwright config exists
-if [ ! -f "playwright.config.ts" ]; then
-    print_color $RED "❌ Playwright config not found at playwright.config.ts"
+if [ ! -f "playwright.config.js" ] && [ ! -f "playwright.config.ts" ]; then
+    print_color $RED "❌ Playwright config not found (looking for playwright.config.js or playwright.config.ts)"
     exit 1
 fi
 
-# Kill any processes on test ports
-for PORT in 8001 8002; do
-    if lsof -i:"$PORT" >/dev/null 2>&1; then
-        print_color $YELLOW "🔧 Killing process on port $PORT..."
-        lsof -ti:"$PORT" | xargs -r kill -9 || true
-    fi
-done
-
-# Check if backend is accessible (with timeout)
-if ! timeout 5 curl -s http://localhost:8001/ > /dev/null; then
-    print_color $YELLOW "⚠️  Backend not responding at http://localhost:8001/"
-    print_color $YELLOW "   The test runner will start the backend automatically."
-fi
-
 print_color $GREEN "✅ Pre-flight checks completed"
+print_color $CYAN "ℹ️  Playwright will automatically start backend and frontend servers"
 echo ""
 
 # Setup test environment
@@ -153,7 +146,7 @@ print_color $GREEN "✅ Environment setup completed"
 echo ""
 
 # Get test files for the selected mode
-TEST_FILES=${TEST_CATEGORIES[$MODE]}
+TEST_FILES=$(get_test_files $MODE)
 
 print_color $YELLOW "🧪 Running $MODE tests..."
 print_color $CYAN "Test files: $TEST_FILES"
