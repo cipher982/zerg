@@ -21,9 +21,9 @@ const config = {
       // Launch the FastAPI backend.  Using the system Python directly avoids
       // the `uv run` wrapper which attempts to access the `.uv_cache` folder
       // and occasionally fails with EPERM inside the sandbox.
-      command: 'cd ../backend && TESTING=1 DEV_ADMIN=1 WORKER_ID=$PW_TEST_WORKER_INDEX E2E_LOG_SUPPRESS=1 LOG_LEVEL=WARNING ./.venv/bin/python -m uvicorn zerg.main:app --port 8001 --log-level warning',
+      command: 'cd ../backend && NODE_ENV=test TESTING=1 WORKER_ID=$PW_TEST_WORKER_INDEX ./.venv/bin/python -m uvicorn zerg.main:app --port 8001 --log-level warning',
       port: 8001,
-      reuseExistingServer: true,
+      reuseExistingServer: false,
       timeout: 120_000,
     },
     {
