@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "description": "End-to-end tests for Zerg Agent Platform",
   "scripts": {
-    "test": "playwright test",
-    "test:headed": "playwright test --headed",
-    "test:debug": "playwright test --debug"
+    "test": "NODE_ENV=test playwright test",
+    "test:headed": "NODE_ENV=test playwright test --headed",
+    "test:debug": "NODE_ENV=test playwright test --debug",
+    "test:dev": "playwright test",
+    "test:single": "NODE_ENV=test playwright test --max-failures=1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",

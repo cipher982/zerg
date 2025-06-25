@@ -1,3 +1,4 @@
+import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -46,6 +47,25 @@ dotenv.load_dotenv()
 # Create Base class
 Base = declarative_base()
 
+# Import all models at module level to ensure they are registered with Base
+# This prevents "no such table" errors when worker databases are created
+try:
+    from zerg.models.models import Agent  # noqa: F401
+    from zerg.models.models import AgentMessage  # noqa: F401
+    from zerg.models.models import AgentRun  # noqa: F401
+    from zerg.models.models import CanvasLayout  # noqa: F401
+    from zerg.models.models import NodeExecutionState  # noqa: F401
+    from zerg.models.models import Thread  # noqa: F401
+    from zerg.models.models import ThreadMessage  # noqa: F401
+    from zerg.models.models import Trigger  # noqa: F401
+    from zerg.models.models import User  # noqa: F401
+    from zerg.models.models import Workflow  # noqa: F401
+    from zerg.models.models import WorkflowExecution  # noqa: F401
+    from zerg.models.models import WorkflowTemplate  # noqa: F401
+except ImportError:
+    # Handle case where models module might not be available during certain imports
+    pass
+
 
 def make_engine(db_url: str, **kwargs) -> Engine:
     """Create a SQLAlchemy engine with the given URL and options.
@@ -58,8 +78,20 @@ def make_engine(db_url: str, **kwargs) -> Engine:
         A SQLAlchemy Engine instance
     """
     connect_args = kwargs.pop("connect_args", {})
-    if "sqlite" in db_url and "check_same_thread" not in connect_args:
-        connect_args["check_same_thread"] = False
+    if "sqlite" in db_url:
+        if "check_same_thread" not in connect_args:
+            connect_args["check_same_thread"] = False
+        # For file-based databases, use WAL mode for better concurrency
+        if ":memory:" not in db_url:
+            # Use WAL mode for better concurrency with file-based databases
+            connect_args["isolation_level"] = None
+        # Enable foreign keys and set timeout
+        connect_args["timeout"] = 30
+
+    # For test environments, add pooling configurations
+    if os.getenv("NODE_ENV") == "test":
+        kwargs.setdefault("pool_pre_ping", True)
+        kwargs.setdefault("pool_recycle", 300)
 
     return create_engine(db_url, connect_args=connect_args, **kwargs)
 
@@ -146,15 +178,85 @@ def get_session_factory() -> sessionmaker:
         if worker_id in _WORKER_SESSIONMAKERS:
             return _WORKER_SESSIONMAKERS[worker_id]
 
-        # Place the database file **inside the backend directory** so the
-        # helper script `backend/cleanup_test_dbs.py` can delete it after the
-        # Playwright run.
-        db_path = Path(__file__).resolve().parents[1] / f"test_worker_{worker_id}.db"
-        db_url = f"sqlite:///{db_path}"
+        # Use file-based database for test workers to ensure proper connection sharing
+        # Each worker gets its own isolated database file for proper SQLAlchemy pooling
+        if _settings.testing or os.getenv("NODE_ENV") == "test":
+            # Use temporary file-based database for better connection pooling support
+            import tempfile
+
+            temp_dir = Path(tempfile.gettempdir()) / "zerg_test_dbs"
+            temp_dir.mkdir(exist_ok=True)
+            db_path = temp_dir / f"test_worker_{worker_id}.db"
+            db_url = f"sqlite:///{db_path}"
+
+            # Clean up existing database file to ensure fresh state
+            if db_path.exists():
+                db_path.unlink()
+        else:
+            # Fallback to file-based databases for non-test environments
+            db_path = Path(__file__).resolve().parents[1] / f"test_worker_{worker_id}.db"
+            db_url = f"sqlite:///{db_path}"
 
         engine = make_engine(db_url)
-        # Create tables on first use
+
+        # Create tables on first use - ensure all tables are created before proceeding
+        # Use a more robust approach for SQLite in-memory databases
         initialize_database(engine)
+
+        # Force a sync checkpoint to ensure all tables are properly created
+        if "sqlite" in db_url:
+            with engine.connect() as conn:
+                # Enable WAL mode and foreign keys for better concurrency
+                if ":memory:" not in db_url:
+                    from sqlalchemy import text
+
+                    conn.execute(text("PRAGMA journal_mode=WAL"))
+                    conn.execute(text("PRAGMA foreign_keys=ON"))
+                    conn.execute(text("PRAGMA synchronous=NORMAL"))
+
+                # Ensure all pending writes are committed
+                conn.commit()
+
+                # Verify tables were actually created
+                if os.getenv("NODE_ENV") == "test":
+                    from sqlalchemy import text
+
+                    result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
+                    tables = [row[0] for row in result]
+                    print(f"[DEBUG] Worker {worker_id} database tables after creation: {sorted(tables)}")
+                    print(f"[DEBUG] Worker {worker_id} database path: {db_url}")
+                    import sys
+
+                    sys.stdout.flush()
+
+                    # Specifically check for critical tables
+                    required_tables = ["agents", "workflows", "users"]
+                    missing_tables = [t for t in required_tables if t not in tables]
+                    if missing_tables:
+                        print(f"[ERROR] Worker {worker_id} missing critical tables: {missing_tables}")
+                        # Try to recreate tables
+                        initialize_database(engine)
+                        sys.stdout.flush()
+
+                    # Ensure test user exists for foreign key constraints
+                    from sqlalchemy import text
+
+                    result = conn.execute(text("SELECT COUNT(*) FROM users WHERE id = 1"))
+                    user_count = result.scalar()
+                    if user_count == 0:
+                        print(f"[DEBUG] Worker {worker_id} creating test user...")
+                        # Create a test user for foreign key references
+                        conn.execute(
+                            text("""
+                            INSERT INTO users (id, email, role, is_active, provider, provider_user_id, 
+                                              display_name, created_at, updated_at)
+                            VALUES (1, 'test@example.com', 'ADMIN', 1, 'dev', 'test-user-1', 
+                                   'Test User', datetime('now'), datetime('now'))
+                        """)
+                        )
+                        conn.commit()
+                        print(f"[DEBUG] Worker {worker_id} test user created")
+                        sys.stdout.flush()
 
         session_factory = make_sessionmaker(engine)
 
@@ -200,5 +302,38 @@ def initialize_database(engine: Engine = None) -> None:
     Args:
         engine: Optional engine to use, defaults to default_engine
     """
+    # Import all models to ensure they are registered with Base
+    # We need to import the models explicitly to ensure they're registered
+    from zerg.models.models import Agent  # noqa: F401
+    from zerg.models.models import AgentMessage  # noqa: F401
+    from zerg.models.models import AgentRun  # noqa: F401
+    from zerg.models.models import CanvasLayout  # noqa: F401
+    from zerg.models.models import NodeExecutionState  # noqa: F401
+    from zerg.models.models import Thread  # noqa: F401
+    from zerg.models.models import ThreadMessage  # noqa: F401
+    from zerg.models.models import Trigger  # noqa: F401
+    from zerg.models.models import User  # noqa: F401
+    from zerg.models.models import Workflow  # noqa: F401
+    from zerg.models.models import WorkflowExecution  # noqa: F401
+    from zerg.models.models import WorkflowTemplate  # noqa: F401
+
     target_engine = engine or default_engine
+
+    # Debug: Check what tables will be created
+    import os
+
+    if os.getenv("NODE_ENV") == "test":
+        table_names = [table.name for table in Base.metadata.tables.values()]
+        print(f"[DEBUG] Creating tables: {sorted(table_names)}")
+
     Base.metadata.create_all(bind=target_engine)
+
+    # Debug: Verify tables were created
+    if os.getenv("NODE_ENV") == "test":
+        from sqlalchemy import text
+
+        with target_engine.connect() as conn:
+            # Check what tables actually exist (SQLite specific)
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
+            tables = [row[0] for row in result]
+            print(f"[DEBUG] Tables created in database: {sorted(tables)}")

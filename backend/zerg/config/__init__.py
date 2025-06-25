@@ -110,9 +110,19 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
     # pipelines can safely inject secrets via the process environment.
     # ------------------------------------------------------------------
 
-    # Only consider the *canonical* env file location at repository root.
-    env_path = _REPO_ROOT / ".env"
+    # Load environment file based on NODE_ENV
+    # Priority: .env.test (when NODE_ENV=test) -> .env (default)
+    node_env = os.getenv("NODE_ENV", "development")
+
+    if node_env == "test":
+        env_path = _REPO_ROOT / ".env.test"
+        if not env_path.exists():
+            env_path = _REPO_ROOT / ".env"  # Fallback to main .env
+    else:
+        env_path = _REPO_ROOT / ".env"
+
     if env_path.exists():
+        print(f"Loading environment from: {env_path}")  # Debug info
         for line in env_path.read_text().splitlines():
             if not line or line.strip().startswith("#") or "=" not in line:
                 continue  # skip blanks & comments

@@ -9,7 +9,7 @@ F_PORT ?= 8002
 # Command templates
 PY_UVICORN = uv run python -m uvicorn zerg.main:app
 
-.PHONY: help backend frontend dev stop test e2e compose tool-code-gen tool-validate tool-check tool-code-diff-check
+.PHONY: help backend frontend dev stop test test-all e2e e2e-comprehensive e2e-quick compose tool-code-gen tool-validate tool-check tool-code-diff-check
 
 # ---------------------------------------------------------------------------
 # Help – `make` or `make help`
@@ -22,7 +22,10 @@ help:
 	@echo "make dev       # start backend + frontend together"
 	@echo "make stop      # kill anything on $(B_PORT) $(F_PORT)"
 	@echo "make test      # backend & frontend unit tests + tool contracts"
-	@echo "make e2e       # full Playwright E2E suite"
+	@echo "make test-all  # complete test suite (unit + comprehensive E2E)"
+	@echo "make e2e       # standard Playwright E2E suite"
+	@echo "make e2e-comprehensive # comprehensive E2E test suite (11 categories)"
+	@echo "make e2e-quick # quick E2E validation tests only"
 	@echo "make compose   # (optional) docker-compose up --build"
 	@echo ""
 	@echo "Tool Contract System:"
@@ -64,8 +67,22 @@ test:
 	cd backend  && ./run_backend_tests.sh
 	- cd frontend && ./run_frontend_tests.sh || echo "[make test] 🟡 Frontend tests skipped (no browser / wasm-pack failure)"
 
+test-all:
+	@echo "🧪 Running complete test suite (unit + comprehensive E2E)..."
+	$(MAKE) test
+	$(MAKE) e2e-comprehensive
+	@echo "🎉 Complete test suite finished!"
+
 e2e:
 	cd e2e && ./run_e2e_tests.sh
+
+e2e-comprehensive:
+	@echo "🚀 Running comprehensive E2E test suite..."
+	cd e2e && ./run-comprehensive-tests.sh
+
+e2e-quick:
+	@echo "⚡ Running quick E2E validation..."
+	cd e2e && npx playwright test tests/agent_creation_full.spec.ts tests/comprehensive_debug.spec.ts --config=playwright.config.ts
 
 # ---------------------------------------------------------------------------
 # AsyncAPI – code generation from spec
