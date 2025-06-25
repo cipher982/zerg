@@ -89,7 +89,8 @@ class WorkerDBMiddleware:  # noqa: D401 – ASGI middleware
         if os.getenv("NODE_ENV") == "test":
             headers_dict = {name.decode(): value.decode() for name, value in scope.get("headers", [])}
             print(
-                f"[DEBUG] Worker middleware: worker_id={worker_id}, path={scope.get('path', 'unknown')}, headers={headers_dict}"
+                f"[DEBUG] Worker middleware: worker_id={worker_id}, path={scope.get('path', 'unknown')}, "
+                f"headers={headers_dict}"
             )
             # Force flush output to ensure we see the debug message
             import sys

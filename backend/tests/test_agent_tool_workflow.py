@@ -69,7 +69,6 @@ def test_agent_gets_configured_with_connected_tools(workflow_with_agent_and_tool
     """Test that agents get configured with tools from connected workflow nodes."""
 
     workflow = workflow_with_agent_and_tool["workflow"]
-    agent = workflow_with_agent_and_tool["agent"]
 
     # Create workflow engine
     engine = LangGraphWorkflowEngine()

@@ -98,7 +98,8 @@ async def debug_full_workflow():
                                 print(f"   📊 Node outputs keys: {list(node_outputs.keys())}")
                                 for output_node_id, output in node_outputs.items():
                                     print(
-                                        f"   🔍 {output_node_id}: {output.get('type', 'unknown')} - {output.get('response', 'no response')[:50]}..."
+                                        f"   🔍 {output_node_id}: {output.get('type', 'unknown')} - "
+                                        f"{output.get('response', 'no response')[:50]}..."
                                     )
                 else:
                     print(f"   ⚠️  Empty chunk #{chunk_count}")
