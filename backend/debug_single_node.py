@@ -10,8 +10,6 @@ from pathlib import Path
 # Add backend to path
 sys.path.append(str(Path(__file__).parent))
 
-from zerg.services.langgraph_workflow_engine import LangGraphWorkflowEngine
-
 
 def debug_single_node():
     """Debug a single AgentIdentity node with no edges."""
@@ -39,8 +37,6 @@ def debug_single_node():
             }
         ],
     }
-
-    engine = LangGraphWorkflowEngine()
 
     print(f"📊 Input canvas_data: {canvas_data}")
 

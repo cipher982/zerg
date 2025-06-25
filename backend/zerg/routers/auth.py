@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timedelta
 from typing import Any
+from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import APIRouter

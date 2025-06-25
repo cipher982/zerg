@@ -44,7 +44,7 @@ def test_verify_pacts(pact_contracts, anyio_backend_name):  # noqa: D401
     client = TestClient(app)
 
     for pact_file in pact_contracts:
-        contract = json.loads(pact_file.read_text())
+        json.loads(pact_file.read_text())
 
         verifier = Verifier(provider="zerg-backend")
 

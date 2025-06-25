@@ -673,9 +673,15 @@ class LangGraphWorkflowEngine:
                     if connects_to_tools:
                         connected_tool_names = self._get_connected_tool_names(node_id)
                         if "http_request" in connected_tool_names:
-                            user_message = f"{base_message}. Use the http_request tool to make HTTP requests as needed. For example, you could test connectivity by making a request to https://httpbin.org/get"
+                            user_message = (
+                                f"{base_message}. Use the http_request tool to make HTTP requests as needed. "
+                                f"For example, you could test connectivity by making a request to https://httpbin.org/get"
+                            )
                         else:
-                            user_message = f"{base_message}. You have access to these tools: {', '.join(connected_tool_names)}. Use them as appropriate for the task."
+                            user_message = (
+                                f"{base_message}. You have access to these tools: {', '.join(connected_tool_names)}. "
+                                f"Use them as appropriate for the task."
+                            )
                     else:
                         user_message = base_message
 
