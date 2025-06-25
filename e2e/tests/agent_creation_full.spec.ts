@@ -11,18 +11,16 @@ import { test, expect } from './fixtures';
  */
 
 test.describe('Agent Creation Full Workflow', () => {
-  test('Complete agent creation and isolation test', async ({ page }) => {
+  test('Complete agent creation and isolation test', async ({ page }, testInfo) => {
     console.log('🔍 Starting complete agent creation test...');
     
-    // Get the worker ID from environment
-    const workerId = process.env.PW_TEST_WORKER_INDEX || '0';
+    // Get the worker ID from testInfo (same source as fixtures)
+    const workerId = String(testInfo.workerIndex);
     console.log('📊 Worker ID:', workerId);
     
     // Step 1: Verify empty state
     console.log('📊 Step 1: Verifying empty state...');
-    const initialAgents = await page.request.get('http://localhost:8001/api/agents', {
-      headers: { 'X-Test-Worker': workerId }
-    });
+    const initialAgents = await page.request.get('http://localhost:8001/api/agents');
     expect(initialAgents.status()).toBe(200);
     const initialAgentsList = await initialAgents.json();
     console.log('📊 Initial agent count:', initialAgentsList.length);
@@ -30,10 +28,6 @@ test.describe('Agent Creation Full Workflow', () => {
     // Step 2: Create an agent via API
     console.log('📊 Step 2: Creating agent via API...');
     const createResponse = await page.request.post('http://localhost:8001/api/agents', {
-      headers: {
-        'X-Test-Worker': workerId,
-        'Content-Type': 'application/json',
-      },
       data: {
         name: `Test Agent Worker ${workerId}`,
         system_instructions: 'You are a test agent for E2E testing',
@@ -51,9 +45,7 @@ test.describe('Agent Creation Full Workflow', () => {
     
     // Step 3: Verify agent appears in list
     console.log('📊 Step 3: Verifying agent appears in list...');
-    const updatedAgents = await page.request.get('http://localhost:8001/api/agents', {
-      headers: { 'X-Test-Worker': workerId }
-    });
+    const updatedAgents = await page.request.get('http://localhost:8001/api/agents');
     expect(updatedAgents.status()).toBe(200);
     const updatedAgentsList = await updatedAgents.json();
     console.log('📊 Updated agent count:', updatedAgentsList.length);
@@ -87,10 +79,6 @@ test.describe('Agent Creation Full Workflow', () => {
     // Step 6: Create a second agent to test isolation
     console.log('📊 Step 6: Creating second agent for isolation test...');
     const secondAgentResponse = await page.request.post('http://localhost:8001/api/agents', {
-      headers: {
-        'X-Test-Worker': workerId,
-        'Content-Type': 'application/json',
-      },
       data: {
         name: `Second Test Agent Worker ${workerId}`,
         system_instructions: 'You are a second test agent',
@@ -105,9 +93,7 @@ test.describe('Agent Creation Full Workflow', () => {
     
     // Step 7: Verify both agents exist and are isolated to this worker
     console.log('📊 Step 7: Verifying agent isolation...');
-    const finalAgents = await page.request.get('http://localhost:8001/api/agents', {
-      headers: { 'X-Test-Worker': workerId }
-    });
+    const finalAgents = await page.request.get('http://localhost:8001/api/agents');
     const finalAgentsList = await finalAgents.json();
     console.log('📊 Final agent count:', finalAgentsList.length);
     expect(finalAgentsList.length).toBe(2);

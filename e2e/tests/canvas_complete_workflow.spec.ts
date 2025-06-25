@@ -14,19 +14,15 @@ import { test, expect } from './fixtures';
  */
 
 test.describe('Complete Canvas Workflow', () => {
-  test('End-to-end canvas workflow with agent and tool execution', async ({ page }) => {
+  test('End-to-end canvas workflow with agent and tool execution', async ({ page }, testInfo) => {
     console.log('🚀 Starting complete canvas workflow test...');
     
-    const workerId = process.env.PW_TEST_WORKER_INDEX || '0';
+    const workerId = String(testInfo.workerIndex);
     console.log('📊 Worker ID:', workerId);
     
     // Step 1: Create Agent via API first to ensure it exists
     console.log('📊 Step 1: Creating test agent...');
     const agentResponse = await page.request.post('http://localhost:8001/api/agents', {
-      headers: {
-        'X-Test-Worker': workerId,
-        'Content-Type': 'application/json',
-      },
       data: {
         name: `Canvas Test Agent ${workerId}`,
         system_instructions: 'You are a test agent for canvas workflow testing',
