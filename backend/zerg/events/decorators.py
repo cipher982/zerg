@@ -49,6 +49,9 @@ def publish_event(event_type: EventType):
                 # Remove SQLAlchemy internal state if present
                 event_data.pop("_sa_instance_state", None)
 
+                # Add event_type field for WebSocket handlers
+                event_data["event_type"] = event_type
+
                 # Publish the event
                 await event_bus.publish(event_type, event_data)
 
