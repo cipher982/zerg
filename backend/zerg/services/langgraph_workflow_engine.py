@@ -17,6 +17,7 @@ from typing import Annotated
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import TypedDict
 from typing import Union
 
@@ -299,7 +300,20 @@ class LangGraphWorkflowEngine:
                 logger.info(f"[LangGraphEngine] Creating tool node for {node_id}")
                 node_func = self._create_tool_node(node)
             elif node_type == "agentidentity" or node_type == "agent":
-                agent_id = node.config.get("agent_id") if node.config else None
+                # Extract agent_id from typed config or fallback to node config
+                agent_id = None
+                if typed_config and hasattr(typed_config, "agent_id"):
+                    agent_id = typed_config.agent_id
+                elif node.config:
+                    agent_id = node.config.get("agent_id")
+                else:
+                    # For AgentIdentity nodes, try to extract from node_type dict
+                    if isinstance(node.node_type, dict):
+                        for key, value in node.node_type.items():
+                            if key.lower() == "agentidentity" and isinstance(value, dict) and "agent_id" in value:
+                                agent_id = value["agent_id"]
+                                break
+
                 logger.info(f"[LangGraphEngine] Creating agent node for {node_id} (agent_id={agent_id})")
                 node_func = self._create_agent_node(node)
             elif node_type == "trigger":
@@ -431,19 +445,52 @@ class LangGraphWorkflowEngine:
         logger.info(f"[LangGraphEngine] Reachable node IDs: {reachable}")
         return connected_nodes
 
+    def _get_node_id(self, node) -> str:
+        """Get ID from any node-like object, handling different field names."""
+        if hasattr(node, "node_id"):
+            return node.node_id
+        elif hasattr(node, "id"):
+            return node.id
+        else:
+            raise AttributeError(f"Object {type(node)} has no recognizable ID field")
+
+    def _find_node_by_id(self, node_id: str) -> Optional[Any]:
+        """Find a node by its ID, handling different ID field names."""
+        for node in self._current_nodes:
+            if self._get_node_id(node) == node_id:
+                return node
+        return None
+
     def _get_node_type_by_id(self, node_id: str) -> str:
         """Get the type of a node by its ID."""
-        for node in self._current_nodes:
-            if node.node_id == node_id:
-                # Use clean NodeTypeHelper instead of isinstance checks
-                node_type, _ = NodeTypeHelper.parse_node_type(node.node_type)
-                return node_type
+        node = self._find_node_by_id(node_id)
+        if node:
+            # Use clean NodeTypeHelper instead of isinstance checks
+            node_type, _ = NodeTypeHelper.parse_node_type(node.node_type)
+            return node_type
         return "unknown"
 
     def _has_outgoing_tool_connections(self, node_id: str) -> bool:
         """Check if a node has outgoing connections to tool nodes."""
         outgoing_edges = [edge for edge in self._current_edges if edge.from_node_id == node_id]
         return any(self._get_node_type_by_id(edge.to_node_id) == "tool" for edge in outgoing_edges)
+
+    def _get_connected_tool_names(self, node_id: str) -> List[str]:
+        """Get names of tools connected to this node."""
+        outgoing_edges = [edge for edge in self._current_edges if edge.from_node_id == node_id]
+        tool_names = []
+
+        for edge in outgoing_edges:
+            if self._get_node_type_by_id(edge.to_node_id) == "tool":
+                # Find the tool node and extract its tool_name
+                node = self._find_node_by_id(edge.to_node_id)
+                if node and hasattr(node, "node_type") and isinstance(node.node_type, dict):
+                    if "Tool" in node.node_type:
+                        tool_name = node.node_type["Tool"].get("tool_name")
+                        if tool_name:
+                            tool_names.append(tool_name)
+
+        return tool_names
 
     def _has_incoming_agent_connections(self, node_id: str) -> bool:
         """Check if a node has incoming connections from agent nodes."""
@@ -561,7 +608,18 @@ class LangGraphWorkflowEngine:
 
         async def agent_node(state: WorkflowState) -> WorkflowState:
             node_id = node_config.node_id
-            agent_id = node_config.config.get("agent_id") if node_config.config else None
+
+            # Extract agent_id from node configuration
+            agent_id = None
+            if node_config.config:
+                agent_id = node_config.config.get("agent_id")
+
+            # If not found in config, try to extract from node_type dict (AgentIdentity format)
+            if agent_id is None and isinstance(node_config.node_type, dict):
+                for key, value in node_config.node_type.items():
+                    if key.lower() == "agentidentity" and isinstance(value, dict) and "agent_id" in value:
+                        agent_id = value["agent_id"]
+                        break
 
             logger.info(
                 (
@@ -605,15 +663,61 @@ class LangGraphWorkflowEngine:
                     )
                     logger.info(f"[AgentNode] Created thread with id={thread.id}")
 
-                    user_message = node_config.config.get("message", "Execute this task")
+                    # Configure agent with connected tools before running
+                    connects_to_tools = self._has_outgoing_tool_connections(node_id)
+
+                    # Get the base message from config and enhance it if tools are connected
+                    base_message = node_config.config.get("message", "Execute this task")
+
+                    # If agent connects to tools, enhance the message to encourage tool usage
+                    if connects_to_tools:
+                        connected_tool_names = self._get_connected_tool_names(node_id)
+                        if "http_request" in connected_tool_names:
+                            user_message = f"{base_message}. Use the http_request tool to make HTTP requests as needed. For example, you could test connectivity by making a request to https://httpbin.org/get"
+                        else:
+                            user_message = f"{base_message}. You have access to these tools: {', '.join(connected_tool_names)}. Use them as appropriate for the task."
+                    else:
+                        user_message = base_message
+
                     logger.info(f"[AgentNode] Creating user message: '{user_message}'")
                     crud.create_thread_message(
                         db=db, thread_id=thread.id, role="user", content=user_message, processed=False
                     )
                     logger.info("[AgentNode] Created thread message in DB")
+                    agent_for_runner = agent  # Default to original agent
+
+                    if connects_to_tools:
+                        logger.info(f"[AgentNode] Agent connects to tools: {connected_tool_names}")
+
+                        # Create a simple object that mimics the agent but with modified allowed_tools
+                        class AgentProxy:
+                            def __init__(self, original_agent, tool_list):
+                                # Copy all attributes from original agent
+                                for attr in dir(original_agent):
+                                    if not attr.startswith("_") and hasattr(original_agent, attr):
+                                        try:
+                                            setattr(self, attr, getattr(original_agent, attr))
+                                        except AttributeError:
+                                            pass  # Skip read-only attributes
+                                # Override allowed_tools with our list
+                                self.allowed_tools = tool_list
+
+                        # Get current tools
+                        current_tools = agent.allowed_tools if agent.allowed_tools else []
+                        if isinstance(current_tools, dict):
+                            current_tools = []  # Reset if it's a dict, we need a list
+                        elif current_tools is None:
+                            current_tools = []
+
+                        # Combine current tools with connected tools
+                        combined_tools = list(set(current_tools + connected_tool_names))
+
+                        # Create agent proxy with combined tools
+                        agent_for_runner = AgentProxy(agent, combined_tools)
+                        logger.info(f"[AgentNode] Created agent proxy with allowed_tools: {combined_tools}")
 
                     logger.info(f"[AgentNode] Initializing AgentRunner for agent {agent.id}")
-                    runner = AgentRunner(agent)
+                    runner = AgentRunner(agent_for_runner)
                     logger.info("[AgentNode] AgentRunner initialized, calling run_thread...")
 
                     created_messages = await runner.run_thread(db, thread)
@@ -631,10 +735,6 @@ class LangGraphWorkflowEngine:
 
                     assistant_messages = [msg for msg in created_messages if msg.role == "assistant"]
                     logger.info(f"[AgentNode] Filtered to {len(assistant_messages)} assistant messages")
-
-                    # Check if this agent connects to tool nodes
-                    connects_to_tools = self._has_outgoing_tool_connections(node_id)
-                    logger.info(f"[AgentNode] Agent connects to tools: {connects_to_tools}")
 
                     if connects_to_tools and assistant_messages:
                         # Extract tool calls from the last assistant message
