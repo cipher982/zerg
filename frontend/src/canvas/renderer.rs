@@ -637,11 +637,8 @@ fn draw_connection_preview(state: &AppState, context: &CanvasRenderingContext2d)
         if let Some(source_node) = state.nodes.get(source_node_id) {
             // Calculate source handle position
             let (start_x, start_y) = match source_handle.as_str() {
-                "top" => (source_node.x + source_node.width / 2.0, source_node.y),
-                "right" => (source_node.x + source_node.width, source_node.y + source_node.height / 2.0),
-                "bottom" => (source_node.x + source_node.width / 2.0, source_node.y + source_node.height),
-                "left" => (source_node.x, source_node.y + source_node.height / 2.0),
-                _ => (source_node.x + source_node.width / 2.0, source_node.y),
+                "output" => (source_node.x + source_node.width / 2.0, source_node.y + source_node.height),
+                _ => (source_node.x + source_node.width / 2.0, source_node.y + source_node.height / 2.0), // Default to center
             };
             
             context.save();
