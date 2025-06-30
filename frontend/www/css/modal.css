@@ -156,6 +156,17 @@
   overflow-y: auto;
 }
 
+.template-gallery-modal {
+  background: var(--dark-card);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  width: min(95vw, 900px); /* Wider for gallery */
+  box-shadow: var(--shadow-lg);
+  animation: modal-pop var(--transition-normal);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
 .modal-header {
   margin-bottom: var(--spacing-md);
   padding-bottom: var(--spacing-sm);
