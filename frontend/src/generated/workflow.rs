@@ -244,8 +244,8 @@ impl WorkflowEdge {
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct WorkflowNode {
     #[doc = "Node-specific configuration"]
-    #[serde(default, skip_serializing_if = "::serde_json::Map::is_empty")]
-    pub config: ::serde_json::Map<::std::string::String, ::serde_json::Value>,
+    #[serde(default)]
+    pub config: crate::models::NodeConfig,
     #[doc = "Unique node identifier"]
     pub node_id: ::std::string::String,
     #[doc = "Node type configuration"]
@@ -418,7 +418,7 @@ pub mod builder {
     #[derive(Clone, Debug)]
     pub struct WorkflowNode {
         config: ::std::result::Result<
-            ::serde_json::Map<::std::string::String, ::serde_json::Value>,
+            crate::models::NodeConfig,
             ::std::string::String,
         >,
         node_id: ::std::result::Result<::std::string::String, ::std::string::String>,
@@ -442,7 +442,7 @@ pub mod builder {
         pub fn config<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<
-                ::serde_json::Map<::std::string::String, ::serde_json::Value>,
+                crate::models::NodeConfig,
             >,
             T::Error: ::std::fmt::Display,
         {

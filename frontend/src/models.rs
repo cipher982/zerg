@@ -206,6 +206,12 @@ pub struct NodeConfig {
     pub tool_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_config: Option<serde_json::Value>,
+    
+    // Dynamic properties for extensibility (trigger params, etc.)
+    #[serde(flatten)]
+    pub dynamic_props: std::collections::HashMap<String, serde_json::Value>,
 }
 
 // Default value functions for serde
@@ -227,6 +233,8 @@ impl Default for NodeConfig {
             parent_id: None,
             tool_name: None,
             server_name: None,
+            tool_config: None,
+            dynamic_props: std::collections::HashMap::new(),
         }
     }
 }
@@ -265,147 +273,88 @@ impl NodeConfig {
     }
 }
 
-// Legacy config_keys for backward compatibility during transition
-pub mod config_keys {
-    pub const X: &str = "x";
-    pub const Y: &str = "y";
-    pub const WIDTH: &str = "width";
-    pub const HEIGHT: &str = "height";
-    pub const COLOR: &str = "color";
-    pub const TEXT: &str = "text";
-    pub const AGENT_ID: &str = "agent_id";
-    pub const PARENT_ID: &str = "parent_id";
-    pub const TOOL_NAME: &str = "tool_name";
-    pub const SERVER_NAME: &str = "server_name";
-}
 
 // Helper methods for WorkflowNode property access
 impl WorkflowNode {
-    /// Get typed config from the JSON map
-    pub fn get_typed_config(&self) -> NodeConfig {
-        // Try to deserialize directly from the config map
-        serde_json::from_value(serde_json::Value::Object(self.config.clone()))
-            .unwrap_or_default()
-    }
-    
-    /// Set typed config into the JSON map
-    pub fn set_typed_config(&mut self, config: NodeConfig) {
-        if let Ok(value) = serde_json::to_value(config) {
-            if let Some(map) = value.as_object() {
-                self.config = map.clone();
-            }
-        }
-    }
-    
-    /// Create a new WorkflowNode with typed config
-    pub fn new_with_typed_config(node_id: String, node_type: &NodeType, config: NodeConfig) -> Self {
-        let mut node = Self::new_with_type(node_id, node_type);
-        node.set_typed_config(config);
-        node
-    }
     pub fn get_x(&self) -> f64 {
-        self.get_typed_config().x
+        self.config.x
     }
 
     pub fn get_y(&self) -> f64 {
-        self.get_typed_config().y
+        self.config.y
     }
 
     pub fn get_width(&self) -> f64 {
-        self.get_typed_config().width
+        self.config.width
     }
 
     pub fn get_height(&self) -> f64 {
-        self.get_typed_config().height
+        self.config.height
     }
 
     pub fn get_color(&self) -> String {
-        self.get_typed_config().color
+        self.config.color.clone()
     }
 
     pub fn get_text(&self) -> String {
-        self.get_typed_config().text
+        self.config.text.clone()
     }
 
     pub fn set_x(&mut self, x: f64) {
-        let mut config = self.get_typed_config();
         // Clamp to reasonable bounds and handle NaN/infinity
-        config.x = if x.is_finite() {
+        self.config.x = if x.is_finite() {
             x.clamp(-10000.0, 10000.0)
         } else {
             0.0
         };
-        self.set_typed_config(config);
     }
 
     pub fn set_y(&mut self, y: f64) {
-        let mut config = self.get_typed_config();
-        config.y = if y.is_finite() {
+        self.config.y = if y.is_finite() {
             y.clamp(-10000.0, 10000.0)
         } else {
             0.0
         };
-        self.set_typed_config(config);
     }
 
     pub fn set_width(&mut self, width: f64) {
-        let mut config = self.get_typed_config();
-        config.width = if width.is_finite() {
+        self.config.width = if width.is_finite() {
             width.clamp(1.0, 2000.0)
         } else {
             200.0
         };
-        self.set_typed_config(config);
     }
 
     pub fn set_height(&mut self, height: f64) {
-        let height = if height.is_finite() {
+        self.config.height = if height.is_finite() {
             height.clamp(1.0, 2000.0)
         } else {
             80.0
         };
-        if let Some(num) = serde_json::Number::from_f64(height) {
-            self.config.insert(
-                config_keys::HEIGHT.to_string(),
-                serde_json::Value::Number(num),
-            );
-        }
     }
 
     pub fn set_text(&mut self, text: String) {
-        self.config.insert(
-            config_keys::TEXT.to_string(),
-            serde_json::Value::String(text),
-        );
+        self.config.text = text;
     }
 
     pub fn set_color(&mut self, color: String) {
-        self.config.insert(
-            config_keys::COLOR.to_string(),
-            serde_json::Value::String(color),
-        );
+        self.config.color = color;
     }
 
     pub fn get_agent_id(&self) -> Option<u32> {
-        self.config
-            .get(config_keys::AGENT_ID)
-            .and_then(|v| v.as_u64().map(|id| id as u32))
+        self.config.agent_id
     }
 
     pub fn set_agent_id(&mut self, agent_id: Option<u32>) {
-        let mut config = self.get_typed_config();
-        config.agent_id = agent_id;
-        self.set_typed_config(config);
+        self.config.agent_id = agent_id;
     }
 
     pub fn get_parent_id(&self) -> Option<String> {
-        self.get_typed_config().parent_id
+        self.config.parent_id.clone()
     }
 
     pub fn set_parent_id(&mut self, parent_id: Option<String>) {
-        let mut config = self.get_typed_config();
-        config.parent_id = parent_id;
-        self.set_typed_config(config);
+        self.config.parent_id = parent_id;
     }
 
     /// Get layout as a single struct - optimized for performance
@@ -433,18 +382,8 @@ impl WorkflowNode {
                     "AgentIdentity" => NodeType::AgentIdentity,
                     "GenericNode" => NodeType::GenericNode,
                     "Tool" => NodeType::Tool {
-                        tool_name: self
-                            .config
-                            .get(config_keys::TOOL_NAME)
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("unknown")
-                            .to_string(),
-                        server_name: self
-                            .config
-                            .get(config_keys::SERVER_NAME)
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("unknown")
-                            .to_string(),
+                        tool_name: self.config.tool_name.clone().unwrap_or_else(|| "unknown".to_string()),
+                        server_name: self.config.server_name.clone().unwrap_or_else(|| "unknown".to_string()),
                         config: crate::models::ToolConfig {
                             static_params: std::collections::HashMap::new(),
                             input_mappings: std::collections::HashMap::new(),
@@ -489,14 +428,8 @@ impl WorkflowNode {
                 server_name,
                 ..
             } => {
-                self.config.insert(
-                    config_keys::TOOL_NAME.to_string(),
-                    serde_json::Value::String(tool_name.clone()),
-                );
-                self.config.insert(
-                    config_keys::SERVER_NAME.to_string(),
-                    serde_json::Value::String(server_name.clone()),
-                );
+                self.config.tool_name = Some(tool_name.clone());
+                self.config.server_name = Some(server_name.clone());
             }
             _ => {}
         }
@@ -507,7 +440,7 @@ impl WorkflowNode {
         let mut node = WorkflowNode {
             node_id,
             node_type: crate::generated::workflow::NodeType::Variant0("GenericNode".to_string()),
-            config: serde_json::Map::new(),
+            config: NodeConfig::default(),
             position: std::collections::HashMap::new(),
         };
         node.set_semantic_type(node_type);
@@ -677,21 +610,7 @@ impl ApiWorkflow {
             .map(|arr| {
                 arr.iter()
                     .filter_map(|v| {
-                        let mut node: WorkflowNode = serde_json::from_value(v.clone()).ok()?;
-                        
-                        // Fix double-nested config structure from backend
-                        if let Some(config_obj) = node.config.get("config") {
-                            if let Some(inner_config) = config_obj.as_object() {
-                                web_sys::console::log_1(&format!(
-                                    "🔧 Fixed double-nested config for node {}: unwrapped config layer",
-                                    node.node_id
-                                ).into());
-                                // Replace the double-nested config with the inner config
-                                node.config = inner_config.clone();
-                            }
-                        }
-                        
-                        Some(node)
+                        serde_json::from_value(v.clone()).ok()
                     })
                     .collect()
             })

@@ -82,7 +82,7 @@ pub fn draw_nodes(state: &mut AppState) {
 fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
     // Draw legacy parent-child connections
     for (_, node) in &state.workflow_nodes {
-        if let Some(parent_id) = node.config.get("parent_id").and_then(|v| v.as_str()) {
+        if let Some(parent_id) = &node.config.parent_id {
             if let Some(parent) = state.workflow_nodes.get(parent_id) {
                 draw_connection_line(context, parent, node, &state.connection_animation_offset);
             }
