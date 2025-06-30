@@ -178,6 +178,94 @@ pub use crate::generated::{WorkflowCanvas, WorkflowEdge, WorkflowNode};
 pub type WorkflowNodeType = NodeType;
 
 // Constants for config keys to avoid magic strings and typos
+/// Typed configuration for workflow nodes - replaces serde_json::Map
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NodeConfig {
+    // Position and dimensions
+    #[serde(default)]
+    pub x: f64,
+    #[serde(default)]
+    pub y: f64,
+    #[serde(default = "default_width")]
+    pub width: f64,
+    #[serde(default = "default_height")]
+    pub height: f64,
+    
+    // Display properties
+    #[serde(default = "default_color")]
+    pub color: String,
+    #[serde(default = "default_text")]
+    pub text: String,
+    
+    // Node-specific properties
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_name: Option<String>,
+}
+
+// Default value functions for serde
+fn default_width() -> f64 { 200.0 }
+fn default_height() -> f64 { 80.0 }
+fn default_color() -> String { "#3b82f6".to_string() }
+fn default_text() -> String { "Node".to_string() }
+
+impl Default for NodeConfig {
+    fn default() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            width: default_width(),
+            height: default_height(),
+            color: default_color(),
+            text: default_text(),
+            agent_id: None,
+            parent_id: None,
+            tool_name: None,
+            server_name: None,
+        }
+    }
+}
+
+impl NodeConfig {
+    /// Create a new NodeConfig with position
+    pub fn new(x: f64, y: f64) -> Self {
+        Self {
+            x,
+            y,
+            ..Default::default()
+        }
+    }
+    
+    /// Create NodeConfig for an agent
+    pub fn agent(x: f64, y: f64, agent_id: u32, text: String) -> Self {
+        Self {
+            x,
+            y,
+            agent_id: Some(agent_id),
+            text,
+            color: "#2ecc71".to_string(),
+            ..Default::default()
+        }
+    }
+    
+    /// Create NodeConfig for a trigger
+    pub fn trigger(x: f64, y: f64, text: String) -> Self {
+        Self {
+            x,
+            y,
+            text,
+            color: "#10b981".to_string(),
+            ..Default::default()
+        }
+    }
+}
+
+// Legacy config_keys for backward compatibility during transition
 pub mod config_keys {
     pub const X: &str = "x";
     pub const Y: &str = "y";
@@ -193,87 +281,81 @@ pub mod config_keys {
 
 // Helper methods for WorkflowNode property access
 impl WorkflowNode {
+    /// Get typed config from the JSON map
+    pub fn get_typed_config(&self) -> NodeConfig {
+        // Try to deserialize directly from the config map
+        serde_json::from_value(serde_json::Value::Object(self.config.clone()))
+            .unwrap_or_default()
+    }
+    
+    /// Set typed config into the JSON map
+    pub fn set_typed_config(&mut self, config: NodeConfig) {
+        if let Ok(value) = serde_json::to_value(config) {
+            if let Some(map) = value.as_object() {
+                self.config = map.clone();
+            }
+        }
+    }
+    
+    /// Create a new WorkflowNode with typed config
+    pub fn new_with_typed_config(node_id: String, node_type: &NodeType, config: NodeConfig) -> Self {
+        let mut node = Self::new_with_type(node_id, node_type);
+        node.set_typed_config(config);
+        node
+    }
     pub fn get_x(&self) -> f64 {
-        self.config
-            .get(config_keys::X)
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0)
+        self.get_typed_config().x
     }
 
     pub fn get_y(&self) -> f64 {
-        self.config
-            .get(config_keys::Y)
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0)
+        self.get_typed_config().y
     }
 
     pub fn get_width(&self) -> f64 {
-        self.config
-            .get(config_keys::WIDTH)
-            .and_then(|v| v.as_f64())
-            .unwrap_or(200.0)
+        self.get_typed_config().width
     }
 
     pub fn get_height(&self) -> f64 {
-        self.config
-            .get(config_keys::HEIGHT)
-            .and_then(|v| v.as_f64())
-            .unwrap_or(80.0)
+        self.get_typed_config().height
     }
 
     pub fn get_color(&self) -> String {
-        self.config
-            .get(config_keys::COLOR)
-            .and_then(|v| v.as_str())
-            .unwrap_or("#cccccc")
-            .to_string()
+        self.get_typed_config().color
     }
 
     pub fn get_text(&self) -> String {
-        self.config
-            .get(config_keys::TEXT)
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string()
+        self.get_typed_config().text
     }
 
     pub fn set_x(&mut self, x: f64) {
+        let mut config = self.get_typed_config();
         // Clamp to reasonable bounds and handle NaN/infinity
-        let x = if x.is_finite() {
+        config.x = if x.is_finite() {
             x.clamp(-10000.0, 10000.0)
         } else {
             0.0
         };
-        if let Some(num) = serde_json::Number::from_f64(x) {
-            self.config
-                .insert(config_keys::X.to_string(), serde_json::Value::Number(num));
-        }
+        self.set_typed_config(config);
     }
 
     pub fn set_y(&mut self, y: f64) {
-        let y = if y.is_finite() {
+        let mut config = self.get_typed_config();
+        config.y = if y.is_finite() {
             y.clamp(-10000.0, 10000.0)
         } else {
             0.0
         };
-        if let Some(num) = serde_json::Number::from_f64(y) {
-            self.config
-                .insert(config_keys::Y.to_string(), serde_json::Value::Number(num));
-        }
+        self.set_typed_config(config);
     }
 
     pub fn set_width(&mut self, width: f64) {
-        let width = if width.is_finite() {
+        let mut config = self.get_typed_config();
+        config.width = if width.is_finite() {
             width.clamp(1.0, 2000.0)
         } else {
             200.0
         };
-        if let Some(num) = serde_json::Number::from_f64(width) {
-            self.config.insert(
-                config_keys::WIDTH.to_string(),
-                serde_json::Value::Number(num),
-            );
-        }
+        self.set_typed_config(config);
     }
 
     pub fn set_height(&mut self, height: f64) {
@@ -311,31 +393,19 @@ impl WorkflowNode {
     }
 
     pub fn set_agent_id(&mut self, agent_id: Option<u32>) {
-        if let Some(id) = agent_id {
-            self.config.insert(
-                config_keys::AGENT_ID.to_string(),
-                serde_json::Value::Number(serde_json::Number::from(id)),
-            );
-        } else {
-            self.config.remove(config_keys::AGENT_ID);
-        }
+        let mut config = self.get_typed_config();
+        config.agent_id = agent_id;
+        self.set_typed_config(config);
     }
 
     pub fn get_parent_id(&self) -> Option<String> {
-        self.config
-            .get(config_keys::PARENT_ID)
-            .and_then(|v| v.as_str().map(|s| s.to_string()))
+        self.get_typed_config().parent_id
     }
 
     pub fn set_parent_id(&mut self, parent_id: Option<String>) {
-        if let Some(id) = parent_id {
-            self.config.insert(
-                config_keys::PARENT_ID.to_string(),
-                serde_json::Value::String(id),
-            );
-        } else {
-            self.config.remove(config_keys::PARENT_ID);
-        }
+        let mut config = self.get_typed_config();
+        config.parent_id = parent_id;
+        self.set_typed_config(config);
     }
 
     /// Get layout as a single struct - optimized for performance
