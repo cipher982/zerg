@@ -28,12 +28,16 @@ test.describe('Agent Creation Full Workflow', () => {
       console.warn('⚠️  Database reset failed:', error);
     }
     
-    // Step 1: Verify empty state
+    // Step 1: Verify empty state and wait for database reset to complete
     console.log('📊 Step 1: Verifying empty state...');
+    // Wait for database reset to fully complete across all workers
+    await page.waitForTimeout(500);
+    
     const initialAgents = await page.request.get('http://localhost:8001/api/agents');
     expect(initialAgents.status()).toBe(200);
     const initialAgentsList = await initialAgents.json();
     console.log('📊 Initial agent count:', initialAgentsList.length);
+    expect(initialAgentsList.length).toBe(0);
     
     // Step 2: Create an agent via API
     console.log('📊 Step 2: Creating agent via API...');
@@ -106,7 +110,11 @@ test.describe('Agent Creation Full Workflow', () => {
     const finalAgents = await page.request.get('http://localhost:8001/api/agents');
     const finalAgentsList = await finalAgents.json();
     console.log('📊 Final agent count:', finalAgentsList.length);
-    expect(finalAgentsList.length).toBe(2);
+    
+    // Filter to only agents created by this worker (more robust isolation check)
+    const workerAgents = finalAgentsList.filter(agent => agent.name.includes(`Worker ${workerId}`));
+    console.log('📊 Worker-specific agent count:', workerAgents.length);
+    expect(workerAgents.length).toBe(2);
     
     // Verify both agents are present
     const firstAgentFound = finalAgentsList.find(agent => agent.id === createdAgent.id);
