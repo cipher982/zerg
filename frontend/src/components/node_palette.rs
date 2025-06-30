@@ -486,15 +486,16 @@ pub fn create_node_from_palette(state: &mut AppState, palette_node: &PaletteNode
 
     // Create the node directly in the state.workflow_nodes HashMap
     use crate::models::WorkflowNode;
-    use serde_json::json;
 
-    let mut config = serde_json::Map::new();
-    config.insert("x".to_string(), json!(world_x));
-    config.insert("y".to_string(), json!(world_y));
-    config.insert("width".to_string(), json!(200.0));
-    config.insert("height".to_string(), json!(80.0));
-    config.insert("color".to_string(), json!("#f59e0b"));
-    config.insert("text".to_string(), json!(name));
+    let config = crate::models::NodeConfig {
+        x: world_x,
+        y: world_y,
+        width: 200.0,
+        height: 80.0,
+        color: "#f59e0b".to_string(),
+        text: name.clone(),
+        ..Default::default()
+    };
 
     let mut node = WorkflowNode::new_with_type(node_id.clone(), &node_type);
     node.config = config;

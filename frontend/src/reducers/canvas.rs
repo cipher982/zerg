@@ -15,10 +15,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     crate::models::NodeType::Tool { .. }
                 ) {
                     // Store the tool config in the node's config field
-                    node.config.insert(
-                        "tool_config".to_string(),
-                        serde_json::to_value(config).unwrap_or_default(),
-                    );
+                    node.config.tool_config = Some(serde_json::to_value(config).unwrap_or_default());
                     state.state_modified = true;
                     state.mark_dirty();
                 }
@@ -35,7 +32,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     if let serde_json::Value::Object(param_map) = params {
                         // Store the trigger params in the node's config field
                         for (key, value) in param_map {
-                            node.config
+                            node.config.dynamic_props
                                 .insert(format!("trigger_{}", key), value.clone());
                         }
                     }
@@ -183,9 +180,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             } else {
                 // Normal click behavior - open agent config
                 if let Some(agent_id) = state.workflow_nodes.get(node_id).and_then(|n| {
-                    n.config
-                        .get("agent_id")
-                        .and_then(|v| v.as_u64().map(|id| id as u32))
+                    n.config.agent_id
                 }) {
                     cmds.push(Command::SendMessage(Message::EditAgent(agent_id)));
                 }
@@ -285,10 +280,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         Message::DeleteNode { node_id } => {
             // Clean up agent tracking before removing the node
             if let Some(node) = state.workflow_nodes.get(node_id) {
-                let agent_id = node
-                    .config
-                    .get("agent_id")
-                    .and_then(|v| v.as_u64().map(|id| id as u32));
+                let agent_id = node.config.agent_id;
                 if let Some(agent_id) = agent_id {
                     state.agent_id_to_node_id.remove(&agent_id);
                     state.agents_on_canvas.remove(&agent_id);
@@ -316,19 +308,13 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             is_first_chunk,
         } => {
             if let Some(node) = state.workflow_nodes.get_mut(node_id) {
-                let current_text = node
-                    .config
-                    .get("text")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .to_string();
+                let current_text = &node.config.text;
                 let new_text = if *is_first_chunk {
                     text.clone()
                 } else {
-                    current_text + text
+                    current_text.clone() + text
                 };
-                node.config
-                    .insert("text".to_string(), serde_json::Value::String(new_text));
+                node.config.text = new_text;
                 state.resize_node_for_content(node_id);
                 state.state_modified = true;
             }
@@ -340,41 +326,22 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         } => {
             if let Some(node) = state.workflow_nodes.get_mut(node_id) {
                 if !final_text.is_empty() {
-                    node.config.insert(
-                        "text".to_string(),
-                        serde_json::Value::String(final_text.clone()),
-                    );
+                    node.config.text = final_text.clone();
                 }
-                node.config.insert(
-                    "color".to_string(),
-                    serde_json::Value::String("#c8e6c9".to_string()),
-                );
-                let agent_id = node
-                    .config
-                    .get("agent_id")
-                    .and_then(|v| v.as_u64().map(|id| id as u32));
+                node.config.color = "#c8e6c9".to_string();
+                let agent_id = node.config.agent_id;
                 if let Some(agent_id) = agent_id {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
                         agent.status = Some("idle".to_string());
                     }
                 }
-                let parent_id = node
-                    .config
-                    .get("parent_id")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
+                let parent_id = node.config.parent_id.clone();
                 state.state_modified = true;
                 state.resize_node_for_content(node_id);
                 if let Some(parent_id) = parent_id {
                     if let Some(parent) = state.workflow_nodes.get_mut(&parent_id) {
-                        parent.config.insert(
-                            "color".to_string(),
-                            serde_json::Value::String("#ffecb3".to_string()),
-                        );
-                        let parent_agent_id = parent
-                            .config
-                            .get("agent_id")
-                            .and_then(|v| v.as_u64().map(|id| id as u32));
+                        parent.config.color = "#ffecb3".to_string();
+                        let parent_agent_id = parent.config.agent_id;
                         if let Some(agent_id) = parent_agent_id {
                             if let Some(agent) = state.agents.get_mut(&agent_id) {
                                 agent.status = Some("idle".to_string());
@@ -396,10 +363,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     _ => ("#e0e7ff", NodeExecStatus::Idle),                           // indigo-100
                 };
 
-                node.config.insert(
-                    "color".to_string(),
-                    serde_json::Value::String(color.to_string()),
-                );
+                node.config.color = color.to_string();
                 if let Some(ui_node_state) = state.ui_state.get_mut(node_id) {
                     ui_node_state.exec_status = Some(exec_status);
                 }
@@ -432,10 +396,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 }
 
                 // Only update agent status for agent-backed nodes with valid workflow execution statuses
-                let agent_id = node
-                    .config
-                    .get("agent_id")
-                    .and_then(|v| v.as_u64().map(|id| id as u32));
+                let agent_id = node.config.agent_id;
                 if let Some(agent_id) = agent_id {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
                         // Only update agent status for legitimate workflow execution status changes
@@ -585,10 +546,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 }
             }
             for (_id, node) in state.workflow_nodes.iter_mut() {
-                let agent_id = node
-                    .config
-                    .get("agent_id")
-                    .and_then(|v| v.as_u64().map(|id| id as u32));
+                let agent_id = node.config.agent_id;
                 if let Some(agent_id) = agent_id {
                     if let Some(agent) = state.agents.get(&agent_id) {
                         if let Some(status_str) = &agent.status {

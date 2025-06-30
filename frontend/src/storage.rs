@@ -167,47 +167,15 @@ fn try_load_layout_from_api() {
                                         }
                                         None => {
                                             // Insert a *stub* node so at least the layout is respected.
-                                            let mut config = serde_json::Map::new();
-                                            config.insert(
-                                                "x".to_string(),
-                                                serde_json::Value::Number(
-                                                    serde_json::Number::from_f64(pos.x).unwrap(),
-                                                ),
-                                            );
-                                            config.insert(
-                                                "y".to_string(),
-                                                serde_json::Value::Number(
-                                                    serde_json::Number::from_f64(pos.y).unwrap(),
-                                                ),
-                                            );
-                                            config.insert(
-                                                "width".to_string(),
-                                                serde_json::Value::Number(
-                                                    serde_json::Number::from_f64(
-                                                        DEFAULT_NODE_WIDTH,
-                                                    )
-                                                    .unwrap(),
-                                                ),
-                                            );
-                                            config.insert(
-                                                "height".to_string(),
-                                                serde_json::Value::Number(
-                                                    serde_json::Number::from_f64(
-                                                        DEFAULT_NODE_HEIGHT,
-                                                    )
-                                                    .unwrap(),
-                                                ),
-                                            );
-                                            config.insert(
-                                                "color".to_string(),
-                                                serde_json::Value::String(
-                                                    NODE_COLOR_GENERIC.to_string(),
-                                                ),
-                                            );
-                                            config.insert(
-                                                "text".to_string(),
-                                                serde_json::Value::String(id.clone()),
-                                            );
+                                            let config = crate::models::NodeConfig {
+                                                x: pos.x,
+                                                y: pos.y,
+                                                width: DEFAULT_NODE_WIDTH,
+                                                height: DEFAULT_NODE_HEIGHT,
+                                                color: NODE_COLOR_GENERIC.to_string(),
+                                                text: id.clone(),
+                                                ..Default::default()
+                                            };
 
                                             let mut node = WorkflowNode::new_with_type(
                                                 id.clone(),
