@@ -107,41 +107,38 @@ def test_agent_gets_configured_with_connected_tools(workflow_with_agent_and_tool
         assert "http_request" in connected_tool_names, f"Should find http_request tool, got: {connected_tool_names}"
 
 
-def test_agent_allowed_tools_data_type():
+def test_agent_allowed_tools_data_type(db_session):
     """Test what data type the Agent.allowed_tools field expects."""
+    # Create an agent
+    agent = crud.create_agent(
+        db=db_session,
+        owner_id=1,  # Add required owner_id
+        name="Test Agent",
+        system_instructions="Test",
+        task_instructions="Test",
+        model="gpt-4o-mini",
+    )
 
-    session_factory = get_session_factory()
-    with session_factory() as db:
-        # Create an agent
-        agent = crud.create_agent(
-            db=db,
-            owner_id=1,  # Add required owner_id
-            name="Test Agent",
-            system_instructions="Test",
-            task_instructions="Test",
-            model="gpt-4o-mini",
-        )
+    # Check the current allowed_tools value and type
+    print(f"Initial allowed_tools: {agent.allowed_tools}, type: {type(agent.allowed_tools)}")
 
-        # Check the current allowed_tools value and type
-        print(f"Initial allowed_tools: {agent.allowed_tools}, type: {type(agent.allowed_tools)}")
+    # Try to understand what type it expects
+    try:
+        agent.allowed_tools = ["http_request"]
+        db_session.commit()
+        print("SUCCESS: List assignment worked")
+    except Exception as e:
+        print(f"FAILED list assignment: {e}")
+        db_session.rollback()
 
-        # Try to understand what type it expects
-        try:
-            agent.allowed_tools = ["http_request"]
-            db.commit()
-            print("SUCCESS: List assignment worked")
-        except Exception as e:
-            print(f"FAILED list assignment: {e}")
-            db.rollback()
-
-        # Try other types
-        try:
-            agent.allowed_tools = None
-            db.commit()
-            print("SUCCESS: None assignment worked")
-        except Exception as e:
-            print(f"FAILED None assignment: {e}")
-            db.rollback()
+    # Try other types
+    try:
+        agent.allowed_tools = None
+        db_session.commit()
+        print("SUCCESS: None assignment worked")
+    except Exception as e:
+        print(f"FAILED None assignment: {e}")
+        db_session.rollback()
 
 
 @pytest.mark.asyncio
