@@ -606,7 +606,23 @@ impl ApiWorkflow {
             .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
-                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                    .filter_map(|v| {
+                        let mut node: WorkflowNode = serde_json::from_value(v.clone()).ok()?;
+                        
+                        // Fix double-nested config structure from backend
+                        if let Some(config_obj) = node.config.get("config") {
+                            if let Some(inner_config) = config_obj.as_object() {
+                                web_sys::console::log_1(&format!(
+                                    "🔧 Fixed double-nested config for node {}: unwrapped config layer",
+                                    node.node_id
+                                ).into());
+                                // Replace the double-nested config with the inner config
+                                node.config = inner_config.clone();
+                            }
+                        }
+                        
+                        Some(node)
+                    })
                     .collect()
             })
             .unwrap_or_default()
@@ -619,7 +635,19 @@ impl ApiWorkflow {
             .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
-                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                    .filter_map(|v| {
+                        let mut edge: WorkflowEdge = serde_json::from_value(v.clone()).ok()?;
+                        
+                        // Fix double-nested config structure from backend
+                        if let Some(config_obj) = edge.config.get("config") {
+                            if let Some(inner_config) = config_obj.as_object() {
+                                // Replace the double-nested config with the inner config
+                                edge.config = inner_config.clone();
+                            }
+                        }
+                        
+                        Some(edge)
+                    })
                     .collect()
             })
             .unwrap_or_default()
