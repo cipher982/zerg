@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { resetDatabaseViaRequest } from './helpers/database-helpers';
 
 /**
  * AGENT CREATION FULL TEST
@@ -17,6 +18,15 @@ test.describe('Agent Creation Full Workflow', () => {
     // Get the worker ID from testInfo (same source as fixtures)
     const workerId = String(testInfo.workerIndex);
     console.log('📊 Worker ID:', workerId);
+    
+    // Step 0: Reset database to ensure clean state
+    console.log('📊 Step 0: Resetting database...');
+    try {
+      await resetDatabaseViaRequest(page);
+      console.log('✅ Database reset successful');
+    } catch (error) {
+      console.warn('⚠️  Database reset failed:', error);
+    }
     
     // Step 1: Verify empty state
     console.log('📊 Step 1: Verifying empty state...');
