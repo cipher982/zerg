@@ -1,5 +1,5 @@
 //! Constants for the frontend application
-//! 
+//!
 //! This module centralizes commonly used string literals to prevent typos
 //! and enable safe refactoring across the codebase.
 
@@ -69,10 +69,10 @@ pub const DEFAULT_NODE_WIDTH: f64 = 200.0;
 pub const DEFAULT_NODE_HEIGHT: f64 = 100.0;
 
 // Status Colors (for canvas nodes)
-pub const COLOR_IDLE: &str = "#ffecb3";      // Light amber
+pub const COLOR_IDLE: &str = "#ffecb3"; // Light amber
 pub const COLOR_PROCESSING: &str = "#b3e5fc"; // Light blue
-pub const COLOR_COMPLETE: &str = "#c8e6c9";   // Light green
-pub const COLOR_ERROR: &str = "#ffcdd2";      // Light red
+pub const COLOR_COMPLETE: &str = "#c8e6c9"; // Light green
+pub const COLOR_ERROR: &str = "#ffcdd2"; // Light red
 
 // Canvas colors
 pub const CANVAS_BACKGROUND_COLOR: &str = "#33334a";

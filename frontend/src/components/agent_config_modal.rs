@@ -10,19 +10,20 @@
 //! wiring here and delete the legacy helpers.
 
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 use web_sys::Document;
 use web_sys::Element;
-use wasm_bindgen::JsCast;
 
-use crate::dom_utils;
 use crate::components::tab_bar;
+use crate::dom_utils;
 
-
-use crate::state::APP_STATE;
-use crate::constants::{DEFAULT_SYSTEM_INSTRUCTIONS, DEFAULT_TASK_INSTRUCTIONS, ATTR_DATA_TESTID, 
-                       CSS_FORM_ROW_SM, CSS_ACTIONS_ROW};
-use crate::state::dispatch_global_message;
+use crate::constants::{
+    ATTR_DATA_TESTID, CSS_ACTIONS_ROW, CSS_FORM_ROW_SM, DEFAULT_SYSTEM_INSTRUCTIONS,
+    DEFAULT_TASK_INSTRUCTIONS,
+};
 use crate::models::Trigger;
+use crate::state::dispatch_global_message;
+use crate::state::APP_STATE;
 use wasm_bindgen::closure::Closure;
 
 /// Thin wrapper around the existing agent configuration modal.  The internal
@@ -61,7 +62,11 @@ impl AgentConfigModal {
 
             if document.get_element_by_id("agent-triggers-tab").is_none() {
                 // Add button next to Main tab (after any History tab if present)
-                if let Some(tab_container) = document.query_selector("#agent-modal .tab-container").ok().flatten() {
+                if let Some(tab_container) = document
+                    .query_selector("#agent-modal .tab-container")
+                    .ok()
+                    .flatten()
+                {
                     let triggers_tab = document.create_element("button")?;
                     triggers_tab.set_attribute("type", "button")?;
                     triggers_tab.set_class_name("tab-button");
@@ -71,7 +76,10 @@ impl AgentConfigModal {
                 }
 
                 // Add content wrapper equivalent to build_dom() variant
-                if document.get_element_by_id("agent-triggers-content").is_none() {
+                if document
+                    .get_element_by_id("agent-triggers-content")
+                    .is_none()
+                {
                     let triggers_content = document.create_element("div")?;
                     triggers_content.set_class_name("tab-content");
                     triggers_content.set_id("agent-triggers-content");
@@ -81,32 +89,34 @@ impl AgentConfigModal {
                     let empty_div = document.create_element("div")?;
                     empty_div.set_id("agent-triggers-empty");
                     let p = document.create_element("p")?;
-                    p.set_inner_html("Connect external events to your agent – create a trigger to get started.");
+                    p.set_inner_html(
+                        "Connect external events to your agent – create a trigger to get started.",
+                    );
                     empty_div.append_child(&p)?;
 
-            // Gmail connect row (only visible when not yet connected)
-            let gmail_row = document.create_element("div")?;
-            gmail_row.set_id("agent-gmail-connect-row");
-            gmail_row.set_class_name(CSS_FORM_ROW_SM);
+                    // Gmail connect row (only visible when not yet connected)
+                    let gmail_row = document.create_element("div")?;
+                    gmail_row.set_id("agent-gmail-connect-row");
+                    gmail_row.set_class_name(CSS_FORM_ROW_SM);
 
-            // Button placeholder – we toggle visibility later in
-            // `render_gmail_connect_status`.
-            let connect_btn = document.create_element("button")?;
-            connect_btn.set_attribute("type", "button")?;
-            connect_btn.set_id("agent-connect-gmail-btn");
-            connect_btn.set_class_name("btn-primary");
-            connect_btn.set_inner_html("Connect Gmail");
-            gmail_row.append_child(&connect_btn)?;
+                    // Button placeholder – we toggle visibility later in
+                    // `render_gmail_connect_status`.
+                    let connect_btn = document.create_element("button")?;
+                    connect_btn.set_attribute("type", "button")?;
+                    connect_btn.set_id("agent-connect-gmail-btn");
+                    connect_btn.set_class_name("btn-primary");
+                    connect_btn.set_inner_html("Connect Gmail");
+                    gmail_row.append_child(&connect_btn)?;
 
-            let connected_span = document.create_element("span")?;
-            connected_span.set_id("agent-gmail-connected-span");
-            connected_span.set_inner_html("Gmail connected ✓");
-            // Static styling (colour + margin) – visibility handled via helper
-            connected_span.set_class_name("text-success ml-4");
-            dom_utils::hide(&connected_span);
-            gmail_row.append_child(&connected_span)?;
+                    let connected_span = document.create_element("span")?;
+                    connected_span.set_id("agent-gmail-connected-span");
+                    connected_span.set_inner_html("Gmail connected ✓");
+                    // Static styling (colour + margin) – visibility handled via helper
+                    connected_span.set_class_name("text-success ml-4");
+                    dom_utils::hide(&connected_span);
+                    gmail_row.append_child(&connected_span)?;
 
-            empty_div.append_child(&gmail_row)?;
+                    empty_div.append_child(&gmail_row)?;
                     let add_trigger_btn = document.create_element("button")?;
                     add_trigger_btn.set_attribute("type", "button")?;
                     add_trigger_btn.set_id("agent-add-trigger-btn");
@@ -168,7 +178,11 @@ impl AgentConfigModal {
                     triggers_content.append_child(&list_ul)?;
 
                     // Append after existing tab-content containers
-                    if let Some(modal_content) = document.query_selector("#agent-modal .modal-content").ok().flatten() {
+                    if let Some(modal_content) = document
+                        .query_selector("#agent-modal .modal-content")
+                        .ok()
+                        .flatten()
+                    {
                         modal_content.append_child(&triggers_content)?;
                     }
                 }
@@ -196,8 +210,9 @@ impl AgentConfigModal {
         // Use shared helper so backdrop + content wrapper follow the same
         // conventions (`hidden` attribute for visibility, CSS classes, …)
         // -----------------------------------------------------------------
-        let (modal, modal_content) = crate::components::modal::ensure_modal(document, "agent-modal")?;
-        
+        let (modal, modal_content) =
+            crate::components::modal::ensure_modal(document, "agent-modal")?;
+
         // Add data-testid for E2E testing
         let _ = modal.set_attribute("data-testid", "agent-modal");
 
@@ -212,7 +227,10 @@ impl AgentConfigModal {
         modal_header.append_child(&modal_title)?;
 
         // Tabs: Main / Triggers / Tools – built via shared helper ------------------
-        let tab_container = tab_bar::build_tab_bar(document, &[("Main", true), ("Triggers", false), ("Tools", false)])?;
+        let tab_container = tab_bar::build_tab_bar(
+            document,
+            &[("Main", true), ("Triggers", false), ("Tools", false)],
+        )?;
         tab_container.set_class_name("modal-tabs");
 
         // -----------------------------------------------------------------
@@ -224,7 +242,9 @@ impl AgentConfigModal {
             use wasm_bindgen::closure::Closure;
             use web_sys::Event;
 
-            let dispatch = |tab| crate::state::dispatch_global_message(crate::messages::Message::SetAgentTab(tab));
+            let dispatch = |tab| {
+                crate::state::dispatch_global_message(crate::messages::Message::SetAgentTab(tab))
+            };
 
             if let Some(first_btn) = tab_container.first_element_child() {
                 // Retain stable id for update.rs active-state toggling.
@@ -237,12 +257,16 @@ impl AgentConfigModal {
             }
 
             // Handle the second tab (Triggers)
-            if let Some(triggers_btn) = tab_container.first_element_child().and_then(|el| el.next_element_sibling()) {
+            if let Some(triggers_btn) = tab_container
+                .first_element_child()
+                .and_then(|el| el.next_element_sibling())
+            {
                 triggers_btn.set_id("agent-triggers-tab");
                 let cb = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                     dispatch(crate::state::AgentConfigTab::Triggers);
                 }));
-                triggers_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
+                triggers_btn
+                    .add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
                 cb.forget();
             }
 
@@ -282,7 +306,9 @@ impl AgentConfigModal {
         empty_wrapper.set_id("agent-triggers-empty");
 
         let empty_p = document.create_element("p")?;
-        empty_p.set_inner_html("Connect external events to your agent – create a trigger to get started.");
+        empty_p.set_inner_html(
+            "Connect external events to your agent – create a trigger to get started.",
+        );
         empty_wrapper.append_child(&empty_p)?;
 
         let add_trigger_btn = document.create_element("button")?;
@@ -396,7 +422,10 @@ impl AgentConfigModal {
         let system_textarea = document.create_element("textarea")?;
         system_textarea.set_id("system-instructions");
         system_textarea.set_attribute("rows", "6")?;
-        system_textarea.set_attribute("placeholder", "Enter system-level instructions for this agent...")?;
+        system_textarea.set_attribute(
+            "placeholder",
+            "Enter system-level instructions for this agent...",
+        )?;
         system_textarea.set_attribute(ATTR_DATA_TESTID, "system-instructions-textarea")?;
 
         // --- Task instructions ---
@@ -447,7 +476,12 @@ impl AgentConfigModal {
         }
 
         // Create labeled containers for each input
-        let create_input_container = |id: &str, label_text: &str, min: &str, max: &str, default_val: &str| -> Result<Element, JsValue> {
+        let create_input_container = |id: &str,
+                                      label_text: &str,
+                                      min: &str,
+                                      max: &str,
+                                      default_val: &str|
+         -> Result<Element, JsValue> {
             let container = document.create_element("div")?;
             container.set_id(&format!("{}-container", id));
             container.set_class_name("schedule-input-container");
@@ -463,7 +497,7 @@ impl AgentConfigModal {
             input.set_attribute("min", min)?;
             input.set_attribute("max", max)?;
             input.set_attribute("placeholder", default_val)?;
-            input.set_attribute("value", default_val)?;  // Set actual default value
+            input.set_attribute("value", default_val)?; // Set actual default value
 
             container.append_child(&label)?;
             container.append_child(&input)?;
@@ -471,43 +505,44 @@ impl AgentConfigModal {
         };
 
         // Special function for weekday select
-        let create_weekday_container = |id: &str, label_text: &str, default_day: u8| -> Result<Element, JsValue> {
-            let container = document.create_element("div")?;
-            container.set_id(&format!("{}-container", id));
-            container.set_class_name("schedule-input-container");
-            crate::dom_utils::hide(&container);
+        let create_weekday_container =
+            |id: &str, label_text: &str, default_day: u8| -> Result<Element, JsValue> {
+                let container = document.create_element("div")?;
+                container.set_id(&format!("{}-container", id));
+                container.set_class_name("schedule-input-container");
+                crate::dom_utils::hide(&container);
 
-            let label = document.create_element("label")?;
-            label.set_inner_html(label_text);
-            label.set_attribute("for", id)?;
+                let label = document.create_element("label")?;
+                label.set_inner_html(label_text);
+                label.set_attribute("for", id)?;
 
-            let select = document.create_element("select")?;
-            select.set_id(id);
+                let select = document.create_element("select")?;
+                select.set_id(id);
 
-            let days = [
-                (0, "Sunday"),
-                (1, "Monday"),
-                (2, "Tuesday"),
-                (3, "Wednesday"),
-                (4, "Thursday"),
-                (5, "Friday"),
-                (6, "Saturday"),
-            ];
+                let days = [
+                    (0, "Sunday"),
+                    (1, "Monday"),
+                    (2, "Tuesday"),
+                    (3, "Wednesday"),
+                    (4, "Thursday"),
+                    (5, "Friday"),
+                    (6, "Saturday"),
+                ];
 
-            for (value, name) in &days {
-                let option = document.create_element("option")?;
-                option.set_attribute("value", &value.to_string())?;
-                if *value == default_day {
-                    option.set_attribute("selected", "true")?;
+                for (value, name) in &days {
+                    let option = document.create_element("option")?;
+                    option.set_attribute("value", &value.to_string())?;
+                    if *value == default_day {
+                        option.set_attribute("selected", "true")?;
+                    }
+                    option.set_inner_html(name);
+                    select.append_child(&option)?;
                 }
-                option.set_inner_html(name);
-                select.append_child(&option)?;
-            }
 
-            container.append_child(&label)?;
-            container.append_child(&select)?;
-            Ok(container)
-        };
+                container.append_child(&label)?;
+                container.append_child(&select)?;
+                Ok(container)
+            };
 
         // Create containers for each input type
         let interval_container = create_input_container(
@@ -515,38 +550,22 @@ impl AgentConfigModal {
             "Run every N minutes (1-59):",
             "1",
             "59",
-            "15"
+            "15",
         )?;
 
-        let hour_container = create_input_container(
-            "sched-hour",
-            "Hour (0-23):",
-            "0",
-            "23",
-            "9"
-        )?;
+        let hour_container = create_input_container("sched-hour", "Hour (0-23):", "0", "23", "9")?;
 
-        let minute_container = create_input_container(
-            "sched-minute",
-            "Minute (0-59):",
-            "0",
-            "59",
-            "0"
-        )?;
+        let minute_container =
+            create_input_container("sched-minute", "Minute (0-59):", "0", "59", "0")?;
 
         let weekday_container = create_weekday_container(
             "sched-weekday",
             "Day of Week:",
-            1  // Default to Monday (1)
+            1, // Default to Monday (1)
         )?;
 
-        let day_container = create_input_container(
-            "sched-day",
-            "Day of Month (1-31):",
-            "1",
-            "31",
-            "15"
-        )?;
+        let day_container =
+            create_input_container("sched-day", "Day of Month (1-31):", "1", "31", "15")?;
 
         // Summary line
         let summary_div = document.create_element("div")?;
@@ -576,8 +595,6 @@ impl AgentConfigModal {
         // Final assembly – add both tab contents to modal
         // --------------------------------------------------------------
 
-
-
         // --- Buttons ---
         let button_container = document.create_element("div")?;
         button_container.set_class_name("modal-buttons");
@@ -603,30 +620,38 @@ impl AgentConfigModal {
         // ------------------------------------------------------------------
         if modal.get_attribute("data-overlay-listener").is_none() {
             let modal_clone = modal.clone();
-            let cb = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(move |evt: web_sys::MouseEvent| {
-                if let Some(target) = evt.target() {
-                    if let Ok(target_node) = target.dyn_into::<web_sys::Node>() {
-                        if modal_clone.is_same_node(Some(&target_node)) {
-                            if let Some(window) = web_sys::window() {
-                                if let Some(doc) = window.document() {
-                                    let _ = Self::close(&doc);
+            let cb = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(
+                move |evt: web_sys::MouseEvent| {
+                    if let Some(target) = evt.target() {
+                        if let Ok(target_node) = target.dyn_into::<web_sys::Node>() {
+                            if modal_clone.is_same_node(Some(&target_node)) {
+                                if let Some(window) = web_sys::window() {
+                                    if let Some(doc) = window.document() {
+                                        let _ = Self::close(&doc);
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            }));
+                },
+            ));
             modal.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
             cb.forget();
             modal.set_attribute("data-overlay-listener", "true")?;
         }
 
         // Stop propagation inside content box
-        if modal_content.get_attribute("data-stop-propagation").is_none() {
-            let stopper = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(|e: web_sys::MouseEvent| {
-                e.stop_propagation();
-            }));
-            modal_content.add_event_listener_with_callback("click", stopper.as_ref().unchecked_ref())?;
+        if modal_content
+            .get_attribute("data-stop-propagation")
+            .is_none()
+        {
+            let stopper = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(
+                |e: web_sys::MouseEvent| {
+                    e.stop_propagation();
+                },
+            ));
+            modal_content
+                .add_event_listener_with_callback("click", stopper.as_ref().unchecked_ref())?;
             stopper.forget();
             modal_content.set_attribute("data-stop-propagation", "true")?;
         }
@@ -675,7 +700,8 @@ impl AgentConfigModal {
                     }
                 }
             }));
-            cancel_btn.add_event_listener_with_callback("click", cb_cancel.as_ref().unchecked_ref())?;
+            cancel_btn
+                .add_event_listener_with_callback("click", cb_cancel.as_ref().unchecked_ref())?;
             cb_cancel.forget();
         }
 
@@ -684,28 +710,38 @@ impl AgentConfigModal {
             let cb_create = Closure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
                     // Determine agent_id
-                    let agent_id_opt = doc.get_element_by_id("agent-modal")
+                    let agent_id_opt = doc
+                        .get_element_by_id("agent-modal")
                         .and_then(|m| m.get_attribute("data-agent-id"))
                         .and_then(|s| s.parse::<u32>().ok());
-                    if agent_id_opt.is_none() { return; }
+                    if agent_id_opt.is_none() {
+                        return;
+                    }
                     let agent_id = agent_id_opt.unwrap();
 
                     // Read type value
-                    let type_value = doc.get_element_by_id("agent-trigger-type-select")
+                    let type_value = doc
+                        .get_element_by_id("agent-trigger-type-select")
                         .and_then(|e| e.dyn_into::<web_sys::HtmlSelectElement>().ok())
                         .map(|sel| sel.value())
                         .unwrap_or_else(|| "webhook".to_string());
 
                     if type_value == "email:gmail" {
-                        let connected = crate::state::APP_STATE.with(|st| st.borrow().gmail_connected);
+                        let connected =
+                            crate::state::APP_STATE.with(|st| st.borrow().gmail_connected);
                         if !connected {
                             // Gmail not connected yet – ignore.
                             return;
                         }
                     }
 
-                    let payload_json = format!("{{\"agent_id\": {}, \"type\": \"{}\"}}", agent_id, type_value);
-                    dispatch_global_message(crate::messages::Message::RequestCreateTrigger { payload_json });
+                    let payload_json = format!(
+                        "{{\"agent_id\": {}, \"type\": \"{}\"}}",
+                        agent_id, type_value
+                    );
+                    dispatch_global_message(crate::messages::Message::RequestCreateTrigger {
+                        payload_json,
+                    });
 
                     // Hide form, show empty again – list will refresh on success
                     if let Some(form) = doc.get_element_by_id("agent-add-trigger-form") {
@@ -716,7 +752,8 @@ impl AgentConfigModal {
                     }
                 }
             }));
-            create_btn.add_event_listener_with_callback("click", cb_create.as_ref().unchecked_ref())?;
+            create_btn
+                .add_event_listener_with_callback("click", cb_create.as_ref().unchecked_ref())?;
             cb_create.forget();
         }
 
@@ -764,20 +801,16 @@ impl AgentConfigModal {
                         .map(|i| i.value());
 
                     match freq_sel_val.as_deref() {
-                        Some("minutes") => {
-                            document
-                                .get_element_by_id("sched-interval")
-                                .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
-                                .and_then(|i| i.value().parse::<u8>().ok())
-                                .map(|n| crate::scheduling::Frequency::EveryNMinutes(n).to_cron())
-                        }
-                        Some("hourly") => {
-                            document
-                                .get_element_by_id("sched-minute")
-                                .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
-                                .and_then(|i| i.value().parse::<u8>().ok())
-                                .map(|m| crate::scheduling::Frequency::Hourly { minute: m }.to_cron())
-                        }
+                        Some("minutes") => document
+                            .get_element_by_id("sched-interval")
+                            .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+                            .and_then(|i| i.value().parse::<u8>().ok())
+                            .map(|n| crate::scheduling::Frequency::EveryNMinutes(n).to_cron()),
+                        Some("hourly") => document
+                            .get_element_by_id("sched-minute")
+                            .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
+                            .and_then(|i| i.value().parse::<u8>().ok())
+                            .map(|m| crate::scheduling::Frequency::Hourly { minute: m }.to_cron()),
                         Some("daily") => {
                             let hour_opt = document
                                 .get_element_by_id("sched-hour")
@@ -789,7 +822,8 @@ impl AgentConfigModal {
                                 .and_then(|i| i.value().parse::<u8>().ok());
                             match (hour_opt, minute_opt) {
                                 (Some(h), Some(m)) => Some(
-                                    crate::scheduling::Frequency::Daily { hour: h, minute: m }.to_cron()
+                                    crate::scheduling::Frequency::Daily { hour: h, minute: m }
+                                        .to_cron(),
                                 ),
                                 _ => None,
                             }
@@ -814,7 +848,7 @@ impl AgentConfigModal {
                                         hour: h,
                                         minute: m,
                                     }
-                                    .to_cron()
+                                    .to_cron(),
                                 ),
                                 _ => None,
                             }
@@ -839,7 +873,7 @@ impl AgentConfigModal {
                                         hour: h,
                                         minute: m,
                                     }
-                                    .to_cron()
+                                    .to_cron(),
                                 ),
                                 _ => None,
                             }
@@ -848,7 +882,8 @@ impl AgentConfigModal {
                     }
                 };
 
-                let selected_model = crate::state::APP_STATE.with(|s| s.borrow().selected_model.clone());
+                let selected_model =
+                    crate::state::APP_STATE.with(|s| s.borrow().selected_model.clone());
 
                 dispatch(crate::messages::Message::SaveAgentDetails {
                     name: name_value,
@@ -885,7 +920,7 @@ impl AgentConfigModal {
 
         // ----------------- Scheduling UI handlers --------------------
         use wasm_bindgen::closure::Closure as WasmClosure;
-        use web_sys::{HtmlSelectElement};
+        use web_sys::HtmlSelectElement;
 
         // Helper to toggle visibility of input fields
         let toggle_inputs = |freq: &str, doc: &Document| {
@@ -975,7 +1010,9 @@ impl AgentConfigModal {
                         .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
                         .and_then(|i| i.value().parse::<u8>().ok());
                     match (hour_opt, minute_opt) {
-                        (Some(h), Some(m)) => Some(crate::scheduling::Frequency::Daily { hour: h, minute: m }),
+                        (Some(h), Some(m)) => {
+                            Some(crate::scheduling::Frequency::Daily { hour: h, minute: m })
+                        }
                         _ => None,
                     }
                 }
@@ -1015,11 +1052,13 @@ impl AgentConfigModal {
                         .and_then(|e| e.dyn_into::<HtmlInputElement>().ok())
                         .and_then(|i| i.value().parse::<u8>().ok());
                     match (day_opt, hour_opt, minute_opt) {
-                        (Some(d), Some(h), Some(m)) => Some(crate::scheduling::Frequency::Monthly {
-                            day: d,
-                            hour: h,
-                            minute: m,
-                        }),
+                        (Some(d), Some(h), Some(m)) => {
+                            Some(crate::scheduling::Frequency::Monthly {
+                                day: d,
+                                hour: h,
+                                minute: m,
+                            })
+                        }
                         _ => None,
                     }
                 }
@@ -1039,12 +1078,13 @@ impl AgentConfigModal {
             if let Ok(freq_select) = freq_sel.dyn_into::<HtmlSelectElement>() {
                 let doc_clone = document.clone();
                 let select_for_listener = freq_select.clone();
-            let cb = WasmClosure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
+                let cb = WasmClosure::<dyn FnMut(Event)>::wrap(Box::new(move |_e: Event| {
                     let val = select_for_listener.value();
                     toggle_inputs(&val, &doc_clone);
                     update_summary(&doc_clone);
                 }));
-                freq_select.add_event_listener_with_callback("change", cb.as_ref().unchecked_ref())?;
+                freq_select
+                    .add_event_listener_with_callback("change", cb.as_ref().unchecked_ref())?;
                 cb.forget();
             }
         }
@@ -1092,8 +1132,8 @@ impl AgentConfigModal {
         // --------------------------------------------------------------
         // 1. Gather data from AppState
         // --------------------------------------------------------------
-        let (agent_name, system_instructions, task_instructions, schedule_value) = APP_STATE
-            .with(|state| {
+        let (agent_name, system_instructions, task_instructions, schedule_value) =
+            APP_STATE.with(|state| {
                 let state = state.borrow();
                 if let Some(agent) = state.agents.get(&agent_id) {
                     (
@@ -1196,13 +1236,17 @@ impl AgentConfigModal {
                     // a pure function of our Rust state.
                     // ------------------------------------------------------------------
 
-                    fn apply_frequency_ui(freq: &crate::scheduling::Frequency, document: &web_sys::Document) {
+                    fn apply_frequency_ui(
+                        freq: &crate::scheduling::Frequency,
+                        document: &web_sys::Document,
+                    ) {
                         // Helper: set input/select value to numeric u8
                         let set_input_value = |id: &str, val: u8| {
                             if let Some(el) = document.get_element_by_id(id) {
                                 if let Some(i) = el.dyn_ref::<web_sys::HtmlInputElement>() {
                                     i.set_value(&val.to_string());
-                                } else if let Some(sel) = el.dyn_ref::<web_sys::HtmlSelectElement>() {
+                                } else if let Some(sel) = el.dyn_ref::<web_sys::HtmlSelectElement>()
+                                {
                                     sel.set_value(&val.to_string());
                                 }
                             }
@@ -1236,7 +1280,11 @@ impl AgentConfigModal {
                                 set_input_value("sched-hour", hour);
                                 set_input_value("sched-minute", minute);
                             }
-                            crate::scheduling::Frequency::Weekly { weekday, hour, minute } => {
+                            crate::scheduling::Frequency::Weekly {
+                                weekday,
+                                hour,
+                                minute,
+                            } => {
                                 set_input_value("sched-weekday", weekday);
                                 set_input_value("sched-hour", hour);
                                 set_input_value("sched-minute", minute);
@@ -1250,7 +1298,9 @@ impl AgentConfigModal {
 
                         // --- Visibility toggles ---
                         let set_vis = |id: &str, show: bool| {
-                            if let Some(el) = document.get_element_by_id(&format!("{}-container", id)) {
+                            if let Some(el) =
+                                document.get_element_by_id(&format!("{}-container", id))
+                            {
                                 if show {
                                     dom_utils::show(&el);
                                 } else {
@@ -1366,7 +1416,6 @@ impl AgentConfigModal {
                 summary_el.set_inner_html("No schedule set");
             }
         }
-
 
         // Finally, show the modal
         if let Some(modal) = document.get_element_by_id("agent-modal") {
@@ -1501,9 +1550,13 @@ pub fn render_triggers_list(document: &Document, agent_id: u32) -> Result<(), Js
 
         {
             let trig_id = trig.id;
-            let cb_del = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
-                dispatch_global_message(crate::messages::Message::RequestDeleteTrigger { trigger_id: trig_id });
-            }));
+            let cb_del = Closure::<dyn FnMut(web_sys::MouseEvent)>::wrap(Box::new(
+                move |_e: web_sys::MouseEvent| {
+                    dispatch_global_message(crate::messages::Message::RequestDeleteTrigger {
+                        trigger_id: trig_id,
+                    });
+                },
+            ));
             del_btn.add_event_listener_with_callback("click", cb_del.as_ref().unchecked_ref())?;
             cb_del.forget();
         }

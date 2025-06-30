@@ -4,8 +4,8 @@
 //! part of the modal refactor (see `modal_refactor.md`).  The helpers here are
 //! limited to toolbar buttons and other global widgets.
 
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::closure::Closure;
+use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Event, MouseEvent};
 
@@ -59,12 +59,16 @@ fn setup_clear_button_handler(document: &Document) -> Result<(), JsValue> {
         let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: Event| {
             let window = web_sys::window().expect("no global window exists");
             let confirm = window
-                .confirm_with_message("Are you sure you want to clear all nodes? This cannot be undone.")
+                .confirm_with_message(
+                    "Are you sure you want to clear all nodes? This cannot be undone.",
+                )
                 .unwrap_or(false);
             if confirm {
                 dispatch_global_message(Message::ClearCanvas);
                 if let Err(err) = crate::storage::clear_storage() {
-                    web_sys::console::error_1(&format!("Failed to clear storage: {:?}", err).into());
+                    web_sys::console::error_1(
+                        &format!("Failed to clear storage: {:?}", err).into(),
+                    );
                 }
             }
         }));
@@ -118,8 +122,12 @@ fn setup_keyboard_shortcuts() -> Result<(), JsValue> {
                 // Cmd/Ctrl + R triggers browser refresh; intercept only when
                 // *not* pressed with meta/ctrl to avoid hijacking.
                 if !e.meta_key() && !e.ctrl_key() {
-                    if let Some(current_id) = crate::state::APP_STATE.with(|st| st.borrow().current_workflow_id) {
-                        dispatch_global_message(Message::StartWorkflowExecution { workflow_id: current_id });
+                    if let Some(current_id) =
+                        crate::state::APP_STATE.with(|st| st.borrow().current_workflow_id)
+                    {
+                        dispatch_global_message(Message::StartWorkflowExecution {
+                            workflow_id: current_id,
+                        });
                     }
                     e.prevent_default();
                 }
@@ -186,7 +194,9 @@ fn setup_add_agent_node_button_handler(document: &Document) -> Result<(), JsValu
                             text: format!("Agent {}", agent_id_num),
                         });
                     } else {
-                        web_sys::console::warn_1(&"Please select a valid agent before adding".into());
+                        web_sys::console::warn_1(
+                            &"Please select a valid agent before adding".into(),
+                        );
                     }
                 }
             }

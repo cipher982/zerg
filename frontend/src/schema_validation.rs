@@ -1,8 +1,8 @@
 //! Schema validation helpers – compiled into WASM.
 
+use jsonschema::JSONSchema;
 use lazy_static::lazy_static;
 use serde_json::Value;
-use jsonschema::JSONSchema;
 
 lazy_static! {
     static ref ENVELOPE_SCHEMA: JSONSchema = {

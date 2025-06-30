@@ -13,22 +13,22 @@
  * 2. Canvas/Visualization Models:
  *    - Node - purely frontend visual representation with x, y coordinates
  *    - References an Agent by ID but doesn't embed all agent properties
- *    - Stored in the frontend state.nodes HashMap
+ *    - Stored in the frontend state.workflow_nodes HashMap
  *
  * 3. Workflow Models:
  *    - Workflow - collection of Nodes and Edges forming a user-defined workflow
  *    - Edge - represents connections between nodes in a workflow
  *    - Stored in frontend state.workflows HashMap
- * 
+ *
  * BACKEND INTEGRATION
  * ------------------
  * The frontend models align with the backend FastAPI models as follows:
- * 
+ *
  * 1. Backend Agent Model:
  *    - Stored in the database with id, name, status, instructions, etc.
  *    - No visual/coordinate properties (x, y)
  *    - Accessed via /api/agents/ endpoints
- * 
+ *
  * 2. Frontend Agent Representation:
  *    - ApiAgent instances are loaded from the backend and stored in state.agents
  *    - Node instances reference agents by ID and add visual properties
@@ -39,7 +39,7 @@
  *    - Can be extended to backend persistence in the future
  */
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 // Needed for AgentDebug modal (Phase 1)
 use serde_json::Value;
@@ -78,7 +78,7 @@ pub struct Trigger {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum NodeType {
     AgentIdentity,
-    UserInput, 
+    UserInput,
     ResponseOutput,
     GenericNode,
     Tool {
@@ -110,10 +110,7 @@ pub enum InputMapping {
     /// Static value set by user
     Static(serde_json::Value),
     /// Value comes from output of another node
-    FromNode { 
-        node_id: String, 
-        output_key: String 
-    },
+    FromNode { node_id: String, output_key: String },
 }
 
 /// Tool visibility classification for hybrid approach
@@ -170,44 +167,364 @@ pub enum FilterOperator {
 /// Message represents a thread entry between user and agent
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Message {
-    pub role: String,      // "user" or "assistant"
-    pub content: String,   // The actual message text
-    pub timestamp: u64,    // Unix timestamp
+    pub role: String,    // "user" or "assistant"
+    pub content: String, // The actual message text
+    pub timestamp: u64,  // Unix timestamp
 }
 
-/// CanvasNode represents a visual element on the canvas with layout information
-/// and is **purely a front-end concern**.
-///
-/// Historically this struct was called `Node`, which led to confusion with
-/// backend “Agent” objects.  As part of the **nodes-vs-agents decoupling
-/// initiative** (see `node_agent_task.md`) we renamed it to `CanvasNode`.
-/// To keep the incremental refactor compilable we provide an interim type
-/// alias `pub type Node = CanvasNode;` – this will be removed once all
-/// call-sites migrate.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CanvasNode {
-    pub node_id: String,           // Unique identifier for this node
-    pub agent_id: Option<u32>,     // Optional reference to a backend agent
-    pub x: f64,                    // X position on canvas
-    pub y: f64,                    // Y position on canvas
-    pub width: f64,                // Node width
-    pub height: f64,               // Node height
-    pub color: String,             // Node color
-    pub text: String,              // Display text for the node
-    pub node_type: NodeType,       // Type of node (AgentIdentity, UserInput, etc.)
-    pub parent_id: Option<String>, // Optional parent node reference
+pub use crate::generated::{WorkflowCanvas, WorkflowEdge, WorkflowNode};
+
+// Add type aliases for commonly used types
+pub type WorkflowNodeType = NodeType;
+
+// Constants for config keys to avoid magic strings and typos
+pub mod config_keys {
+    pub const X: &str = "x";
+    pub const Y: &str = "y";
+    pub const WIDTH: &str = "width";
+    pub const HEIGHT: &str = "height";
+    pub const COLOR: &str = "color";
+    pub const TEXT: &str = "text";
+    pub const AGENT_ID: &str = "agent_id";
+    pub const PARENT_ID: &str = "parent_id";
+    pub const TOOL_NAME: &str = "tool_name";
+    pub const SERVER_NAME: &str = "server_name";
+}
+
+// Helper methods for WorkflowNode property access
+impl WorkflowNode {
+    pub fn get_x(&self) -> f64 {
+        self.config
+            .get(config_keys::X)
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0)
+    }
+
+    pub fn get_y(&self) -> f64 {
+        self.config
+            .get(config_keys::Y)
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0)
+    }
+
+    pub fn get_width(&self) -> f64 {
+        self.config
+            .get(config_keys::WIDTH)
+            .and_then(|v| v.as_f64())
+            .unwrap_or(200.0)
+    }
+
+    pub fn get_height(&self) -> f64 {
+        self.config
+            .get(config_keys::HEIGHT)
+            .and_then(|v| v.as_f64())
+            .unwrap_or(80.0)
+    }
+
+    pub fn get_color(&self) -> String {
+        self.config
+            .get(config_keys::COLOR)
+            .and_then(|v| v.as_str())
+            .unwrap_or("#cccccc")
+            .to_string()
+    }
+
+    pub fn get_text(&self) -> String {
+        self.config
+            .get(config_keys::TEXT)
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    }
+
+    pub fn set_x(&mut self, x: f64) {
+        // Clamp to reasonable bounds and handle NaN/infinity
+        let x = if x.is_finite() {
+            x.clamp(-10000.0, 10000.0)
+        } else {
+            0.0
+        };
+        if let Some(num) = serde_json::Number::from_f64(x) {
+            self.config
+                .insert(config_keys::X.to_string(), serde_json::Value::Number(num));
+        }
+    }
+
+    pub fn set_y(&mut self, y: f64) {
+        let y = if y.is_finite() {
+            y.clamp(-10000.0, 10000.0)
+        } else {
+            0.0
+        };
+        if let Some(num) = serde_json::Number::from_f64(y) {
+            self.config
+                .insert(config_keys::Y.to_string(), serde_json::Value::Number(num));
+        }
+    }
+
+    pub fn set_width(&mut self, width: f64) {
+        let width = if width.is_finite() {
+            width.clamp(1.0, 2000.0)
+        } else {
+            200.0
+        };
+        if let Some(num) = serde_json::Number::from_f64(width) {
+            self.config.insert(
+                config_keys::WIDTH.to_string(),
+                serde_json::Value::Number(num),
+            );
+        }
+    }
+
+    pub fn set_height(&mut self, height: f64) {
+        let height = if height.is_finite() {
+            height.clamp(1.0, 2000.0)
+        } else {
+            80.0
+        };
+        if let Some(num) = serde_json::Number::from_f64(height) {
+            self.config.insert(
+                config_keys::HEIGHT.to_string(),
+                serde_json::Value::Number(num),
+            );
+        }
+    }
+
+    pub fn set_text(&mut self, text: String) {
+        self.config.insert(
+            config_keys::TEXT.to_string(),
+            serde_json::Value::String(text),
+        );
+    }
+
+    pub fn set_color(&mut self, color: String) {
+        self.config.insert(
+            config_keys::COLOR.to_string(),
+            serde_json::Value::String(color),
+        );
+    }
+
+    pub fn get_agent_id(&self) -> Option<u32> {
+        self.config
+            .get(config_keys::AGENT_ID)
+            .and_then(|v| v.as_u64().map(|id| id as u32))
+    }
+
+    pub fn set_agent_id(&mut self, agent_id: Option<u32>) {
+        if let Some(id) = agent_id {
+            self.config.insert(
+                config_keys::AGENT_ID.to_string(),
+                serde_json::Value::Number(serde_json::Number::from(id)),
+            );
+        } else {
+            self.config.remove(config_keys::AGENT_ID);
+        }
+    }
+
+    pub fn get_parent_id(&self) -> Option<String> {
+        self.config
+            .get(config_keys::PARENT_ID)
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+    }
+
+    pub fn set_parent_id(&mut self, parent_id: Option<String>) {
+        if let Some(id) = parent_id {
+            self.config.insert(
+                config_keys::PARENT_ID.to_string(),
+                serde_json::Value::String(id),
+            );
+        } else {
+            self.config.remove(config_keys::PARENT_ID);
+        }
+    }
+
+    /// Get layout as a single struct - optimized for performance
+    pub fn get_layout(&self) -> NodeLayout {
+        NodeLayout {
+            x: self.get_x(),
+            y: self.get_y(),
+            width: self.get_width(),
+            height: self.get_height(),
+        }
+    }
+
+    /// Set layout from a single struct - more efficient than individual calls
+    pub fn set_layout(&mut self, layout: &NodeLayout) {
+        layout.apply_to_node(self);
+    }
+
+    /// Get the semantic node type from the generated NodeType
+    pub fn get_semantic_type(&self) -> NodeType {
+        match &self.node_type {
+            crate::generated::workflow::NodeType::Variant0(type_str) => {
+                match type_str.as_str() {
+                    "UserInput" => NodeType::UserInput,
+                    "ResponseOutput" => NodeType::ResponseOutput,
+                    "AgentIdentity" => NodeType::AgentIdentity,
+                    "GenericNode" => NodeType::GenericNode,
+                    "Tool" => NodeType::Tool {
+                        tool_name: self
+                            .config
+                            .get(config_keys::TOOL_NAME)
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string(),
+                        server_name: self
+                            .config
+                            .get(config_keys::SERVER_NAME)
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown")
+                            .to_string(),
+                        config: crate::models::ToolConfig {
+                            static_params: std::collections::HashMap::new(),
+                            input_mappings: std::collections::HashMap::new(),
+                            auto_execute: false,
+                        },
+                        visibility: crate::models::ToolVisibility::AlwaysExternal,
+                    },
+                    "Trigger" => NodeType::Trigger {
+                        trigger_type: crate::models::TriggerType::Manual, // Default
+                        config: crate::models::TriggerConfig {
+                            params: std::collections::HashMap::new(),
+                            enabled: true,
+                            filters: Vec::new(),
+                        },
+                    },
+                    _ => NodeType::GenericNode,
+                }
+            }
+            crate::generated::workflow::NodeType::Variant1(_map) => {
+                // If it's a complex type stored as a map, we'd need more sophisticated parsing
+                NodeType::GenericNode
+            }
+        }
+    }
+
+    /// Set the node type from a semantic NodeType
+    pub fn set_semantic_type(&mut self, node_type: &NodeType) {
+        let type_str = match node_type {
+            NodeType::UserInput => "UserInput",
+            NodeType::ResponseOutput => "ResponseOutput",
+            NodeType::AgentIdentity => "AgentIdentity",
+            NodeType::GenericNode => "GenericNode",
+            NodeType::Tool { .. } => "Tool",
+            NodeType::Trigger { .. } => "Trigger",
+        };
+        self.node_type = crate::generated::workflow::NodeType::Variant0(type_str.to_string());
+
+        // Set additional config for complex types
+        match node_type {
+            NodeType::Tool {
+                tool_name,
+                server_name,
+                ..
+            } => {
+                self.config.insert(
+                    config_keys::TOOL_NAME.to_string(),
+                    serde_json::Value::String(tool_name.clone()),
+                );
+                self.config.insert(
+                    config_keys::SERVER_NAME.to_string(),
+                    serde_json::Value::String(server_name.clone()),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    /// Helper to create a WorkflowNode from semantic type
+    pub fn new_with_type(node_id: String, node_type: &NodeType) -> Self {
+        let mut node = WorkflowNode {
+            node_id,
+            node_type: crate::generated::workflow::NodeType::Variant0("GenericNode".to_string()),
+            config: serde_json::Map::new(),
+            position: std::collections::HashMap::new(),
+        };
+        node.set_semantic_type(node_type);
+        node
+    }
+}
+
+/// Cached layout information for performance
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodeLayout {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+impl Default for NodeLayout {
+    fn default() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            width: 200.0,
+            height: 80.0,
+        }
+    }
+}
+
+impl NodeLayout {
+    pub fn from_node(node: &WorkflowNode) -> Self {
+        Self {
+            x: node.get_x(),
+            y: node.get_y(),
+            width: node.get_width(),
+            height: node.get_height(),
+        }
+    }
+
+    pub fn apply_to_node(&self, node: &mut WorkflowNode) {
+        node.set_x(self.x);
+        node.set_y(self.y);
+        node.set_width(self.width);
+        node.set_height(self.height);
+    }
+}
+
+// Add UI-only state wrapper:
+#[derive(Clone, Default)]
+pub struct UiNodeState {
     pub is_selected: bool,
     pub is_dragging: bool,
-
-    /// Live execution state coming from the WorkflowExecutionEngine.
-    /// None means the node has never been executed in the current run.
-    #[serde(skip, default)]
     pub exec_status: Option<NodeExecStatus>,
-
-    /// Animation state for transition effects (success flash, error shake, etc.)
-    #[serde(skip, default)]
     pub transition_animation: Option<TransitionAnimation>,
+    /// Cached layout for performance - avoids HashMap lookups every frame
+    pub cached_layout: Option<NodeLayout>,
+    /// Cached semantic node type - avoids string->enum conversion
+    pub cached_node_type: Option<NodeType>,
 }
+
+impl UiNodeState {
+    /// Sync cached data from a WorkflowNode - call this when the node changes
+    pub fn sync_from_node(&mut self, node: &WorkflowNode) {
+        self.cached_layout = Some(NodeLayout::from_node(node));
+        self.cached_node_type = Some(node.get_semantic_type());
+    }
+
+    /// Get cached layout, falling back to node if not cached
+    pub fn get_layout(&self, node: &WorkflowNode) -> NodeLayout {
+        self.cached_layout
+            .clone()
+            .unwrap_or_else(|| NodeLayout::from_node(node))
+    }
+
+    /// Get cached node type, falling back to node if not cached
+    pub fn get_node_type(&self, node: &WorkflowNode) -> NodeType {
+        self.cached_node_type
+            .clone()
+            .unwrap_or_else(|| node.get_semantic_type())
+    }
+
+    /// Invalidate cache when node changes
+    pub fn invalidate_cache(&mut self) {
+        self.cached_layout = None;
+        self.cached_node_type = None;
+    }
+}
+
+pub type UiStateMap = std::collections::HashMap<String, UiNodeState>;
 
 /// Execution status emitted via WebSocket (running/success/failed).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -231,30 +548,6 @@ pub struct TransitionAnimation {
 pub enum TransitionType {
     SuccessFlash,
     ErrorShake,
-}
-
-// -----------------------------------------------------------------------------
-// Transitional compatibility alias
-// -----------------------------------------------------------------------------
-#[allow(dead_code)]
-pub type Node = CanvasNode;
-
-/// Edge represents a connection between two nodes in a workflow
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Edge {
-    pub id: String,                // Unique identifier for this edge
-    pub from_node_id: String,      // Source node ID
-    pub to_node_id: String,        // Target node ID
-    pub label: Option<String>,     // Optional label for the edge
-}
-
-/// Workflow represents a collection of nodes and edges that form a complete workflow
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct Workflow {
-    pub id: u32,                   // Unique identifier for this workflow
-    pub name: String,              // Name of the workflow
-    pub nodes: Vec<CanvasNode>,          // Nodes in this workflow
-    pub edges: Vec<Edge>,          // Edges connecting nodes in this workflow
 }
 
 // ---------------------------------------------------------------------------
@@ -299,26 +592,94 @@ pub struct ApiWorkflow {
     pub updated_at: Option<String>,
 }
 
-impl From<ApiWorkflow> for Workflow {
+impl From<ApiWorkflow> for WorkflowCanvas {
     fn from(api: ApiWorkflow) -> Self {
-        // canvas_data is expected to be an object with "nodes" and "edges" arrays.
-        let (nodes, edges) = if let Some(obj) = api.canvas_data.as_object() {
-            let nodes_val = obj.get("nodes").cloned().unwrap_or(serde_json::Value::Array(vec![]));
-            let edges_val = obj.get("edges").cloned().unwrap_or(serde_json::Value::Array(vec![]));
+        serde_json::from_value(api.canvas_data).expect("backend guarantees canonical schema")
+    }
+}
 
-            // Deserialize to Vec<CanvasNode> / Vec<Edge>; fall back to empty vec on error
-            let nodes: Vec<CanvasNode> = serde_json::from_value(nodes_val).unwrap_or_default();
-            let edges: Vec<Edge> = serde_json::from_value(edges_val).unwrap_or_default();
-            (nodes, edges)
-        } else {
-            (Vec::new(), Vec::new())
-        };
+impl ApiWorkflow {
+    /// Get nodes from canvas_data
+    pub fn get_nodes(&self) -> Vec<WorkflowNode> {
+        self.canvas_data
+            .get("nodes")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 
-        Workflow {
-            id: api.id,
-            name: api.name,
-            nodes,
-            edges,
+    /// Get edges from canvas_data
+    pub fn get_edges(&self) -> Vec<WorkflowEdge> {
+        self.canvas_data
+            .get("edges")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get mutable access to nodes (for internal use)
+    pub fn get_nodes_mut(&mut self) -> &mut serde_json::Value {
+        if !self.canvas_data.is_object() {
+            self.canvas_data = serde_json::json!({});
+        }
+        let canvas_obj = self.canvas_data.as_object_mut().unwrap();
+        canvas_obj.entry("nodes").or_insert(serde_json::json!([]));
+        &mut canvas_obj["nodes"]
+    }
+
+    /// Get mutable access to edges (for internal use)
+    pub fn get_edges_mut(&mut self) -> &mut serde_json::Value {
+        if !self.canvas_data.is_object() {
+            self.canvas_data = serde_json::json!({});
+        }
+        let canvas_obj = self.canvas_data.as_object_mut().unwrap();
+        canvas_obj.entry("edges").or_insert(serde_json::json!([]));
+        &mut canvas_obj["edges"]
+    }
+
+    /// Add a node to the workflow
+    pub fn add_node(&mut self, node: WorkflowNode) {
+        let nodes_array = self.get_nodes_mut();
+        if let Some(arr) = nodes_array.as_array_mut() {
+            // Remove existing node with same ID
+            arr.retain(|v| v.get("node_id").and_then(|id| id.as_str()) != Some(&node.node_id));
+            // Add new node
+            arr.push(serde_json::to_value(&node).unwrap());
+        }
+    }
+
+    /// Add an edge to the workflow
+    pub fn add_edge(&mut self, edge: WorkflowEdge) {
+        let edges_array = self.get_edges_mut();
+        if let Some(arr) = edges_array.as_array_mut() {
+            arr.push(serde_json::to_value(&edge).unwrap());
+        }
+    }
+
+    /// Remove a node and its associated edges
+    pub fn remove_node(&mut self, node_id: &str) {
+        // Remove node
+        let nodes_array = self.get_nodes_mut();
+        if let Some(arr) = nodes_array.as_array_mut() {
+            arr.retain(|v| v.get("node_id").and_then(|id| id.as_str()) != Some(node_id));
+        }
+
+        // Remove associated edges
+        let edges_array = self.get_edges_mut();
+        if let Some(arr) = edges_array.as_array_mut() {
+            arr.retain(|v| {
+                let from_id = v.get("from_node_id").and_then(|id| id.as_str());
+                let to_id = v.get("to_node_id").and_then(|id| id.as_str());
+                from_id != Some(node_id) && to_id != Some(node_id)
+            });
         }
     }
 }
@@ -396,8 +757,8 @@ pub struct ApiAgentRun {
     pub agent_id: u32,
     pub thread_id: Option<u32>,
 
-    pub status: String,        // queued | running | success | failed
-    pub trigger: String,       // manual | schedule | api
+    pub status: String,  // queued | running | success | failed
+    pub trigger: String, // manual | schedule | api
 
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
@@ -492,13 +853,18 @@ mod tests {
         assert!(!agent_none.is_scheduled());
 
         // Case 2: Empty string -> not scheduled
-        let agent_empty = ApiAgent { schedule: Some("   ".to_string()), ..agent_none.clone() };
+        let agent_empty = ApiAgent {
+            schedule: Some("   ".to_string()),
+            ..agent_none.clone()
+        };
         assert!(!agent_empty.is_scheduled());
 
         // Case 3: Valid cron -> scheduled
-        let agent_cron = ApiAgent { schedule: Some("0 * * * *".to_string()), ..agent_empty.clone() };
+        let agent_cron = ApiAgent {
+            schedule: Some("0 * * * *".to_string()),
+            ..agent_empty.clone()
+        };
         assert!(agent_cron.is_scheduled());
-
     }
 
     // ---------------------------------------------------------------------
@@ -539,6 +905,120 @@ mod tests {
 
         let user: CurrentUser = serde_json::from_str(json).expect("CurrentUser JSON");
         assert_eq!(user.email, "alice@example.com");
+    }
+
+    #[wasm_bindgen_test]
+    fn test_workflow_node_serialization_roundtrip() {
+        let mut node =
+            WorkflowNode::new_with_type("test-node".to_string(), &NodeType::AgentIdentity);
+        node.set_x(100.0);
+        node.set_y(200.0);
+        node.set_width(300.0);
+        node.set_height(80.0);
+        node.set_text("Test Agent".to_string());
+        node.set_color("#2ecc71".to_string());
+        node.set_agent_id(Some(42));
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&node).expect("Serialization failed");
+
+        // Deserialize back
+        let deserialized: WorkflowNode =
+            serde_json::from_str(&json).expect("Deserialization failed");
+
+        // Verify the round-trip
+        assert_eq!(node.node_id, deserialized.node_id);
+        assert_eq!(node.get_x(), deserialized.get_x());
+        assert_eq!(node.get_y(), deserialized.get_y());
+        assert_eq!(node.get_width(), deserialized.get_width());
+        assert_eq!(node.get_height(), deserialized.get_height());
+        assert_eq!(node.get_text(), deserialized.get_text());
+        assert_eq!(node.get_color(), deserialized.get_color());
+        assert_eq!(node.get_agent_id(), deserialized.get_agent_id());
+
+        // Verify semantic type conversion works
+        assert!(matches!(
+            deserialized.get_semantic_type(),
+            NodeType::AgentIdentity
+        ));
+    }
+
+    #[wasm_bindgen_test]
+    fn test_node_layout_cache_performance() {
+        let mut node = WorkflowNode::new_with_type("test".to_string(), &NodeType::GenericNode);
+        node.set_x(10.0);
+        node.set_y(20.0);
+        node.set_width(100.0);
+        node.set_height(50.0);
+
+        let mut ui_state = UiNodeState::default();
+        ui_state.sync_from_node(&node);
+
+        // Test cached access
+        let cached_layout = ui_state.get_layout(&node);
+        assert_eq!(cached_layout.x, 10.0);
+        assert_eq!(cached_layout.y, 20.0);
+        assert_eq!(cached_layout.width, 100.0);
+        assert_eq!(cached_layout.height, 50.0);
+
+        // Test cached type access
+        let cached_type = ui_state.get_node_type(&node);
+        assert!(matches!(cached_type, NodeType::GenericNode));
+    }
+
+    #[wasm_bindgen_test]
+    fn test_safe_property_setters() {
+        let mut node = WorkflowNode::new_with_type("test".to_string(), &NodeType::GenericNode);
+
+        // Test NaN/infinity handling
+        node.set_x(f64::NAN);
+        assert_eq!(node.get_x(), 0.0); // Should fallback to 0.0
+
+        node.set_x(f64::INFINITY);
+        assert_eq!(node.get_x(), 0.0); // Should fallback to 0.0
+
+        // Test clamping
+        node.set_x(-20000.0);
+        assert_eq!(node.get_x(), -10000.0); // Should clamp to min
+
+        node.set_width(-10.0);
+        assert_eq!(node.get_width(), 1.0); // Should clamp to min
+
+        node.set_width(5000.0);
+        assert_eq!(node.get_width(), 2000.0); // Should clamp to max
+    }
+
+    #[wasm_bindgen_test]
+    fn test_workflow_canvas_roundtrip() {
+        let mut canvas = WorkflowCanvas::default();
+
+        // Add a node
+        let node = WorkflowNode::new_with_type("test-node".to_string(), &NodeType::UserInput);
+        canvas.nodes.push(node);
+
+        // Add an edge
+        let edge = WorkflowEdge {
+            from_node_id: "test-node".to_string(),
+            to_node_id: "test-node-2".to_string(),
+            config: serde_json::Map::new(),
+        };
+        canvas.edges.push(edge);
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&canvas).expect("Canvas serialization failed");
+
+        // Deserialize back
+        let deserialized: WorkflowCanvas =
+            serde_json::from_str(&json).expect("Canvas deserialization failed");
+
+        // Verify the round-trip
+        assert_eq!(canvas.nodes.len(), deserialized.nodes.len());
+        assert_eq!(canvas.edges.len(), deserialized.edges.len());
+        assert_eq!(canvas.nodes[0].node_id, deserialized.nodes[0].node_id);
+        assert_eq!(
+            canvas.edges[0].from_node_id,
+            deserialized.edges[0].from_node_id
+        );
     }
 }
 
@@ -645,7 +1125,7 @@ pub struct ApiThreadMessage {
     pub timestamp: Option<String>,
     // New fields for tool message display
     #[serde(default)]
-    pub message_type: Option<String>,  // "tool_output" or "assistant_message"
+    pub message_type: Option<String>, // "tool_output" or "assistant_message"
     #[serde(default)]
     pub tool_name: Option<String>,
     #[serde(default)]
@@ -662,11 +1142,6 @@ pub struct ApiThreadMessage {
 pub struct ApiThreadMessageCreate {
     pub role: String,
     pub content: String,
-}
-
-/// Extension methods for Node to provide backward compatibility with legacy code
-#[allow(dead_code)] // These methods are kept for backward compatibility
-impl CanvasNode {
 }
 
 // -----------------------------------------------------------------------------

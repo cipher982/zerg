@@ -5,7 +5,7 @@
 //! without sprinkling `set_attribute("style", …)` calls across the code-base.
 
 use wasm_bindgen::JsCast;
-use web_sys::{Element, HtmlInputElement, HtmlElement, Document};
+use web_sys::{Document, Element, HtmlElement, HtmlInputElement};
 
 /// Remove the `hidden` attribute so the element becomes visible.
 pub fn show(el: &Element) {
@@ -64,9 +64,9 @@ pub fn focus_first_interactive(container: &Element) -> bool {
         "textarea:not([disabled])",
         "select:not([disabled])",
         "a[href]",
-        "[tabindex]:not([tabindex='-1'])"
+        "[tabindex]:not([tabindex='-1'])",
     ];
-    
+
     for selector in &focusable_selectors {
         if let Ok(Some(element)) = container.query_selector(selector) {
             if let Ok(html_element) = element.dyn_into::<HtmlElement>() {
@@ -83,7 +83,7 @@ pub fn focus_first_interactive(container: &Element) -> bool {
 /// Note: This finds the first element of each type due to web-sys API limitations.
 pub fn get_focusable_elements(container: &Element) -> Vec<HtmlElement> {
     let mut focusable = Vec::new();
-    
+
     // Since Element doesn't have query_selector_all, we'll iterate through each selector type
     let selectors = [
         "input:not([disabled]):not([type='hidden'])",
@@ -91,9 +91,9 @@ pub fn get_focusable_elements(container: &Element) -> Vec<HtmlElement> {
         "textarea:not([disabled])",
         "select:not([disabled])",
         "a[href]",
-        "[tabindex]:not([tabindex='-1'])"
+        "[tabindex]:not([tabindex='-1'])",
     ];
-    
+
     for selector in &selectors {
         if let Ok(Some(element)) = container.query_selector(selector) {
             if let Ok(html_element) = element.dyn_into::<HtmlElement>() {
@@ -101,20 +101,21 @@ pub fn get_focusable_elements(container: &Element) -> Vec<HtmlElement> {
             }
         }
     }
-    
+
     focusable
 }
 
 /// Store the currently focused element for later restoration.
 pub fn store_active_element(document: &Document) -> Option<HtmlElement> {
-    let active = document.active_element()
+    let active = document
+        .active_element()
         .and_then(|el| el.dyn_into::<HtmlElement>().ok());
-    
+
     // Store in thread-local storage
     PREVIOUS_FOCUS.with(|prev| {
         *prev.borrow_mut() = active.clone();
     });
-    
+
     active
 }
 
@@ -148,7 +149,7 @@ pub fn is_focusable(element: &Element) -> bool {
         if element.has_attribute("disabled") {
             return false;
         }
-        
+
         // Check if element has negative tabindex
         if let Some(tabindex) = element.get_attribute("tabindex") {
             if let Ok(index) = tabindex.parse::<i32>() {
@@ -157,11 +158,13 @@ pub fn is_focusable(element: &Element) -> bool {
                 }
             }
         }
-        
+
         // Check if element is naturally focusable
         let tag_name = element.tag_name().to_lowercase();
-        matches!(tag_name.as_str(), "input" | "button" | "textarea" | "select" | "a") ||
-        element.has_attribute("tabindex")
+        matches!(
+            tag_name.as_str(),
+            "input" | "button" | "textarea" | "select" | "a"
+        ) || element.has_attribute("tabindex")
     } else {
         false
     }

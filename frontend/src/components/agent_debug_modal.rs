@@ -10,9 +10,9 @@
 //!   • `hide_agent_debug_modal(document)` – hides the backdrop (wrapper stays
 //!     in the DOM for quick subsequent opens).
 
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use wasm_bindgen::closure::Closure;
 
 use web_sys::{Document, Element};
 
@@ -89,7 +89,10 @@ pub fn render_agent_debug_modal(state: &AppState, document: &Document) -> Result
     let active_overview = matches!(pane.active_tab, DebugTab::Overview);
     let tab_container = tab_bar::build_tab_bar(
         document,
-        &[("Overview", active_overview), ("Raw JSON", !active_overview)],
+        &[
+            ("Overview", active_overview),
+            ("Raw JSON", !active_overview),
+        ],
     )?;
 
     // Attach listeners to newly created buttons (child_nodes order matches

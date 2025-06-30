@@ -1,11 +1,11 @@
-use wasm_bindgen::prelude::*;
-use web_sys::{WebSocket, MessageEvent};
-use std::cell::RefCell;
-use std::rc::Rc;
 use js_sys::Array;
+use js_sys::Date;
 use serde_json::Value;
 use std::any::Any;
-use js_sys::Date;
+use std::cell::RefCell;
+use std::rc::Rc;
+use wasm_bindgen::prelude::*;
+use web_sys::{MessageEvent, WebSocket};
 
 use crate::schema_validation;
 
@@ -83,7 +83,7 @@ impl Default for WsConfig {
             initial_backoff_ms: 1000,
             max_backoff_ms: 30000,
             ping_interval_ms: None, // server → ping, client replies with pong
-            watchdog_ms: 65_000,   // 65 s gives generous slack above 60 s drop rule
+            watchdog_ms: 65_000,    // 65 s gives generous slack above 60 s drop rule
         }
     }
 }
@@ -185,13 +185,15 @@ impl WsClientV2 {
         if let Some(interval_ms) = self.config.ping_interval_ms {
             let window = web_sys::window().expect("no global window exists");
             let ws_clone = self.websocket.clone();
-            
+
             let ping_callback = Closure::wrap(Box::new(move || {
                 if let Some(ws) = &ws_clone {
                     let ping = builders::create_ping();
                     if let Ok(json) = serde_json::to_string(&ping) {
                         if let Err(e) = ws.send_with_str(&json) {
-                            web_sys::console::error_1(&format!("Failed to send ping: {:?}", e).into());
+                            web_sys::console::error_1(
+                                &format!("Failed to send ping: {:?}", e).into(),
+                            );
                         }
                     }
                 }
@@ -240,7 +242,7 @@ impl WsClientV2 {
             *state_clone.borrow_mut() = ConnectionState::Connected;
             *reconnect_attempt_clone.borrow_mut() = 0; // Reset counter
 
-            // --- Call on_connect callback --- 
+            // --- Call on_connect callback ---
             if let Some(callback_rc) = &on_connect_cb_clone {
                 (callback_rc.borrow_mut())();
             }
@@ -285,14 +287,17 @@ impl WsClientV2 {
                 *client_clone_for_reconnect.activity_interval.borrow_mut() = None;
             }
 
-            // --- Call on_disconnect callback --- 
+            // --- Call on_disconnect callback ---
             if let Some(callback_rc) = &on_disconnect_cb_clone_for_close {
                 (callback_rc.borrow_mut())();
             }
 
             // Check if reconnection should be attempted
             let current_attempt = *reconnect_attempt_clone.borrow();
-            if config_clone.max_reconnect_attempts.map_or(true, |max| current_attempt < max) {
+            if config_clone
+                .max_reconnect_attempts
+                .map_or(true, |max| current_attempt < max)
+            {
                 *reconnect_attempt_clone.borrow_mut() = current_attempt + 1;
                 // Use the client clone to call schedule_reconnect
                 client_clone_for_reconnect.schedule_reconnect();
@@ -325,10 +330,7 @@ impl WsClientV2 {
                             // ------------------------------------------------------------------
                             // Automatic Pong reply – server-initiated heart-beat
                             // ------------------------------------------------------------------
-                            if let Some(ty) = parsed_value
-                                .get("type")
-                                .and_then(|v| v.as_str())
-                            {
+                            if let Some(ty) = parsed_value.get("type").and_then(|v| v.as_str()) {
                                 if ty.eq_ignore_ascii_case("PING") {
                                     // Extract ping_id if present under data.ping_id (enveloped) OR
                                     // at root for legacy format.
@@ -336,11 +338,14 @@ impl WsClientV2 {
                                         .get("data")
                                         .and_then(|d| d.get("ping_id"))
                                         .and_then(|v| v.as_str())
-                                        .or_else(|| parsed_value.get("ping_id").and_then(|v| v.as_str()));
+                                        .or_else(|| {
+                                            parsed_value.get("ping_id").and_then(|v| v.as_str())
+                                        });
 
                                     let mut pong_obj = serde_json::json!({"type": "pong"});
                                     if let Some(pid) = ping_id {
-                                        pong_obj["ping_id"] = serde_json::Value::String(pid.to_string());
+                                        pong_obj["ping_id"] =
+                                            serde_json::Value::String(pid.to_string());
                                     }
 
                                     if let Ok(pong_str) = serde_json::to_string(&pong_obj) {
@@ -357,9 +362,9 @@ impl WsClientV2 {
                             *last_activity_ms_clone.borrow_mut() = Date::now();
                         } else {
                             web_sys::console::error_1(&"Protocol error – invalid envelope".into());
-                                // Close to trigger reconnect (matches backend 1002 logic).  We ignore
-                                // failures since the socket may already be closed by the server.
-                                let _ = ws_for_close.close_with_code(1002);
+                            // Close to trigger reconnect (matches backend 1002 logic).  We ignore
+                            // failures since the socket may already be closed by the server.
+                            let _ = ws_for_close.close_with_code(1002);
                         }
                     } else {
                         web_sys::console::error_1(
@@ -367,7 +372,7 @@ impl WsClientV2 {
                                 "Failed to parse incoming WebSocket message as JSON: {}",
                                 msg_str
                             )
-                            .into()
+                            .into(),
                         );
                     }
                 }
@@ -386,8 +391,8 @@ impl WsClientV2 {
         // ------------------------------------------------------------------
 
         let watchdog_last = self.last_activity_ms.clone();
-        let watchdog_ws   = ws.clone();
-        let watchdog_ms   = self.config.watchdog_ms as i32;
+        let watchdog_ws = ws.clone();
+        let watchdog_ms = self.config.watchdog_ms as i32;
 
         // Store interval id so we can clear it on manual close / reconnect.
         let watchdog_closure = Closure::wrap(Box::new(move || {
@@ -423,13 +428,19 @@ impl WsClientV2 {
         let reconnect_callback = Closure::once(Box::new(move || {
             // Only attempt reconnection if we're still disconnected
             if *state_clone.borrow() == ConnectionState::Disconnected {
-                web_sys::console::log_1(&format!("Attempting reconnection (attempt {})", *client_clone.reconnect_attempt.borrow()).into());
-                
+                web_sys::console::log_1(
+                    &format!(
+                        "Attempting reconnection (attempt {})",
+                        *client_clone.reconnect_attempt.borrow()
+                    )
+                    .into(),
+                );
+
                 // Update state to connecting before attempting
                 *state_clone.borrow_mut() = ConnectionState::Connecting;
 
                 // Attempt to establish connection
-                 match client_clone.establish_connection() {
+                match client_clone.establish_connection() {
                     Ok(ws) => {
                         // Connection initiated, store the WebSocket instance
                         client_clone.websocket = Some(ws);
@@ -437,11 +448,13 @@ impl WsClientV2 {
                         client_clone.setup_ping_interval();
                     }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to create WebSocket during reconnect: {:?}", e).into());
+                        web_sys::console::error_1(
+                            &format!("Failed to create WebSocket during reconnect: {:?}", e).into(),
+                        );
                         // Connection failed, state might be reset by onclose, or manually trigger schedule_reconnect again if necessary
-                         *state_clone.borrow_mut() = ConnectionState::Disconnected; // Reset state
-                         // Schedule again immediately if creation failed (could lead to tight loop, consider delay)
-                         client_clone.schedule_reconnect(); 
+                        *state_clone.borrow_mut() = ConnectionState::Disconnected; // Reset state
+                                                                                   // Schedule again immediately if creation failed (could lead to tight loop, consider delay)
+                        client_clone.schedule_reconnect();
                     }
                 }
             }
@@ -461,7 +474,7 @@ impl WsClientV2 {
         *self.reconnect_timeout.borrow_mut() = Some(timeout_id);
 
         // Closure::once requires forget
-        reconnect_callback.forget(); 
+        reconnect_callback.forget();
     }
 
     /// Connect to the WebSocket server for the first time.
@@ -469,7 +482,7 @@ impl WsClientV2 {
         web_sys::console::log_1(&"Initiating WebSocket connection...".into());
         // Reset reconnection counter when manually connecting
         *self.reconnect_attempt.borrow_mut() = 0;
-        
+
         // Clear any previous interval
         self.clear_ping_interval();
 
@@ -502,7 +515,9 @@ impl WsClientV2 {
                 ws.send_with_str(message_json)?;
                 Ok(())
             } else {
-                web_sys::console::warn_1(&"Attempted to send message while WebSocket is not connected".into());
+                web_sys::console::warn_1(
+                    &"Attempted to send message while WebSocket is not connected".into(),
+                );
                 Err(JsValue::from_str("WebSocket is not connected"))
             }
         } else {
@@ -519,10 +534,13 @@ impl WsClientV2 {
         // Set state to disconnected *before* closing
         *self.state.borrow_mut() = ConnectionState::Disconnected;
 
-        if let Some(ws) = self.websocket.take() { // Use take to remove it
-             match ws.close_with_code(1000) {
+        if let Some(ws) = self.websocket.take() {
+            // Use take to remove it
+            match ws.close_with_code(1000) {
                 Ok(_) => web_sys::console::log_1(&"WebSocket close command sent.".into()),
-                Err(e) => web_sys::console::error_1(&format!("Error sending close command: {:?}", e).into()),
+                Err(e) => web_sys::console::error_1(
+                    &format!("Error sending close command: {:?}", e).into(),
+                ),
             }
         }
         // Note: The onclose handler will likely fire after this, potentially calling on_disconnect again.
@@ -560,7 +578,9 @@ impl IWsClient for WsClientV2 {
         if let Some(ws) = self.websocket.take() {
             match ws.close_with_code(1000) {
                 Ok(_) => web_sys::console::log_1(&"WebSocket close command sent.".into()),
-                Err(e) => web_sys::console::error_1(&format!("Error sending close command: {:?}", e).into()),
+                Err(e) => web_sys::console::error_1(
+                    &format!("Error sending close command: {:?}", e).into(),
+                ),
             }
         }
         Ok(())
@@ -600,7 +620,7 @@ impl Clone for WsClientV2 {
             reconnect_timeout: self.reconnect_timeout.clone(),
             // Callbacks are specifically NOT cloned here. They are managed by Rc.
             on_connect_callback: self.on_connect_callback.clone(),
-            on_message_callback: self.on_message_callback.clone(), 
+            on_message_callback: self.on_message_callback.clone(),
             on_disconnect_callback: self.on_disconnect_callback.clone(),
 
             last_activity_ms: self.last_activity_ms.clone(),
@@ -625,7 +645,7 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_backoff_calculation() {
         let client = WsClientV2::new_default();
-        
+
         // First attempt should be initial_backoff_ms
         assert_eq!(*client.reconnect_attempt.borrow(), 0);
         assert_eq!(client.get_backoff_ms(), 1000);
@@ -644,14 +664,14 @@ mod tests {
         let mut client = WsClientV2::new_default();
         let received_messages = Rc::new(RefCell::new(Vec::new()));
         let received_clone = received_messages.clone();
-        
+
         client.set_on_message(move |msg| {
             // Store the message type from the JSON if it exists
             if let Some(msg_type) = msg.get("type").and_then(|t| t.as_str()) {
                 received_clone.borrow_mut().push(msg_type.to_string());
             }
         });
-        
+
         // TODO: Add more message handler tests when we implement the full
         // message processing system
     }
@@ -660,43 +680,60 @@ mod tests {
 // Helper function to send a message to a thread via WebSocket
 #[allow(dead_code)]
 pub fn send_thread_message(text: &str, message_id: String) {
-    web_sys::console::log_1(&format!("Network: Sending thread message: '{}', message_id: {}", text, message_id).into());
+    web_sys::console::log_1(
+        &format!(
+            "Network: Sending thread message: '{}', message_id: {}",
+            text, message_id
+        )
+        .into(),
+    );
 
     super::ui_updates::flash_activity(); // Flash on send
-    
+
     // Check if we have a selected agent and a websocket connection
     let has_agent_and_websocket = crate::state::APP_STATE.with(|state| {
         let state = state.borrow();
         state.selected_node_id.is_some() && state.websocket.is_some()
     });
-    
+
     if has_agent_and_websocket {
         // Use WebSocket for agent communication
         crate::state::APP_STATE.with(|state| {
             let state = state.borrow();
             if let Some(ws) = &state.websocket {
-                if ws.ready_state() == 1 { // OPEN
+                if ws.ready_state() == 1 {
+                    // OPEN
                     // Get current thread ID
                     let thread_id = state.current_thread_id.unwrap_or(1);
-                    
+
                     // Create message body with correct format
                     let body_obj = js_sys::Object::new();
-                    js_sys::Reflect::set(&body_obj, &"type".into(), &"send_message".into()).unwrap();
-                    js_sys::Reflect::set(&body_obj, &"thread_id".into(), &thread_id.into()).unwrap();
+                    js_sys::Reflect::set(&body_obj, &"type".into(), &"send_message".into())
+                        .unwrap();
+                    js_sys::Reflect::set(&body_obj, &"thread_id".into(), &thread_id.into())
+                        .unwrap();
                     js_sys::Reflect::set(&body_obj, &"content".into(), &text.into()).unwrap();
-                    js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into()).unwrap();
-                    
+                    js_sys::Reflect::set(&body_obj, &"message_id".into(), &message_id.into())
+                        .unwrap();
+
                     // Get selected model if any
                     if !state.selected_model.is_empty() {
-                        js_sys::Reflect::set(&body_obj, &"model".into(), &state.selected_model.clone().into()).unwrap();
+                        js_sys::Reflect::set(
+                            &body_obj,
+                            &"model".into(),
+                            &state.selected_model.clone().into(),
+                        )
+                        .unwrap();
                     }
-                    
+
                     let body_string = js_sys::JSON::stringify(&body_obj).unwrap();
-                    
+
                     // Convert JsString to String before sending
                     if let Some(string_data) = body_string.as_string() {
                         // Send through WebSocket
-                        web_sys::console::log_1(&format!("Sending message: {}", string_data).into());
+                        web_sys::console::log_1(
+                            &format!("Sending message: {}", string_data).into(),
+                        );
                         let _ = ws.send_with_str(&string_data);
                     } else {
                         web_sys::console::error_1(&"Failed to convert JSON to string".into());
@@ -711,6 +748,8 @@ pub fn send_thread_message(text: &str, message_id: String) {
             }
         });
     } else {
-        web_sys::console::error_1(&"Cannot send message: No websocket connection or no agent selected".into());
+        web_sys::console::error_1(
+            &"Cannot send message: No websocket connection or no agent selected".into(),
+        );
     }
 }

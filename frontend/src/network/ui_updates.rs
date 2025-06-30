@@ -1,5 +1,5 @@
-use std::cell::RefCell;
 use js_sys::Array;
+use std::cell::RefCell;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
@@ -51,24 +51,26 @@ pub fn flash_activity() {
 
                 // Flash the LED
                 status_element.set_class_name("packet-counter flash");
-                
+
                 // Remove flash after 200ms
                 let status_clone = status_element.clone();
                 let clear_callback = Closure::wrap(Box::new(move || {
                     status_clone.set_class_name("packet-counter");
                 }) as Box<dyn FnMut()>);
-                
-                window.set_timeout_with_callback_and_timeout_and_arguments(
-                    clear_callback.as_ref().unchecked_ref(),
-                    200, // Longer flash for better visibility
-                    &Array::new(),
-                ).expect("Failed to set timeout");
-                
+
+                window
+                    .set_timeout_with_callback_and_timeout_and_arguments(
+                        clear_callback.as_ref().unchecked_ref(),
+                        200, // Longer flash for better visibility
+                        &Array::new(),
+                    )
+                    .expect("Failed to set timeout");
+
                 clear_callback.forget();
             }
         }
     }
-} 
+}
 
 /// Update the *layout* persistence status area at the bottom bar.
 /// `color` should be a CSS class such as "red", "yellow", "green" that the

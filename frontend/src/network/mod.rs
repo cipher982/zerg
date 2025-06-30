@@ -1,25 +1,25 @@
 // Re-export network modules
 pub mod api_client;
-pub mod ws_client_v2;
+pub mod config;
 pub mod event_types;
 pub mod messages;
 pub mod topic_manager;
-pub mod ws_schema;
 pub mod ui_updates;
-pub mod config;
+pub mod ws_client_v2;
+pub mod ws_schema;
 
 // Re-export commonly used items
 pub use api_client::ApiClient;
-pub use ws_client_v2::WsClientV2;
 pub use topic_manager::TopicManager;
+pub use ws_client_v2::WsClientV2;
 
+use config::ApiConfig;
 use lazy_static::lazy_static;
 use std::sync::RwLock;
-use config::ApiConfig;
 use wasm_bindgen::prelude::*;
 
 lazy_static! {
-static ref API_CONFIG: RwLock<Option<ApiConfig>> = RwLock::new(None);
+    static ref API_CONFIG: RwLock<Option<ApiConfig>> = RwLock::new(None);
 }
 
 /// Initialize the API configuration. Must be called before any network operations.
@@ -40,7 +40,8 @@ pub fn init_api_config_js(api_base_url: &str) -> Result<(), JsValue> {
 
 /// Get the API configuration
 #[allow(dead_code)]
-fn get_api_config() -> Result<std::sync::RwLockReadGuard<'static, Option<ApiConfig>>, &'static str> {
+fn get_api_config() -> Result<std::sync::RwLockReadGuard<'static, Option<ApiConfig>>, &'static str>
+{
     Ok(API_CONFIG.read().unwrap())
 }
 

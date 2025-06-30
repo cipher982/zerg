@@ -3,9 +3,9 @@
 //! Keeps creation / show / hide logic in one place so feature modals don't
 //! duplicate the same boilerplate.
 
-use web_sys::{Document, Element, HtmlElement, KeyboardEvent, EventTarget};
-use wasm_bindgen::{JsCast, closure::Closure};
 use std::cell::RefCell;
+use wasm_bindgen::{closure::Closure, JsCast};
+use web_sys::{Document, Element, EventTarget, HtmlElement, KeyboardEvent};
 
 use crate::dom_utils;
 
@@ -15,7 +15,10 @@ use crate::dom_utils;
 /// can append their specific inner markup.
 ///
 /// Returns `(backdrop, content)`.
-pub fn ensure_modal(document: &Document, id: &str) -> Result<(Element, Element), wasm_bindgen::JsValue> {
+pub fn ensure_modal(
+    document: &Document,
+    id: &str,
+) -> Result<(Element, Element), wasm_bindgen::JsValue> {
     // Backdrop first ------------------------------------------------------
     let backdrop = if let Some(el) = document.get_element_by_id(id) {
         el
@@ -58,13 +61,13 @@ pub fn show(modal_backdrop: &Element) {
     if let Some(document) = web_sys::window().and_then(|w| w.document()) {
         // Store the currently focused element
         let _ = dom_utils::store_active_element(&document);
-        
+
         // Show the modal
         dom_utils::show(modal_backdrop);
-        
+
         // Focus first interactive element
         let _ = dom_utils::focus_first_interactive(modal_backdrop);
-        
+
         // Set up keyboard event handlers
         setup_keyboard_handlers(modal_backdrop);
     }
@@ -77,10 +80,10 @@ pub fn show(modal_backdrop: &Element) {
 pub fn hide(modal_backdrop: &Element) {
     // Remove keyboard event handlers
     cleanup_keyboard_handlers(modal_backdrop);
-    
+
     // Hide the modal
     dom_utils::hide(modal_backdrop);
-    
+
     // Restore focus to the previously focused element
     dom_utils::restore_previous_focus();
 }
@@ -91,10 +94,10 @@ pub fn show_with_focus(modal_backdrop: &Element, focus_selector: Option<&str>) {
     if let Some(document) = web_sys::window().and_then(|w| w.document()) {
         // Store the currently focused element
         let _ = dom_utils::store_active_element(&document);
-        
+
         // Show the modal
         dom_utils::show(modal_backdrop);
-        
+
         // Focus specific element or first interactive element
         if let Some(selector) = focus_selector {
             if let Ok(Some(element)) = modal_backdrop.query_selector(selector) {
@@ -112,7 +115,7 @@ pub fn show_with_focus(modal_backdrop: &Element, focus_selector: Option<&str>) {
             // Fallback to first interactive element
             let _ = dom_utils::focus_first_interactive(modal_backdrop);
         }
-        
+
         // Set up keyboard event handlers
         setup_keyboard_handlers(modal_backdrop);
     }
@@ -121,12 +124,12 @@ pub fn show_with_focus(modal_backdrop: &Element, focus_selector: Option<&str>) {
 /// Set up keyboard event handlers for focus trap and Escape key.
 fn setup_keyboard_handlers(modal_backdrop: &Element) {
     let modal_id = modal_backdrop.id();
-    
+
     // Create keydown handler
     let modal_backdrop_clone = modal_backdrop.clone();
     let keydown_handler = Closure::wrap(Box::new(move |event: KeyboardEvent| {
         let key = event.key();
-        
+
         match key.as_str() {
             "Escape" => {
                 // Close modal on Escape key
@@ -141,7 +144,7 @@ fn setup_keyboard_handlers(modal_backdrop: &Element) {
                         if let Ok(current_element) = target.dyn_into::<HtmlElement>() {
                             let first_element = focusable_elements.first();
                             let last_element = focusable_elements.last();
-                            
+
                             if event.shift_key() {
                                 // Shift+Tab: moving backwards
                                 if let Some(first) = first_element {
@@ -172,14 +175,14 @@ fn setup_keyboard_handlers(modal_backdrop: &Element) {
             _ => {}
         }
     }) as Box<dyn FnMut(KeyboardEvent)>);
-    
+
     // Add event listener to the modal
     if let Ok(event_target) = modal_backdrop.clone().dyn_into::<EventTarget>() {
         let _ = event_target.add_event_listener_with_callback(
             "keydown",
-            keydown_handler.as_ref().dyn_ref().unwrap()
+            keydown_handler.as_ref().dyn_ref().unwrap(),
         );
-        
+
         // Store the handler so it doesn't get dropped
         MODAL_LISTENERS.with(|listeners| {
             listeners.borrow_mut().push((modal_id, keydown_handler));
@@ -190,7 +193,7 @@ fn setup_keyboard_handlers(modal_backdrop: &Element) {
 /// Clean up keyboard event handlers when modal is closed.
 fn cleanup_keyboard_handlers(modal_backdrop: &Element) {
     let modal_id = modal_backdrop.id();
-    
+
     MODAL_LISTENERS.with(|listeners| {
         let mut listeners_mut = listeners.borrow_mut();
         listeners_mut.retain(|(id, handler)| {
@@ -199,7 +202,7 @@ fn cleanup_keyboard_handlers(modal_backdrop: &Element) {
                 if let Ok(event_target) = modal_backdrop.clone().dyn_into::<EventTarget>() {
                     let _ = event_target.remove_event_listener_with_callback(
                         "keydown",
-                        handler.as_ref().dyn_ref().unwrap()
+                        handler.as_ref().dyn_ref().unwrap(),
                     );
                 }
                 false // Remove from vector

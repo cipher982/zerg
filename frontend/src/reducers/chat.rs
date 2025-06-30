@@ -4,29 +4,41 @@
 //! compiles.  Real variants and logic will move here incrementally over the
 //! next refactor commits.
 
+use crate::messages::{Command, Message};
 use crate::state::AppState;
-use crate::messages::{Message, Command};
 
 /// Returns `true` when the message was handled by the chat reducer.
 pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> bool {
     match msg {
         crate::messages::Message::CreateThread(agent_id, title) => {
             // Log for debugging
-            web_sys::console::log_1(&format!("Creating thread for agent {} with title: {}", agent_id, title).into());
+            web_sys::console::log_1(
+                &format!(
+                    "Creating thread for agent {} with title: {}",
+                    agent_id, title
+                )
+                .into(),
+            );
             // Instead of spawning directly, return a command that will be executed after state update
-            cmds.push(crate::messages::Command::CreateThread { 
-                agent_id: *agent_id, 
-                title: title.clone() 
+            cmds.push(crate::messages::Command::CreateThread {
+                agent_id: *agent_id,
+                title: title.clone(),
             });
             true
         }
         crate::messages::Message::ThreadCreated(thread) => {
-            web_sys::console::log_1(&format!("Update: Handling ThreadCreated: {:?}", thread).into());
+            web_sys::console::log_1(
+                &format!("Update: Handling ThreadCreated: {:?}", thread).into(),
+            );
             if let Some(thread_id) = thread.id {
                 state.threads.insert(thread_id, thread.clone());
-                cmds.push(crate::messages::Command::SendMessage(crate::messages::Message::SelectThread(thread_id)));
+                cmds.push(crate::messages::Command::SendMessage(
+                    crate::messages::Message::SelectThread(thread_id),
+                ));
             } else {
-                web_sys::console::error_1(&format!("ThreadCreated message missing thread ID: {:?}", thread).into());
+                web_sys::console::error_1(
+                    &format!("ThreadCreated message missing thread ID: {:?}", thread).into(),
+                );
             }
             true
         }
@@ -50,12 +62,21 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             let thread_messages_clone = thread_messages.clone();
 
             cmds.push(Command::UpdateUI(Box::new(move || {
-                if let Some(_document) = web_sys::window().expect("no global window exists").document() {
-                    crate::state::dispatch_global_message(crate::messages::Message::UpdateThreadList(
-                        threads_clone, current_thread_id, thread_messages_clone
-                    ));
+                if let Some(_document) = web_sys::window()
+                    .expect("no global window exists")
+                    .document()
+                {
+                    crate::state::dispatch_global_message(
+                        crate::messages::Message::UpdateThreadList(
+                            threads_clone,
+                            current_thread_id,
+                            thread_messages_clone,
+                        ),
+                    );
                     if current_thread_id.is_none() {
-                        crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(Vec::new()));
+                        crate::state::dispatch_global_message(
+                            crate::messages::Message::UpdateConversation(Vec::new()),
+                        );
                     }
                 }
             })));
@@ -64,9 +85,11 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             let thread_id_clone = *thread_id;
             wasm_bindgen_futures::spawn_local(async move {
                 match crate::network::api_client::ApiClient::delete_thread(thread_id_clone).await {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to delete thread: {:?}", e).into());
+                        web_sys::console::error_1(
+                            &format!("Failed to delete thread: {:?}", e).into(),
+                        );
                     }
                 }
             });
@@ -81,32 +104,56 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 state.thread_messages.remove(thread_id);
                 state.active_streams.remove(thread_id);
 
-                let selected_thread_title = state.threads.get(thread_id)
+                let selected_thread_title = state
+                    .threads
+                    .get(thread_id)
                     .expect("Selected thread not found in state")
                     .title
                     .clone();
 
-                cmds.push(crate::messages::Command::SendMessage(crate::messages::Message::LoadThreadMessages(*thread_id)));
+                cmds.push(crate::messages::Command::SendMessage(
+                    crate::messages::Message::LoadThreadMessages(*thread_id),
+                ));
 
-                let threads: Vec<crate::models::ApiThread> = state.threads.values().cloned().collect();
+                let threads: Vec<crate::models::ApiThread> =
+                    state.threads.values().cloned().collect();
                 let current_thread_id = state.current_thread_id;
                 let thread_messages = state.thread_messages.clone();
 
-                cmds.push(crate::messages::Command::SendMessage(crate::messages::Message::UpdateThreadList(
-                    threads,
-                    current_thread_id,
-                    thread_messages
-                )));
+                cmds.push(crate::messages::Command::SendMessage(
+                    crate::messages::Message::UpdateThreadList(
+                        threads,
+                        current_thread_id,
+                        thread_messages,
+                    ),
+                ));
 
-                cmds.push(crate::messages::Command::SendMessage(crate::messages::Message::UpdateThreadTitleUI(selected_thread_title)));
+                cmds.push(crate::messages::Command::SendMessage(
+                    crate::messages::Message::UpdateThreadTitleUI(selected_thread_title),
+                ));
 
-            let topic_manager_clone = state.topic_manager.clone();
-            let thread_id_clone = *thread_id;
-            cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
-                if let Err(e) = crate::components::chat::init_chat_view_ws(thread_id_clone, topic_manager_clone) {
-                        web_sys::console::error_1(&format!("Failed to initialize WebSocket for thread {}: {:?}", thread_id_clone, e).into());
+                let topic_manager_clone = state.topic_manager.clone();
+                let thread_id_clone = *thread_id;
+                cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
+                    if let Err(e) = crate::components::chat::init_chat_view_ws(
+                        thread_id_clone,
+                        topic_manager_clone,
+                    ) {
+                        web_sys::console::error_1(
+                            &format!(
+                                "Failed to initialize WebSocket for thread {}: {:?}",
+                                thread_id_clone, e
+                            )
+                            .into(),
+                        );
                     } else {
-                        web_sys::console::log_1(&format!("Initialized WebSocket subscription for thread {}", thread_id_clone).into());
+                        web_sys::console::log_1(
+                            &format!(
+                                "Initialized WebSocket subscription for thread {}",
+                                thread_id_clone
+                            )
+                            .into(),
+                        );
                     }
                 })));
             }
@@ -123,19 +170,25 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 let messages_clone = messages.clone();
                 cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
                     if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-                        let current_user_opt = crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
-                        let _ = crate::components::chat_view::update_conversation_ui(&document, &messages_clone, current_user_opt.as_ref());
+                        let current_user_opt =
+                            crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
+                        let _ = crate::components::chat_view::update_conversation_ui(
+                            &document,
+                            &messages_clone,
+                            current_user_opt.as_ref(),
+                        );
                     }
                 })));
             }
-            let threads_data: Vec<crate::models::ApiThread> = state.threads.values().cloned().collect();
+            let threads_data: Vec<crate::models::ApiThread> =
+                state.threads.values().cloned().collect();
             let current_thread_id = state.current_thread_id;
             let thread_messages = state.thread_messages.clone();
             cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
                 crate::state::dispatch_global_message(crate::messages::Message::UpdateThreadList(
                     threads_data.clone(),
                     current_thread_id,
-                    thread_messages.clone()
+                    thread_messages.clone(),
                 ));
             })));
             true
@@ -150,14 +203,21 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             let title_clone = title.clone();
             let thread_id_clone = *thread_id;
             cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
-                if let Some(_document) = web_sys::window().expect("no global window exists").document() {
-                    crate::state::dispatch_global_message(crate::messages::Message::UpdateThreadList(
-                        threads.clone(), 
-                        current_thread_id, 
-                        thread_messages.clone()
-                    ));
+                if let Some(_document) = web_sys::window()
+                    .expect("no global window exists")
+                    .document()
+                {
+                    crate::state::dispatch_global_message(
+                        crate::messages::Message::UpdateThreadList(
+                            threads.clone(),
+                            current_thread_id,
+                            thread_messages.clone(),
+                        ),
+                    );
                     if current_thread_id == Some(thread_id_clone) {
-                        crate::state::dispatch_global_message(crate::messages::Message::UpdateThreadTitleUI(title_clone.clone()));
+                        crate::state::dispatch_global_message(
+                            crate::messages::Message::UpdateThreadTitleUI(title_clone.clone()),
+                        );
                     }
                 }
             })));
@@ -168,8 +228,16 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         crate::messages::Message::UpdateThreadList(threads, current_thread_id, thread_messages) => {
-            if let Some(document) = web_sys::window().expect("no global window exists").document() {
-                let _ = crate::components::chat_view::update_thread_list_ui(&document, &threads, *current_thread_id, &thread_messages);
+            if let Some(document) = web_sys::window()
+                .expect("no global window exists")
+                .document()
+            {
+                let _ = crate::components::chat_view::update_thread_list_ui(
+                    &document,
+                    &threads,
+                    *current_thread_id,
+                    &thread_messages,
+                );
             }
             true
         }
@@ -177,8 +245,13 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             let messages_clone = messages.clone();
             cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
                 if let Some(document) = web_sys::window().unwrap().document() {
-                    let current_user_opt = crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
-                    let _ = crate::components::chat_view::update_conversation_ui(&document, &messages_clone, current_user_opt.as_ref());
+                    let current_user_opt =
+                        crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
+                    let _ = crate::components::chat_view::update_conversation_ui(
+                        &document,
+                        &messages_clone,
+                        current_user_opt.as_ref(),
+                    );
                 }
             })));
             true
@@ -186,8 +259,14 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         crate::messages::Message::UpdateThreadTitleUI(title) => {
             let title_clone = title.clone();
             cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
-                if let Some(document) = web_sys::window().expect("no global window exists").document() {
-                    let _ = crate::components::chat_view::update_thread_title_with_data(&document, &title_clone);
+                if let Some(document) = web_sys::window()
+                    .expect("no global window exists")
+                    .document()
+                {
+                    let _ = crate::components::chat_view::update_thread_title_with_data(
+                        &document,
+                        &title_clone,
+                    );
                 }
             })));
             true
@@ -196,12 +275,16 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             let thread_id_opt = state.current_thread_id;
             if let Some(thread_id) = thread_id_opt {
                 let title_clone = title.clone();
-                cmds.push(crate::messages::Command::SendMessage(crate::messages::Message::UpdateThreadTitle(thread_id, title_clone)));
+                cmds.push(crate::messages::Command::SendMessage(
+                    crate::messages::Message::UpdateThreadTitle(thread_id, title_clone),
+                ));
             }
             true
         }
         crate::messages::Message::RequestThreadListUpdate(agent_id) => {
-            let threads: Vec<crate::models::ApiThread> = state.threads.values()
+            let threads: Vec<crate::models::ApiThread> = state
+                .threads
+                .values()
                 .filter(|t| t.agent_id == *agent_id)
                 .cloned()
                 .collect();
@@ -216,13 +299,22 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             })));
             true
         }
-        crate::messages::Message::ReceiveStreamChunk { thread_id, content, chunk_type, tool_name, tool_call_id, message_id } => {
+        crate::messages::Message::ReceiveStreamChunk {
+            thread_id,
+            content,
+            chunk_type,
+            tool_name,
+            tool_call_id,
+            message_id,
+        } => {
             // (migrated logic from update.rs)
             if chunk_type.as_deref() == Some("assistant_token") {
                 state.token_mode_threads.insert(*thread_id);
                 let messages = state.thread_messages.entry(*thread_id).or_default();
                 let need_new_bubble = match messages.last() {
-                    Some(last) => last.role != "assistant" || !state.streaming_threads.contains(thread_id),
+                    Some(last) => {
+                        last.role != "assistant" || !state.streaming_threads.contains(thread_id)
+                    }
                     None => true,
                 };
                 if need_new_bubble {
@@ -259,7 +351,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 };
                 let messages = state.thread_messages.entry(*thread_id).or_default();
                 messages.push(tool_message);
-                web_sys::console::log_1(&format!("Added tool message for thread {}: {}", thread_id, content).into());
+                web_sys::console::log_1(
+                    &format!("Added tool message for thread {}: {}", thread_id, content).into(),
+                );
             } else {
                 let mid_u32 = message_id.as_ref().and_then(|s| s.parse::<u32>().ok());
                 let current_mid = state.current_assistant_id(*thread_id);
@@ -295,7 +389,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     ).into());
                     let messages_clone = messages.clone();
                     cmds.push(Command::UpdateUI(Box::new(move || {
-                        crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
+                        crate::state::dispatch_global_message(
+                            crate::messages::Message::UpdateConversation(messages_clone),
+                        );
                     })));
                 }
             }
@@ -311,25 +407,48 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.streaming_threads.remove(thread_id);
             state.token_mode_threads.remove(thread_id);
             if let Some(messages) = state.thread_messages.get_mut(thread_id) {
-                if let Some(last_user_message) = messages.iter_mut().filter(|msg| msg.role == "user").last() {
+                if let Some(last_user_message) =
+                    messages.iter_mut().filter(|msg| msg.role == "user").last()
+                {
                     last_user_message.id = None;
-                    web_sys::console::log_1(&format!("Stream ended: Set last user message ID to None for thread {}.", thread_id).into());
+                    web_sys::console::log_1(
+                        &format!(
+                            "Stream ended: Set last user message ID to None for thread {}.",
+                            thread_id
+                        )
+                        .into(),
+                    );
                 }
                 if state.current_thread_id == Some(*thread_id) {
                     let messages_clone = messages.clone();
                     cmds.push(Command::UpdateUI(Box::new(move || {
-                        crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
+                        crate::state::dispatch_global_message(
+                            crate::messages::Message::UpdateConversation(messages_clone),
+                        );
                     })));
                 }
             }
             web_sys::console::log_1(&format!("Stream ended for thread {}.", thread_id).into());
             true
         }
-        crate::messages::Message::ReceiveAssistantId { thread_id, message_id } => {
-            web_sys::console::log_1(&format!("Received AssistantId {} for thread {}", message_id, thread_id).into());
+        crate::messages::Message::ReceiveAssistantId {
+            thread_id,
+            message_id,
+        } => {
+            web_sys::console::log_1(
+                &format!(
+                    "Received AssistantId {} for thread {}",
+                    message_id, thread_id
+                )
+                .into(),
+            );
             state.active_streams.insert(*thread_id, Some(*message_id));
             if let Some(messages) = state.thread_messages.get_mut(thread_id) {
-                if let Some(last) = messages.iter_mut().rev().find(|m| m.role == "assistant" && m.id.is_none()) {
+                if let Some(last) = messages
+                    .iter_mut()
+                    .rev()
+                    .find(|m| m.role == "assistant" && m.id.is_none())
+                {
                     last.id = Some(*message_id);
                 }
             }
@@ -342,10 +461,13 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             if state.current_thread_id == Some(thread_id) {
                 let messages_clone = messages.clone();
                 cmds.push(Command::UpdateUI(Box::new(move || {
-                    crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
+                    crate::state::dispatch_global_message(
+                        crate::messages::Message::UpdateConversation(messages_clone),
+                    );
                 })));
             }
-            let threads_data: Vec<crate::models::ApiThread> = state.threads.values().cloned().collect();
+            let threads_data: Vec<crate::models::ApiThread> =
+                state.threads.values().cloned().collect();
             let thread_messages_map = state.thread_messages.clone();
             let current_thread_id = state.current_thread_id;
             cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
@@ -365,7 +487,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 if state.current_thread_id == Some(*thread_id) {
                     let title_clone = thread.title.clone();
                     cmds.push(Command::UpdateUI(Box::new(move || {
-                        crate::state::dispatch_global_message(crate::messages::Message::UpdateThreadTitleUI(title_clone));
+                        crate::state::dispatch_global_message(
+                            crate::messages::Message::UpdateThreadTitleUI(title_clone),
+                        );
                     })));
                 }
             }
@@ -376,42 +500,66 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             if system_messages_count > 0 {
                 web_sys::console::log_1(&format!("Thread history contains {} system messages which won't be displayed in the chat UI", system_messages_count).into());
             }
-            web_sys::console::log_1(&format!("Update handler: Received thread history ({} messages, {} displayable)", 
-                messages.len(), messages.len() - system_messages_count).into());
+            web_sys::console::log_1(
+                &format!(
+                    "Update handler: Received thread history ({} messages, {} displayable)",
+                    messages.len(),
+                    messages.len() - system_messages_count
+                )
+                .into(),
+            );
             if let Some(active_thread_id) = state.current_thread_id {
-                let messages_clone_for_dispatch = messages.clone(); 
-                state.thread_messages.insert(active_thread_id, messages.clone());
+                let messages_clone_for_dispatch = messages.clone();
+                state
+                    .thread_messages
+                    .insert(active_thread_id, messages.clone());
                 cmds.push(Command::UpdateUI(Box::new(move || {
-                    crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone_for_dispatch));
+                    crate::state::dispatch_global_message(
+                        crate::messages::Message::UpdateConversation(messages_clone_for_dispatch),
+                    );
                 })));
             } else {
-                web_sys::console::warn_1(&"Received thread history but no active thread selected in state.".into());
+                web_sys::console::warn_1(
+                    &"Received thread history but no active thread selected in state.".into(),
+                );
             }
             true
         }
         crate::messages::Message::ToggleToolExpansion { tool_call_id } => {
-            let entry = state.tool_ui_states.entry(tool_call_id.clone())
-                .or_insert(crate::state::ToolUiState { expanded: false, show_full: false });
+            let entry = state.tool_ui_states.entry(tool_call_id.clone()).or_insert(
+                crate::state::ToolUiState {
+                    expanded: false,
+                    show_full: false,
+                },
+            );
             entry.expanded = !entry.expanded;
             if let Some(thread_id) = state.current_thread_id {
                 if let Some(messages) = state.thread_messages.get(&thread_id) {
                     let messages_clone = messages.clone();
                     cmds.push(Command::UpdateUI(Box::new(move || {
-                        crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
+                        crate::state::dispatch_global_message(
+                            crate::messages::Message::UpdateConversation(messages_clone),
+                        );
                     })));
                 }
             }
             true
         }
         crate::messages::Message::ToggleToolShowMore { tool_call_id } => {
-            let entry = state.tool_ui_states.entry(tool_call_id.clone())
-                .or_insert(crate::state::ToolUiState { expanded: false, show_full: false });
+            let entry = state.tool_ui_states.entry(tool_call_id.clone()).or_insert(
+                crate::state::ToolUiState {
+                    expanded: false,
+                    show_full: false,
+                },
+            );
             entry.show_full = !entry.show_full;
             if let Some(thread_id) = state.current_thread_id {
                 if let Some(messages) = state.thread_messages.get(&thread_id) {
                     let messages_clone = messages.clone();
                     cmds.push(Command::UpdateUI(Box::new(move || {
-                        crate::state::dispatch_global_message(crate::messages::Message::UpdateConversation(messages_clone));
+                        crate::state::dispatch_global_message(
+                            crate::messages::Message::UpdateConversation(messages_clone),
+                        );
                     })));
                 }
             }
@@ -419,7 +567,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         crate::messages::Message::UpdateLoadingState(is_loading) => {
             state.is_chat_loading = *is_loading;
-            if let Some(document) = web_sys::window().expect("no global window exists").document() {
+            if let Some(document) = web_sys::window()
+                .expect("no global window exists")
+                .document()
+            {
                 let _ = crate::components::chat_view::update_loading_state(&document, *is_loading);
             }
             true
@@ -432,24 +583,41 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             cmds.push(Command::UpdateUI(Box::new(move || {
                 if let Some(document) = web_sys::window().and_then(|w| w.document()) {
                     let _ = crate::components::chat_view::setup_chat_view(&document);
-                    let _ = crate::components::chat_view::show_chat_view(&document, agent_id_for_effects);
+                    let _ = crate::components::chat_view::show_chat_view(
+                        &document,
+                        agent_id_for_effects,
+                    );
                 }
                 wasm_bindgen_futures::spawn_local(async move {
-                    match crate::network::api_client::ApiClient::get_threads(Some(agent_id_for_effects)).await {
+                    match crate::network::api_client::ApiClient::get_threads(Some(
+                        agent_id_for_effects,
+                    ))
+                    .await
+                    {
                         Ok(response) => {
                             match serde_json::from_str::<Vec<crate::models::ApiThread>>(&response) {
                                 Ok(threads) => {
-                                    crate::state::dispatch_global_message(crate::messages::Message::ThreadsLoaded(threads));
-                                },
+                                    crate::state::dispatch_global_message(
+                                        crate::messages::Message::ThreadsLoaded(threads),
+                                    );
+                                }
                                 Err(e) => {
-                                    web_sys::console::error_1(&format!("Failed to parse threads: {:?}", e).into());
-                                    crate::state::dispatch_global_message(crate::messages::Message::UpdateLoadingState(false));
+                                    web_sys::console::error_1(
+                                        &format!("Failed to parse threads: {:?}", e).into(),
+                                    );
+                                    crate::state::dispatch_global_message(
+                                        crate::messages::Message::UpdateLoadingState(false),
+                                    );
                                 }
                             }
-                        },
+                        }
                         Err(e) => {
-                            web_sys::console::error_1(&format!("Failed to load threads: {:?}", e).into());
-                            crate::state::dispatch_global_message(crate::messages::Message::UpdateLoadingState(false));
+                            web_sys::console::error_1(
+                                &format!("Failed to load threads: {:?}", e).into(),
+                            );
+                            crate::state::dispatch_global_message(
+                                crate::messages::Message::UpdateLoadingState(false),
+                            );
                         }
                     }
                 });
@@ -460,20 +628,29 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.current_thread_id = Some(*thread_id);
             if let Some(thread) = state.threads.get(thread_id) {
                 let agent_id = thread.agent_id;
-                crate::state::dispatch_global_message(crate::messages::Message::NavigateToChatView(agent_id));
+                crate::state::dispatch_global_message(
+                    crate::messages::Message::NavigateToChatView(agent_id),
+                );
             }
             true
         }
         crate::messages::Message::RequestNewThread => {
-            let agent_id_opt = state.current_thread_id
+            let agent_id_opt = state
+                .current_thread_id
                 .and_then(|thread_id| state.threads.get(&thread_id))
                 .map(|thread| thread.agent_id)
                 .or(state.current_agent_id);
-            web_sys::console::log_1(&format!("RequestNewThread - agent_id: {:?}", agent_id_opt).into());
+            web_sys::console::log_1(
+                &format!("RequestNewThread - agent_id: {:?}", agent_id_opt).into(),
+            );
             if let Some(agent_id) = agent_id_opt {
                 let title = crate::constants::DEFAULT_THREAD_TITLE.to_string();
-                web_sys::console::log_1(&format!("Creating new thread for agent: {}", agent_id).into());
-                cmds.push(crate::messages::Command::SendMessage(crate::messages::Message::CreateThread(agent_id, title)));
+                web_sys::console::log_1(
+                    &format!("Creating new thread for agent: {}", agent_id).into(),
+                );
+                cmds.push(crate::messages::Command::SendMessage(
+                    crate::messages::Message::CreateThread(agent_id, title),
+                ));
             } else {
                 web_sys::console::error_1(&"Cannot create thread: No agent selected".into());
             }
@@ -495,11 +672,16 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         crate::messages::Message::SendThreadMessage(_, _) => {
-            web_sys::console::warn_1(&"Received legacy SendThreadMessage; ignoring to avoid duplicate network call".into());
+            web_sys::console::warn_1(
+                &"Received legacy SendThreadMessage; ignoring to avoid duplicate network call"
+                    .into(),
+            );
             true
         }
         crate::messages::Message::ThreadMessageSent(_response, _client_id) => {
-            web_sys::console::warn_1(&"ThreadMessageSent is deprecated, use ThreadMessagesLoaded instead".into());
+            web_sys::console::warn_1(
+                &"ThreadMessageSent is deprecated, use ThreadMessagesLoaded instead".into(),
+            );
             true
         }
         crate::messages::Message::ThreadMessageFailed(_thread_id, _client_id) => {
@@ -516,7 +698,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         crate::messages::Message::ThreadsLoaded(threads) => {
             web_sys::console::log_1(&format!("Threads loaded: {} threads", threads.len()).into());
-            
+
             // Update state with loaded threads
             for thread in threads {
                 if let Some(thread_id) = thread.id {
@@ -529,22 +711,35 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 // Sort threads by updated_at (newest first), fallback to created_at
                 let mut threads_vec: Vec<_> = state.threads.values().collect();
                 threads_vec.sort_by(|a, b| {
-                    let a_time = a.updated_at.as_ref().or(a.created_at.as_ref()).map(|s| s.as_str()).unwrap_or("");
-                    let b_time = b.updated_at.as_ref().or(b.created_at.as_ref()).map(|s| s.as_str()).unwrap_or("");
+                    let a_time = a
+                        .updated_at
+                        .as_ref()
+                        .or(a.created_at.as_ref())
+                        .map(|s| s.as_str())
+                        .unwrap_or("");
+                    let b_time = b
+                        .updated_at
+                        .as_ref()
+                        .or(b.created_at.as_ref())
+                        .map(|s| s.as_str())
+                        .unwrap_or("");
                     b_time.cmp(a_time)
                 });
                 if let Some(first_thread) = threads_vec.first() {
                     if let Some(first_thread_id) = first_thread.id {
-                        cmds.push(crate::messages::Command::SendMessage(crate::messages::Message::SelectThread(first_thread_id)));
+                        cmds.push(crate::messages::Command::SendMessage(
+                            crate::messages::Message::SelectThread(first_thread_id),
+                        ));
                     }
                 }
             }
-            
+
             // Update UI with thread list
-            let threads_data: Vec<crate::models::ApiThread> = state.threads.values().cloned().collect();
+            let threads_data: Vec<crate::models::ApiThread> =
+                state.threads.values().cloned().collect();
             let current_thread_id = state.current_thread_id;
             let thread_messages = state.thread_messages.clone();
-            
+
             cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
                 crate::state::dispatch_global_message(crate::messages::Message::UpdateThreadList(
                     threads_data,
@@ -552,10 +747,12 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     thread_messages,
                 ));
             })));
-            
+
             // Stop loading state
-            cmds.push(crate::messages::Command::SendMessage(crate::messages::Message::UpdateLoadingState(false)));
-            
+            cmds.push(crate::messages::Command::SendMessage(
+                crate::messages::Message::UpdateLoadingState(false),
+            ));
+
             true
         }
         _ => false,

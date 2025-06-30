@@ -18,8 +18,8 @@
 //! print to the console and keep the old stub behaviour so demos without
 //! network access still work.
 
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::closure::Closure;
+use wasm_bindgen::prelude::*;
 
 // wasm-bindgen externs ------------------------------------------------------
 
@@ -51,7 +51,9 @@ pub fn initiate_gmail_connect() {
     let client_id = if let Some(id) = client_id_opt {
         id
     } else {
-        web_sys::console::error_1(&"[gmail-connect] Missing google_client_id – cannot start OAuth".into());
+        web_sys::console::error_1(
+            &"[gmail-connect] Missing google_client_id – cannot start OAuth".into(),
+        );
         // Fallback to stub.
         crate::state::dispatch_global_message(crate::messages::Message::GmailConnected);
         return;
@@ -66,10 +68,13 @@ pub fn initiate_gmail_connect() {
     };
 
     // Verify that the GIS script loaded successfully.
-    let google_ns = js_sys::Reflect::get(&window, &JsValue::from_str("google")).unwrap_or(JsValue::UNDEFINED);
+    let google_ns =
+        js_sys::Reflect::get(&window, &JsValue::from_str("google")).unwrap_or(JsValue::UNDEFINED);
     if google_ns.is_undefined() {
         // Offline / tests – perform stub behaviour for now.
-        web_sys::console::warn_1(&"[gmail-connect] google.accounts namespace unavailable – using stub".into());
+        web_sys::console::warn_1(
+            &"[gmail-connect] google.accounts namespace unavailable – using stub".into(),
+        );
         crate::state::dispatch_global_message(crate::messages::Message::GmailConnected);
         return;
     }
@@ -80,7 +85,12 @@ pub fn initiate_gmail_connect() {
     let params = js_sys::Object::new();
 
     // client_id ------------------------------------------------------------
-    js_sys::Reflect::set(&params, &JsValue::from_str("client_id"), &JsValue::from_str(&client_id)).unwrap();
+    js_sys::Reflect::set(
+        &params,
+        &JsValue::from_str("client_id"),
+        &JsValue::from_str(&client_id),
+    )
+    .unwrap();
 
     // Scope limited to readonly Gmail.  Note the space-separated list format.
     js_sys::Reflect::set(
@@ -91,8 +101,18 @@ pub fn initiate_gmail_connect() {
     .unwrap();
 
     // Force consent screen and request *offline* refresh-token.
-    js_sys::Reflect::set(&params, &JsValue::from_str("prompt"), &JsValue::from_str("consent")).unwrap();
-    js_sys::Reflect::set(&params, &JsValue::from_str("access_type"), &JsValue::from_str("offline")).unwrap();
+    js_sys::Reflect::set(
+        &params,
+        &JsValue::from_str("prompt"),
+        &JsValue::from_str("consent"),
+    )
+    .unwrap();
+    js_sys::Reflect::set(
+        &params,
+        &JsValue::from_str("access_type"),
+        &JsValue::from_str("offline"),
+    )
+    .unwrap();
 
     // Callback closure – receives JS object with `.code` once the user
     // grants access.
@@ -106,14 +126,17 @@ pub fn initiate_gmail_connect() {
         let auth_code = match code_val {
             Some(c) => c,
             None => {
-                web_sys::console::error_1(&"[gmail-connect] Callback called without `.code`".into());
+                web_sys::console::error_1(
+                    &"[gmail-connect] Callback called without `.code`".into(),
+                );
                 return;
             }
         };
 
         // We need to perform an async fetch – spawn_local inside closure.
         wasm_bindgen_futures::spawn_local(async move {
-            match crate::network::api_client::ApiClient::gmail_exchange_auth_code(&auth_code).await {
+            match crate::network::api_client::ApiClient::gmail_exchange_auth_code(&auth_code).await
+            {
                 Ok(()) => {
                     crate::state::dispatch_global_message(crate::messages::Message::GmailConnected);
                 }

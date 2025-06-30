@@ -16,4 +16,4 @@ pub fn parse_models_from_api(models: Vec<ModelConfig>) -> Vec<(String, String)> 
         .into_iter()
         .map(|model| (model.id, model.display_name))
         .collect()
-} 
+}

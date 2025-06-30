@@ -1,50 +1,65 @@
-use crate::messages::{Message, Command};
-use crate::models::{ApiThread, ApiAgent, ApiThreadMessage};
+use crate::messages::{Command, Message};
 use crate::models::ApiAgentDetails;
-use crate::state::{APP_STATE, dispatch_global_message};
+use crate::models::ApiWorkflow;
+use crate::models::{ApiAgent, ApiThread, ApiThreadMessage};
 use crate::network::api_client::ApiClient;
-use std::rc::Rc;
+use crate::state::{dispatch_global_message, APP_STATE};
 use std::cell::RefCell;
+use std::rc::Rc;
 
 pub fn execute_fetch_command(cmd: Command) {
     match cmd {
         Command::FetchThreads(agent_id) => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_threads(Some(agent_id)).await {
-                    Ok(response) => {
-                        match serde_json::from_str::<Vec<ApiThread>>(&response) {
-                            Ok(threads) => dispatch_global_message(Message::ThreadsLoaded(threads)),
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse threads: {:?}", e).into())
-                        }
+                    Ok(response) => match serde_json::from_str::<Vec<ApiThread>>(&response) {
+                        Ok(threads) => dispatch_global_message(Message::ThreadsLoaded(threads)),
+                        Err(e) => web_sys::console::error_1(
+                            &format!("Failed to parse threads: {:?}", e).into(),
+                        ),
                     },
-                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch threads: {:?}", e).into())
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to fetch threads: {:?}", e).into(),
+                    ),
                 }
             });
-        },
+        }
         Command::FetchThreadMessages(thread_id) => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_thread_messages(thread_id, 0, 100).await {
-                    Ok(messages) => match serde_json::from_str::<Vec<ApiThreadMessage>>(&messages) {
-                        Ok(messages) => dispatch_global_message(Message::ThreadMessagesLoaded(thread_id, messages)),
-                        Err(e) => web_sys::console::error_1(&format!("Failed to parse messages: {:?}", e).into())
-                    },
-                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch messages: {:?}", e).into())
+                    Ok(messages) => {
+                        match serde_json::from_str::<Vec<ApiThreadMessage>>(&messages) {
+                            Ok(messages) => dispatch_global_message(Message::ThreadMessagesLoaded(
+                                thread_id, messages,
+                            )),
+                            Err(e) => web_sys::console::error_1(
+                                &format!("Failed to parse messages: {:?}", e).into(),
+                            ),
+                        }
+                    }
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to fetch messages: {:?}", e).into(),
+                    ),
                 }
             });
-        },
+        }
         Command::LoadAgentInfo(agent_id) => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_agent(agent_id).await {
-                    Ok(response) => {
-                        match serde_json::from_str::<ApiAgent>(&response) {
-                            Ok(agent) => dispatch_global_message(Message::AgentInfoLoaded(Box::new(agent))),
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse agent: {:?}", e).into())
+                    Ok(response) => match serde_json::from_str::<ApiAgent>(&response) {
+                        Ok(agent) => {
+                            dispatch_global_message(Message::AgentInfoLoaded(Box::new(agent)))
                         }
+                        Err(e) => web_sys::console::error_1(
+                            &format!("Failed to parse agent: {:?}", e).into(),
+                        ),
                     },
-                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch agent: {:?}", e).into())
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to fetch agent: {:?}", e).into())
+                    }
                 }
             });
-        },
+        }
         Command::FetchAgents => {
             // Determine current dashboard scope before starting the async
             // task so we don’t hold a RefCell borrow across await points.
@@ -53,75 +68,111 @@ pub fn execute_fetch_command(cmd: Command) {
                 state.dashboard_scope.as_str().to_string()
             });
 
-            web_sys::console::log_1(&format!("Executing FetchAgents command (scope={})", scope_str).into());
+            web_sys::console::log_1(
+                &format!("Executing FetchAgents command (scope={})", scope_str).into(),
+            );
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_agents_scoped(&scope_str).await {
-                    Ok(agents_json) => {
-                        match serde_json::from_str::<Vec<ApiAgent>>(&agents_json) {
-                            Ok(agents) => {
-                                web_sys::console::log_1(&format!("Fetched {} agents from API", agents.len()).into());
-                                dispatch_global_message(Message::AgentsRefreshed(agents))
-                            },
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse agents: {:?}", e).into())
+                    Ok(agents_json) => match serde_json::from_str::<Vec<ApiAgent>>(&agents_json) {
+                        Ok(agents) => {
+                            web_sys::console::log_1(
+                                &format!("Fetched {} agents from API", agents.len()).into(),
+                            );
+                            dispatch_global_message(Message::AgentsRefreshed(agents))
                         }
+                        Err(e) => web_sys::console::error_1(
+                            &format!("Failed to parse agents: {:?}", e).into(),
+                        ),
                     },
-                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch agents: {:?}", e).into())
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to fetch agents: {:?}", e).into(),
+                    ),
                 }
             });
-        },
+        }
 
         // -----------------------------------------------------------
         // Workflow helpers (new)
         // -----------------------------------------------------------
-
         Command::FetchWorkflows => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_workflows().await {
                     Ok(json_str) => {
                         match serde_json::from_str::<Vec<crate::models::ApiWorkflow>>(&json_str) {
                             Ok(api_wfs) => {
-                                let workflows: Vec<crate::models::Workflow> = api_wfs.into_iter().map(|w| w.into()).collect();
+                                let workflows: Vec<ApiWorkflow> = api_wfs;
                                 dispatch_global_message(Message::WorkflowsLoaded(workflows));
-                            },
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse workflows: {:?}", e).into()),
+                            }
+                            Err(e) => web_sys::console::error_1(
+                                &format!("Failed to parse workflows: {:?}", e).into(),
+                            ),
                         }
                     }
-                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch workflows: {:?}", e).into()),
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to fetch workflows: {:?}", e).into(),
+                    ),
                 }
             });
-        },
+        }
 
         Command::FetchCurrentWorkflow => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_current_workflow().await {
                     Ok(json_str) => {
+                        web_sys::console::log_1(
+                            &format!("🔍 Raw workflow JSON from backend: {}", json_str).into(),
+                        );
                         match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
                             Ok(api_wf) => {
-                                let workflow: crate::models::Workflow = api_wf.into();
+                                let node_count = api_wf
+                                    .canvas_data
+                                    .as_object()
+                                    .and_then(|obj| obj.get("nodes"))
+                                    .and_then(|nodes| nodes.as_array())
+                                    .map_or(0, |arr| arr.len());
+                                let edge_count = api_wf
+                                    .canvas_data
+                                    .as_object()
+                                    .and_then(|obj| obj.get("edges"))
+                                    .and_then(|edges| edges.as_array())
+                                    .map_or(0, |arr| arr.len());
+                                web_sys::console::log_1(
+                                    &format!(
+                                        "🔍 Parsed workflow: {} nodes, {} edges",
+                                        node_count, edge_count
+                                    )
+                                    .into(),
+                                );
+                                let workflow: ApiWorkflow = api_wf;
                                 dispatch_global_message(Message::CurrentWorkflowLoaded(workflow));
-                            },
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse current workflow: {:?}", e).into()),
+                            }
+                            Err(e) => web_sys::console::error_1(
+                                &format!("Failed to parse current workflow: {:?}", e).into(),
+                            ),
                         }
                     }
-                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch current workflow: {:?}", e).into()),
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to fetch current workflow: {:?}", e).into(),
+                    ),
                 }
             });
-        },
+        }
 
         // ---------------- Workflow CRUD commands -------------------
-
         Command::CreateWorkflowApi { name } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::create_workflow(&name).await {
                     Ok(json_str) => {
                         match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
                             Ok(api_wf) => {
-                                let wf: crate::models::Workflow = api_wf.into();
+                                let wf: ApiWorkflow = api_wf;
                                 dispatch_global_message(Message::WorkflowCreated(wf));
                                 crate::toast::success("Workflow created successfully!");
                             }
                             Err(e) => {
-                                web_sys::console::error_1(&format!("Failed to parse created workflow: {:?}", e).into());
+                                web_sys::console::error_1(
+                                    &format!("Failed to parse created workflow: {:?}", e).into(),
+                                );
                                 crate::toast::error("Failed to process workflow creation response");
                             }
                         }
@@ -145,18 +196,24 @@ pub fn execute_fetch_command(cmd: Command) {
                 }
             });
         }
-        Command::RenameWorkflowApi { workflow_id, name, description } => {
+        Command::RenameWorkflowApi {
+            workflow_id,
+            name,
+            description,
+        } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::rename_workflow(workflow_id, &name, &description).await {
                     Ok(json_str) => {
                         match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
                             Ok(api_wf) => {
-                                let wf: crate::models::Workflow = api_wf.into();
+                                let wf: ApiWorkflow = api_wf;
                                 dispatch_global_message(Message::WorkflowUpdated(wf));
                                 crate::toast::success("Workflow updated successfully!");
                             }
                             Err(e) => {
-                                web_sys::console::error_1(&format!("Failed to parse renamed workflow: {:?}", e).into());
+                                web_sys::console::error_1(
+                                    &format!("Failed to parse renamed workflow: {:?}", e).into(),
+                                );
                                 crate::toast::error("Failed to process workflow update response");
                             }
                         }
@@ -180,7 +237,11 @@ pub fn execute_fetch_command(cmd: Command) {
                             if let Some(exec_id_val) = val.get("execution_id") {
                                 if let Some(exec_id_u64) = exec_id_val.as_u64() {
                                     let exec_id = exec_id_u64 as u32;
-                                    crate::state::dispatch_global_message(crate::messages::Message::SubscribeWorkflowExecution { execution_id: exec_id });
+                                    crate::state::dispatch_global_message(
+                                        crate::messages::Message::SubscribeWorkflowExecution {
+                                            execution_id: exec_id,
+                                        },
+                                    );
                                 }
                             }
                         }
@@ -205,9 +266,17 @@ pub fn execute_fetch_command(cmd: Command) {
                                 if let Some(exec_id_u64) = exec_id_val.as_u64() {
                                     let exec_id = exec_id_u64 as u32;
                                     // Subscribe to the reserved execution first
-                                    crate::state::dispatch_global_message(crate::messages::Message::SubscribeWorkflowExecution { execution_id: exec_id });
+                                    crate::state::dispatch_global_message(
+                                        crate::messages::Message::SubscribeWorkflowExecution {
+                                            execution_id: exec_id,
+                                        },
+                                    );
                                     // Then start the execution
-                                    crate::state::dispatch_global_message(crate::messages::Message::StartReservedExecution { execution_id: exec_id });
+                                    crate::state::dispatch_global_message(
+                                        crate::messages::Message::StartReservedExecution {
+                                            execution_id: exec_id,
+                                        },
+                                    );
                                 }
                             }
                         }
@@ -221,13 +290,15 @@ pub fn execute_fetch_command(cmd: Command) {
 
         // -----------------------------------------------------------
         // Start reserved execution
-        // -----------------------------------------------------------  
+        // -----------------------------------------------------------
         Command::StartReservedExecutionApi { execution_id } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::start_reserved_execution(execution_id).await {
                     Ok(_json_str) => {
                         // Execution started successfully
-                        web_sys::console::log_1(&format!("✅ Reserved execution {} started", execution_id).into());
+                        web_sys::console::log_1(
+                            &format!("✅ Reserved execution {} started", execution_id).into(),
+                        );
                     }
                     Err(_) => {
                         // Error toast already shown by ApiClient::format_http_error
@@ -239,16 +310,30 @@ pub fn execute_fetch_command(cmd: Command) {
         // -----------------------------------------------------------
         // Workflow Scheduling commands
         // -----------------------------------------------------------
-        Command::ScheduleWorkflowApi { workflow_id, cron_expression } => {
+        Command::ScheduleWorkflowApi {
+            workflow_id,
+            cron_expression,
+        } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::schedule_workflow(workflow_id, &cron_expression).await {
                     Ok(json_str) => {
-                        web_sys::console::log_1(&format!("Workflow {} scheduled successfully: {}", workflow_id, json_str).into());
+                        web_sys::console::log_1(
+                            &format!(
+                                "Workflow {} scheduled successfully: {}",
+                                workflow_id, json_str
+                            )
+                            .into(),
+                        );
                         // Could dispatch success message / toast
-                        crate::toast::success(&format!("Workflow scheduled with cron: {}", cron_expression));
+                        crate::toast::success(&format!(
+                            "Workflow scheduled with cron: {}",
+                            cron_expression
+                        ));
                     }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to schedule workflow: {:?}", e).into());
+                        web_sys::console::error_1(
+                            &format!("Failed to schedule workflow: {:?}", e).into(),
+                        );
                         crate::toast::error("Failed to schedule workflow");
                     }
                 }
@@ -259,11 +344,15 @@ pub fn execute_fetch_command(cmd: Command) {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::unschedule_workflow(workflow_id).await {
                     Ok(_) => {
-                        web_sys::console::log_1(&format!("Workflow {} unscheduled successfully", workflow_id).into());
+                        web_sys::console::log_1(
+                            &format!("Workflow {} unscheduled successfully", workflow_id).into(),
+                        );
                         crate::toast::success("Workflow unscheduled successfully");
                     }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to unschedule workflow: {:?}", e).into());
+                        web_sys::console::error_1(
+                            &format!("Failed to unschedule workflow: {:?}", e).into(),
+                        );
                         crate::toast::error("Failed to unschedule workflow");
                     }
                 }
@@ -275,19 +364,33 @@ pub fn execute_fetch_command(cmd: Command) {
                 match ApiClient::get_workflow_schedule(workflow_id).await {
                     Ok(json_str) => {
                         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                            if let Some(scheduled) = val.get("scheduled").and_then(|v| v.as_bool()) {
+                            if let Some(scheduled) = val.get("scheduled").and_then(|v| v.as_bool())
+                            {
                                 if scheduled {
-                                    if let Some(next_run) = val.get("next_run_time").and_then(|v| v.as_str()) {
-                                        web_sys::console::log_1(&format!("Workflow {} is scheduled, next run: {}", workflow_id, next_run).into());
+                                    if let Some(next_run) =
+                                        val.get("next_run_time").and_then(|v| v.as_str())
+                                    {
+                                        web_sys::console::log_1(
+                                            &format!(
+                                                "Workflow {} is scheduled, next run: {}",
+                                                workflow_id, next_run
+                                            )
+                                            .into(),
+                                        );
                                     }
                                 } else {
-                                    web_sys::console::log_1(&format!("Workflow {} is not scheduled", workflow_id).into());
+                                    web_sys::console::log_1(
+                                        &format!("Workflow {} is not scheduled", workflow_id)
+                                            .into(),
+                                    );
                                 }
                             }
                         }
                     }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to check workflow schedule: {:?}", e).into());
+                        web_sys::console::error_1(
+                            &format!("Failed to check workflow schedule: {:?}", e).into(),
+                        );
                     }
                 }
             });
@@ -296,50 +399,69 @@ pub fn execute_fetch_command(cmd: Command) {
         Command::FetchAgentDetails(agent_id) => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_agent_details(agent_id).await {
-                    Ok(json_str) => {
-                        match serde_json::from_str::<ApiAgentDetails>(&json_str) {
-                            Ok(details) => dispatch_global_message(Message::ReceiveAgentDetails(details)),
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse agent details: {:?}", e).into()),
+                    Ok(json_str) => match serde_json::from_str::<ApiAgentDetails>(&json_str) {
+                        Ok(details) => {
+                            dispatch_global_message(Message::ReceiveAgentDetails(details))
                         }
-                    }
+                        Err(e) => web_sys::console::error_1(
+                            &format!("Failed to parse agent details: {:?}", e).into(),
+                        ),
+                    },
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to fetch agent details: {:?}", e).into());
+                        web_sys::console::error_1(
+                            &format!("Failed to fetch agent details: {:?}", e).into(),
+                        );
                         // Could choose to dispatch HideAgentDebugModal or error state
                     }
                 }
             });
-        },
+        }
         Command::FetchAgentRuns(agent_id) => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_agent_runs(agent_id, 20).await {
                     Ok(json_str) => {
                         match serde_json::from_str::<Vec<crate::models::ApiAgentRun>>(&json_str) {
-                            Ok(runs) => dispatch_global_message(Message::ReceiveAgentRuns { agent_id, runs }),
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse agent runs: {:?}", e).into()),
+                            Ok(runs) => dispatch_global_message(Message::ReceiveAgentRuns {
+                                agent_id,
+                                runs,
+                            }),
+                            Err(e) => web_sys::console::error_1(
+                                &format!("Failed to parse agent runs: {:?}", e).into(),
+                            ),
                         }
-                    },
-                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch agent runs: {:?}", e).into()),
+                    }
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to fetch agent runs: {:?}", e).into(),
+                    ),
                 }
             });
-        },
+        }
 
         // -----------------------------------------------------------
         // Trigger helpers
         // -----------------------------------------------------------
-
         Command::FetchTriggers(agent_id) => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_triggers(agent_id).await {
                     Ok(json_str) => {
                         match serde_json::from_str::<Vec<crate::models::Trigger>>(&json_str) {
-                            Ok(triggers) => dispatch_global_message(crate::messages::Message::TriggersLoaded { agent_id, triggers }),
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse triggers: {:?}", e).into()),
+                            Ok(triggers) => {
+                                dispatch_global_message(crate::messages::Message::TriggersLoaded {
+                                    agent_id,
+                                    triggers,
+                                })
+                            }
+                            Err(e) => web_sys::console::error_1(
+                                &format!("Failed to parse triggers: {:?}", e).into(),
+                            ),
                         }
                     }
-                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch triggers: {:?}", e).into()),
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to fetch triggers: {:?}", e).into(),
+                    ),
                 }
             });
-        },
+        }
 
         Command::CreateTrigger { payload_json } => {
             wasm_bindgen_futures::spawn_local(async move {
@@ -348,34 +470,55 @@ pub fn execute_fetch_command(cmd: Command) {
                         match serde_json::from_str::<crate::models::Trigger>(&json_str) {
                             Ok(trigger) => {
                                 let agent_id = trigger.agent_id;
-                                dispatch_global_message(crate::messages::Message::TriggerCreated { agent_id, trigger });
+                                dispatch_global_message(crate::messages::Message::TriggerCreated {
+                                    agent_id,
+                                    trigger,
+                                });
                             }
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse new trigger: {:?}", e).into()),
+                            Err(e) => web_sys::console::error_1(
+                                &format!("Failed to parse new trigger: {:?}", e).into(),
+                            ),
                         }
                     }
-                    Err(e) => web_sys::console::error_1(&format!("Failed to create trigger: {:?}", e).into()),
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to create trigger: {:?}", e).into(),
+                    ),
                 }
             });
-        },
+        }
 
         Command::DeleteTrigger(trigger_id) => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::delete_trigger(trigger_id).await {
-                    Ok(()) => dispatch_global_message(crate::messages::Message::TriggerDeleted { agent_id: 0, trigger_id }),
-                    Err(e) => web_sys::console::error_1(&format!("Failed to delete trigger: {:?}", e).into()),
+                    Ok(()) => dispatch_global_message(crate::messages::Message::TriggerDeleted {
+                        agent_id: 0,
+                        trigger_id,
+                    }),
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to delete trigger: {:?}", e).into(),
+                    ),
                 }
             });
-        },
+        }
 
         // Template Gallery Commands
-        Command::LoadTemplatesApi { category, my_templates } => {
+        Command::LoadTemplatesApi {
+            category,
+            my_templates,
+        } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_templates(category.as_deref(), my_templates).await {
                     Ok(json_str) => {
-                        match serde_json::from_str::<Vec<crate::models::WorkflowTemplate>>(&json_str) {
-                            Ok(templates) => dispatch_global_message(Message::TemplatesLoaded(templates)),
+                        match serde_json::from_str::<Vec<crate::models::WorkflowTemplate>>(
+                            &json_str,
+                        ) {
+                            Ok(templates) => {
+                                dispatch_global_message(Message::TemplatesLoaded(templates))
+                            }
                             Err(e) => {
-                                web_sys::console::error_1(&format!("Failed to parse templates: {:?}", e).into());
+                                web_sys::console::error_1(
+                                    &format!("Failed to parse templates: {:?}", e).into(),
+                                );
                                 crate::toast::error("Failed to load templates");
                             }
                         }
@@ -390,15 +533,17 @@ pub fn execute_fetch_command(cmd: Command) {
         Command::LoadTemplateCategoriesApi => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_template_categories().await {
-                    Ok(json_str) => {
-                        match serde_json::from_str::<Vec<String>>(&json_str) {
-                            Ok(categories) => dispatch_global_message(Message::TemplateCategoriesLoaded(categories)),
-                            Err(e) => {
-                                web_sys::console::error_1(&format!("Failed to parse template categories: {:?}", e).into());
-                                crate::toast::error("Failed to load template categories");
-                            }
+                    Ok(json_str) => match serde_json::from_str::<Vec<String>>(&json_str) {
+                        Ok(categories) => {
+                            dispatch_global_message(Message::TemplateCategoriesLoaded(categories))
                         }
-                    }
+                        Err(e) => {
+                            web_sys::console::error_1(
+                                &format!("Failed to parse template categories: {:?}", e).into(),
+                            );
+                            crate::toast::error("Failed to load template categories");
+                        }
+                    },
                     Err(_) => {
                         // Error toast already shown by ApiClient::format_http_error
                     }
@@ -406,17 +551,29 @@ pub fn execute_fetch_command(cmd: Command) {
             });
         }
 
-        Command::DeployTemplateApi { template_id, name, description } => {
+        Command::DeployTemplateApi {
+            template_id,
+            name,
+            description,
+        } => {
             wasm_bindgen_futures::spawn_local(async move {
-                match ApiClient::deploy_template(template_id, name.as_deref(), description.as_deref()).await {
+                match ApiClient::deploy_template(
+                    template_id,
+                    name.as_deref(),
+                    description.as_deref(),
+                )
+                .await
+                {
                     Ok(json_str) => {
                         match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
                             Ok(api_wf) => {
-                                let workflow: crate::models::Workflow = api_wf.into();
+                                let workflow: ApiWorkflow = api_wf;
                                 dispatch_global_message(Message::TemplateDeployed(workflow));
                             }
                             Err(e) => {
-                                web_sys::console::error_1(&format!("Failed to parse deployed workflow: {:?}", e).into());
+                                web_sys::console::error_1(
+                                    &format!("Failed to parse deployed workflow: {:?}", e).into(),
+                                );
                                 crate::toast::error("Failed to process template deployment");
                             }
                         }
@@ -428,7 +585,7 @@ pub fn execute_fetch_command(cmd: Command) {
             });
         }
 
-        _ => web_sys::console::warn_1(&"Unexpected command type in execute_fetch_command".into())
+        _ => web_sys::console::warn_1(&"Unexpected command type in execute_fetch_command".into()),
     }
 }
 
@@ -437,69 +594,122 @@ pub fn execute_thread_command(cmd: Command) {
         Command::CreateThread { agent_id, title } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::create_thread(agent_id, &title).await {
-                    Ok(response) => {
-                        match serde_json::from_str::<ApiThread>(&response) {
-                            Ok(thread) => dispatch_global_message(Message::ThreadCreated(thread)),
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse created thread: {:?}", e).into())
-                        }
+                    Ok(response) => match serde_json::from_str::<ApiThread>(&response) {
+                        Ok(thread) => dispatch_global_message(Message::ThreadCreated(thread)),
+                        Err(e) => web_sys::console::error_1(
+                            &format!("Failed to parse created thread: {:?}", e).into(),
+                        ),
                     },
-                    Err(e) => web_sys::console::error_1(&format!("Failed to create thread: {:?}", e).into())
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to create thread: {:?}", e).into(),
+                    ),
                 }
             });
-        },
-        Command::SendThreadMessage { thread_id, content, client_id } => {
-            web_sys::console::log_1(&format!("Executor: Handling Command::SendThreadMessage for thread {}: '{}'", thread_id, content).into());
+        }
+        Command::SendThreadMessage {
+            thread_id,
+            content,
+            client_id,
+        } => {
+            web_sys::console::log_1(
+                &format!(
+                    "Executor: Handling Command::SendThreadMessage for thread {}: '{}'",
+                    thread_id, content
+                )
+                .into(),
+            );
             let client_id_str = client_id.map(|id| id.to_string()).unwrap_or_default();
-            
+
             // Minimal required flow: (1) create message, (2) trigger processing
             wasm_bindgen_futures::spawn_local(async move {
                 // Step 1 – create the user message
                 if let Err(e) = ApiClient::create_thread_message(thread_id, &content).await {
-                    web_sys::console::error_1(&format!("Executor: Failed to create message for thread {}: {:?}", thread_id, e).into());
-                    dispatch_global_message(Message::ThreadMessageFailed(thread_id, client_id_str.clone()));
+                    web_sys::console::error_1(
+                        &format!(
+                            "Executor: Failed to create message for thread {}: {:?}",
+                            thread_id, e
+                        )
+                        .into(),
+                    );
+                    dispatch_global_message(Message::ThreadMessageFailed(
+                        thread_id,
+                        client_id_str.clone(),
+                    ));
                     return;
                 }
 
                 // Step 2 – run the thread (process unprocessed messages)
                 if let Err(e) = ApiClient::run_thread(thread_id).await {
-                    web_sys::console::error_1(&format!("Executor: Failed to run thread {}: {:?}", thread_id, e).into());
+                    web_sys::console::error_1(
+                        &format!("Executor: Failed to run thread {}: {:?}", thread_id, e).into(),
+                    );
                     dispatch_global_message(Message::ThreadMessageFailed(thread_id, client_id_str));
                 } else {
-                    web_sys::console::log_1(&format!("Executor: Processing started for thread {}", thread_id).into());
+                    web_sys::console::log_1(
+                        &format!("Executor: Processing started for thread {}", thread_id).into(),
+                    );
                 }
             });
-        },
+        }
         Command::RunThread(thread_id) => {
             // This command might now be redundant if SendThreadMessage handles everything.
             // If kept, it should ideally not be called right after SendThreadMessage.
             // Consider removing or repurposing this command.
-            web_sys::console::warn_1(&format!("Executor: Handling potentially redundant Command::RunThread for thread {}", thread_id).into());
+            web_sys::console::warn_1(
+                &format!(
+                    "Executor: Handling potentially redundant Command::RunThread for thread {}",
+                    thread_id
+                )
+                .into(),
+            );
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::run_thread(thread_id).await {
                     Ok(response) => {
-                        web_sys::console::log_1(&format!("Executor: run_thread (manual) POST succeeded for thread {}: {}", thread_id, response).into());
-                    },
+                        web_sys::console::log_1(
+                            &format!(
+                                "Executor: run_thread (manual) POST succeeded for thread {}: {}",
+                                thread_id, response
+                            )
+                            .into(),
+                        );
+                    }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Executor: Failed to run thread {} (manual): {:?}", thread_id, e).into());
+                        web_sys::console::error_1(
+                            &format!(
+                                "Executor: Failed to run thread {} (manual): {:?}",
+                                thread_id, e
+                            )
+                            .into(),
+                        );
                     }
                 }
             });
-        },
+        }
         Command::UpdateThreadTitle { thread_id, title } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::update_thread(thread_id, &title).await {
-                    Ok(_) => web_sys::console::log_1(&format!("Successfully updated thread title for {}", thread_id).into()),
-                    Err(e) => web_sys::console::error_1(&format!("Failed to update thread title: {:?}", e).into())
+                    Ok(_) => web_sys::console::log_1(
+                        &format!("Successfully updated thread title for {}", thread_id).into(),
+                    ),
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to update thread title: {:?}", e).into(),
+                    ),
                 }
             });
-        },
-        _ => web_sys::console::warn_1(&"Unexpected command type in execute_thread_command".into())
+        }
+        _ => web_sys::console::warn_1(&"Unexpected command type in execute_thread_command".into()),
     }
 }
 
 pub fn execute_network_command(cmd: Command) {
     match cmd {
-        Command::NetworkCall { endpoint, method, body, on_success, on_error } => {
+        Command::NetworkCall {
+            endpoint,
+            method,
+            body,
+            on_success,
+            on_error,
+        } => {
             wasm_bindgen_futures::spawn_local(async move {
                 // Ensure endpoint is absolute
                 let endpoint_abs = if endpoint.starts_with("http") {
@@ -522,18 +732,18 @@ pub fn execute_network_command(cmd: Command) {
                         } else {
                             Err("POST request requires body data".into())
                         }
-                    },
+                    }
                     "PUT" => {
                         if let Some(data) = body {
                             ApiClient::fetch_json(&endpoint_abs, "PUT", Some(&data)).await
                         } else {
                             Err("PUT request requires body data".into())
                         }
-                    },
+                    }
                     "DELETE" => ApiClient::fetch_json(&endpoint_abs, "DELETE", None).await,
                     _ => Err(format!("Unsupported HTTP method: {}", method).into()),
                 };
-                
+
                 match result {
                     Ok(_) => dispatch_global_message(*on_success),
                     Err(e) => {
@@ -542,14 +752,27 @@ pub fn execute_network_command(cmd: Command) {
                     }
                 }
             });
-        },
-        Command::UpdateAgent { agent_id, payload, on_success, on_error } => {
-            web_sys::console::log_1(&format!("Executor: Updating agent {} with payload: {}", agent_id, payload).into());
-            
+        }
+        Command::UpdateAgent {
+            agent_id,
+            payload,
+            on_success,
+            on_error,
+        } => {
+            web_sys::console::log_1(
+                &format!(
+                    "Executor: Updating agent {} with payload: {}",
+                    agent_id, payload
+                )
+                .into(),
+            );
+
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::update_agent(agent_id, &payload).await {
                     Ok(response) => {
-                        web_sys::console::log_1(&format!("Agent update successful: {}", response).into());
+                        web_sys::console::log_1(
+                            &format!("Agent update successful: {}", response).into(),
+                        );
 
                         // 1. Notify the state layer that the update succeeded so it
                         //    can refresh the agent list (or optimistic cache).
@@ -560,9 +783,11 @@ pub fn execute_network_command(cmd: Command) {
                         //    race-conditions seen in Playwright tests and giving
                         //    users clear confirmation the save completed.
                         dispatch_global_message(Message::CloseAgentModal);
-                    },
+                    }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to update agent {}: {:?}", agent_id, e).into());
+                        web_sys::console::error_1(
+                            &format!("Failed to update agent {}: {:?}", agent_id, e).into(),
+                        );
                         dispatch_global_message(*on_error);
 
                         // Re-enable the Save button so the user can retry.
@@ -575,22 +800,24 @@ pub fn execute_network_command(cmd: Command) {
                     }
                 }
             });
-        },
+        }
         Command::DeleteAgentApi { agent_id } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::delete_agent(agent_id).await {
                     Ok(_) => dispatch_global_message(Message::AgentDeletionSuccess { agent_id }),
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Delete agent API call failed: {:?}", e).into());
-                        dispatch_global_message(Message::AgentDeletionFailure { 
-                            agent_id, 
-                            error: format!("Failed to delete agent: {:?}", e) 
+                        web_sys::console::error_1(
+                            &format!("Delete agent API call failed: {:?}", e).into(),
+                        );
+                        dispatch_global_message(Message::AgentDeletionFailure {
+                            agent_id,
+                            error: format!("Failed to delete agent: {:?}", e),
                         })
                     }
                 }
             });
-        },
-        _ => web_sys::console::warn_1(&"Unexpected command type in execute_network_command".into())
+        }
+        _ => web_sys::console::warn_1(&"Unexpected command type in execute_network_command".into()),
     }
 }
 
@@ -610,85 +837,141 @@ pub fn execute_save_command() {
 
 pub fn execute_websocket_command(cmd: Command) {
     match cmd {
-        Command::WebSocketAction { action, topic, data: _ } => {
+        Command::WebSocketAction {
+            action,
+            topic,
+            data: _,
+        } => {
             match action.as_str() {
                 "subscribe" => {
                     if let Some(topic_str) = topic {
                         APP_STATE.with(|state| {
                             let state = state.borrow();
                             let topic_manager = state.topic_manager.clone();
-                            
+
                             // Clone topic_str before moving into closure
                             let topic_for_handler = topic_str.clone();
-                            
+
                             // Clone topic_str for potential error logging
                             let topic_for_error_log = topic_str.clone();
-                            
+
                             wasm_bindgen_futures::spawn_local(async move {
                                 // Create a simple handler that logs the received messages
-                                let handler = Rc::new(RefCell::new(move |json_value: serde_json::Value| {
-                                    web_sys::console::log_1(&format!("WS: Received message for topic {}: {:?}", topic_for_handler, json_value).into());
-                                }));
-                                
+                                let handler =
+                                    Rc::new(RefCell::new(move |json_value: serde_json::Value| {
+                                        web_sys::console::log_1(
+                                            &format!(
+                                                "WS: Received message for topic {}: {:?}",
+                                                topic_for_handler, json_value
+                                            )
+                                            .into(),
+                                        );
+                                    }));
+
                                 // Subscribe using the topic manager
-                                if let Err(e) = topic_manager.borrow_mut().subscribe(topic_str, handler) {
-                                    web_sys::console::error_1(&format!("Failed to subscribe to topic {}: {:?}", topic_for_error_log, e).into());
+                                if let Err(e) =
+                                    topic_manager.borrow_mut().subscribe(topic_str, handler)
+                                {
+                                    web_sys::console::error_1(
+                                        &format!(
+                                            "Failed to subscribe to topic {}: {:?}",
+                                            topic_for_error_log, e
+                                        )
+                                        .into(),
+                                    );
                                 } else {
                                     // No need to clone here, topic_str wasn't moved in this path if subscribe succeeded
-                                    web_sys::console::log_1(&format!("Successfully subscribed to topic {}", topic_for_error_log).into()); // Use the cloned value here too for consistency, although original topic_str *could* be used if subscribe didn't move.
+                                    web_sys::console::log_1(
+                                        &format!(
+                                            "Successfully subscribed to topic {}",
+                                            topic_for_error_log
+                                        )
+                                        .into(),
+                                    ); // Use the cloned value here too for consistency, although original topic_str *could* be used if subscribe didn't move.
                                 }
                             });
                         });
                     } else {
                         web_sys::console::error_1(&"Cannot subscribe without a topic".into());
                     }
-                },
-                _ => web_sys::console::warn_1(&format!("Unsupported WebSocket action: {}", action).into())
+                }
+                _ => web_sys::console::warn_1(
+                    &format!("Unsupported WebSocket action: {}", action).into(),
+                ),
             }
-        },
-        _ => web_sys::console::warn_1(&"Unexpected command type in execute_websocket_command".into())
+        }
+        _ => {
+            web_sys::console::warn_1(&"Unexpected command type in execute_websocket_command".into())
+        }
     }
 }
 
 pub fn execute_template_command(cmd: Command) {
     match cmd {
-        Command::LoadTemplatesApi { category, my_templates } => {
+        Command::LoadTemplatesApi {
+            category,
+            my_templates,
+        } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_templates(category.as_deref(), my_templates).await {
                     Ok(json_str) => {
-                        match serde_json::from_str::<Vec<crate::models::WorkflowTemplate>>(&json_str) {
-                            Ok(templates) => dispatch_global_message(Message::TemplatesLoaded(templates)),
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse templates: {:?}", e).into())
+                        match serde_json::from_str::<Vec<crate::models::WorkflowTemplate>>(
+                            &json_str,
+                        ) {
+                            Ok(templates) => {
+                                dispatch_global_message(Message::TemplatesLoaded(templates))
+                            }
+                            Err(e) => web_sys::console::error_1(
+                                &format!("Failed to parse templates: {:?}", e).into(),
+                            ),
                         }
-                    },
-                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch templates: {:?}", e).into())
+                    }
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to fetch templates: {:?}", e).into(),
+                    ),
                 }
             });
-        },
+        }
         Command::LoadTemplateCategoriesApi => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_template_categories().await {
-                    Ok(json_str) => {
-                        match serde_json::from_str::<Vec<String>>(&json_str) {
-                            Ok(categories) => dispatch_global_message(Message::TemplateCategoriesLoaded(categories)),
-                            Err(e) => web_sys::console::error_1(&format!("Failed to parse template categories: {:?}", e).into())
+                    Ok(json_str) => match serde_json::from_str::<Vec<String>>(&json_str) {
+                        Ok(categories) => {
+                            dispatch_global_message(Message::TemplateCategoriesLoaded(categories))
                         }
+                        Err(e) => web_sys::console::error_1(
+                            &format!("Failed to parse template categories: {:?}", e).into(),
+                        ),
                     },
-                    Err(e) => web_sys::console::error_1(&format!("Failed to fetch template categories: {:?}", e).into())
+                    Err(e) => web_sys::console::error_1(
+                        &format!("Failed to fetch template categories: {:?}", e).into(),
+                    ),
                 }
             });
-        },
-        Command::DeployTemplateApi { template_id, name, description } => {
+        }
+        Command::DeployTemplateApi {
+            template_id,
+            name,
+            description,
+        } => {
             wasm_bindgen_futures::spawn_local(async move {
-                match ApiClient::deploy_template(template_id, name.as_deref(), description.as_deref()).await {
+                match ApiClient::deploy_template(
+                    template_id,
+                    name.as_deref(),
+                    description.as_deref(),
+                )
+                .await
+                {
                     Ok(json_str) => {
                         match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
                             Ok(api_wf) => {
-                                let workflow: crate::models::Workflow = api_wf.into();
+                                let workflow: ApiWorkflow = api_wf;
                                 dispatch_global_message(Message::TemplateDeployed(workflow));
                             }
                             Err(e) => {
-                                web_sys::console::error_1(&format!("Failed to parse deployed workflow: {:?}", e).into());
+                                web_sys::console::error_1(
+                                    &format!("Failed to parse deployed workflow: {:?}", e).into(),
+                                );
                                 crate::toast::error("Failed to process template deployment");
                             }
                         }
@@ -698,7 +981,9 @@ pub fn execute_template_command(cmd: Command) {
                     }
                 }
             });
-        },
-        _ => web_sys::console::warn_1(&"Unexpected command type in execute_template_command".into())
+        }
+        _ => {
+            web_sys::console::warn_1(&"Unexpected command type in execute_template_command".into())
+        }
     }
 }

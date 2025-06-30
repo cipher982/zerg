@@ -1,7 +1,7 @@
-use wasm_bindgen::prelude::*;
-use web_sys::{Document, Event, HtmlInputElement};
-use wasm_bindgen::JsCast;
 use serde_json;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use web_sys::{Document, Event, HtmlInputElement};
 
 use std::collections::HashMap;
 
@@ -18,9 +18,9 @@ pub fn setup_chat_view(document: &Document) -> Result<(), JsValue> {
         let chat_container = document.create_element("div")?;
         chat_container.set_id("chat-view-container");
         chat_container.set_class_name("chat-view-container");
-        
+
         // Make chat container visible by default (E2E tests expect it)
-        
+
         // Add the chat layout structure
         chat_container.set_inner_html(r#"
             <div class="chat-header">
@@ -47,18 +47,18 @@ pub fn setup_chat_view(document: &Document) -> Result<(), JsValue> {
             <button class="send-button" data-testid="send-message-btn">Send</button>
             </div>
         "#);
-        
+
         // Add the chat container to the app container
         let app_container = document
             .get_element_by_id("app-container")
             .ok_or(JsValue::from_str("Could not find app-container"))?;
-        
+
         app_container.append_child(&chat_container)?;
-        
+
         // Setup event handlers
         setup_chat_event_handlers(document)?;
     }
-    
+
     Ok(())
 }
 
@@ -69,11 +69,12 @@ fn setup_chat_event_handlers(document: &Document) -> Result<(), JsValue> {
         let back_handler = Closure::wrap(Box::new(move |_: Event| {
             dispatch_global_message(Message::NavigateToDashboard);
         }) as Box<dyn FnMut(_)>);
-        
-        back_button.add_event_listener_with_callback("click", back_handler.as_ref().unchecked_ref())?;
+
+        back_button
+            .add_event_listener_with_callback("click", back_handler.as_ref().unchecked_ref())?;
         back_handler.forget();
     }
-    
+
     // New thread button handler
     if let Some(new_thread_btn) = document.query_selector(".new-thread-btn")? {
         let document_clone = document.clone();
@@ -81,7 +82,10 @@ fn setup_chat_event_handlers(document: &Document) -> Result<(), JsValue> {
             // ------------------------------------------------------------------
             // Minimal modal for thread title input (E2E test compatibility)
             // ------------------------------------------------------------------
-            if document_clone.get_element_by_id("new-thread-modal").is_some() {
+            if document_clone
+                .get_element_by_id("new-thread-modal")
+                .is_some()
+            {
                 return; // Already open
             }
 
@@ -106,12 +110,20 @@ fn setup_chat_event_handlers(document: &Document) -> Result<(), JsValue> {
                 let modal_clone = modal.clone();
                 let doc_for_btn = document_clone.clone();
                 let handler = Closure::wrap(Box::new(move |_: Event| {
-                    if let Some(input_el) = modal_clone.query_selector(".thread-title-input").ok().flatten() {
+                    if let Some(input_el) = modal_clone
+                        .query_selector(".thread-title-input")
+                        .ok()
+                        .flatten()
+                    {
                         let input = input_el.dyn_into::<HtmlInputElement>().unwrap();
                         let title = input.value();
 
                         // Fallback title if empty
-                        let used_title = if title.trim().is_empty() { "Untitled Thread".to_string() } else { title };
+                        let used_title = if title.trim().is_empty() {
+                            "Untitled Thread".to_string()
+                        } else {
+                            title
+                        };
 
                         // Determine current agent_id from global state
                         let mut agent_id_opt: Option<u32> = None;
@@ -134,7 +146,11 @@ fn setup_chat_event_handlers(document: &Document) -> Result<(), JsValue> {
 
                                 match ApiClient::create_agent(payload).await {
                                     Ok(json_str) => {
-                                        if let Ok(agent) = serde_json::from_str::<crate::models::ApiAgent>(&json_str) {
+                                        if let Ok(agent) =
+                                            serde_json::from_str::<crate::models::ApiAgent>(
+                                                &json_str,
+                                            )
+                                        {
                                             if let Some(new_id) = agent.id {
                                                 crate::state::APP_STATE.with(|cell| {
                                                     let mut s = cell.borrow_mut();
@@ -142,11 +158,16 @@ fn setup_chat_event_handlers(document: &Document) -> Result<(), JsValue> {
                                                     s.agents.insert(new_id, agent.clone());
                                                 });
 
-                                                dispatch_global_message(Message::CreateThread(new_id, title_clone2));
+                                                dispatch_global_message(Message::CreateThread(
+                                                    new_id,
+                                                    title_clone2,
+                                                ));
                                             }
                                         }
                                     }
-                                    Err(e) => web_sys::console::error_1(&format!("Failed to auto-create agent: {:?}", e).into()),
+                                    Err(e) => web_sys::console::error_1(
+                                        &format!("Failed to auto-create agent: {:?}", e).into(),
+                                    ),
                                 }
                             });
                         }
@@ -156,15 +177,20 @@ fn setup_chat_event_handlers(document: &Document) -> Result<(), JsValue> {
                     }
                 }) as Box<dyn FnMut(_)>);
 
-                confirm_btn.add_event_listener_with_callback("click", handler.as_ref().unchecked_ref()).unwrap();
+                confirm_btn
+                    .add_event_listener_with_callback("click", handler.as_ref().unchecked_ref())
+                    .unwrap();
                 handler.forget();
             }
         }) as Box<dyn FnMut(_)>);
-        
-        new_thread_btn.add_event_listener_with_callback("click", new_thread_handler.as_ref().unchecked_ref())?;
+
+        new_thread_btn.add_event_listener_with_callback(
+            "click",
+            new_thread_handler.as_ref().unchecked_ref(),
+        )?;
         new_thread_handler.forget();
     }
-    
+
     // Send message button handler
     if let Some(send_button) = document.query_selector(".send-button")? {
         let document_clone = document.clone();
@@ -172,7 +198,7 @@ fn setup_chat_event_handlers(document: &Document) -> Result<(), JsValue> {
             if let Some(input_el) = document_clone.query_selector(".chat-input").ok().flatten() {
                 let input = input_el.dyn_into::<HtmlInputElement>().unwrap();
                 let message = input.value();
-                
+
                 if !message.is_empty() {
                     // Request to send message to current thread
                     dispatch_global_message(Message::RequestSendMessage(message.clone()));
@@ -180,24 +206,28 @@ fn setup_chat_event_handlers(document: &Document) -> Result<(), JsValue> {
                 }
             }
         }) as Box<dyn FnMut(_)>);
-        
-        send_button.add_event_listener_with_callback("click", send_handler.as_ref().unchecked_ref())?;
+
+        send_button
+            .add_event_listener_with_callback("click", send_handler.as_ref().unchecked_ref())?;
         send_handler.forget();
     }
-    
+
     // Chat input key press handler
     if let Some(input_el) = document.query_selector(".chat-input")? {
         let document_clone = document.clone();
         let keypress_handler = Closure::wrap(Box::new(move |e: web_sys::KeyboardEvent| {
             if e.key() == "Enter" {
                 e.prevent_default();
-                
-                let input = document_clone.query_selector(".chat-input").ok().flatten()
+
+                let input = document_clone
+                    .query_selector(".chat-input")
+                    .ok()
+                    .flatten()
                     .and_then(|el| el.dyn_into::<HtmlInputElement>().ok())
                     .unwrap();
-                
+
                 let message = input.value();
-                
+
                 if !message.is_empty() {
                     // Request to send message to current thread
                     dispatch_global_message(Message::RequestSendMessage(message.clone()));
@@ -205,11 +235,14 @@ fn setup_chat_event_handlers(document: &Document) -> Result<(), JsValue> {
                 }
             }
         }) as Box<dyn FnMut(_)>);
-        
-        input_el.add_event_listener_with_callback("keypress", keypress_handler.as_ref().unchecked_ref())?;
+
+        input_el.add_event_listener_with_callback(
+            "keypress",
+            keypress_handler.as_ref().unchecked_ref(),
+        )?;
         keypress_handler.forget();
     }
-    
+
     Ok(())
 }
 
@@ -228,7 +261,7 @@ pub fn show_chat_view(document: &Document, agent_id: u32) -> Result<(), JsValue>
     if let Some(chat_view) = document.get_element_by_id("chat-view-container") {
         dom_utils::show(&chat_view);
     }
-    
+
     // Instead of accessing APP_STATE, dispatch a message to update the thread list after the DOM is ready
     let agent_id_clone = agent_id;
     let update_thread_list = Closure::once(Box::new(move || {
@@ -238,7 +271,7 @@ pub fn show_chat_view(document: &Document, agent_id: u32) -> Result<(), JsValue>
         .expect("no global window exists")
         .set_timeout_with_callback_and_timeout_and_arguments_0(
             update_thread_list.as_ref().unchecked_ref(),
-            50 // Small delay to ensure DOM is ready
+            50, // Small delay to ensure DOM is ready
         )?;
     update_thread_list.forget();
 
@@ -247,30 +280,30 @@ pub fn show_chat_view(document: &Document, agent_id: u32) -> Result<(), JsValue>
     let load_agent_info = Closure::once(Box::new(move || {
         dispatch_global_message(Message::LoadAgentInfo(agent_id_clone));
     }) as Box<dyn FnOnce()>);
-    
+
     let agent_id_clone = agent_id;
     let load_threads = Closure::once(Box::new(move || {
         dispatch_global_message(Message::LoadThreads(agent_id_clone));
     }) as Box<dyn FnOnce()>);
-    
+
     web_sys::window()
         .expect("no global window exists")
         .set_timeout_with_callback_and_timeout_and_arguments_0(
             load_agent_info.as_ref().unchecked_ref(),
-            0
+            0,
         )?;
-    
+
     web_sys::window()
         .expect("no global window exists")
         .set_timeout_with_callback_and_timeout_and_arguments_0(
             load_threads.as_ref().unchecked_ref(),
-            0
+            0,
         )?;
-    
+
     // Prevent these closures from being garbage collected
     load_agent_info.forget();
     load_threads.forget();
-    
+
     Ok(())
 }
 
@@ -288,7 +321,7 @@ pub fn update_thread_list_ui(
     document: &Document,
     threads: &[ApiThread],
     current_thread_id: Option<u32>,
-    thread_messages: &HashMap<u32, Vec<ApiThreadMessage>>
+    thread_messages: &HashMap<u32, Vec<ApiThreadMessage>>,
 ) -> Result<(), JsValue> {
     if let Some(thread_list) = document.query_selector(".thread-list").ok().flatten() {
         // Clear existing threads
@@ -306,48 +339,53 @@ pub fn update_thread_list_ui(
         // Sort threads by updated_at (newest first)
         let mut threads = threads.to_vec();
         threads.sort_by(|a, b| {
-            b.updated_at.as_ref().unwrap_or(&"".to_string())
+            b.updated_at
+                .as_ref()
+                .unwrap_or(&"".to_string())
                 .cmp(a.updated_at.as_ref().unwrap_or(&"".to_string()))
         });
-        
+
         // Create thread items
         for thread in threads {
             if let Some(thread_id) = thread.id {
                 let thread_item = document.create_element("div")?;
-                
+
                 // Add selected class if this is the current thread
                 if current_thread_id == Some(thread_id) {
                     thread_item.set_class_name("thread-item selected");
                 } else {
                     thread_item.set_class_name("thread-item");
                 }
-                
+
                 // Set data-id attribute for event handling
                 thread_item.set_attribute("data-id", &thread_id.to_string())?;
                 thread_item.set_attribute("data-testid", "thread-list-item")?;
                 thread_item.set_attribute("data-thread-id", &thread_id.to_string())?;
-                
+
                 // Add thread information
                 let title = document.create_element("div")?;
                 title.set_class_name("thread-item-title");
                 title.set_text_content(Some(&thread.title));
-                
+
                 let timestamp = document.create_element("div")?;
                 timestamp.set_class_name("thread-item-time");
-                timestamp.set_text_content(Some(
-                    &format_timestamp(thread.updated_at.as_ref().unwrap_or(&thread.created_at.clone().unwrap_or_default()))
-                ));
-                
+                timestamp.set_text_content(Some(&format_timestamp(
+                    thread
+                        .updated_at
+                        .as_ref()
+                        .unwrap_or(&thread.created_at.clone().unwrap_or_default()),
+                )));
+
                 // Add edit button for thread title
                 let edit_button = document.create_element("div")?;
                 edit_button.set_class_name("thread-edit-button");
                 edit_button.set_text_content(Some("✎"));
                 edit_button.set_attribute("aria-label", "Edit thread title")?;
-                
+
                 // Add preview of last message if available
                 let preview = document.create_element("div")?;
                 preview.set_class_name("thread-item-preview");
-                
+
                 if let Some(messages) = thread_messages.get(&thread_id) {
                     if !messages.is_empty() {
                         let last_message = messages.last().unwrap();
@@ -358,51 +396,63 @@ pub fn update_thread_list_ui(
                 } else {
                     preview.set_text_content(Some("No messages"));
                 }
-                
+
                 // Add elements to thread item
                 thread_item.append_child(&title)?;
                 thread_item.append_child(&timestamp)?;
                 thread_item.append_child(&edit_button)?;
                 thread_item.append_child(&preview)?;
-                
+
                 // Add click handler for thread selection
                 let thread_id_clone = thread_id;
                 let click_handler = Closure::wrap(Box::new(move |_: Event| {
                     dispatch_global_message(Message::SelectThread(thread_id_clone));
                 }) as Box<dyn FnMut(_)>);
-                
-                thread_item.add_event_listener_with_callback("click", click_handler.as_ref().unchecked_ref())?;
+
+                thread_item.add_event_listener_with_callback(
+                    "click",
+                    click_handler.as_ref().unchecked_ref(),
+                )?;
                 click_handler.forget();
-                
+
                 // Add edit button click handler
                 let thread_id_for_edit = thread_id;
                 let title_for_edit = thread.title.clone();
                 let edit_handler = Closure::wrap(Box::new(move |e: Event| {
                     e.stop_propagation();
-                    
+
                     // Fix the type mismatch by properly handling the Result before the Option
                     let new_title = web_sys::window()
                         .and_then(|w| {
-                            match w.prompt_with_message_and_default("Edit thread title:", &title_for_edit) {
+                            match w.prompt_with_message_and_default(
+                                "Edit thread title:",
+                                &title_for_edit,
+                            ) {
                                 Ok(Some(title)) => Some(title),
                                 _ => Some(title_for_edit.clone()), // Fall back to original title on error or cancel
                             }
                         })
                         .unwrap_or_else(|| title_for_edit.clone());
-                    
+
                     if !new_title.is_empty() {
-                        dispatch_global_message(Message::UpdateThreadTitle(thread_id_for_edit, new_title));
+                        dispatch_global_message(Message::UpdateThreadTitle(
+                            thread_id_for_edit,
+                            new_title,
+                        ));
                     }
                 }) as Box<dyn FnMut(_)>);
-                
-                edit_button.add_event_listener_with_callback("click", edit_handler.as_ref().unchecked_ref())?;
+
+                edit_button.add_event_listener_with_callback(
+                    "click",
+                    edit_handler.as_ref().unchecked_ref(),
+                )?;
                 edit_handler.forget();
-                
+
                 // Add the thread item to the list
                 thread_list.append_child(&thread_item)?;
             }
         }
-        
+
         // Enable or disable chat input based on whether a thread is selected
         if let (Some(input), Some(button)) = (
             document.query_selector(".chat-input").ok().flatten(),
@@ -429,7 +479,7 @@ pub fn update_thread_list_ui(
             }
         }
     }
-    
+
     Ok(())
 }
 
@@ -443,21 +493,28 @@ pub fn update_conversation_ui(
 ) -> Result<(), JsValue> {
     // DEBUG: Log message count and roles to help diagnose missing bubbles
     let roles: Vec<String> = messages.iter().map(|m| m.role.clone()).collect();
-    web_sys::console::log_1(&format!(
-        "[DEBUG] update_conversation_ui: {} messages, roles: {:?}",
-        messages.len(),
-        roles
-    ).into());
-    if let Some(messages_container) = document.query_selector(".messages-container").ok().flatten() {
+    web_sys::console::log_1(
+        &format!(
+            "[DEBUG] update_conversation_ui: {} messages, roles: {:?}",
+            messages.len(),
+            roles
+        )
+        .into(),
+    );
+    if let Some(messages_container) = document
+        .query_selector(".messages-container")
+        .ok()
+        .flatten()
+    {
         // Clear existing messages
         messages_container.set_inner_html("");
-        
+
         // ------------------------------------------------------------------
         // Stable chronological ordering - simplified
         // ------------------------------------------------------------------
         // Sort messages by ID (which corresponds to insertion order in the database)
         // Fall back to timestamp ordering only when IDs aren't available
-        
+
         let mut sorted_messages = messages.to_vec();
         sorted_messages.sort_by(|a, b| {
             match (a.id, b.id) {
@@ -470,27 +527,39 @@ pub fn update_conversation_ui(
                 }
             }
         });
-        
+
         // Build a map from parent_id to tool messages for grouping under the
         // originating assistant message.  We only include messages that have
         // a concrete parent_id – any *tool* messages **without** this field
         // will be rendered later as standalone bubbles so that useful output
         // is never silently dropped.
-        let mut tool_messages_by_parent: std::collections::HashMap<u32, Vec<ApiThreadMessage>> = std::collections::HashMap::new();
-        for msg in sorted_messages.iter().filter(|m| m.role == "tool" && m.parent_id.is_some()) {
+        let mut tool_messages_by_parent: std::collections::HashMap<u32, Vec<ApiThreadMessage>> =
+            std::collections::HashMap::new();
+        for msg in sorted_messages
+            .iter()
+            .filter(|m| m.role == "tool" && m.parent_id.is_some())
+        {
             // Safe to unwrap because of the filter guard.
             let pid = msg.parent_id.unwrap();
-            tool_messages_by_parent.entry(pid).or_default().push(msg.clone());
+            tool_messages_by_parent
+                .entry(pid)
+                .or_default()
+                .push(msg.clone());
         }
 
         // Display thread messages, but filter out system messages
-        for message in sorted_messages.iter().filter(|m| m.role != "system" && m.role != "tool") {
+        for message in sorted_messages
+            .iter()
+            .filter(|m| m.role != "system" && m.role != "tool")
+        {
             // DEBUG: Log each message about to be rendered
-            web_sys::console::log_1(&format!(
-                "[DEBUG] Rendering message: role={}, content={:?}",
-                message.role,
-                message.content
-            ).into());
+            web_sys::console::log_1(
+                &format!(
+                    "[DEBUG] Rendering message: role={}, content={:?}",
+                    message.role, message.content
+                )
+                .into(),
+            );
 
             // If this assistant bubble has **no textual content**, we skip
             // rendering the bubble itself.  Any tool messages that reference
@@ -523,7 +592,9 @@ pub fn update_conversation_ui(
 
             // Create the container for message bubble
             let message_element = document.create_element("div")?;
-            message_element.set_attribute("data-testid", "chat-message").ok();
+            message_element
+                .set_attribute("data-testid", "chat-message")
+                .ok();
             // Set class based on message role and type (user vs assistant)
             let class_name = if message.role == "user" {
                 "message user-message".to_string()
@@ -570,7 +641,10 @@ pub fn update_conversation_ui(
         // fall back to showing such orphaned tool outputs directly.
         // --------------------------------------------------------------
 
-        for tool_msg in sorted_messages.iter().filter(|m| m.role == "tool" && m.parent_id.is_none()) {
+        for tool_msg in sorted_messages
+            .iter()
+            .filter(|m| m.role == "tool" && m.parent_id.is_none())
+        {
             let tool_call_id = tool_msg.tool_call_id.clone().unwrap_or_default();
 
             // Determine current UI expansion preferences (default collapsed)
@@ -600,9 +674,12 @@ pub fn update_conversation_ui(
             {
                 let tcid = tool_call_id.clone();
                 let click = Closure::wrap(Box::new(move |_e: web_sys::Event| {
-                    dispatch_global_message(Message::ToggleToolExpansion { tool_call_id: tcid.clone() });
+                    dispatch_global_message(Message::ToggleToolExpansion {
+                        tool_call_id: tcid.clone(),
+                    });
                 }) as Box<dyn FnMut(_)>);
-                indicator.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
+                indicator
+                    .add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
                 click.forget();
             }
 
@@ -652,9 +729,14 @@ pub fn update_conversation_ui(
                     toggle.set_text_content(Some(more));
                     let tcid2 = tool_call_id.clone();
                     let click_more = Closure::wrap(Box::new(move |_e: web_sys::Event| {
-                        dispatch_global_message(Message::ToggleToolShowMore { tool_call_id: tcid2.clone() });
+                        dispatch_global_message(Message::ToggleToolShowMore {
+                            tool_call_id: tcid2.clone(),
+                        });
                     }) as Box<dyn FnMut(_)>);
-                    toggle.add_event_listener_with_callback("click", click_more.as_ref().unchecked_ref())?;
+                    toggle.add_event_listener_with_callback(
+                        "click",
+                        click_more.as_ref().unchecked_ref(),
+                    )?;
                     click_more.forget();
                     details.append_child(&toggle)?;
                 }
@@ -665,7 +747,7 @@ pub fn update_conversation_ui(
         // Scroll to the bottom
         messages_container.set_scroll_top(messages_container.scroll_height());
     }
-    
+
     Ok(())
 }
 
@@ -692,11 +774,16 @@ fn render_tool_message(
     }
     indicator.set_attribute("data-tool-call-id", &tool_call_id)?;
     let tool_name = tool_msg.tool_name.as_deref().unwrap_or("tool");
-    indicator.set_inner_html(&format!("🛠️ Tool Used: {} <span class=\"arrow\">▸</span>", tool_name));
+    indicator.set_inner_html(&format!(
+        "🛠️ Tool Used: {} <span class=\"arrow\">▸</span>",
+        tool_name
+    ));
     {
         let tcid = tool_call_id.clone();
         let click = Closure::wrap(Box::new(move |_e: web_sys::Event| {
-            dispatch_global_message(Message::ToggleToolExpansion { tool_call_id: tcid.clone() });
+            dispatch_global_message(Message::ToggleToolExpansion {
+                tool_call_id: tcid.clone(),
+            });
         }) as Box<dyn FnMut(_)>);
         indicator.add_event_listener_with_callback("click", click.as_ref().unchecked_ref())?;
         click.forget();
@@ -747,9 +834,12 @@ fn render_tool_message(
             toggle.set_text_content(Some(more));
             let tcid2 = tool_call_id.clone();
             let click_more = Closure::wrap(Box::new(move |_e: web_sys::Event| {
-                dispatch_global_message(Message::ToggleToolShowMore { tool_call_id: tcid2.clone() });
+                dispatch_global_message(Message::ToggleToolShowMore {
+                    tool_call_id: tcid2.clone(),
+                });
             }) as Box<dyn FnMut(_)>);
-            toggle.add_event_listener_with_callback("click", click_more.as_ref().unchecked_ref())?;
+            toggle
+                .add_event_listener_with_callback("click", click_more.as_ref().unchecked_ref())?;
             click_more.forget();
             details.append_child(&toggle)?;
         }
@@ -765,11 +855,11 @@ fn render_tool_message(
 pub fn update_thread_title(_document: &Document) -> Result<(), JsValue> {
     // Instead of accessing APP_STATE directly, dispatch a message to get the current title
     // This prevents borrowing conflicts since state access will happen in update()
-    
-    // This message will cause the update() function to get the current thread title 
+
+    // This message will cause the update() function to get the current thread title
     // and then dispatch an UpdateThreadTitleUI message
     dispatch_global_message(Message::RequestThreadTitleUpdate);
-    
+
     Ok(())
 }
 
@@ -778,7 +868,7 @@ pub fn update_thread_title_with_data(document: &Document, title: &str) -> Result
     if let Some(title_el) = document.query_selector(".thread-title-text").ok().flatten() {
         title_el.set_text_content(Some(title));
     }
-    
+
     Ok(())
 }
 
@@ -791,13 +881,13 @@ fn get_current_agent_id(state: &std::cell::Ref<crate::state::AppState>) -> Optio
             return Some(thread.agent_id);
         }
     }
-    
+
     // If no thread is selected, check if we're in chat view with an agent
     if state.active_view == ActiveView::ChatView {
         // We would need some way to store the agent ID when transitioning to chat view
         // For now, return None
     }
-    
+
     None
 }
 
@@ -807,7 +897,7 @@ fn format_timestamp(timestamp: &str) -> String {
     if timestamp.is_empty() {
         return "[Missing timestamp]".to_string();
     }
-    
+
     // Parse the timestamp (assuming ISO format)
     // In a real app, use a proper date library
     let date_parts: Vec<&str> = timestamp.split('T').collect();
@@ -817,7 +907,7 @@ fn format_timestamp(timestamp: &str) -> String {
             return format!("{} {}:{}", date_parts[0], time_parts[0], time_parts[1]);
         }
     }
-    
+
     timestamp.to_string()
 }
 

@@ -2,7 +2,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element};
 
-use crate::state::{APP_STATE};
+use crate::state::APP_STATE;
 
 /// Ensure the log drawer exists and redraw its content from `AppState`.
 pub fn refresh(document: &Document) -> Result<(), JsValue> {

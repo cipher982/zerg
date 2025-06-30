@@ -3,11 +3,11 @@ use wasm_bindgen_futures::JsFuture;
 // Individual web-sys types are imported where required – RequestMode is still
 // used in several helper methods so we keep the top-level import for
 // convenience.
-use web_sys::RequestMode;
 use super::ui_updates::flash_activity;
-use crate::constants::{DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT};
-use std::rc::Rc;
+use crate::constants::{DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH};
 use serde::Deserialize;
+use std::rc::Rc;
+use web_sys::RequestMode;
 
 #[derive(Deserialize)]
 struct TokenOut {
@@ -42,7 +42,9 @@ impl ApiClient {
                     crate::toast::info("Agent is already running. Please wait for it to finish.");
                     "Agent already running".to_string()
                 } else {
-                    crate::toast::error("That name is already taken. Please choose a different name.");
+                    crate::toast::error(
+                        "That name is already taken. Please choose a different name.",
+                    );
                     "Conflict: Resource already exists".to_string()
                 }
             }
@@ -89,7 +91,10 @@ impl ApiClient {
     pub async fn get_execution_history(workflow_id: u32, limit: u32) -> Result<String, JsValue> {
         let base = Self::api_base_url();
         // Backend currently ignores limit param but we include for forward-compat
-        let url = format!("{}/api/workflow-executions/history/{}?limit={}", base, workflow_id, limit);
+        let url = format!(
+            "{}/api/workflow-executions/history/{}?limit={}",
+            base, workflow_id, limit
+        );
         Self::fetch_json(&url, "GET", None).await
     }
 
@@ -98,7 +103,10 @@ impl ApiClient {
     // -------------------------------------------------------------------
 
     /// Schedule a workflow to run on a cron schedule
-    pub async fn schedule_workflow(workflow_id: u32, cron_expression: &str) -> Result<String, JsValue> {
+    pub async fn schedule_workflow(
+        workflow_id: u32,
+        cron_expression: &str,
+    ) -> Result<String, JsValue> {
         let url = format!(
             "{}/api/workflow-executions/{}/schedule",
             Self::api_base_url(),
@@ -242,8 +250,12 @@ impl ApiClient {
         let url = format!("{}/api/agents?scope={}", Self::api_base_url(), scope);
         let result = Self::fetch_json(&url, "GET", None).await;
         match &result {
-            Ok(json) => web_sys::console::log_1(&format!("API_CLIENT: GET /api/agents returned: {}", json).into()),
-            Err(e) => web_sys::console::error_1(&format!("API_CLIENT: GET /api/agents error: {:?}", e).into()),
+            Ok(json) => web_sys::console::log_1(
+                &format!("API_CLIENT: GET /api/agents returned: {}", json).into(),
+            ),
+            Err(e) => web_sys::console::error_1(
+                &format!("API_CLIENT: GET /api/agents error: {:?}", e).into(),
+            ),
         }
         result
     }
@@ -282,7 +294,10 @@ impl ApiClient {
     }
 
     // Add a message to an agent
-    pub async fn create_agent_message(agent_id: u32, message_data: &str) -> Result<String, JsValue> {
+    pub async fn create_agent_message(
+        agent_id: u32,
+        message_data: &str,
+    ) -> Result<String, JsValue> {
         let url = format!("{}/api/agents/{}/messages", Self::api_base_url(), agent_id);
         Self::fetch_json(&url, "POST", Some(message_data)).await
     }
@@ -342,7 +357,10 @@ impl ApiClient {
 
     pub async fn create_thread(agent_id: u32, title: &str) -> Result<String, JsValue> {
         let url = format!("{}/api/threads", Self::api_base_url());
-        let thread_data = format!("{{\"agent_id\": {}, \"title\": \"{}\", \"active\": true}}", agent_id, title);
+        let thread_data = format!(
+            "{{\"agent_id\": {}, \"title\": \"{}\", \"active\": true}}",
+            agent_id, title
+        );
         Self::fetch_json(&url, "POST", Some(&thread_data)).await
     }
 
@@ -359,14 +377,27 @@ impl ApiClient {
     }
 
     // Thread messages
-    pub async fn get_thread_messages(thread_id: u32, skip: u32, limit: u32) -> Result<String, JsValue> {
-        let url = format!("{}/api/threads/{}/messages?skip={}&limit={}", 
-                       Self::api_base_url(), thread_id, skip, limit);
+    pub async fn get_thread_messages(
+        thread_id: u32,
+        skip: u32,
+        limit: u32,
+    ) -> Result<String, JsValue> {
+        let url = format!(
+            "{}/api/threads/{}/messages?skip={}&limit={}",
+            Self::api_base_url(),
+            thread_id,
+            skip,
+            limit
+        );
         Self::fetch_json(&url, "GET", None).await
     }
 
     pub async fn create_thread_message(thread_id: u32, content: &str) -> Result<String, JsValue> {
-        let url = format!("{}/api/threads/{}/messages", Self::api_base_url(), thread_id);
+        let url = format!(
+            "{}/api/threads/{}/messages",
+            Self::api_base_url(),
+            thread_id
+        );
         let message_data = format!("{{\"role\": \"user\", \"content\": \"{}\"}}", content);
         Self::fetch_json(&url, "POST", Some(&message_data)).await
     }
@@ -388,7 +419,11 @@ impl ApiClient {
     /// can simply change the URL – call-sites remain unchanged.
     #[allow(dead_code)]
     pub async fn get_triggers(agent_id: u32) -> Result<String, JsValue> {
-        let url = format!("{}/api/triggers?agent_id={}", Self::api_base_url(), agent_id);
+        let url = format!(
+            "{}/api/triggers?agent_id={}",
+            Self::api_base_url(),
+            agent_id
+        );
         Self::fetch_json(&url, "GET", None).await
     }
 
@@ -418,7 +453,9 @@ impl ApiClient {
     pub async fn gmail_exchange_auth_code(auth_code: &str) -> Result<(), JsValue> {
         let url = format!("{}/api/auth/google/gmail", Self::api_base_url());
         let payload = format!("{{\"auth_code\": \"{}\"}}", auth_code);
-        Self::fetch_json(&url, "POST", Some(&payload)).await.map(|_| ())
+        Self::fetch_json(&url, "POST", Some(&payload))
+            .await
+            .map(|_| ())
     }
 
     // -------------------------------------------------------------------
@@ -512,8 +549,12 @@ impl ApiClient {
     }
 
     // Helper function to make fetch requests
-    pub async fn fetch_json(url: &str, method: &str, body: Option<&str>) -> Result<String, JsValue> {
-        use web_sys::{Request, RequestInit, RequestMode, Response, Headers};
+    pub async fn fetch_json(
+        url: &str,
+        method: &str,
+        body: Option<&str>,
+    ) -> Result<String, JsValue> {
+        use web_sys::{Headers, Request, RequestInit, RequestMode, Response};
 
         let opts = RequestInit::new();
         // As above, `RequestInit` methods mutate internal JS fields via
@@ -585,32 +626,53 @@ impl ApiClient {
 
     /// List MCP servers configured for an agent
     pub async fn list_mcp_servers(agent_id: u32) -> Result<String, JsValue> {
-        let url = format!("{}/api/agents/{}/mcp-servers/", Self::api_base_url(), agent_id);
+        let url = format!(
+            "{}/api/agents/{}/mcp-servers/",
+            Self::api_base_url(),
+            agent_id
+        );
         Self::fetch_json(&url, "GET", None).await
     }
 
     /// Add a new MCP server to an agent
     pub async fn add_mcp_server(agent_id: u32, server_config: &str) -> Result<String, JsValue> {
-        let url = format!("{}/api/agents/{}/mcp-servers/", Self::api_base_url(), agent_id);
+        let url = format!(
+            "{}/api/agents/{}/mcp-servers/",
+            Self::api_base_url(),
+            agent_id
+        );
         Self::fetch_json(&url, "POST", Some(server_config)).await
     }
 
     /// Remove an MCP server from an agent
     pub async fn remove_mcp_server(agent_id: u32, server_name: &str) -> Result<(), JsValue> {
-        let url = format!("{}/api/agents/{}/mcp-servers/{}", Self::api_base_url(), agent_id, server_name);
+        let url = format!(
+            "{}/api/agents/{}/mcp-servers/{}",
+            Self::api_base_url(),
+            agent_id,
+            server_name
+        );
         let _ = Self::fetch_json(&url, "DELETE", None).await?;
         Ok(())
     }
 
     /// Test connection to an MCP server
     pub async fn test_mcp_connection(agent_id: u32, test_config: &str) -> Result<String, JsValue> {
-        let url = format!("{}/api/agents/{}/mcp-servers/test", Self::api_base_url(), agent_id);
+        let url = format!(
+            "{}/api/agents/{}/mcp-servers/test",
+            Self::api_base_url(),
+            agent_id
+        );
         Self::fetch_json(&url, "POST", Some(test_config)).await
     }
 
     /// Get available tools from all MCP servers for an agent
     pub async fn get_mcp_available_tools(agent_id: u32) -> Result<String, JsValue> {
-        let url = format!("{}/api/agents/{}/mcp-servers/available-tools", Self::api_base_url(), agent_id);
+        let url = format!(
+            "{}/api/agents/{}/mcp-servers/available-tools",
+            Self::api_base_url(),
+            agent_id
+        );
         Self::fetch_json(&url, "GET", None).await
     }
 
@@ -643,10 +705,13 @@ impl ApiClient {
     // -------------------------------------------------------------------
 
     /// List workflow templates
-    pub async fn get_templates(category: Option<&str>, my_templates: bool) -> Result<String, JsValue> {
+    pub async fn get_templates(
+        category: Option<&str>,
+        my_templates: bool,
+    ) -> Result<String, JsValue> {
         let base = Self::api_base_url();
         let mut url = format!("{}/api/templates", base);
-        
+
         let mut params = Vec::new();
         if let Some(cat) = category {
             params.push(format!("category={}", cat));
@@ -654,12 +719,12 @@ impl ApiClient {
         if my_templates {
             params.push("my_templates=true".to_string());
         }
-        
+
         if !params.is_empty() {
             url.push('?');
             url.push_str(&params.join("&"));
         }
-        
+
         Self::fetch_json(&url, "GET", None).await
     }
 
@@ -676,11 +741,15 @@ impl ApiClient {
     }
 
     /// Deploy a template as a new workflow
-    pub async fn deploy_template(template_id: u32, name: Option<&str>, description: Option<&str>) -> Result<String, JsValue> {
+    pub async fn deploy_template(
+        template_id: u32,
+        name: Option<&str>,
+        description: Option<&str>,
+    ) -> Result<String, JsValue> {
         let url = format!("{}/api/templates/deploy", Self::api_base_url());
-        
+
         let mut deploy_request = format!(r#"{{"template_id": {}}}"#, template_id);
-        
+
         if name.is_some() || description.is_some() {
             let mut fields = vec![format!(r#""template_id": {}"#, template_id)];
             if let Some(n) = name {
@@ -691,7 +760,7 @@ impl ApiClient {
             }
             deploy_request = format!("{{{}}}", fields.join(", "));
         }
-        
+
         Self::fetch_json(&url, "POST", Some(&deploy_request)).await
     }
 
@@ -705,29 +774,36 @@ impl ApiClient {
         preview_image_url: Option<&str>,
     ) -> Result<String, JsValue> {
         let url = format!("{}/api/templates", Self::api_base_url());
-        
+
         let mut fields = vec![
             format!(r#""name": "{}""#, name.replace('"', r#"\""#)),
             format!(r#""category": "{}""#, category.replace('"', r#"\""#)),
             format!(r#""canvas_data": {}"#, canvas_data),
         ];
-        
+
         if let Some(desc) = description {
-            fields.push(format!(r#""description": "{}""#, desc.replace('"', r#"\""#)));
+            fields.push(format!(
+                r#""description": "{}""#,
+                desc.replace('"', r#"\""#)
+            ));
         }
-        
+
         if let Some(tag_list) = tags {
-            let tags_json = tag_list.iter()
+            let tags_json = tag_list
+                .iter()
                 .map(|t| format!(r#""{}""#, t.replace('"', r#"\""#)))
                 .collect::<Vec<_>>()
                 .join(", ");
             fields.push(format!(r#""tags": [{}]"#, tags_json));
         }
-        
+
         if let Some(img_url) = preview_image_url {
-            fields.push(format!(r#""preview_image_url": "{}""#, img_url.replace('"', r#"\""#)));
+            fields.push(format!(
+                r#""preview_image_url": "{}""#,
+                img_url.replace('"', r#"\""#)
+            ));
         }
-        
+
         let payload = format!("{{{}}}", fields.join(", "));
         Self::fetch_json(&url, "POST", Some(&payload)).await
     }
@@ -736,35 +812,45 @@ impl ApiClient {
 // Load agents from API and update state.agents
 pub fn load_agents() {
     flash_activity(); // Flash on API call
-    
+
     let api_base_url = format!("{}/api/agents", ApiClient::api_base_url());
-    
+
     // Call the API and update state
     wasm_bindgen_futures::spawn_local(async move {
         let window = web_sys::window().expect("no global window exists");
         let opts = web_sys::RequestInit::new();
         opts.set_method("GET");
         opts.set_mode(RequestMode::Cors);
-        
+
         // Create new request
         match web_sys::Request::new_with_str_and_init(&api_base_url, &opts) {
             Ok(request) => {
                 let promise = window.fetch_with_request(&request);
-                
+
                 match wasm_bindgen_futures::JsFuture::from(promise).await {
                     Ok(resp_value) => {
                         let response: web_sys::Response = resp_value.dyn_into().unwrap();
-                        
+
                         if response.ok() {
                             match response.json() {
                                 Ok(json_promise) => {
                                     match wasm_bindgen_futures::JsFuture::from(json_promise).await {
                                         Ok(json_value) => {
                                             let agents_data = json_value;
-                                            match serde_wasm_bindgen::from_value::<Vec<crate::models::ApiAgent>>(agents_data) {
+                                            match serde_wasm_bindgen::from_value::<
+                                                Vec<crate::models::ApiAgent>,
+                                            >(
+                                                agents_data
+                                            ) {
                                                 Ok(agents) => {
-                                                    web_sys::console::log_1(&format!("Loaded {} agents from API", agents.len()).into());
-                                                    
+                                                    web_sys::console::log_1(
+                                                        &format!(
+                                                            "Loaded {} agents from API",
+                                                            agents.len()
+                                                        )
+                                                        .into(),
+                                                    );
+
                                                     // Update the agents HashMap in AppState
                                                     crate::state::APP_STATE.with(|state| {
                                                         let mut state = state.borrow_mut();
@@ -801,43 +887,61 @@ pub fn load_agents() {
                                                         state.api_load_attempted = true;
                                                         state.is_loading = false;
                                                     });
-                                                    
+
                                                     // Update the UI
                                                     if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
                                                         web_sys::console::error_1(&format!("Error refreshing UI: {:?}", e).into());
                                                     }
 
                                                     // Notify the application that the dashboard data changed
-                                                    crate::state::dispatch_global_message(crate::messages::Message::RefreshDashboard);
-                                                },
+                                                    crate::state::dispatch_global_message(
+                                                        crate::messages::Message::RefreshDashboard,
+                                                    );
+                                                }
                                                 Err(e) => {
-                                                    web_sys::console::error_1(&format!("Failed to deserialize agents: {:?}", e).into());
+                                                    web_sys::console::error_1(
+                                                        &format!(
+                                                            "Failed to deserialize agents: {:?}",
+                                                            e
+                                                        )
+                                                        .into(),
+                                                    );
                                                     mark_load_attempted();
                                                 }
                                             }
-                                        },
+                                        }
                                         Err(e) => {
-                                            web_sys::console::error_1(&format!("Failed to parse response: {:?}", e).into());
+                                            web_sys::console::error_1(
+                                                &format!("Failed to parse response: {:?}", e)
+                                                    .into(),
+                                            );
                                             mark_load_attempted();
                                         }
                                     }
-                                },
+                                }
                                 Err(e) => {
-                                    web_sys::console::error_1(&format!("Failed to call json(): {:?}", e).into());
+                                    web_sys::console::error_1(
+                                        &format!("Failed to call json(): {:?}", e).into(),
+                                    );
                                     mark_load_attempted();
                                 }
                             }
                         } else {
-                            web_sys::console::error_1(&format!("API request failed with status: {}", response.status()).into());
+                            web_sys::console::error_1(
+                                &format!("API request failed with status: {}", response.status())
+                                    .into(),
+                            );
                             mark_load_attempted();
                         }
-                    },
+                    }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to fetch agents: {:?}", e).into());
+                        web_sys::console::error_1(
+                            &format!("Failed to fetch agents: {:?}", e).into(),
+                        );
                         mark_load_attempted();
                     }
                 }
-            },
+            }
             Err(e) => {
                 web_sys::console::error_1(&format!("Failed to create request: {:?}", e).into());
                 mark_load_attempted();
@@ -859,70 +963,90 @@ fn mark_load_attempted() {
 pub fn reload_agent(agent_id: u32) {
     let api_url = ApiClient::api_base_url();
     let url = format!("{}/api/agents/{}", api_url, agent_id);
-    
+
     wasm_bindgen_futures::spawn_local(async move {
         let window = web_sys::window().expect("no global window exists");
         let opts = web_sys::RequestInit::new();
         opts.set_method("GET");
         opts.set_mode(web_sys::RequestMode::Cors);
-        
+
         match web_sys::Request::new_with_str_and_init(&url, &opts) {
             Ok(request) => {
                 match JsFuture::from(window.fetch_with_request(&request)).await {
                     Ok(resp_value) => {
                         let response: web_sys::Response = resp_value.dyn_into().unwrap();
-                        
+
                         if response.ok() {
                             match response.json() {
                                 Ok(json_promise) => {
                                     match JsFuture::from(json_promise).await {
                                         Ok(json_value) => {
                                             let agent_data = json_value;
-                                            match serde_wasm_bindgen::from_value::<crate::models::ApiAgent>(agent_data) {
+                                            match serde_wasm_bindgen::from_value::<
+                                                crate::models::ApiAgent,
+                                            >(
+                                                agent_data
+                                            ) {
                                                 Ok(agent) => {
                                                     // Update the agent in the agents HashMap
-                                                        // First mutate state data
-                                                        crate::state::APP_STATE.with(|state| {
-                                                            let mut state = state.borrow_mut();
-                                                            if let Some(id) = agent.id {
-                                                                state.agents.insert(id, agent.clone());
-                                                                for (_, node) in state.nodes.iter_mut() {
-                                                                    if node.agent_id == Some(id) {
-                                                                        node.text = agent.name.clone();
-                                                                    }
+                                                    // First mutate state data
+                                                    crate::state::APP_STATE.with(|state| {
+                                                        let mut state = state.borrow_mut();
+                                                        if let Some(id) = agent.id {
+                                                            state.agents.insert(id, agent.clone());
+                                                            for (_, node) in
+                                                                state.workflow_nodes.iter_mut()
+                                                            {
+                                                                if node.get_agent_id() == Some(id) {
+                                                                    node.set_text(
+                                                                        agent.name.clone(),
+                                                                    );
                                                                 }
                                                             }
-                                                        });
+                                                        }
+                                                    });
 
-                                                        // After the previous borrow ends, mark canvas dirty via queued Message
-                                                        crate::state::dispatch_global_message(crate::messages::Message::MarkCanvasDirty);
-                                                    
+                                                    // After the previous borrow ends, mark canvas dirty via queued Message
+                                                    crate::state::dispatch_global_message(
+                                                        crate::messages::Message::MarkCanvasDirty,
+                                                    );
+
                                                     // Update the UI
                                                     if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
                                                         web_sys::console::error_1(&format!("Error refreshing UI: {:?}", e).into());
                                                     }
-                                                },
+                                                }
                                                 Err(e) => {
-                                                    web_sys::console::error_1(&format!("Failed to deserialize agent: {:?}", e).into());
+                                                    web_sys::console::error_1(
+                                                        &format!(
+                                                            "Failed to deserialize agent: {:?}",
+                                                            e
+                                                        )
+                                                        .into(),
+                                                    );
                                                 }
                                             }
-                                        },
+                                        }
                                         Err(e) => {
-                                            web_sys::console::error_1(&format!("Failed to parse json: {:?}", e).into());
+                                            web_sys::console::error_1(
+                                                &format!("Failed to parse json: {:?}", e).into(),
+                                            );
                                         }
                                     }
-                                },
+                                }
                                 Err(e) => {
-                                    web_sys::console::error_1(&format!("Failed to call json(): {:?}", e).into());
+                                    web_sys::console::error_1(
+                                        &format!("Failed to call json(): {:?}", e).into(),
+                                    );
                                 }
                             }
                         }
-                    },
+                    }
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to fetch: {:?}", e).into());
                     }
                 }
-            },
+            }
             Err(e) => {
                 web_sys::console::error_1(&format!("Failed to create request: {:?}", e).into());
             }
@@ -933,31 +1057,45 @@ pub fn reload_agent(agent_id: u32) {
 // Create nodes for agents that don't already have one
 fn create_nodes_for_agents(state: &mut crate::state::AppState) {
     // First, collect all the information we need without holding the borrow
-    let agents_to_add: Vec<(u32, String)> = state.agents.iter()
+    let agents_to_add: Vec<(u32, String)> = state
+        .agents
+        .iter()
         .filter(|(agent_id, _)| {
             // Check if there's already a node for this agent
-            !state.nodes.iter().any(|(_, node)| {
-                node.agent_id == Some(**agent_id)
-            })
+            !state
+                .workflow_nodes
+                .iter()
+                .any(|(_, node)| node.get_agent_id() == Some(**agent_id))
         })
         .map(|(agent_id, agent)| (*agent_id, agent.name.clone()))
         .collect();
-    
+
     // Calculate grid layout
     let grid_size = (agents_to_add.len() as f64).sqrt().ceil() as usize;
-    
+
     // Now add the nodes without conflicting borrows
     for (i, (agent_id, name)) in agents_to_add.into_iter().enumerate() {
         // Calculate a grid-like position for the new node
         let row = i / grid_size;
         let col = i % grid_size;
-        
+
         let x = 100.0 + (col as f64 * (DEFAULT_NODE_WIDTH + 50.0));
         let y = 100.0 + (row as f64 * (DEFAULT_NODE_HEIGHT + 70.0));
-        
-        let node_id = state.add_node_with_agent(Some(agent_id), x, y, 
-            crate::models::NodeType::AgentIdentity, name);
-        
-        web_sys::console::log_1(&format!("Created visual node with ID: {} for agent {}", node_id, agent_id).into());
+
+        let node_id = state.add_node_with_agent(
+            Some(agent_id),
+            x,
+            y,
+            crate::models::NodeType::AgentIdentity,
+            name,
+        );
+
+        web_sys::console::log_1(
+            &format!(
+                "Created visual node with ID: {} for agent {}",
+                node_id, agent_id
+            )
+            .into(),
+        );
     }
 }

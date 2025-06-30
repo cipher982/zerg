@@ -27,7 +27,9 @@ impl ApiConfig {
     /// Create a new ApiConfig from the API_BASE_URL environment variable
     pub fn new() -> Result<Self, &'static str> {
         if let Some(url) = option_env!("API_BASE_URL") {
-            Ok(Self { base_url: url.trim_end_matches('/').to_string() })
+            Ok(Self {
+                base_url: url.trim_end_matches('/').to_string(),
+            })
         } else {
             Err("API_BASE_URL environment variable is not set")
         }
@@ -35,7 +37,9 @@ impl ApiConfig {
 
     /// Create a new ApiConfig from a URL string
     pub fn from_url(url: &str) -> Self {
-        Self { base_url: url.trim_end_matches('/').to_string() }
+        Self {
+            base_url: url.trim_end_matches('/').to_string(),
+        }
     }
 
     /// Get the base URL for all API calls
@@ -58,4 +62,4 @@ impl ApiConfig {
     pub fn url(&self, path: &str) -> String {
         format!("{}/api{}", self.base_url, path)
     }
-} 
+}

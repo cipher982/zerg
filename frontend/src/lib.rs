@@ -82,7 +82,8 @@ pub fn remove_global_shortcuts(document: &web_sys::Document) {
     SHORTCUT_HANDLER.with(|cell| {
         if let Some(cb) = cell.borrow_mut().take() {
             let target: EventTarget = document.clone().into();
-            let _ = target.remove_event_listener_with_callback("keydown", cb.as_ref().unchecked_ref());
+            let _ =
+                target.remove_event_listener_with_callback("keydown", cb.as_ref().unchecked_ref());
         }
     });
 }
@@ -126,36 +127,39 @@ pub fn remove_global_shortcuts(document: &web_sys::Document) {
 //     unused_mut,
 // )]
 
+use crate::components::auth as components_auth;
+use crate::constants::{
+    ATTR_TYPE, BUTTON_TYPE_BUTTON, CSS_TAB_BUTTON, CSS_TAB_BUTTON_ACTIVE, ID_GLOBAL_CANVAS_TAB,
+    ID_GLOBAL_DASHBOARD_TAB,
+};
+use crate::state::dispatch_global_message;
+use network::ui_updates;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{window, Document};
-use network::ui_updates;
-use crate::state::dispatch_global_message;
-use crate::components::auth as components_auth;
-use crate::constants::{CSS_TAB_BUTTON, CSS_TAB_BUTTON_ACTIVE, ID_GLOBAL_CANVAS_TAB, ID_GLOBAL_DASHBOARD_TAB, BUTTON_TYPE_BUTTON, ATTR_TYPE};
 
 // Import modules
-mod models;
-mod state;
 mod canvas;
-mod ui;
-mod network;
-mod storage;
-mod components;
-mod messages;
-mod update;
-mod views;
-mod constants;
-mod thread_handlers;
 mod command_executors;
+mod components;
+mod constants;
+mod generated;
+mod messages;
+mod models;
 mod models_config;
+mod network;
 mod pages;
 mod scheduling;
-mod utils;
-mod toast;
 mod schema_validation;
-mod generated;
+mod state;
+mod storage;
+mod thread_handlers;
+mod toast;
+mod ui;
+mod update;
+mod utils;
+mod views;
 
 // ---------------------------------------------------------------------------
 // Global keyboard shortcuts
@@ -173,7 +177,9 @@ fn init_global_shortcuts(document: &Document) {
         {
             let tag = active_el.node_name();
             let is_input = tag == "INPUT" || tag == "TEXTAREA";
-            let is_editable = active_el.dyn_ref::<web_sys::HtmlElement>().map_or(false, |el| el.is_content_editable());
+            let is_editable = active_el
+                .dyn_ref::<web_sys::HtmlElement>()
+                .map_or(false, |el| el.is_content_editable());
             if is_input || is_editable {
                 // User is typing in input or editable, skip shortcuts
                 return;
@@ -181,7 +187,6 @@ fn init_global_shortcuts(document: &Document) {
         }
 
         let key = event.key();
-
 
         // ? with no modifiers → show shortcut help
         if key == "?" && !event.ctrl_key() && !event.meta_key() {
@@ -204,23 +209,35 @@ fn init_global_shortcuts(document: &Document) {
                         crate::constants::DEFAULT_AGENT_NAME,
                         (js_sys::Math::random() * 100.0).round()
                     );
-                    crate::state::dispatch_global_message(crate::messages::Message::RequestCreateAgent {
-                        name: agent_name,
-                        system_instructions: crate::constants::DEFAULT_SYSTEM_INSTRUCTIONS.to_string(),
-                        task_instructions: crate::constants::DEFAULT_TASK_INSTRUCTIONS.to_string(),
-                    });
+                    crate::state::dispatch_global_message(
+                        crate::messages::Message::RequestCreateAgent {
+                            name: agent_name,
+                            system_instructions: crate::constants::DEFAULT_SYSTEM_INSTRUCTIONS
+                                .to_string(),
+                            task_instructions: crate::constants::DEFAULT_TASK_INSTRUCTIONS
+                                .to_string(),
+                        },
+                    );
                 }
                 "r" | "R" => {
                     event.prevent_default();
                     // If focused row has data-agent-id, trigger run.
-                    if let Some(active_el) = web_sys::window().and_then(|w| w.document()).and_then(|d| d.active_element()) {
+                    if let Some(active_el) = web_sys::window()
+                        .and_then(|w| w.document())
+                        .and_then(|d| d.active_element())
+                    {
                         if let Some(agent_id_attr) = active_el.get_attribute("data-agent-id") {
                             if let Ok(agent_id) = agent_id_attr.parse::<u32>() {
                                 // Reuse ApiClient::run_agent logic (without spinner)
                                 wasm_bindgen_futures::spawn_local(async move {
-                                    match crate::network::api_client::ApiClient::run_agent(agent_id).await {
+                                    match crate::network::api_client::ApiClient::run_agent(agent_id)
+                                        .await
+                                    {
                                         Ok(_) => crate::toast::success("Agent queued to run"),
-                                        Err(e) => crate::toast::error(&format!("Failed to run agent: {:?}", e)),
+                                        Err(e) => crate::toast::error(&format!(
+                                            "Failed to run agent: {:?}",
+                                            e
+                                        )),
                                     }
                                 });
                             }
@@ -236,10 +253,10 @@ fn init_global_shortcuts(document: &Document) {
     let _ = target.add_event_listener_with_callback("keydown", keydown_cb.as_ref().unchecked_ref());
     keydown_cb.forget();
 }
-mod dom_utils;
 mod auth;
-mod ui_components;
+mod dom_utils;
 pub mod reducers;
+mod ui_components;
 
 // Export convenience macros crate-wide
 #[macro_use]
@@ -247,18 +264,21 @@ mod macros;
 
 /// Basic hash router for a handful of top-level pages.
 fn route_hash(hash: &str) {
-    use crate::storage::ActiveView;
     use crate::messages::Message;
+    use crate::storage::ActiveView;
     match hash {
-        "#/profile" => crate::state::dispatch_global_message(Message::ToggleView(ActiveView::Profile)),
-        "#/canvas" => crate::state::dispatch_global_message(Message::ToggleView(ActiveView::Canvas)),
+        "#/profile" => {
+            crate::state::dispatch_global_message(Message::ToggleView(ActiveView::Profile))
+        }
+        "#/canvas" => {
+            crate::state::dispatch_global_message(Message::ToggleView(ActiveView::Canvas))
+        }
         "#/dashboard" | "" | "#/" => {
             crate::state::dispatch_global_message(Message::ToggleView(ActiveView::Dashboard))
         }
         _ => {}
     }
 }
-
 
 // Main entry point for the WASM application
 #[wasm_bindgen(start)]
@@ -267,12 +287,17 @@ pub fn start() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
 
     // Log the API base URL for debugging
-    web_sys::console::log_1(&format!("API_BASE_URL at build: {:?}", option_env!("API_BASE_URL")).into());
+    web_sys::console::log_1(
+        &format!("API_BASE_URL at build: {:?}", option_env!("API_BASE_URL")).into(),
+    );
 
     // Initialize API configuration before any network operations
     if let Err(e) = network::init_api_config() {
         web_sys::console::error_1(&format!("Failed to initialize API config: {:?}", e).into());
-        return Err(JsValue::from_str(&format!("API config initialization failed: {}", e)));
+        return Err(JsValue::from_str(&format!(
+            "API config initialization failed: {}",
+            e
+        )));
     }
 
     // Kick off model list fetch ASAP so dropdown is populated by the time
@@ -365,7 +390,9 @@ pub fn start() -> Result<(), JsValue> {
         let client_id = info.google_client_id.as_deref().unwrap_or("");
 
         if client_id.is_empty() {
-            web_sys::console::error_1(&"Google Client ID missing but authentication is enabled".into());
+            web_sys::console::error_1(
+                &"Google Client ID missing but authentication is enabled".into(),
+            );
             return;
         }
 
@@ -383,14 +410,14 @@ pub fn start() -> Result<(), JsValue> {
 pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsValue> {
     // Create base UI elements (header and status bar)
     ui::setup::create_base_ui(document)?;
-    
+
     // --- Initialize and Connect WebSocket v2 ---
     // Access the globally initialized WS client and Topic Manager
     let (ws_client_rc, topic_manager_rc) = state::APP_STATE.with(|state_ref| {
         let state = state_ref.borrow();
         (state.ws_client.clone(), state.topic_manager.clone())
     });
-    
+
     // Setup callbacks for WebSocket
     {
         let topic_manager_clone = topic_manager_rc.clone();
@@ -401,18 +428,18 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
 
         // Set callbacks for websocket events
         setup_websocket_callbacks(&mut ws_client, topic_manager_clone.clone())?;
-        
+
         // Set initial status before attempting connection
         ui_updates::update_connection_status("Connecting", "yellow");
 
         // Initiate the connection
         if let Err(e) = ws_client.connect() {
-             web_sys::console::error_1(&format!("Initial WebSocket connect failed: {:?}", e).into());
-             // Update UI status on initial connection error
-             ui_updates::update_connection_status("Error", "red");
+            web_sys::console::error_1(&format!("Initial WebSocket connect failed: {:?}", e).into());
+            // Update UI status on initial connection error
+            ui_updates::update_connection_status("Error", "red");
         }
     } // Mutable borrow of ws_client ends here
-    
+
     // Create the tab navigation
     create_tab_navigation(&document)?;
 
@@ -430,17 +457,19 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
 
         // Install listener for subsequent changes
         if let Some(win) = web_sys::window() {
-            let closure = wasm_bindgen::closure::Closure::wrap(Box::new(move |_e: web_sys::Event| {
-                if let Ok(hash) = web_sys::window().unwrap().location().hash() {
-                    route_hash(&hash);
-                }
-            }) as Box<dyn FnMut(_)>);
+            let closure =
+                wasm_bindgen::closure::Closure::wrap(Box::new(move |_e: web_sys::Event| {
+                    if let Ok(hash) = web_sys::window().unwrap().location().hash() {
+                        route_hash(&hash);
+                    }
+                }) as Box<dyn FnMut(_)>);
 
-            let _ = win.add_event_listener_with_callback("hashchange", closure.as_ref().unchecked_ref());
+            let _ = win
+                .add_event_listener_with_callback("hashchange", closure.as_ref().unchecked_ref());
             closure.forget();
         }
     }
-    
+
     // Set up shared UI components
     ui::main::setup_ui(&document)?;
 
@@ -450,7 +479,7 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
             spinner_element.set_class_name("active");
         }
     }
-    
+
     // Initialize data loading
     initialize_data_loading();
 
@@ -461,27 +490,32 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
 
     wasm_bindgen_futures::spawn_local(async move {
         if crate::state::APP_STATE.with(|s| s.borrow().logged_in) {
-            if let Ok(profile_json) = crate::network::api_client::ApiClient::fetch_current_user().await {
-                if let Ok(user) = serde_json::from_str::<crate::models::CurrentUser>(&profile_json) {
+            if let Ok(profile_json) =
+                crate::network::api_client::ApiClient::fetch_current_user().await
+            {
+                if let Ok(user) = serde_json::from_str::<crate::models::CurrentUser>(&profile_json)
+                {
                     dispatch_global_message(crate::messages::Message::CurrentUserLoaded(user));
                 }
             }
         }
     });
-    
+
     // By default, start with dashboard view
     web_sys::console::log_1(&"Setting initial view to Dashboard".into());
-    
+
     // Set initial view to Dashboard via message dispatch (uses update+commands)
-    dispatch_global_message(crate::messages::Message::ToggleView(storage::ActiveView::Dashboard));
+    dispatch_global_message(crate::messages::Message::ToggleView(
+        storage::ActiveView::Dashboard,
+    ));
 
     Ok(())
 }
 
 // Helper function to setup WebSocket callbacks
 fn setup_websocket_callbacks(
-    ws_client: &mut network::WsClientV2, 
-    topic_manager: std::rc::Rc<std::cell::RefCell<network::TopicManager>>
+    ws_client: &mut network::WsClientV2,
+    topic_manager: std::rc::Rc<std::cell::RefCell<network::TopicManager>>,
 ) -> Result<(), JsValue> {
     // Set on_connect: Call topic_manager.resubscribe_all_topics
     let tm_on_connect = topic_manager.clone();
@@ -507,7 +541,7 @@ fn setup_websocket_callbacks(
         // Update UI status
         ui_updates::update_connection_status("Disconnected", "red");
     });
-    
+
     Ok(())
 }
 
@@ -522,16 +556,20 @@ fn initialize_data_loading() {
                 return;
             }
         };
-        let models: Vec<crate::models_config::ModelConfig> = match serde_json::from_str(&models_json) {
-            Ok(m) => m,
-            Err(e) => {
-                web_sys::console::error_1(&format!("Failed to parse models: {:?}", e).into());
-                return;
-            }
-        };
+        let models: Vec<crate::models_config::ModelConfig> =
+            match serde_json::from_str(&models_json) {
+                Ok(m) => m,
+                Err(e) => {
+                    web_sys::console::error_1(&format!("Failed to parse models: {:?}", e).into());
+                    return;
+                }
+            };
         let default_model = models.iter().find(|m| m.is_default);
         if let Some(default) = default_model {
-            let model_pairs = models.iter().map(|m| (m.id.clone(), m.display_name.clone())).collect();
+            let model_pairs = models
+                .iter()
+                .map(|m| (m.id.clone(), m.display_name.clone()))
+                .collect();
             dispatch_global_message(crate::messages::Message::SetAvailableModels {
                 models: model_pairs,
                 default_model_id: default.id.clone(),
@@ -540,7 +578,7 @@ fn initialize_data_loading() {
             web_sys::console::error_1(&"No default model found in backend response".into());
             return;
         }
-        
+
         // Load the state (this will also try to load workflows and agents)
         state::APP_STATE.with(|s| {
             let mut app_state = s.borrow_mut();
@@ -548,22 +586,25 @@ fn initialize_data_loading() {
                 web_sys::console::error_1(&format!("Error loading state: {:?}", e).into());
             }
         }); // The borrow is dropped when this block ends
-        
+
         // Canvas workflow will be loaded when user switches to Canvas tab
         state::APP_STATE.with(|state| {
             let state = state.borrow();
             // No need for default workflow creation - backend handles this
-            
+
             // If we have an agent selected in chat view, load their threads
             if state.active_view == storage::ActiveView::ChatView {
                 if let Some(agent_id) = state.agents.keys().next().cloned() {
-                    crate::state::dispatch_global_message(crate::messages::Message::LoadThreads(agent_id));
+                    crate::state::dispatch_global_message(crate::messages::Message::LoadThreads(
+                        agent_id,
+                    ));
                 }
             }
         });
-        
+
         // Set up auto-save timer
-        if let Err(e) = setup_auto_save_timer(30000) { // 30 seconds
+        if let Err(e) = setup_auto_save_timer(30000) {
+            // 30 seconds
             web_sys::console::error_1(&format!("Failed to setup auto-save: {:?}", e).into());
         }
     });
@@ -576,7 +617,7 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     let tabs_container = document.create_element("div")?;
     tabs_container.set_id("global-tabs-container");
     tabs_container.set_class_name("tabs-container");
-    
+
     // Create dashboard tab
     let dashboard_tab = document.create_element("button")?;
     dashboard_tab.set_attribute(ATTR_TYPE, BUTTON_TYPE_BUTTON)?;
@@ -584,7 +625,7 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     dashboard_tab.set_attribute("data-testid", "global-dashboard-tab")?;
     dashboard_tab.set_class_name(CSS_TAB_BUTTON_ACTIVE);
     dashboard_tab.set_inner_html("Agent Dashboard");
-    
+
     // Create canvas tab
     let canvas_tab = document.create_element("button")?;
     canvas_tab.set_attribute(ATTR_TYPE, BUTTON_TYPE_BUTTON)?;
@@ -593,46 +634,51 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     canvas_tab.set_attribute("data-testid", "global-canvas-tab")?;
     canvas_tab.set_class_name(CSS_TAB_BUTTON);
     canvas_tab.set_inner_html("Canvas Editor");
-    
+
     // Add tabs to container
     tabs_container.append_child(&dashboard_tab)?;
     tabs_container.append_child(&canvas_tab)?;
-    
+
     // Set up dashboard tab click handler
     {
         let dashboard_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
             web_sys::console::log_1(&"Dashboard tab clicked".into());
-            dispatch_global_message(messages::Message::ToggleView(storage::ActiveView::Dashboard));
+            dispatch_global_message(messages::Message::ToggleView(
+                storage::ActiveView::Dashboard,
+            ));
         }) as Box<dyn FnMut(_)>);
-        
-        dashboard_tab.add_event_listener_with_callback("click", dashboard_click.as_ref().unchecked_ref())?;
+
+        dashboard_tab
+            .add_event_listener_with_callback("click", dashboard_click.as_ref().unchecked_ref())?;
         dashboard_click.forget();
     }
-    
+
     // Set up canvas tab click handler
     {
         let canvas_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
             web_sys::console::log_1(&"Canvas tab clicked".into());
             dispatch_global_message(messages::Message::ToggleView(storage::ActiveView::Canvas));
         }) as Box<dyn FnMut(_)>);
-        
-        canvas_tab.add_event_listener_with_callback("click", canvas_click.as_ref().unchecked_ref())?;
+
+        canvas_tab
+            .add_event_listener_with_callback("click", canvas_click.as_ref().unchecked_ref())?;
         canvas_click.forget();
     }
-    
+
     // Add the tabs container to the document
-    let header = document.get_element_by_id("header")
+    let header = document
+        .get_element_by_id("header")
         .ok_or_else(|| JsValue::from_str("Header not found"))?;
     header.append_child(&tabs_container)?;
     web_sys::console::log_1(&"Tabs added to DOM".into());
-    
+
     Ok(())
 }
 
 // Set up a timer to auto-save state periodically
 fn setup_auto_save_timer(interval_ms: i32) -> Result<(), JsValue> {
     let window = window().expect("no global window exists");
-    
+
     // Create a closure that will be called by setInterval
     let auto_save_callback = Closure::wrap(Box::new(move || {
         state::APP_STATE.with(|state| {
@@ -642,17 +688,17 @@ fn setup_auto_save_timer(interval_ms: i32) -> Result<(), JsValue> {
             }
         });
     }) as Box<dyn FnMut()>);
-    
+
     // Create interval timer
     let _ = window.set_interval_with_callback_and_timeout_and_arguments(
         auto_save_callback.as_ref().unchecked_ref(),
         interval_ms,
         &js_sys::Array::new(),
     )?;
-    
+
     // Forget the closure to prevent it from being dropped
     auto_save_callback.forget();
-    
+
     Ok(())
 }
 
@@ -662,13 +708,13 @@ fn setup_auto_save_timer(interval_ms: i32) -> Result<(), JsValue> {
 pub fn debug_get_node_count() -> usize {
     crate::state::APP_STATE.with(|state| {
         let state_ref = state.borrow();
-        let count = state_ref.nodes.len();
+        let count = state_ref.workflow_nodes.len();
         web_sys::console::log_1(&format!("debug_get_node_count: found {} nodes", count).into());
-        
+
         // Log all node IDs for debugging
-        let node_ids: Vec<String> = state_ref.nodes.keys().cloned().collect();
+        let node_ids: Vec<String> = state_ref.workflow_nodes.keys().cloned().collect();
         web_sys::console::log_1(&format!("debug_get_node_count: node IDs = {:?}", node_ids).into());
-        
+
         count
     })
 }
@@ -676,8 +722,12 @@ pub fn debug_get_node_count() -> usize {
 #[wasm_bindgen]
 pub fn debug_has_trigger_node() -> bool {
     crate::state::APP_STATE.with(|state| {
-        state.borrow().nodes.values().any(|node| {
-            matches!(node.node_type, crate::models::NodeType::Trigger { .. })
+        state.borrow().workflow_nodes.values().any(|node| {
+            matches!(
+                node.node_type,
+                crate::generated::workflow::NodeType::Variant0(_)
+                    | crate::generated::workflow::NodeType::Variant1(_)
+            )
         })
     })
 }
@@ -686,11 +736,15 @@ pub fn debug_has_trigger_node() -> bool {
 pub fn debug_get_trigger_node_info() -> String {
     crate::state::APP_STATE.with(|state| {
         let state = state.borrow();
-        for node in state.nodes.values() {
-            if let crate::models::NodeType::Trigger { trigger_type, .. } = &node.node_type {
-                return format!("{{\"id\":\"{}\",\"text\":\"{}\",\"x\":{},\"y\":{},\"trigger_type\":\"{:?}\"}}", 
-                    node.node_id, node.text, node.x, node.y, trigger_type);
-            }
+        if let Some(node) = state.workflow_nodes.values().next() {
+            // Use helper methods for property access
+            return format!(
+                "{{\"id\":\"{}\",\"text\":\"{}\",\"x\":{},\"y\":{}}}",
+                node.node_id,
+                node.get_text(),
+                node.get_x(),
+                node.get_y()
+            );
         }
         "null".to_string()
     })

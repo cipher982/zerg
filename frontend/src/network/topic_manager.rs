@@ -1,11 +1,11 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use std::cell::RefCell;
 use wasm_bindgen::JsValue;
- // Ensure uuid crate is added to Cargo.toml
+// Ensure uuid crate is added to Cargo.toml
 
-use super::ws_client_v2::IWsClient; // Update import
 use super::messages::builders::{create_subscribe, create_unsubscribe};
+use super::ws_client_v2::IWsClient; // Update import
 
 /// Represents a topic string like "agent:123" or "thread:45"
 pub type Topic = String;
@@ -14,10 +14,14 @@ pub type Topic = String;
 /// Receives the "data" part of the incoming WebSocket message
 pub type TopicHandler = Rc<RefCell<dyn FnMut(serde_json::Value)>>;
 
-// --- Define the Trait --- 
+// --- Define the Trait ---
 pub trait ITopicManager {
     fn subscribe(&mut self, topic: Topic, handler: TopicHandler) -> Result<(), JsValue>;
-    fn unsubscribe_handler(&mut self, topic: &Topic, handler_to_remove: &TopicHandler) -> Result<(), JsValue>;
+    fn unsubscribe_handler(
+        &mut self,
+        topic: &Topic,
+        handler_to_remove: &TopicHandler,
+    ) -> Result<(), JsValue>;
     // Add other methods used by consumers if any (e.g., route_incoming_message if needed elsewhere)
     // fn route_incoming_message(&self, message: serde_json::Value); // Example
 }
@@ -61,7 +65,8 @@ impl TopicManager {
             self.subscribed_topics.insert(topic.clone());
 
             let msg = create_subscribe(vec![topic]);
-            let msg_json = serde_json::to_string(&msg).map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
+            let msg_json = serde_json::to_string(&msg)
+                .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
 
             match self.ws_client.try_borrow() {
                 Ok(client) => client.send_serialized_message(&msg_json)?,
@@ -81,14 +86,26 @@ impl TopicManager {
         web_sys::console::warn_1(&"Using unsubscribe by topic - this removes ALL handlers. Consider using unsubscribe_handler.".into());
         // Remove handlers only if the topic exists in our handler map
         if self.topic_handlers.remove(topic).is_some() {
-             // Only unsubscribe from the backend if we were actually subscribed
+            // Only unsubscribe from the backend if we were actually subscribed
             if self.subscribed_topics.remove(topic) {
                 self.send_unsubscribe_message(topic)?;
             } else {
-                 web_sys::console::log_1(&format!("Removed local handlers for topic {} but was not subscribed on backend.", topic).into());
+                web_sys::console::log_1(
+                    &format!(
+                        "Removed local handlers for topic {} but was not subscribed on backend.",
+                        topic
+                    )
+                    .into(),
+                );
             }
         } else {
-            web_sys::console::log_1(&format!("Attempted to unsubscribe from topic {} with no handlers.", topic).into());
+            web_sys::console::log_1(
+                &format!(
+                    "Attempted to unsubscribe from topic {} with no handlers.",
+                    topic
+                )
+                .into(),
+            );
         }
 
         Ok(())
@@ -98,29 +115,46 @@ impl TopicManager {
     ///
     /// If this was the last handler for the topic, an "unsubscribe" message is sent to the backend.
     #[allow(dead_code)]
-    pub fn unsubscribe_handler(&mut self, topic: &Topic, handler_to_remove: &TopicHandler) -> Result<(), JsValue> {
+    pub fn unsubscribe_handler(
+        &mut self,
+        topic: &Topic,
+        handler_to_remove: &TopicHandler,
+    ) -> Result<(), JsValue> {
         let mut removed = false;
         let mut topic_is_empty = false;
 
         if let Some(handlers) = self.topic_handlers.get_mut(topic) {
             // Find the position of the handler to remove using Rc pointer equality
-            if let Some(pos) = handlers.iter().position(|h| Rc::ptr_eq(h, handler_to_remove)) {
+            if let Some(pos) = handlers
+                .iter()
+                .position(|h| Rc::ptr_eq(h, handler_to_remove))
+            {
                 handlers.remove(pos);
-                web_sys::console::log_1(&format!("Removed specific handler for topic: {}", topic).into());
+                web_sys::console::log_1(
+                    &format!("Removed specific handler for topic: {}", topic).into(),
+                );
                 removed = true;
                 topic_is_empty = handlers.is_empty();
             } else {
-                 web_sys::console::warn_1(&format!("Handler not found for topic {} during unsubscribe.", topic).into());
+                web_sys::console::warn_1(
+                    &format!("Handler not found for topic {} during unsubscribe.", topic).into(),
+                );
             }
         }
 
         // If we removed a handler and the topic list is now empty, clean up the topic subscription
         if removed && topic_is_empty {
-            web_sys::console::log_1(&format!("Last handler removed for topic: {}. Cleaning up subscription.", topic).into());
+            web_sys::console::log_1(
+                &format!(
+                    "Last handler removed for topic: {}. Cleaning up subscription.",
+                    topic
+                )
+                .into(),
+            );
             self.topic_handlers.remove(topic);
             // Only send unsubscribe to backend if we were actually tracking this subscription
             if self.subscribed_topics.remove(topic) {
-                 self.send_unsubscribe_message(topic)?;
+                self.send_unsubscribe_message(topic)?;
             }
         }
 
@@ -129,13 +163,20 @@ impl TopicManager {
 
     // Helper to send the unsubscribe message
     fn send_unsubscribe_message(&self, topic: &Topic) -> Result<(), JsValue> {
-        web_sys::console::log_1(&format!("Sending unsubscribe request for topic: {}", topic).into());
+        web_sys::console::log_1(
+            &format!("Sending unsubscribe request for topic: {}", topic).into(),
+        );
         let msg = create_unsubscribe(vec![topic.clone()]);
-        let msg_json = serde_json::to_string(&msg).map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
+        let msg_json = serde_json::to_string(&msg)
+            .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
 
         match self.ws_client.try_borrow() {
             Ok(client) => client.send_serialized_message(&msg_json)?,
-            Err(_) => return Err(JsValue::from_str("Failed to borrow WsClient for unsubscribe")),
+            Err(_) => {
+                return Err(JsValue::from_str(
+                    "Failed to borrow WsClient for unsubscribe",
+                ))
+            }
         }
         Ok(())
     }
@@ -147,13 +188,24 @@ impl TopicManager {
         let topics_to_resubscribe: Vec<Topic> = self.subscribed_topics.iter().cloned().collect();
 
         if !topics_to_resubscribe.is_empty() {
-            web_sys::console::log_1(&format!("Sending resubscribe request for topics: {:?}", topics_to_resubscribe).into());
+            web_sys::console::log_1(
+                &format!(
+                    "Sending resubscribe request for topics: {:?}",
+                    topics_to_resubscribe
+                )
+                .into(),
+            );
             let msg = create_subscribe(topics_to_resubscribe);
-            let msg_json = serde_json::to_string(&msg).map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
+            let msg_json = serde_json::to_string(&msg)
+                .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
 
             match self.ws_client.try_borrow() {
                 Ok(client) => client.send_serialized_message(&msg_json)?,
-                Err(_) => return Err(JsValue::from_str("Failed to borrow WsClient for resubscribe")),
+                Err(_) => {
+                    return Err(JsValue::from_str(
+                        "Failed to borrow WsClient for resubscribe",
+                    ))
+                }
             }
         } else {
             web_sys::console::log_1(&"No topics to resubscribe.".into());
@@ -201,10 +253,13 @@ impl TopicManager {
                         // In the unlikely case `data` is not an object pass the
                         // original envelope for debugging – downstream will log
                         // an error for unmatched shape.
-                        self.dispatch_to_topic_handlers(&envelope.topic, json!({
-                            "type": envelope.r#type,
-                            "data": other,
-                        }));
+                        self.dispatch_to_topic_handlers(
+                            &envelope.topic,
+                            json!({
+                                "type": envelope.r#type,
+                                "data": other,
+                            }),
+                        );
                         return;
                     }
                 };
@@ -223,7 +278,13 @@ impl TopicManager {
                     self.dispatch_to_topic_handlers(&topic_str, message);
                 }
             } else {
-                web_sys::console::error_1(&format!("Failed to parse incoming message as Envelope or WsMessage: {:?}", message).into());
+                web_sys::console::error_1(
+                    &format!(
+                        "Failed to parse incoming message as Envelope or WsMessage: {:?}",
+                        message
+                    )
+                    .into(),
+                );
             }
         }
     }
@@ -249,10 +310,10 @@ impl TopicManager {
         use wasm_bindgen_futures::spawn_local;
 
         // 1. Clone handlers while the immutable borrow of `self` is held.
-        let handlers_cloned: Option<Vec<TopicHandler>> =
-            self.topic_handlers
-                .get(topic)
-                .map(|vec| vec.iter().cloned().collect());
+        let handlers_cloned: Option<Vec<TopicHandler>> = self
+            .topic_handlers
+            .get(topic)
+            .map(|vec| vec.iter().cloned().collect());
 
         // 2. Borrow ends here (handlers_cloned owns independent `Rc`s).
 
@@ -268,7 +329,9 @@ impl TopicManager {
                 });
             }
         } else {
-            web_sys::console::debug_1(&format!("No handlers registered for determined topic: {}", topic).into());
+            web_sys::console::debug_1(
+                &format!("No handlers registered for determined topic: {}", topic).into(),
+            );
         }
     }
 
@@ -278,14 +341,18 @@ impl TopicManager {
     }
 }
 
-// --- Implement Trait for Real TopicManager --- 
+// --- Implement Trait for Real TopicManager ---
 impl ITopicManager for TopicManager {
     fn subscribe(&mut self, topic: Topic, handler: TopicHandler) -> Result<(), JsValue> {
         // Delegate to the inherent implementation to avoid duplication.
         TopicManager::subscribe(self, topic, handler)
     }
 
-    fn unsubscribe_handler(&mut self, topic: &Topic, handler_to_remove: &TopicHandler) -> Result<(), JsValue> {
+    fn unsubscribe_handler(
+        &mut self,
+        topic: &Topic,
+        handler_to_remove: &TopicHandler,
+    ) -> Result<(), JsValue> {
         TopicManager::unsubscribe_handler(self, topic, handler_to_remove)
     }
 

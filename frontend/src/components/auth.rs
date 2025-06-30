@@ -6,16 +6,16 @@
 //! Identity library once it has loaded and forwards the *ID token* to the
 //! Rust side where we call `ApiClient::google_auth_login()`.
 
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use wasm_bindgen::closure::Closure;
-use web_sys::{HtmlElement, Element, Document};
+use web_sys::{Document, Element, HtmlElement};
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::network::api_client::ApiClient;
 use crate::messages::Message;
+use crate::network::api_client::ApiClient;
 use crate::state::dispatch_global_message;
 
 /// Called by JS when `google.accounts.id.initialize()` fires the *credential*
@@ -44,7 +44,6 @@ pub async fn google_credential_received(id_token: String) {
         }
         return;
     }
-
 
     // ---------------------------------------------------------------------
     // Step 2: Fetch the user profile & update global state
@@ -100,9 +99,7 @@ pub fn mount_login_overlay(document: &Document, client_id: &str) {
     overlay.set_class_name("login-overlay");
 
     // Container for Google button ------------------------------------------
-    let btn_holder: Element = document
-        .create_element("div")
-        .expect("create btn holder");
+    let btn_holder: Element = document.create_element("div").expect("create btn holder");
     btn_holder.set_attribute("id", "google-btn-holder").unwrap();
     overlay.append_child(&btn_holder).unwrap();
 
@@ -136,7 +133,8 @@ pub fn mount_login_overlay(document: &Document, client_id: &str) {
         if attempt_google_init(&doc_clone, &client_id_owned) {
             if let Some(id) = *interval_handle_clone.borrow() {
                 let _ = web_sys::window()
-                    .expect("window").clear_interval_with_handle(id);
+                    .expect("window")
+                    .clear_interval_with_handle(id);
             }
         }
     }) as Box<dyn FnMut()>);
@@ -200,7 +198,11 @@ fn attempt_google_init(document: &Document, client_id: &str) -> bool {
     };
 
     let init_opts = Object::new();
-    let _ = Reflect::set(&init_opts, &"client_id".into(), &JsValue::from_str(client_id));
+    let _ = Reflect::set(
+        &init_opts,
+        &"client_id".into(),
+        &JsValue::from_str(client_id),
+    );
     let _ = Reflect::set(&init_opts, &"callback".into(), credential_cb.as_ref());
 
     let _ = init_fn.call1(&id_val, &init_opts);

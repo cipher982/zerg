@@ -3,10 +3,10 @@
 //! clickable list (no true drag-and-drop yet). Clicking an agent pill dispatches a
 //! `Message::AddCanvasNode` with x = 0, y = 0 so the node is centred by existing logic.
 
+use crate::state::APP_STATE;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{Document, Element, HtmlElement, DragEvent};
-use crate::state::APP_STATE;
+use web_sys::{Document, DragEvent, Element, HtmlElement};
 
 /// Public helper that (re-)creates the Agent Shelf DOM element and appends it to the
 /// `<div id="app-container">` root if it isn't present yet.
@@ -42,10 +42,9 @@ fn create_root_element(document: &Document) -> Result<Element, JsValue> {
 
 /// Internal – clears and repopulates the shelf with the current set of agents.
 fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), JsValue> {
-    
     // Clear current children.
     shelf_el.set_inner_html("");
-    
+
     // Add header
     let header = document.create_element("div")?;
     header.set_class_name("agent-shelf-header");
