@@ -176,6 +176,79 @@ pub enum ConnectionStatus {
     Checking,
 }
 
+// ---------------------------------------------------------------------------
+// Agent-Centric State Management (NEW)
+// ---------------------------------------------------------------------------
+
+/// Complete state for a single agent, including all its threads and UI state
+#[derive(Debug, Clone)]
+pub struct AgentState {
+    /// Agent metadata from API
+    pub metadata: ApiAgent,
+    /// All threads owned by this agent
+    pub threads: HashMap<u32, ApiThread>,
+    /// Currently selected thread for this agent
+    pub current_thread_id: Option<u32>,
+    /// Messages for each thread (thread_id -> messages)
+    pub thread_messages: HashMap<u32, Vec<ApiThreadMessage>>,
+    /// Whether this agent is currently streaming
+    pub is_streaming: bool,
+    /// Active stream tracking for this agent's threads
+    pub active_streams: HashMap<u32, Option<u32>>,
+    /// Threads in token streaming mode
+    pub token_mode_threads: HashSet<u32>,
+}
+
+impl AgentState {
+    /// Create a new AgentState for the given agent
+    pub fn new(metadata: ApiAgent) -> Self {
+        Self {
+            metadata,
+            threads: HashMap::new(),
+            current_thread_id: None,
+            thread_messages: HashMap::new(),
+            is_streaming: false,
+            active_streams: HashMap::new(),
+            token_mode_threads: HashSet::new(),
+        }
+    }
+
+    /// Get all threads for this agent as a sorted vector (newest first)
+    pub fn get_threads_sorted(&self) -> Vec<&ApiThread> {
+        let mut threads: Vec<&ApiThread> = self.threads.values().collect();
+        threads.sort_by(|a, b| {
+            let a_time = a.updated_at.as_ref().or(a.created_at.as_ref()).map(|s| s.as_str()).unwrap_or("");
+            let b_time = b.updated_at.as_ref().or(b.created_at.as_ref()).map(|s| s.as_str()).unwrap_or("");
+            b_time.cmp(a_time) // Newest first
+        });
+        threads
+    }
+
+    /// Get the currently selected thread
+    pub fn current_thread(&self) -> Option<&ApiThread> {
+        self.current_thread_id.and_then(|id| self.threads.get(&id))
+    }
+
+    /// Get messages for the current thread
+    pub fn current_thread_messages(&self) -> Vec<&ApiThreadMessage> {
+        if let Some(thread_id) = self.current_thread_id {
+            self.thread_messages.get(&thread_id).map(|msgs| msgs.iter().collect()).unwrap_or_default()
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Clear all thread data (for clean navigation)
+    pub fn clear_threads(&mut self) {
+        self.threads.clear();
+        self.thread_messages.clear();
+        self.current_thread_id = None;
+        self.active_streams.clear();
+        self.token_mode_threads.clear();
+        self.is_streaming = false;
+    }
+}
+
 // Store global application state
 pub struct AppState {
     /// If true, global keyboard shortcuts (power mode) are enabled
@@ -280,11 +353,21 @@ pub struct AppState {
     pub creating_workflow: bool,
     pub deleting_workflow: Option<u32>, // workflow_id being deleted
     pub updating_workflow: Option<u32>, // workflow_id being updated
-    // Chat/Thread related state
-    pub current_thread_id: Option<u32>,
-    pub threads: HashMap<u32, ApiThread>,
-    pub thread_messages: HashMap<u32, Vec<ApiThreadMessage>>,
+    // Agent-Centric State Management
+    /// Map of agent_id -> AgentState for clean data isolation
+    pub agent_states: HashMap<u32, AgentState>,
+    /// Currently active agent for chat interface
+    pub current_agent_id: Option<u32>,
+    /// Loading state for chat interface
     pub is_chat_loading: bool,
+    
+    // DEPRECATED: Legacy compatibility fields (to be removed after full migration)
+    #[deprecated(note = "Use agent_states instead")]
+    pub current_thread_id: Option<u32>,
+    #[deprecated(note = "Use agent_states instead")]
+    pub threads: HashMap<u32, ApiThread>,
+    #[deprecated(note = "Use agent_states instead")]
+    pub thread_messages: HashMap<u32, Vec<ApiThreadMessage>>,
     // New field for handling streaming responses
     /// Tracks the **current assistant message** id for every thread that is
     /// actively streaming.  `None` means we have not yet received the
@@ -302,7 +385,6 @@ pub struct AppState {
     /// detected lazily when the first `assistant_token` chunk is observed so
     /// we can adapt placeholder/bubble logic accordingly.
     pub token_mode_threads: HashSet<u32>,
-    pub current_agent_id: Option<u32>,
 
     /// Currently selected tab inside the *Agent Configuration* modal.  Kept
     /// here so business logic can switch tabs without directly touching the
@@ -570,17 +652,22 @@ impl AppState {
             creating_workflow: false,
             deleting_workflow: None,
             updating_workflow: None,
+            
+            // Agent-Centric State
+            agent_states: HashMap::new(),
+            current_agent_id: None,
+            is_chat_loading: false,
+            
+            // DEPRECATED: Legacy compatibility fields
             current_thread_id: None,
             threads: HashMap::new(),
             thread_messages: HashMap::new(),
-            is_chat_loading: false,
             active_streams: HashMap::new(),
             ws_client: ws_client_rc,
             topic_manager: topic_manager_rc,
             streaming_threads: HashSet::new(),
 
             token_mode_threads: HashSet::new(),
-            current_agent_id: None,
 
             agent_modal_tab: AgentConfigTab::Main,
 
@@ -738,7 +825,101 @@ impl AppState {
     /// Return the assistant message id that is **currently being streamed**
     /// for the given `thread_id`, if known.
     pub fn current_assistant_id(&self, thread_id: u32) -> Option<u32> {
+        // First check agent-scoped state
+        if let Some(agent_state) = self.current_agent() {
+            if let Some(assistant_id) = agent_state.active_streams.get(&thread_id).and_then(|opt| *opt) {
+                return Some(assistant_id);
+            }
+        }
+        // Fallback to global active_streams for compatibility with existing WebSocket code
         self.active_streams.get(&thread_id).and_then(|opt| *opt)
+    }
+
+    // ---------------------------------------------------------------------------
+    // NEW: Agent-Centric Accessor Methods
+    // ---------------------------------------------------------------------------
+
+    /// Get the currently active agent state
+    pub fn current_agent(&self) -> Option<&AgentState> {
+        self.current_agent_id.and_then(|id| self.agent_states.get(&id))
+    }
+
+    /// Get the currently active agent state (mutable)
+    pub fn current_agent_mut(&mut self) -> Option<&mut AgentState> {
+        self.current_agent_id.and_then(|id| self.agent_states.get_mut(&id))
+    }
+
+    /// Get agent state by id
+    pub fn get_agent_state(&self, agent_id: u32) -> Option<&AgentState> {
+        self.agent_states.get(&agent_id)
+    }
+
+    /// Get agent state by id (mutable)
+    pub fn get_agent_state_mut(&mut self, agent_id: u32) -> Option<&mut AgentState> {
+        self.agent_states.get_mut(&agent_id)
+    }
+
+    /// Get threads for the current agent
+    pub fn current_agent_threads(&self) -> Vec<&ApiThread> {
+        self.current_agent()
+            .map(|agent| agent.get_threads_sorted())
+            .unwrap_or_default()
+    }
+
+    /// Get the current thread for the current agent
+    pub fn current_agent_current_thread(&self) -> Option<&ApiThread> {
+        self.current_agent().and_then(|agent| agent.current_thread())
+    }
+
+    /// Get messages for the current thread of the current agent
+    pub fn current_agent_current_thread_messages(&self) -> Vec<&ApiThreadMessage> {
+        self.current_agent()
+            .map(|agent| agent.current_thread_messages())
+            .unwrap_or_default()
+    }
+
+    /// Initialize or get agent state for a given agent
+    pub fn ensure_agent_state(&mut self, agent_id: u32) -> &mut AgentState {
+        if !self.agent_states.contains_key(&agent_id) {
+            // Get agent metadata from existing agents map
+            if let Some(agent_metadata) = self.agents.get(&agent_id).cloned() {
+                let agent_state = AgentState::new(agent_metadata);
+                self.agent_states.insert(agent_id, agent_state);
+            } else {
+                // Create minimal agent state if metadata not available
+                let minimal_agent = ApiAgent {
+                    id: Some(agent_id),
+                    name: format!("Agent {}", agent_id),
+                    status: Some("unknown".to_string()),
+                    system_instructions: None,
+                    task_instructions: None,
+                    model: None,
+                    temperature: None,
+                    created_at: None,
+                    updated_at: None,
+                    schedule: None,
+                    next_run_at: None,
+                    last_run_at: None,
+                    last_error: None,
+                    owner_id: None,
+                    owner: None,
+                };
+                let agent_state = AgentState::new(minimal_agent);
+                self.agent_states.insert(agent_id, agent_state);
+            }
+        }
+        self.agent_states.get_mut(&agent_id).unwrap()
+    }
+
+    /// Set the current agent and ensure its state is initialized
+    pub fn set_current_agent(&mut self, agent_id: u32) {
+        self.current_agent_id = Some(agent_id);
+        self.ensure_agent_state(agent_id);
+    }
+
+    /// Clear current agent selection
+    pub fn clear_current_agent(&mut self) {
+        self.current_agent_id = None;
     }
 
     pub fn add_node(

@@ -354,6 +354,16 @@ pub enum Message {
     CreateThread(u32, String),     // Create a new thread for an agent
     ThreadCreated(ApiThread),      // Changed String to ApiThread for direct use
     SelectThread(u32),             // Select a thread
+
+    // NEW: Agent-Scoped Thread Messages
+    /// Load threads for a specific agent (agent-scoped)
+    LoadAgentThreads(u32),
+    /// Threads loaded for a specific agent (agent-scoped)
+    AgentThreadsLoaded { agent_id: u32, threads: Vec<ApiThread> },
+    /// Select a thread within the current agent context
+    SelectAgentThread { agent_id: u32, thread_id: u32 },
+    /// Navigate to agent chat view with clean state management
+    NavigateToAgentChat(u32),
     LoadThreadMessages(u32),       // Load messages for a thread
     ThreadMessagesLoaded(u32, Vec<ApiThreadMessage>), // Changed String to Vec<ApiThreadMessage> + thread_id
     SendThreadMessage(u32, String),                   // Send a message to a thread
