@@ -4,8 +4,7 @@
 //
 use crate::models::ApiWorkflow;
 use crate::models::{
-    ApiAgent, ApiAgentDetails, ApiThread, ApiThreadMessage, NodeType, UiNodeState, WorkflowEdge,
-    WorkflowNode,
+    ApiAgent, ApiAgentDetails, ApiThread, ApiThreadMessage, NodeType,
 };
 use crate::network::messages::AgentEventData;
 use crate::storage::ActiveView;

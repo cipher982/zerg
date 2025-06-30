@@ -122,7 +122,7 @@ pub fn draw_node_text(
     x: f64,
     y: f64,
     width: f64,
-    height: f64,
+    _height: f64,
     text: &str,
 ) {
     // Removed unused import

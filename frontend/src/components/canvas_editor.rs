@@ -434,7 +434,7 @@ fn setup_canvas_mouse_events(canvas: &HtmlCanvasElement) -> Result<(), JsValue> 
                         .map(|n| n.node_type.clone())
                 });
 
-                if let Some(node_type) = node_type {
+                if let Some(_node_type) = node_type {
                     // Get the semantic type from the node
                     let semantic_type = APP_STATE.with(|state| {
                         let state = state.borrow();

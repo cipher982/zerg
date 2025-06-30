@@ -3,7 +3,6 @@
 #![allow(clippy::match_single_binding)]
 #![allow(clippy::clone_on_copy)]
 
-use serde::{Deserialize, Serialize};
 
 // Type alias for compatibility
 type WorkflowNodeType = NodeType;

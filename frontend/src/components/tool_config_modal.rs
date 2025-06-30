@@ -1,4 +1,4 @@
-use crate::models::{InputMapping, NodeType, ToolConfig, UiNodeState, WorkflowEdge, WorkflowNode};
+use crate::models::{InputMapping, NodeType, ToolConfig, WorkflowNode};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;

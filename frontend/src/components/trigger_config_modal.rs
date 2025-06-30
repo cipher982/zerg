@@ -4,7 +4,7 @@
 use crate::components::modal;
 use crate::messages::Message;
 use crate::models::{
-    NodeType, TriggerConfig, TriggerType, UiNodeState, WorkflowEdge, WorkflowNode,
+    NodeType, TriggerType, WorkflowNode,
 };
 use crate::state::dispatch_global_message;
 use wasm_bindgen::prelude::*;
