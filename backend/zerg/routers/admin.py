@@ -1,4 +1,5 @@
 import logging
+import os
 
 # FastAPI helpers
 from fastapi import APIRouter
@@ -87,6 +88,26 @@ async def reset_database():
 
         logger.info("Re-creating all tables …")
         Base.metadata.create_all(bind=engine)
+
+        # Create test user for foreign key constraints in test environment
+        if settings.testing or os.getenv("NODE_ENV") == "test":
+            from sqlalchemy import text
+
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT COUNT(*) FROM users WHERE id = 1"))
+                user_count = result.scalar()
+                if user_count == 0:
+                    logger.info("Creating test user for foreign key constraints...")
+                    conn.execute(
+                        text("""
+                        INSERT INTO users (id, email, role, is_active, provider, provider_user_id, 
+                                          display_name, created_at, updated_at)
+                        VALUES (1, 'test@example.com', 'ADMIN', 1, 'dev', 'test-user-1', 
+                               'Test User', datetime('now'), datetime('now'))
+                        """)
+                    )
+                    conn.commit()
+                    logger.info("Test user created")
 
         logger.info("Database schema reset (drop+create) complete")
 
