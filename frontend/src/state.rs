@@ -361,10 +361,6 @@ pub struct AppState {
     /// Loading state for chat interface
     pub is_chat_loading: bool,
     
-    // LEGACY: Keep for compatibility during gradual migration
-    pub current_thread_id: Option<u32>,
-    pub threads: HashMap<u32, ApiThread>,
-    pub thread_messages: HashMap<u32, Vec<ApiThreadMessage>>,
     // New field for handling streaming responses
     /// Tracks the **current assistant message** id for every thread that is
     /// actively streaming.  `None` means we have not yet received the
@@ -655,10 +651,6 @@ impl AppState {
             current_agent_id: None,
             is_chat_loading: false,
             
-            // LEGACY: Keep for compatibility during gradual migration
-            current_thread_id: None,
-            threads: HashMap::new(),
-            thread_messages: HashMap::new(),
             active_streams: HashMap::new(),
             ws_client: ws_client_rc,
             topic_manager: topic_manager_rc,
