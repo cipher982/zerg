@@ -9,7 +9,6 @@ use crate::dom_utils;
 use crate::messages::Message;
 use crate::models::{ApiThread, ApiThreadMessage};
 use crate::state::{dispatch_global_message, APP_STATE};
-use crate::storage::ActiveView;
 
 // Main function to setup the chat view
 pub fn setup_chat_view(document: &Document) -> Result<(), JsValue> {
@@ -875,20 +874,8 @@ pub fn update_thread_title_with_data(document: &Document, title: &str) -> Result
 // Helper function to get the current agent ID from the state
 #[allow(dead_code)]
 fn get_current_agent_id(state: &std::cell::Ref<crate::state::AppState>) -> Option<u32> {
-    // Get the selected agent ID based on the current thread
-    if let Some(thread_id) = state.current_thread_id {
-        if let Some(thread) = state.threads.get(&thread_id) {
-            return Some(thread.agent_id);
-        }
-    }
-
-    // If no thread is selected, check if we're in chat view with an agent
-    if state.active_view == ActiveView::ChatView {
-        // We would need some way to store the agent ID when transitioning to chat view
-        // For now, return None
-    }
-
-    None
+    // Use the new agent-centric state
+    state.current_agent_id
 }
 
 // Helper function to format timestamps

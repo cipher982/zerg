@@ -703,8 +703,10 @@ pub fn send_thread_message(text: &str, message_id: String) {
             if let Some(ws) = &state.websocket {
                 if ws.ready_state() == 1 {
                     // OPEN
-                    // Get current thread ID
-                    let thread_id = state.current_thread_id.unwrap_or(1);
+                    // Get current thread ID from agent state
+                    let thread_id = state.current_agent()
+                        .and_then(|agent| agent.current_thread_id)
+                        .unwrap_or(1);
 
                     // Create message body with correct format
                     let body_obj = js_sys::Object::new();

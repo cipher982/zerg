@@ -80,7 +80,7 @@ impl ToolName {
 
 /// Validation functions for runtime checks
 pub mod validation {
-    
+    use super::*;
     
     /// Validate that a tool name string matches a known tool
     pub fn validate_tool_name(name: &str) -> bool {
