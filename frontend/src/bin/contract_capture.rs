@@ -20,7 +20,7 @@ fn main() {
                 "description": "agent created → receive agent_event with creation data",
                 "request": {
                     "type": "websocket",
-                    "subtype": "text", 
+                    "subtype": "text",
                     "body": {
                         "type": "subscribe",
                         "topics": ["agent:123"],
@@ -59,7 +59,7 @@ fn main() {
                     "body": {
                         "v": 1,
                         "type": "agent_updated",
-                        "topic": "agent:123", 
+                        "topic": "agent:123",
                         "req_id": null,
                         "ts": 1234567890,
                         "data": {
@@ -78,7 +78,7 @@ fn main() {
                     "type": "websocket",
                     "subtype": "text",
                     "body": {
-                        "type": "subscribe", 
+                        "type": "subscribe",
                         "topics": ["agent:123"],
                         "message_id": "test-agent-3"
                     }
@@ -225,7 +225,7 @@ fn main() {
                 "response": {
                     "body": {
                         "v": 1,
-                        "type": "thread_updated", 
+                        "type": "thread_updated",
                         "topic": "thread:789",
                         "req_id": null,
                         "ts": 1234567890,
@@ -237,7 +237,7 @@ fn main() {
                 }
             },
             {
-                "description": "thread deleted → receive thread_deleted event", 
+                "description": "thread deleted → receive thread_deleted event",
                 "request": {
                     "type": "websocket",
                     "subtype": "text",

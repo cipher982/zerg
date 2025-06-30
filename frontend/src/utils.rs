@@ -1,6 +1,6 @@
 //! Utility helpers shared across the WASM frontend.
 
-use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
+use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
 /// Format a duration given in **milliseconds** into a short human-readable
 /// string such as `"1 m 23 s"` or `"12 s"`.
@@ -116,12 +116,8 @@ pub fn logout() -> Result<(), JsValue> {
         if let Some(document) = window.document() {
             // If overlay not present create it.
             if document.get_element_by_id("global-login-overlay").is_none() {
-                let client_id: String = crate::state::APP_STATE.with(|st| {
-                    st.borrow()
-                        .google_client_id
-                        .clone()
-                        .unwrap_or_default()
-                });
+                let client_id: String = crate::state::APP_STATE
+                    .with(|st| st.borrow().google_client_id.clone().unwrap_or_default());
                 crate::components::auth::mount_login_overlay(&document, &client_id);
             } else if let Some(el) = document.get_element_by_id("global-login-overlay") {
                 el.set_class_name("login-overlay");
@@ -202,7 +198,6 @@ macro_rules! debug_log {
     }};
 }
 
-
 // wasm-bindgen tests ----------------------------------------------------------
 
 #[cfg(test)]
@@ -247,7 +242,12 @@ mod tests {
         let document = window.document().unwrap();
 
         // Inject fake GOOGLE_CLIENT_ID so overlay creation works.
-        js_sys::Reflect::set(&window, &"GOOGLE_CLIENT_ID".into(), &"dummy_client_id".into()).unwrap();
+        js_sys::Reflect::set(
+            &window,
+            &"GOOGLE_CLIENT_ID".into(),
+            &"dummy_client_id".into(),
+        )
+        .unwrap();
 
         // Ensure no overlay initially
         if let Some(el) = document.get_element_by_id("global-login-overlay") {

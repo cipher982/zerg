@@ -4,8 +4,8 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element};
 
-use crate::state::{APP_STATE, dispatch_global_message};
 use crate::messages::Message;
+use crate::state::{dispatch_global_message, APP_STATE};
 
 /// Create or refresh the execution sidebar.
 /// Call after state changes that affect `executions` or visibility.
@@ -51,7 +51,7 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
             "success" => "#86efac",   // green
             "failed" => "#fca5a5",    // red
             "cancelled" => "#fcd34d", // amber
-            _ => "#e0e7ff",            // indigo
+            _ => "#e0e7ff",           // indigo
         };
         item.set_inner_html(&format!(
             "<span style=\"color:{};font-weight:600;\">{}</span> <span style=\"font-size:11px;color:#aaa;\">#{}</span>",
@@ -62,7 +62,9 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
         {
             let exec_id = exec.id;
             let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
-                dispatch_global_message(Message::SelectExecution { execution_id: exec_id });
+                dispatch_global_message(Message::SelectExecution {
+                    execution_id: exec_id,
+                });
             }));
             item.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
             cb.forget();

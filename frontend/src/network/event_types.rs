@@ -11,32 +11,32 @@ pub enum MessageType {
     Error,
     Ping,
     Pong,
-    
+
     // Generic Subscriptions (NEW)
     Subscribe,
     Unsubscribe,
     UnsubscribeSuccess,
-    
+
     // Thread messages
     SubscribeThread,
     ThreadHistory,
     ThreadMessage,
     SendMessage,
-    
+
     // Streaming messages
     StreamStart,
     StreamChunk,
     StreamEnd,
-    
+
     // System events
     SystemStatus,
-    
+
     // Agent messages
     AgentState,
-    
+
     // Model messages
     Models,
-    
+
     // Special cases
     Unknown,
 }
@@ -49,13 +49,13 @@ pub enum EventType {
     AgentCreated,
     AgentUpdated,
     AgentDeleted,
-    
+
     // Thread events
     ThreadCreated,
     ThreadUpdated,
     ThreadDeleted,
     ThreadMessageCreated,
-    
+
     // System events
     SystemStatus,
     Error,
@@ -130,7 +130,7 @@ mod tests {
         let msg_type = MessageType::ThreadMessage;
         let serialized = serde_json::to_string(&msg_type).unwrap();
         assert_eq!(serialized, "\"thread_message\"");
-        
+
         let deserialized: MessageType = serde_json::from_str(&serialized).unwrap();
         assert_eq!(deserialized, MessageType::ThreadMessage);
     }
@@ -140,7 +140,7 @@ mod tests {
         let event_type = EventType::AgentCreated;
         let serialized = serde_json::to_string(&event_type).unwrap();
         assert_eq!(serialized, "\"agent_created\"");
-        
+
         let deserialized: EventType = serde_json::from_str(&serialized).unwrap();
         assert_eq!(deserialized, EventType::AgentCreated);
     }
@@ -161,7 +161,10 @@ mod tests {
     #[test]
     fn test_event_type_display() {
         assert_eq!(EventType::AgentCreated.to_string(), "agent_created");
-        assert_eq!(EventType::ThreadMessageCreated.to_string(), "thread_message_created");
+        assert_eq!(
+            EventType::ThreadMessageCreated.to_string(),
+            "thread_message_created"
+        );
         assert_eq!(EventType::Error.to_string(), "error");
     }
-} 
+}

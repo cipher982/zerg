@@ -74,7 +74,9 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
     status_bar.append_child(&layout_status)?;
 
     // Inject into DOM
-    let body = document.body().ok_or(JsValue::from_str("No <body> element found"))?;
+    let body = document
+        .body()
+        .ok_or(JsValue::from_str("No <body> element found"))?;
     body.append_child(&header)?;
     body.append_child(&status_bar)?;
 
@@ -112,7 +114,8 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
 
         // SAFETY: `.unchecked_ref()` is safe because the closure type
         // matches the required `&Function` signature for addEventListener.
-        let _ = window.add_event_listener_with_callback("pagehide", on_pagehide.as_ref().unchecked_ref());
+        let _ = window
+            .add_event_listener_with_callback("pagehide", on_pagehide.as_ref().unchecked_ref());
 
         // Leak – see comment above.
         on_pagehide.forget();

@@ -2,9 +2,13 @@
 //
 // The events that can occur in your UI. Expand as needed.
 //
-use crate::storage::ActiveView;
-use crate::models::{NodeType, ApiThread, ApiThreadMessage, ApiAgent, ApiAgentDetails};
+use crate::models::ApiWorkflow;
+use crate::models::{
+    ApiAgent, ApiAgentDetails, ApiThread, ApiThreadMessage, NodeType, UiNodeState, WorkflowEdge,
+    WorkflowNode,
+};
 use crate::network::messages::AgentEventData;
+use crate::storage::ActiveView;
 use std::collections::{HashMap, HashSet};
 
 use crate::models::ToolConfig;
@@ -19,25 +23,33 @@ pub enum Message {
     /// Enable or disable global keyboard shortcuts (“Power Mode”)
     SetPowerMode(bool),
     // View switching
-    ToggleView(ActiveView),              // Switch between Dashboard and Canvas
-    
+    ToggleView(ActiveView), // Switch between Dashboard and Canvas
+
     // Agent management
-    CreateAgent(String),                 // Create a new agent with a given name
-    CreateAgentWithDetails {              // Enhanced version with complete details
+    CreateAgent(String), // Create a new agent with a given name
+    CreateAgentWithDetails {
+        // Enhanced version with complete details
         name: String,
-        agent_id: u32,                   // API-provided ID
+        agent_id: u32, // API-provided ID
         system_instructions: String,
         task_instructions: String,
     },
-    EditAgent(u32),                  
-    RequestAgentDeletion { agent_id: u32 },
-    AgentDeletionSuccess { agent_id: u32 }, 
-    AgentDeletionFailure { agent_id: u32, error: String },
-    
+    EditAgent(u32),
+    RequestAgentDeletion {
+        agent_id: u32,
+    },
+    AgentDeletionSuccess {
+        agent_id: u32,
+    },
+    AgentDeletionFailure {
+        agent_id: u32,
+        error: String,
+    },
+
     // Canvas generation from agents
-    GenerateCanvasFromAgents,           // Create nodes for agents that don't have one
-    
-    // Node manipulation 
+    GenerateCanvasFromAgents, // Create nodes for agents that don't have one
+
+    // Node manipulation
     UpdateNodePosition {
         node_id: String,
         x: f64,
@@ -53,7 +65,7 @@ pub enum Message {
         parent_id: String,
         response_text: String,
     },
-    
+
     // Canvas node creation (may reference an agent)
     AddCanvasNode {
         agent_id: Option<u32>,
@@ -83,9 +95,7 @@ pub enum Message {
         node_id: String,
         params: serde_json::Value,
     },
-    
 
-    
     // Workflow management
     CreateWorkflow {
         name: String,
@@ -100,27 +110,32 @@ pub enum Message {
     },
 
     // Connection creation UI
-    ToggleConnectionMode,               // Toggle connection creation mode
-    SelectNodeForConnection {           // Select a node for connection
+    ToggleConnectionMode, // Toggle connection creation mode
+    SelectNodeForConnection {
+        // Select a node for connection
         node_id: String,
     },
-    CreateConnectionFromSelected {      // Create connection from selected node to target
+    CreateConnectionFromSelected {
+        // Create connection from selected node to target
         target_node_id: String,
     },
-    ClearNodeSelection,                 // Clear current node selection
+    ClearNodeSelection, // Clear current node selection
 
     // Connection handle dragging
-    StartConnectionDrag {               // Start dragging from a connection handle
+    StartConnectionDrag {
+        // Start dragging from a connection handle
         node_id: String,
         handle_position: String,
         start_x: f64,
         start_y: f64,
     },
-    UpdateConnectionDrag {              // Update connection drag position
+    UpdateConnectionDrag {
+        // Update connection drag position
         current_x: f64,
         current_y: f64,
     },
-    EndConnectionDrag {                 // End connection drag
+    EndConnectionDrag {
+        // End connection drag
         end_x: f64,
         end_y: f64,
     },
@@ -134,12 +149,16 @@ pub enum Message {
     DeleteWorkflow {
         workflow_id: u32,
     },
-    
+
     // Loading state messages for workflow operations
     WorkflowCreationStarted,
-    WorkflowDeletionStarted { workflow_id: u32 },
-    WorkflowUpdateStarted { workflow_id: u32 },
-    
+    WorkflowDeletionStarted {
+        workflow_id: u32,
+    },
+    WorkflowUpdateStarted {
+        workflow_id: u32,
+    },
+
     // Workflow scheduling actions
     ScheduleWorkflow {
         workflow_id: u32,
@@ -153,21 +172,23 @@ pub enum Message {
     },
 
     // Workflows fetched from backend
-    WorkflowsLoaded(Vec<crate::models::Workflow>),
+    WorkflowsLoaded(Vec<ApiWorkflow>),
     /// Workflow successfully created via backend
-    WorkflowCreated(crate::models::Workflow),
-    CurrentWorkflowLoaded(crate::models::Workflow),
+    WorkflowCreated(ApiWorkflow),
+    CurrentWorkflowLoaded(ApiWorkflow),
     /// Workflow was deleted (soft delete)
-    WorkflowDeleted { workflow_id: u32 },
+    WorkflowDeleted {
+        workflow_id: u32,
+    },
     /// Workflow renamed / updated
-    WorkflowUpdated(crate::models::Workflow),
-    
+    WorkflowUpdated(ApiWorkflow),
+
     // Canvas view controls
-    ToggleAutoFit,                       // Toggle auto-fit functionality
-    CenterView,                          // Center the canvas view
-    ResetView,                           // Reset zoom =100% and pan to origin
-    ClearCanvas,                         // Clear all nodes from the canvas
-    
+    ToggleAutoFit, // Toggle auto-fit functionality
+    CenterView,    // Center the canvas view
+    ResetView,     // Reset zoom =100% and pan to origin
+    ClearCanvas,   // Clear all nodes from the canvas
+
     // Canvas zooming
     ZoomCanvas {
         new_zoom: f64,
@@ -183,15 +204,15 @@ pub enum Message {
     /// operations or bulk agent refresh from the backend.  One-way sync only
     /// (agents are the source-of-truth).
     RefreshCanvasLabels,
-    
+
     // Input handling
-    UpdateInputText(String),             // Update the input text field
+    UpdateInputText(String), // Update the input text field
 
     // Mark canvas as needing a redraw (set `dirty = true`).  Should not be
     // produced by the renderer itself – only helpers that run outside the
     // normal reducer flow and cannot obtain a mutable AppState borrow.
     MarkCanvasDirty,
-    
+
     // Dragging state
     StartDragging {
         node_id: String,
@@ -202,7 +223,7 @@ pub enum Message {
         is_agent: bool,
     },
     StopDragging,
-    
+
     // Canvas dragging
     StartCanvasDrag {
         start_x: f64,
@@ -213,9 +234,9 @@ pub enum Message {
         current_y: f64,
     },
     StopCanvasDrag,
-    
+
     // Other actions can be added as needed
-    
+
     // Modal operations
     SaveAgentDetails {
         name: String,
@@ -224,32 +245,32 @@ pub enum Message {
         model: String,
         schedule: Option<String>,
     },
-    
+
     CloseAgentModal,
-    
+
     // Task operations
     SendTaskToAgent,
-    
+
     // Tab switching in modal – use the unified variant below.
     /// Unified variant – switch to the given tab.
     SetAgentTab(crate::state::AgentConfigTab),
-    
+
     // Auto-save operations
     UpdateSystemInstructions(String),
     UpdateAgentName(String),
-    
+
     // WebSocket related messages
     UpdateNodeText {
         node_id: String,
         text: String,
         is_first_chunk: bool,
     },
-    
+
     CompleteNodeResponse {
         node_id: String,
         final_text: String,
     },
-    
+
     UpdateNodeStatus {
         node_id: String,
         status: String,
@@ -273,7 +294,6 @@ pub enum Message {
     // ------------------------------------------------------------------
     // Execution history / right-hand sidebar
     // ------------------------------------------------------------------
-
     /// Toggle the execution history drawer
     ToggleExecutionHistory,
 
@@ -302,7 +322,7 @@ pub enum Message {
     ReserveWorkflowExecution {
         workflow_id: u32,
     },
-    
+
     /// Start a previously reserved execution
     StartReservedExecution {
         execution_id: u32,
@@ -316,67 +336,85 @@ pub enum Message {
         execution_id: u32,
     },
 
-
     // Toggle / change dashboard sort
     UpdateDashboardSort(crate::state::DashboardSortKey),
-    
+
     // Database management
-    ResetDatabase,                      // Clear all agent data from database
-    
+    ResetDatabase, // Clear all agent data from database
+
     // Reload agents from the API to refresh state
     RefreshAgentsFromAPI,
-    AgentsRefreshed(Vec<ApiAgent>),    // Agents have been refreshed from API
-    
+    AgentsRefreshed(Vec<ApiAgent>), // Agents have been refreshed from API
+
     // Animation related
     AnimationTick,
-    
+
     // Thread-related messages
-    LoadThreads(u32),                // Load threads for an agent
+    LoadThreads(u32),                                 // Load threads for an agent
     ThreadsLoaded(Vec<ApiThread>), // Changed String to Vec<ApiThread> for direct use
-    CreateThread(u32, String),       // Create a new thread for an agent
-    ThreadCreated(ApiThread),        // Changed String to ApiThread for direct use
-    SelectThread(u32),               // Select a thread
-    LoadThreadMessages(u32),         // Load messages for a thread
+    CreateThread(u32, String),     // Create a new thread for an agent
+    ThreadCreated(ApiThread),      // Changed String to ApiThread for direct use
+    SelectThread(u32),             // Select a thread
+    LoadThreadMessages(u32),       // Load messages for a thread
     ThreadMessagesLoaded(u32, Vec<ApiThreadMessage>), // Changed String to Vec<ApiThreadMessage> + thread_id
-    SendThreadMessage(u32, String),  // Send a message to a thread
-    ThreadMessageSent(String, String),  // Message sent response with client_id
-    ThreadMessageFailed(u32, String), // Message failed to send with client_id
-    UpdateThreadTitle(u32, String),  // Update thread title (request)
-    DeleteThread(u32),               // Delete thread
-    
+    SendThreadMessage(u32, String),                   // Send a message to a thread
+    ThreadMessageSent(String, String),                // Message sent response with client_id
+    ThreadMessageFailed(u32, String),                 // Message failed to send with client_id
+    UpdateThreadTitle(u32, String),                   // Update thread title (request)
+    DeleteThread(u32),                                // Delete thread
+
     // --- NEW WebSocket Received Messages ---
     ReceiveNewMessage(ApiThreadMessage), // New message received via WebSocket
-    ReceiveThreadUpdate {              // Thread metadata updated via WebSocket
+    ReceiveThreadUpdate {
+        // Thread metadata updated via WebSocket
         thread_id: u32,
         title: Option<String>,
     },
 
     // ---------------- Run History (AgentRun) ----------------
     /// Request to load the latest runs for an agent (REST call)
-    LoadAgentRuns(u32),               // agent_id
+    LoadAgentRuns(u32), // agent_id
     /// Response containing latest runs list
-    ReceiveAgentRuns { agent_id: u32, runs: Vec<crate::models::ApiAgentRun> },
+    ReceiveAgentRuns {
+        agent_id: u32,
+        runs: Vec<crate::models::ApiAgentRun>,
+    },
     /// Real-time update for a single run via WebSocket
-
-    ReceiveRunUpdate { agent_id: u32, run: crate::models::ApiAgentRun },
+    ReceiveRunUpdate {
+        agent_id: u32,
+        run: crate::models::ApiAgentRun,
+    },
 
     // -------------------------------------------------------------------
     // Trigger management (Phase A)
     // -------------------------------------------------------------------
     /// Request the list of triggers for an agent (REST call)
-    LoadTriggers(u32),                 // agent_id
+    LoadTriggers(u32), // agent_id
     /// Response containing current triggers
-    TriggersLoaded { agent_id: u32, triggers: Vec<crate::models::Trigger> },
+    TriggersLoaded {
+        agent_id: u32,
+        triggers: Vec<crate::models::Trigger>,
+    },
     /// A trigger was created via the modal wizard
-    TriggerCreated { agent_id: u32, trigger: crate::models::Trigger },
+    TriggerCreated {
+        agent_id: u32,
+        trigger: crate::models::Trigger,
+    },
     /// A trigger was deleted (list should refresh)
-    TriggerDeleted { agent_id: u32, trigger_id: u32 },
+    TriggerDeleted {
+        agent_id: u32,
+        trigger_id: u32,
+    },
 
     /// User requested to create a new trigger (UI ➜ update ➜ REST)
-    RequestCreateTrigger { payload_json: String },
+    RequestCreateTrigger {
+        payload_json: String,
+    },
 
     /// User clicked delete on a trigger row.
-    RequestDeleteTrigger { trigger_id: u32 },
+    RequestDeleteTrigger {
+        trigger_id: u32,
+    },
 
     // -------------------------------------------------------------------
     // Gmail OAuth flow (Phase C)
@@ -385,50 +423,64 @@ pub enum Message {
     GmailConnected,
 
     /// Toggle between compact (first 5) and full run list for an agent row
-    ToggleRunHistory { agent_id: u32 },
+    ToggleRunHistory {
+        agent_id: u32,
+    },
 
     // -------------------------------------------------------------------
     // Dashboard filtering (My vs All agents)
     // -------------------------------------------------------------------
     ToggleDashboardScope(crate::state::DashboardScope),
-    ReceiveStreamStart(u32),          // Start of streaming response for thread_id
-    ReceiveStreamChunk {               // Chunk of streaming response
+    ReceiveStreamStart(u32), // Start of streaming response for thread_id
+    ReceiveStreamChunk {
+        // Chunk of streaming response
         thread_id: u32,
         content: String,
-        chunk_type: Option<String>,    // "tool_output" or "assistant_message"
+        chunk_type: Option<String>, // "tool_output" or "assistant_message"
         tool_name: Option<String>,
         tool_call_id: Option<String>,
         message_id: Option<String>,
     },
-    ReceiveStreamEnd(u32),            // End of streaming response for thread_id
+    ReceiveStreamEnd(u32), // End of streaming response for thread_id
     /// The backend sent the id of the assistant bubble currently being
     /// streamed (token mode).  Enables correct parent-linking of tool_output
     /// messages.
-    ReceiveAssistantId { thread_id: u32, message_id: u32 },
+    ReceiveAssistantId {
+        thread_id: u32,
+        message_id: u32,
+    },
     /// Toggle collapse/expand of a tool call indicator
-    ToggleToolExpansion { tool_call_id: String },
+    ToggleToolExpansion {
+        tool_call_id: String,
+    },
     /// Toggle show full vs truncated tool output for a tool call
-    ToggleToolShowMore { tool_call_id: String },
+    ToggleToolShowMore {
+        tool_call_id: String,
+    },
     // Using UpdateConversation for thread history
     // --- END NEW WebSocket Received Messages ---
 
     // Navigation messages
-    NavigateToChatView(u32),         // Navigate to chat view with agent
-    NavigateToThreadView(u32),       // Navigate to specific thread
-    NavigateToDashboard,             // Back to dashboard
-    
+    NavigateToChatView(u32),   // Navigate to chat view with agent
+    NavigateToThreadView(u32), // Navigate to specific thread
+    NavigateToDashboard,       // Back to dashboard
+
     // Chat view messages
-    LoadAgentInfo(u32),                    // Request to load agent info
-    AgentInfoLoaded(Box<ApiAgent>),        // Changed String to Box<ApiAgent>
-    RequestNewThread,                      // Request to create new thread
-    RequestSendMessage(String),            // Request to send message
-    RequestUpdateThreadTitle(String),      // Request to update thread title
-    RequestThreadTitleUpdate,              // Request to refresh thread title UI
-    RequestThreadListUpdate(u32),          // Request to update thread list for agent
-    UpdateThreadList(Vec<ApiThread>, Option<u32>, HashMap<u32, Vec<ApiThreadMessage>>),  // Update thread list UI
-    UpdateConversation(Vec<ApiThreadMessage>),  // Update conversation UI
-    UpdateThreadTitleUI(String),           // Update thread title UI with provided title
-    UpdateLoadingState(bool),              // Update loading state in UI
+    LoadAgentInfo(u32),               // Request to load agent info
+    AgentInfoLoaded(Box<ApiAgent>),   // Changed String to Box<ApiAgent>
+    RequestNewThread,                 // Request to create new thread
+    RequestSendMessage(String),       // Request to send message
+    RequestUpdateThreadTitle(String), // Request to update thread title
+    RequestThreadTitleUpdate,         // Request to refresh thread title UI
+    RequestThreadListUpdate(u32),     // Request to update thread list for agent
+    UpdateThreadList(
+        Vec<ApiThread>,
+        Option<u32>,
+        HashMap<u32, Vec<ApiThreadMessage>>,
+    ), // Update thread list UI
+    UpdateConversation(Vec<ApiThreadMessage>), // Update conversation UI
+    UpdateThreadTitleUI(String),      // Update thread title UI with provided title
+    UpdateLoadingState(bool),         // Update loading state in UI
 
     // Force a redraw of the Dashboard table after agents have been reloaded
     RefreshDashboard,
@@ -440,9 +492,10 @@ pub enum Message {
     // -------------------------------------------------------------------
     // Agent Debug / Info Modal (Phase 1)
     // -------------------------------------------------------------------
-
     /// Open the read-only debug modal for the specified agent.
-    ShowAgentDebugModal { agent_id: u32 },
+    ShowAgentDebugModal {
+        agent_id: u32,
+    },
     /// Close/hide the debug modal.
     HideAgentDebugModal,
     /// Backend payload with full AgentDetails has arrived.
@@ -452,7 +505,9 @@ pub enum Message {
     SetAgentDebugTab(crate::state::DebugTab),
 
     // Add the DeleteAgentApi command inside the enum
-    DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion
+    DeleteAgentApi {
+        agent_id: u32,
+    }, // Command to execute the API call for deletion
 
     // -------------------------------------------------------------------
     // Authentication / User profile
@@ -474,65 +529,69 @@ pub enum Message {
     },
 
     // Dashboard-specific actions for error rows
-    RetryAgentTask { agent_id: u32 },
-    DismissAgentError { agent_id: u32 },
+    RetryAgentTask {
+        agent_id: u32,
+    },
+    DismissAgentError {
+        agent_id: u32,
+    },
 
     // -------------------------------------------------------------------
     // MCP Integration Messages
     // -------------------------------------------------------------------
     /// Load available MCP tools for an agent
     LoadMcpTools(u32), // agent_id
-    
+
     /// Received available MCP tools
     McpToolsLoaded {
         agent_id: u32,
         builtin_tools: Vec<String>,
         mcp_tools: HashMap<String, Vec<crate::state::McpToolInfo>>,
     },
-    
+
     /// Add an MCP server to an agent
     AddMcpServer {
         agent_id: u32,
         server_config: crate::state::McpServerConfig,
     },
-    
+
     /// Remove an MCP server from an agent
     RemoveMcpServer {
         agent_id: u32,
         server_name: String,
     },
-    
+
     /// Test MCP server connection
     TestMcpConnection {
         agent_id: u32,
         server_config: crate::state::McpServerConfig,
     },
-    
+
     /// MCP connection test result
     McpConnectionTested {
         agent_id: u32,
         server_name: String,
         status: crate::state::ConnectionStatus,
     },
-    
+
     /// Update allowed tools for an agent
     UpdateAllowedTools {
         agent_id: u32,
         allowed_tools: HashSet<String>,
     },
-    
+
     /// MCP server was successfully added
     McpServerAdded {
         agent_id: u32,
         server_name: String,
     },
-    
+
     /// MCP server was successfully removed
     McpServerRemoved {
         agent_id: u32,
         server_name: String,
     },
-    
+
     /// Error occurred with MCP operation
     McpError {
         agent_id: u32,
@@ -576,20 +635,30 @@ pub enum Message {
     },
 
     // Particle System Messages
-    InitializeParticleSystem { width: f64, height: f64 },
+    InitializeParticleSystem {
+        width: f64,
+        height: f64,
+    },
     ClearParticleSystem,
 
     // Template Gallery Messages
     ShowTemplateGallery,
     HideTemplateGallery,
-    LoadTemplates { category: Option<String>, my_templates: bool },
+    LoadTemplates {
+        category: Option<String>,
+        my_templates: bool,
+    },
     TemplatesLoaded(Vec<crate::models::WorkflowTemplate>),
     LoadTemplateCategories,
     TemplateCategoriesLoaded(Vec<String>),
     SetTemplateCategory(Option<String>),
     ToggleMyTemplatesOnly,
-    DeployTemplate { template_id: u32, name: String, description: String },
-    TemplateDeployed(crate::models::Workflow),
+    DeployTemplate {
+        template_id: u32,
+        name: String,
+        description: String,
+    },
+    TemplateDeployed(ApiWorkflow),
 }
 
 /// Commands represent side effects that should be executed after state updates.
@@ -597,13 +666,13 @@ pub enum Message {
 pub enum Command {
     /// Chain another message to be processed
     SendMessage(Message),
-    
+
     /// Execute a UI update function after state changes
     UpdateUI(Box<dyn FnOnce() + 'static>),
-    
+
     /// Fetch threads for an agent
     FetchThreads(u32), // agent_id
-    
+
     /// Fetch messages for a thread
     FetchThreadMessages(u32), // thread_id
 
@@ -614,11 +683,17 @@ pub enum Command {
     FetchCurrentWorkflow,
 
     /// Fetch execution history for workflow
-    FetchExecutionHistory { workflow_id: u32 },
+    FetchExecutionHistory {
+        workflow_id: u32,
+    },
 
     // Workflow CRUD actions
-    CreateWorkflowApi { name: String },
-    DeleteWorkflowApi { workflow_id: u32 },
+    CreateWorkflowApi {
+        name: String,
+    },
+    DeleteWorkflowApi {
+        workflow_id: u32,
+    },
     RenameWorkflowApi {
         workflow_id: u32,
         name: String,
@@ -627,21 +702,34 @@ pub enum Command {
 
     // ---------------- Workflow execution -----------------------------
     /// POST /workflow-executions/{workflow_id}/start
-    StartWorkflowExecutionApi { workflow_id: u32 },
-    
+    StartWorkflowExecutionApi {
+        workflow_id: u32,
+    },
+
     /// POST /workflow-executions/{workflow_id}/reserve
-    ReserveWorkflowExecutionApi { workflow_id: u32 },
-    
+    ReserveWorkflowExecutionApi {
+        workflow_id: u32,
+    },
+
     /// POST /workflow-executions/executions/{execution_id}/start
-    StartReservedExecutionApi { execution_id: u32 },
+    StartReservedExecutionApi {
+        execution_id: u32,
+    },
 
     // ---------------- Workflow scheduling -----------------------------
     /// POST /workflow-executions/{workflow_id}/schedule
-    ScheduleWorkflowApi { workflow_id: u32, cron_expression: String },
+    ScheduleWorkflowApi {
+        workflow_id: u32,
+        cron_expression: String,
+    },
     /// DELETE /workflow-executions/{workflow_id}/schedule
-    UnscheduleWorkflowApi { workflow_id: u32 },
+    UnscheduleWorkflowApi {
+        workflow_id: u32,
+    },
     /// GET /workflow-executions/{workflow_id}/schedule
-    CheckWorkflowScheduleApi { workflow_id: u32 },
+    CheckWorkflowScheduleApi {
+        workflow_id: u32,
+    },
 
     // ---------------------------------------------------------------
     // Trigger-related side-effect commands (Phase A wiring only)
@@ -649,33 +737,35 @@ pub enum Command {
     /// Fetch triggers for the specified agent id.
     FetchTriggers(u32),
     /// Perform POST /triggers with given JSON payload.
-    CreateTrigger { payload_json: String },
+    CreateTrigger {
+        payload_json: String,
+    },
     /// DELETE /triggers/{id}
     DeleteTrigger(u32), // trigger_id
-    
+
     /// Create a new thread
     CreateThread {
         agent_id: u32,
         title: String,
     },
-    
+
     /// Send a message to a thread
     SendThreadMessage {
         thread_id: u32,
         content: String,
         client_id: Option<u32>,
     },
-    
+
     /// Run a thread to process messages
     #[allow(dead_code)]
     RunThread(u32), // thread_id
-    
+
     /// Update thread title
     UpdateThreadTitle {
         thread_id: u32,
         title: String,
     },
-    
+
     /// Update an agent
     UpdateAgent {
         agent_id: u32,
@@ -683,11 +773,11 @@ pub enum Command {
         on_success: Box<Message>,
         on_error: Box<Message>,
     },
-    
+
     /// Load agent info
     #[allow(dead_code)]
     LoadAgentInfo(u32),
-    
+
     /// Generic network call
     NetworkCall {
         endpoint: String,
@@ -696,7 +786,7 @@ pub enum Command {
         on_success: Box<Message>,
         on_error: Box<Message>,
     },
-    
+
     /// WebSocket operation
     #[allow(dead_code)]
     WebSocketAction {
@@ -704,10 +794,10 @@ pub enum Command {
         topic: Option<String>,
         data: Option<String>,
     },
-    
+
     /// Represents no side effect
     NoOp,
-    
+
     // Template Gallery Messages
     LoadTemplates {
         category: Option<String>,
@@ -725,12 +815,14 @@ pub enum Command {
         name: Option<String>,
         description: Option<String>,
     },
-    TemplateDeployed(crate::models::Workflow),
-    
-    // Add the DeleteAgentApi command inside the enum
-    DeleteAgentApi { agent_id: u32 }, // Command to execute the API call for deletion
+    TemplateDeployed(ApiWorkflow),
 
-    FetchAgents,                     // Command to fetch agents from API
+    // Add the DeleteAgentApi command inside the enum
+    DeleteAgentApi {
+        agent_id: u32,
+    }, // Command to execute the API call for deletion
+
+    FetchAgents, // Command to fetch agents from API
 
     /// Fetch visual workflows from backend
     /// Fetch detailed debug info for an agent
@@ -767,16 +859,16 @@ impl Command {
     pub fn none() -> Self {
         Command::NoOp
     }
-    
+
     /// Helper to create an UpdateUI command
     #[allow(dead_code)]
-    pub fn update_ui<F>(f: F) -> Self 
-    where 
-        F: FnOnce() + 'static 
+    pub fn update_ui<F>(f: F) -> Self
+    where
+        F: FnOnce() + 'static,
     {
         Command::UpdateUI(Box::new(f))
     }
-    
+
     /// Helper to create a NetworkCall command
     #[allow(dead_code)]
     pub fn network_call(
@@ -784,7 +876,7 @@ impl Command {
         method: String,
         body: Option<String>,
         on_success: Message,
-        on_error: Message
+        on_error: Message,
     ) -> Self {
         Command::NetworkCall {
             endpoint,

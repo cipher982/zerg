@@ -4,7 +4,7 @@
 
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{Document, HtmlInputElement, HtmlElement};
+use web_sys::{Document, HtmlElement, HtmlInputElement};
 
 use crate::state::APP_STATE;
 
@@ -128,16 +128,23 @@ pub fn mount_profile(document: &Document) -> Result<(), JsValue> {
 
             // Make async API call
             wasm_bindgen_futures::spawn_local(async move {
-                match crate::network::api_client::ApiClient::update_current_user(&patch_json).await {
+                match crate::network::api_client::ApiClient::update_current_user(&patch_json).await
+                {
                     Ok(resp_json) => {
-                        if let Ok(user) = serde_json::from_str::<crate::models::CurrentUser>(&resp_json) {
-                            crate::state::dispatch_global_message(crate::messages::Message::CurrentUserLoaded(user));
+                        if let Ok(user) =
+                            serde_json::from_str::<crate::models::CurrentUser>(&resp_json)
+                        {
+                            crate::state::dispatch_global_message(
+                                crate::messages::Message::CurrentUserLoaded(user),
+                            );
                             // Optionally show a toast
                             crate::network::ui_updates::flash_activity();
                         }
                     }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to save profile: {:?}", e).into());
+                        web_sys::console::error_1(
+                            &format!("Failed to save profile: {:?}", e).into(),
+                        );
                     }
                 }
             });

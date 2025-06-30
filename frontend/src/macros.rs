@@ -19,8 +19,7 @@ macro_rules! mut_borrow {
     ($cell:expr) => {
         // The explicit expect message is important – default panic is hard
         // to trace when it bubbles up from deep inside borrowed call-stacks.
-        $cell
-            .borrow_mut()
+        $cell.borrow_mut()
     };
 }
 

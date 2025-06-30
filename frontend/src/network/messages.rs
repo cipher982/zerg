@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::event_types::MessageType;
+use serde::{Deserialize, Serialize};
 
 /// Base message structure that all WebSocket messages must implement
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,7 +95,7 @@ pub struct StreamChunkMessage {
     pub content: String,
     // New fields for tool message display
     #[serde(default)]
-    pub chunk_type: Option<String>,  // "tool_output" or "assistant_message"
+    pub chunk_type: Option<String>, // "tool_output" or "assistant_message"
     #[serde(default)]
     pub tool_name: Option<String>,
     #[serde(default)]
@@ -234,8 +234,6 @@ pub mod builders {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,7 +246,7 @@ mod tests {
         let ping = builders::create_ping();
         let json = serde_json::to_string(&ping).unwrap();
         let parsed: PingMessage = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(parsed.message_type, MessageType::Ping);
         assert!(parsed.message_id.is_some());
         assert!(parsed.timestamp.is_some());
@@ -258,7 +256,7 @@ mod tests {
     fn test_subscribe_message() {
         let topics = vec!["thread:123".to_string(), "agent:456".to_string()];
         let msg = builders::create_subscribe(topics.clone());
-        
+
         assert_eq!(msg.message_type, MessageType::Subscribe);
         assert!(msg.message_id.is_some());
         assert_eq!(msg.topics, topics);
@@ -305,9 +303,9 @@ mod tests {
             title: "New Conversation".to_string(),
         };
         let json = serde_json::to_string(&data).unwrap();
-         assert!(json.contains("\"thread_id\":456"));
-         assert!(json.contains("\"agent_id\":123"));
-         assert!(json.contains("\"title\":\"New Conversation\""));
+        assert!(json.contains("\"thread_id\":456"));
+        assert!(json.contains("\"agent_id\":123"));
+        assert!(json.contains("\"title\":\"New Conversation\""));
     }
 
     #[wasm_bindgen_test]
@@ -322,9 +320,9 @@ mod tests {
             data: agent_data,
             message_id: Some("msg-1".to_string()),
         };
-         let json = serde_json::to_string(&msg).unwrap();
-         assert!(json.contains("\"type\":\"agent_state\""));
-         assert!(json.contains("\"message_id\":\"msg-1\""));
-         assert!(json.contains("\"data\":{\"id\":789")); // Check nested data
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"type\":\"agent_state\""));
+        assert!(json.contains("\"message_id\":\"msg-1\""));
+        assert!(json.contains("\"data\":{\"id\":789")); // Check nested data
     }
 }

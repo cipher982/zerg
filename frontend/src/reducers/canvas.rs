@@ -2,16 +2,23 @@
 //!
 //! Handles all canvas, node, edge, drag, zoom, and workflow logic.
 
+use crate::messages::{Command, Message};
+use crate::models::{NodeType, UiNodeState};
 use crate::state::AppState;
-use crate::messages::{Message, Command};
-use crate::models::NodeType;
 
 pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> bool {
     match msg {
         Message::SaveToolConfig { node_id, config } => {
-            if let Some(node) = state.nodes.get_mut(node_id) {
-                if let crate::models::NodeType::Tool { config: node_config, .. } = &mut node.node_type {
-                    *node_config = config.clone();
+            if let Some(node) = state.workflow_nodes.get_mut(node_id) {
+                if matches!(
+                    node.get_semantic_type(),
+                    crate::models::NodeType::Tool { .. }
+                ) {
+                    // Store the tool config in the node's config field
+                    node.config.insert(
+                        "tool_config".to_string(),
+                        serde_json::to_value(config).unwrap_or_default(),
+                    );
                     state.state_modified = true;
                     state.mark_dirty();
                 }
@@ -19,13 +26,17 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::UpdateTriggerNodeConfig { node_id, params } => {
-            if let Some(node) = state.nodes.get_mut(node_id) {
-                if let crate::models::NodeType::Trigger { config, .. } = &mut node.node_type {
-                    // Update the params in the trigger config
+            if let Some(node) = state.workflow_nodes.get_mut(node_id) {
+                if matches!(
+                    node.get_semantic_type(),
+                    crate::models::NodeType::Trigger { .. }
+                ) {
+                    // Update the params in the trigger config stored in node config
                     if let serde_json::Value::Object(param_map) = params {
-                        config.params.clear();
+                        // Store the trigger params in the node's config field
                         for (key, value) in param_map {
-                            config.params.insert(key.clone(), value.clone());
+                            node.config
+                                .insert(format!("trigger_{}", key), value.clone());
                         }
                     }
                     state.state_modified = true;
@@ -40,26 +51,44 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.mark_dirty();
             // Only mark state as modified (triggering API saves) if not currently dragging
             // This prevents spam of PATCH requests during drag operations for all node types
-            if state.dragging.is_none() {
+            if state.ui_state.get(node_id).map_or(false, |s| s.is_dragging) {
                 state.state_modified = true;
             }
             true
         }
-        Message::AddNode { text, x, y, node_type } => {
+        Message::AddNode {
+            text,
+            x,
+            y,
+            node_type,
+        } => {
             if *node_type == NodeType::AgentIdentity && *x == 0.0 && *y == 0.0 {
-                let viewport_width = if state.canvas_width > 0.0 { state.canvas_width } else { 800.0 };
-                let viewport_height = if state.canvas_height > 0.0 { state.canvas_height } else { 600.0 };
+                let viewport_width = if state.canvas_width > 0.0 {
+                    state.canvas_width
+                } else {
+                    800.0
+                };
+                let viewport_height = if state.canvas_height > 0.0 {
+                    state.canvas_height
+                } else {
+                    600.0
+                };
                 let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 75.0;
                 let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0;
                 let node_id = state.add_node(text.clone(), x, y, node_type.clone());
-                web_sys::console::log_1(&format!("Created visual node for agent: {}", node_id).into());
+                web_sys::console::log_1(
+                    &format!("Created visual node for agent: {}", node_id).into(),
+                );
             } else {
                 let _ = state.add_node(text.clone(), *x, *y, node_type.clone());
             }
             state.state_modified = true;
             true
         }
-        Message::AddResponseNode { parent_id, response_text } => {
+        Message::AddResponseNode {
+            parent_id,
+            response_text,
+        } => {
             let _ = state.add_response_node(parent_id, response_text.clone());
             state.state_modified = true;
             true
@@ -80,7 +109,8 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::ClearCanvas => {
-            state.nodes.clear();
+            state.workflow_nodes.clear();
+            state.ui_state.clear();
             state.latest_user_input_id = None;
             state.message_id_to_node_id.clear();
             state.viewport_x = 0.0;
@@ -91,19 +121,25 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::ShowToolConfigModal { node_id } => {
-            if let Some(node) = state.nodes.get(node_id) {
-                if let NodeType::Tool { tool_name, server_name, .. } = &node.node_type {
-                    let _description = state.available_mcp_tools.values()
+            if let Some(node) = state.workflow_nodes.get(node_id) {
+                if let NodeType::Tool {
+                    tool_name,
+                    server_name,
+                    ..
+                } = node.get_semantic_type()
+                {
+                    let _description = state
+                        .available_mcp_tools
+                        .values()
                         .flat_map(|tools| tools.iter())
-                        .find(|t| &t.name == tool_name && &t.server_name == server_name)
+                        .find(|t| t.name == tool_name && t.server_name == server_name)
                         .and_then(|t| t.description.clone())
                         .unwrap_or_else(|| "No description available.".to_string());
 
                     if let Some(window) = web_sys::window() {
                         if let Some(document) = window.document() {
                             let _ = crate::components::tool_config_modal::ToolConfigModal::open(
-                                &document,
-                                node,
+                                &document, node,
                             );
                         }
                     }
@@ -112,14 +148,14 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::ShowTriggerConfigModal { node_id } => {
-            if let Some(node) = state.nodes.get(node_id) {
-                if let NodeType::Trigger { .. } = &node.node_type {
+            if let Some(node) = state.workflow_nodes.get(node_id) {
+                if matches!(node.get_semantic_type(), NodeType::Trigger { .. }) {
                     if let Some(window) = web_sys::window() {
                         if let Some(document) = window.document() {
-                            let _ = crate::components::trigger_config_modal::TriggerConfigModal::open(
-                                &document,
-                                node,
-                            );
+                            let _ =
+                                crate::components::trigger_config_modal::TriggerConfigModal::open(
+                                    &document, node,
+                                );
                         }
                     }
                 }
@@ -132,19 +168,25 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 if let Some(source_node_id) = &state.connection_source_node {
                     if source_node_id != node_id {
                         // Create connection from source to clicked node
-                        cmds.push(Command::SendMessage(Message::CreateConnectionFromSelected {
-                            target_node_id: node_id.clone()
-                        }));
+                        cmds.push(Command::SendMessage(
+                            Message::CreateConnectionFromSelected {
+                                target_node_id: node_id.clone(),
+                            },
+                        ));
                     }
                 } else {
                     // Select this node as connection source
                     cmds.push(Command::SendMessage(Message::SelectNodeForConnection {
-                        node_id: node_id.clone()
+                        node_id: node_id.clone(),
                     }));
                 }
             } else {
                 // Normal click behavior - open agent config
-                if let Some(agent_id) = state.nodes.get(node_id).and_then(|n| n.agent_id) {
+                if let Some(agent_id) = state.workflow_nodes.get(node_id).and_then(|n| {
+                    n.config
+                        .get("agent_id")
+                        .and_then(|v| v.as_u64().map(|id| id as u32))
+                }) {
                     cmds.push(Command::SendMessage(Message::EditAgent(agent_id)));
                 }
             }
@@ -154,7 +196,17 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.mark_dirty();
             true
         }
-        Message::StartDragging { node_id, offset_x, offset_y, start_x, start_y, is_agent: _ } => {
+        Message::StartDragging {
+            node_id,
+            offset_x,
+            offset_y,
+            start_x,
+            start_y,
+            is_agent: _,
+        } => {
+            if let Some(ui_node_state) = state.ui_state.get_mut(node_id) {
+                ui_node_state.is_dragging = true;
+            }
             state.dragging = Some(node_id.clone());
             state.drag_offset_x = *offset_x;
             state.drag_offset_y = *offset_y;
@@ -163,7 +215,11 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::StopDragging => {
-            state.dragging = None;
+            if let Some(node_id) = state.dragging.take() {
+                if let Some(ui_node_state) = state.ui_state.get_mut(&node_id) {
+                    ui_node_state.is_dragging = false;
+                }
+            }
             state.state_modified = true;
             let _ = state.save_if_modified();
             true
@@ -176,7 +232,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.drag_last_y = *start_y;
             true
         }
-        Message::UpdateCanvasDrag { current_x, current_y } => {
+        Message::UpdateCanvasDrag {
+            current_x,
+            current_y,
+        } => {
             if state.canvas_dragging {
                 let dx = *current_x - state.drag_last_x;
                 let dy = *current_y - state.drag_last_y;
@@ -196,7 +255,11 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             let _ = state.save_if_modified();
             true
         }
-        Message::ZoomCanvas { new_zoom, viewport_x, viewport_y } => {
+        Message::ZoomCanvas {
+            new_zoom,
+            viewport_x,
+            viewport_y,
+        } => {
             state.zoom_level = *new_zoom;
             state.clamp_zoom();
             state.viewport_x = *viewport_x;
@@ -205,53 +268,114 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.mark_dirty();
             true
         }
-        Message::AddCanvasNode { agent_id, x, y, node_type, text } => {
-            let node_id = state.add_node_with_agent(*agent_id, *x, *y, node_type.clone(), text.clone());
+        Message::AddCanvasNode {
+            agent_id,
+            x,
+            y,
+            node_type,
+            text,
+        } => {
+            let node_id =
+                state.add_node_with_agent(*agent_id, *x, *y, node_type.clone(), text.clone());
             web_sys::console::log_1(&format!("Created new node: {}", node_id).into());
             state.state_modified = true;
+
             true
         }
         Message::DeleteNode { node_id } => {
-            state.nodes.remove(node_id);
-            if let Some(workflow_id) = state.current_workflow_id {
-                if let Some(workflow) = state.workflows.get_mut(&workflow_id) {
-                    workflow.nodes.retain(|n| n.node_id != *node_id);
-                    workflow.edges.retain(|edge| edge.from_node_id != *node_id && edge.to_node_id != *node_id);
+            // Clean up agent tracking before removing the node
+            if let Some(node) = state.workflow_nodes.get(node_id) {
+                let agent_id = node
+                    .config
+                    .get("agent_id")
+                    .and_then(|v| v.as_u64().map(|id| id as u32));
+                if let Some(agent_id) = agent_id {
+                    state.agent_id_to_node_id.remove(&agent_id);
+                    state.agents_on_canvas.remove(&agent_id);
                 }
             }
+
+            // Remove the node
+            state.workflow_nodes.remove(node_id);
+            state.ui_state.remove(node_id);
+
+            // Also clean up from workflow
+            if let Some(workflow_id) = state.current_workflow_id {
+                if let Some(workflow) = state.workflows.get_mut(&workflow_id) {
+                    workflow.remove_node(node_id);
+                }
+            }
+
             state.state_modified = true;
+            state.mark_dirty();
             true
         }
-        Message::UpdateNodeText { node_id, text, is_first_chunk } => {
-            if let Some(node) = state.nodes.get_mut(node_id) {
-                if *is_first_chunk {
-                    node.text = text.clone();
+        Message::UpdateNodeText {
+            node_id,
+            text,
+            is_first_chunk,
+        } => {
+            if let Some(node) = state.workflow_nodes.get_mut(node_id) {
+                let current_text = node
+                    .config
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let new_text = if *is_first_chunk {
+                    text.clone()
                 } else {
-                    node.text.push_str(text);
-                }
+                    current_text + text
+                };
+                node.config
+                    .insert("text".to_string(), serde_json::Value::String(new_text));
                 state.resize_node_for_content(node_id);
                 state.state_modified = true;
             }
             true
         }
-        Message::CompleteNodeResponse { node_id, final_text } => {
-            if let Some(node) = state.nodes.get_mut(node_id) {
-                if !final_text.is_empty() && node.text != *final_text {
-                    node.text = final_text.clone();
+        Message::CompleteNodeResponse {
+            node_id,
+            final_text,
+        } => {
+            if let Some(node) = state.workflow_nodes.get_mut(node_id) {
+                if !final_text.is_empty() {
+                    node.config.insert(
+                        "text".to_string(),
+                        serde_json::Value::String(final_text.clone()),
+                    );
                 }
-                node.color = "#c8e6c9".to_string();
-                if let Some(agent_id) = node.agent_id {
+                node.config.insert(
+                    "color".to_string(),
+                    serde_json::Value::String("#c8e6c9".to_string()),
+                );
+                let agent_id = node
+                    .config
+                    .get("agent_id")
+                    .and_then(|v| v.as_u64().map(|id| id as u32));
+                if let Some(agent_id) = agent_id {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
                         agent.status = Some("idle".to_string());
                     }
                 }
-                let parent_id = node.parent_id.clone();
+                let parent_id = node
+                    .config
+                    .get("parent_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
                 state.state_modified = true;
                 state.resize_node_for_content(node_id);
                 if let Some(parent_id) = parent_id {
-                    if let Some(parent) = state.nodes.get_mut(&parent_id) {
-                        parent.color = "#ffecb3".to_string();
-                        if let Some(agent_id) = parent.agent_id {
+                    if let Some(parent) = state.workflow_nodes.get_mut(&parent_id) {
+                        parent.config.insert(
+                            "color".to_string(),
+                            serde_json::Value::String("#ffecb3".to_string()),
+                        );
+                        let parent_agent_id = parent
+                            .config
+                            .get("agent_id")
+                            .and_then(|v| v.as_u64().map(|id| id as u32));
+                        if let Some(agent_id) = parent_agent_id {
                             if let Some(agent) = state.agents.get_mut(&agent_id) {
                                 agent.status = Some("idle".to_string());
                             }
@@ -262,61 +386,76 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         Message::UpdateNodeStatus { node_id, status } => {
-            if let Some(node) = state.nodes.get_mut(node_id) {
+            if let Some(node) = state.workflow_nodes.get_mut(node_id) {
                 use crate::models::NodeExecStatus;
 
                 let (color, exec_status) = match status.as_str() {
-                    "running" | "processing" => ("#fcd34d", NodeExecStatus::Running),   // amber-300
-                    "success" | "complete" => ("#86efac", NodeExecStatus::Success),     // green-300
+                    "running" | "processing" => ("#fcd34d", NodeExecStatus::Running), // amber-300
+                    "success" | "complete" => ("#86efac", NodeExecStatus::Success),   // green-300
                     "failed" | "error" => ("#fca5a5", NodeExecStatus::Failed),        // red-300
-                    _ => ("#e0e7ff", NodeExecStatus::Idle),                               // indigo-100
+                    _ => ("#e0e7ff", NodeExecStatus::Idle),                           // indigo-100
                 };
 
-                node.color = color.to_string();
-                node.exec_status = Some(exec_status);
-                
+                node.config.insert(
+                    "color".to_string(),
+                    serde_json::Value::String(color.to_string()),
+                );
+                if let Some(ui_node_state) = state.ui_state.get_mut(node_id) {
+                    ui_node_state.exec_status = Some(exec_status);
+                }
+
                 // Start transition animations for success/error states
                 match exec_status {
                     NodeExecStatus::Success => {
                         let now = js_sys::Date::now();
-                        node.transition_animation = Some(crate::models::TransitionAnimation {
-                            animation_type: crate::models::TransitionType::SuccessFlash,
-                            start_time: now,
-                            duration: 1000.0, // 1 second flash
-                        });
-                    },
+                        if let Some(ui_node_state) = state.ui_state.get_mut(node_id) {
+                            ui_node_state.transition_animation =
+                                Some(crate::models::TransitionAnimation {
+                                    animation_type: crate::models::TransitionType::SuccessFlash,
+                                    start_time: now,
+                                    duration: 1000.0, // 1 second flash
+                                });
+                        }
+                    }
                     NodeExecStatus::Failed => {
                         let now = js_sys::Date::now();
-                        node.transition_animation = Some(crate::models::TransitionAnimation {
-                            animation_type: crate::models::TransitionType::ErrorShake,
-                            start_time: now,
-                            duration: 800.0, // 0.8 second shake
-                        });
-                    },
+                        if let Some(ui_node_state) = state.ui_state.get_mut(node_id) {
+                            ui_node_state.transition_animation =
+                                Some(crate::models::TransitionAnimation {
+                                    animation_type: crate::models::TransitionType::ErrorShake,
+                                    start_time: now,
+                                    duration: 800.0, // 0.8 second shake
+                                });
+                        }
+                    }
                     _ => {}
                 }
-                
+
                 // Only update agent status for agent-backed nodes with valid workflow execution statuses
-                if let Some(agent_id) = node.agent_id {
+                let agent_id = node
+                    .config
+                    .get("agent_id")
+                    .and_then(|v| v.as_u64().map(|id| id as u32));
+                if let Some(agent_id) = agent_id {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
                         // Only update agent status for legitimate workflow execution status changes
                         // that come from the backend workflow engine, not UI-only updates
                         let should_update_agent_status = match status.as_str() {
-                            "running" | "success" | "failed" => true,  // Valid workflow execution statuses
-                            _ => false,  // Skip UI-only statuses like "processing", "complete", etc.
+                            "running" | "success" | "failed" => true, // Valid workflow execution statuses
+                            _ => false, // Skip UI-only statuses like "processing", "complete", etc.
                         };
-                        
+
                         if should_update_agent_status {
                             // Map node execution status to valid agent status
                             let agent_status = match status.as_str() {
                                 "running" => "running",
-                                "success" => "idle",  // Node completed, agent goes back to idle
+                                "success" => "idle", // Node completed, agent goes back to idle
                                 "failed" => "error",
-                                _ => return true,  // Should not reach here due to filter above
+                                _ => return true, // Should not reach here due to filter above
                             };
-                            
+
                             web_sys::console::log_1(&format!("Updating agent {} status from '{}' to '{}' due to node {} workflow execution", agent_id, agent.status.as_ref().unwrap_or(&"unknown".to_string()), agent_status, node_id).into());
-                            
+
                             agent.status = Some(agent_status.to_string());
                             let update = crate::models::ApiAgentUpdate {
                                 name: None,
@@ -333,22 +472,30 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                             wasm_bindgen_futures::spawn_local(async move {
                                 match serde_json::to_string(&update_clone) {
                                     Ok(json_str) => {
-                                        if let Err(e) = crate::network::ApiClient::update_agent(agent_id_clone, &json_str).await {
-                                            web_sys::console::error_1(&format!("Failed to update agent: {:?}", e).into());
+                                        if let Err(e) = crate::network::ApiClient::update_agent(
+                                            agent_id_clone,
+                                            &json_str,
+                                        )
+                                        .await
+                                        {
+                                            web_sys::console::error_1(
+                                                &format!("Failed to update agent: {:?}", e).into(),
+                                            );
                                         }
                                     }
                                     Err(e) => {
-                                        web_sys::console::error_1(&format!("Failed to serialize agent update: {}", e).into());
+                                        web_sys::console::error_1(
+                                            &format!("Failed to serialize agent update: {}", e)
+                                                .into(),
+                                        );
                                     }
                                 }
                             });
-                        } else {
-                            web_sys::console::log_1(&format!("Skipping agent status update for node {} with status '{}' (not a workflow execution status)", node_id, status).into());
                         }
                     }
                 }
                 state.state_modified = true;
-                
+
                 // Refresh results panel for node status updates via command
                 cmds.push(Command::UpdateUI(Box::new(|| {
                     // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
@@ -359,34 +506,40 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         Message::AnimationTick => {
             // Check if there are active animations or continuous background animations that need rendering
             let has_background_particles = state.particle_system.is_some();
-            let has_connection_lines = state.current_workflow_id
+            let has_connection_lines = state
+                .current_workflow_id
                 .and_then(|wf_id| state.workflows.get(&wf_id))
-                .map(|wf| !wf.edges.is_empty())
-                .unwrap_or(false) || 
-                state.nodes.values().any(|node| node.parent_id.is_some());
-            
+                .map(|wf| !wf.get_edges().is_empty())
+                .unwrap_or(false)
+                || state
+                    .workflow_nodes
+                    .values()
+                    .any(|node| node.get_parent_id().is_some());
+
             // Clean up expired transition animations and check if any are still active
             let now = js_sys::Date::now();
             let mut has_transition_animations = false;
-            for node in state.nodes.values_mut() {
-                if let Some(animation) = &node.transition_animation {
-                    let elapsed = now - animation.start_time;
-                    if elapsed >= animation.duration {
-                        node.transition_animation = None;
-                    } else {
-                        has_transition_animations = true;
+            for node_id in state.ui_state.keys().cloned().collect::<Vec<String>>() {
+                if let Some(ui_node_state) = state.ui_state.get_mut(&node_id) {
+                    if let Some(animation) = &ui_node_state.transition_animation {
+                        let elapsed = now - animation.start_time;
+                        if elapsed >= animation.duration {
+                            ui_node_state.transition_animation = None;
+                        } else {
+                            has_transition_animations = true;
+                        }
                     }
                 }
             }
-            
-            let needs_animation = !state.running_runs.is_empty() || 
-                                  state.connection_drag_active || 
-                                  state.dragging.is_some() ||
-                                  state.canvas_dragging ||
-                                  has_background_particles ||
-                                  has_connection_lines ||
-                                  has_transition_animations;
-            
+
+            let needs_animation = !state.running_runs.is_empty()
+                || state.connection_drag_active
+                || state.ui_state.values().any(|s| s.is_dragging)
+                || state.canvas_dragging
+                || has_background_particles
+                || has_connection_lines
+                || has_transition_animations;
+
             if needs_animation {
                 state.mark_dirty();
             }
@@ -397,7 +550,8 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     crate::state::APP_STATE.with(|state_rc| {
                         let mut st = state_rc.borrow_mut();
                         crate::canvas::renderer::draw_nodes(&mut st);
-                        #[cfg(debug_assertions)] {
+                        #[cfg(debug_assertions)]
+                        {
                             if let Some(ctx) = st.context.as_ref() {
                                 crate::utils::debug::draw_overlay(ctx, &st.debug_ring);
                             }
@@ -430,8 +584,12 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     }
                 }
             }
-            for (_id, node) in state.nodes.iter_mut() {
-                if let Some(agent_id) = node.agent_id {
+            for (_id, node) in state.workflow_nodes.iter_mut() {
+                let agent_id = node
+                    .config
+                    .get("agent_id")
+                    .and_then(|v| v.as_u64().map(|id| id as u32));
+                if let Some(agent_id) = agent_id {
                     if let Some(agent) = state.agents.get(&agent_id) {
                         if let Some(status_str) = &agent.status {
                             if status_str == "processing" {
@@ -478,16 +636,40 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::SelectWorkflow { workflow_id } => {
             state.current_workflow_id = Some(*workflow_id);
-            web_sys::console::log_1(&format!("DEBUG: SelectWorkflow {} - clearing {} nodes", workflow_id, state.nodes.len()).into());
-            for (id, node) in &state.nodes {
-                web_sys::console::log_1(&format!("DEBUG: Clearing node {} (type: {:?})", id, node.node_type).into());
+            web_sys::console::log_1(
+                &format!(
+                    "DEBUG: SelectWorkflow {} - clearing {} nodes",
+                    workflow_id,
+                    state.workflow_nodes.len()
+                )
+                .into(),
+            );
+            for (id, node) in &state.workflow_nodes {
+                web_sys::console::log_1(
+                    &format!("DEBUG: Clearing node {} (type: {:?})", id, node.node_type).into(),
+                );
             }
-            state.nodes.clear();
+            state.workflow_nodes.clear();
+            state.ui_state.clear();
             if let Some(workflow) = state.workflows.get(workflow_id) {
-                web_sys::console::log_1(&format!("DEBUG: Repopulating with {} workflow nodes", workflow.nodes.len()).into());
-                for node in &workflow.nodes {
-                    web_sys::console::log_1(&format!("DEBUG: Restoring node {} (type: {:?})", node.node_id, node.node_type).into());
-                    state.nodes.insert(node.node_id.clone(), node.clone());
+                let nodes = workflow.get_nodes();
+                web_sys::console::log_1(
+                    &format!("DEBUG: Repopulating with {} workflow nodes", nodes.len()).into(),
+                );
+                for node in &nodes {
+                    web_sys::console::log_1(
+                        &format!(
+                            "DEBUG: Restoring node {} (type: {:?})",
+                            node.node_id, node.node_type
+                        )
+                        .into(),
+                    );
+                    state
+                        .workflow_nodes
+                        .insert(node.node_id.clone(), node.clone());
+                    state
+                        .ui_state
+                        .insert(node.node_id.clone(), UiNodeState::default());
                 }
             }
             state.mark_dirty();
@@ -503,16 +685,23 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
 
             true
         }
-        Message::AddEdge { from_node_id, to_node_id, label } => {
+        Message::AddEdge {
+            from_node_id,
+            to_node_id,
+            label,
+        } => {
             let edge_id = state.add_edge(from_node_id.clone(), to_node_id.clone(), label.clone());
             web_sys::console::log_1(&format!("Created new edge with ID: {}", edge_id).into());
             state.mark_dirty();
             state.state_modified = true;
+
             true
         }
         Message::GenerateCanvasFromAgents => {
             let mut nodes_created = 0;
-            let agents_needing_nodes = state.agents.iter()
+            let agents_needing_nodes = state
+                .agents
+                .iter()
                 .filter(|(id, _)| !state.agent_id_to_node_id.contains_key(id))
                 .map(|(id, agent)| (*id, agent.name.clone()))
                 .collect::<Vec<_>>();
@@ -524,7 +713,13 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 state.add_agent_node(*agent_id, name.clone(), x, y);
                 nodes_created += 1;
             }
-            web_sys::console::log_1(&format!("Created {} nodes for agents without visual representation", nodes_created).into());
+            web_sys::console::log_1(
+                &format!(
+                    "Created {} nodes for agents without visual representation",
+                    nodes_created
+                )
+                .into(),
+            );
             if nodes_created > 0 {
                 state.state_modified = true;
                 state.mark_dirty();
@@ -542,14 +737,14 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             }
             web_sys::console::log_1(&format!("Connection mode: {}", state.connection_mode).into());
             state.mark_dirty();
-            
+
             // Update button appearance
             cmds.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
                     let _ = crate::components::workflow_switcher::update_connection_button(&doc);
                 }
             })));
-            
+
             true
         }
 
@@ -557,7 +752,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             if state.connection_mode {
                 state.connection_source_node = Some(node_id.clone());
                 state.selected_node_id = Some(node_id.clone());
-                web_sys::console::log_1(&format!("Selected node {} as connection source", node_id).into());
+                web_sys::console::log_1(
+                    &format!("Selected node {} as connection source", node_id).into(),
+                );
                 state.mark_dirty();
             }
             true
@@ -567,11 +764,18 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             if state.connection_mode {
                 if let Some(source_node_id) = state.connection_source_node.clone() {
                     if source_node_id != *target_node_id {
-                        let edge_id = state.add_edge(source_node_id.clone(), target_node_id.clone(), None);
-                        web_sys::console::log_1(&format!("Created connection from {} to {} (edge ID: {})", source_node_id, target_node_id, edge_id).into());
+                        let edge_id =
+                            state.add_edge(source_node_id.clone(), target_node_id.clone(), None);
+                        web_sys::console::log_1(
+                            &format!(
+                                "Created connection from {} to {} (edge ID: {})",
+                                source_node_id, target_node_id, edge_id
+                            )
+                            .into(),
+                        );
                         state.mark_dirty();
                         state.state_modified = true;
-                        
+
                         // Clear selection after creating connection
                         state.connection_source_node = None;
                         state.selected_node_id = None;
@@ -594,16 +798,30 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
 
         // Connection handle dragging handlers
-        Message::StartConnectionDrag { node_id, handle_position, start_x, start_y } => {
+        Message::StartConnectionDrag {
+            node_id,
+            handle_position,
+            start_x,
+            start_y,
+        } => {
             state.connection_drag_active = true;
             state.connection_drag_start = Some((node_id.clone(), handle_position.clone()));
             state.connection_drag_current = Some((*start_x, *start_y));
-            web_sys::console::log_1(&format!("Started connection drag from {} handle of node {}", handle_position, node_id).into());
+            web_sys::console::log_1(
+                &format!(
+                    "Started connection drag from {} handle of node {}",
+                    handle_position, node_id
+                )
+                .into(),
+            );
             state.mark_dirty();
             true
         }
 
-        Message::UpdateConnectionDrag { current_x, current_y } => {
+        Message::UpdateConnectionDrag {
+            current_x,
+            current_y,
+        } => {
             if state.connection_drag_active {
                 state.connection_drag_current = Some((*current_x, *current_y));
                 state.mark_dirty(); // Repaint to show preview line
@@ -617,34 +835,71 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 if let Some((source_node_id, source_handle)) = state.connection_drag_start.clone() {
                     // Check if dropped on a specific handle (precise targeting)
                     let mut connection_created = false;
-                    for (target_node_id, _) in &state.nodes.clone() {
+                    for (target_node_id, _) in &state.workflow_nodes.clone() {
                         if target_node_id != &source_node_id {
-                            if let Some(target_handle) = state.get_handle_at_point(target_node_id, *end_x, *end_y) {
+                            if let Some(target_handle) =
+                                state.get_handle_at_point(target_node_id, *end_x, *end_y)
+                            {
                                 // Validate the connection before creating
-                                if state.is_valid_connection(&source_handle, &target_handle, &source_node_id, target_node_id) {
-                                    let edge_id = state.add_edge(source_node_id.clone(), target_node_id.clone(), None);
+                                if state.is_valid_connection(
+                                    &source_handle,
+                                    &target_handle,
+                                    &source_node_id,
+                                    target_node_id,
+                                ) {
+                                    let edge_id = state.add_edge(
+                                        source_node_id.clone(),
+                                        target_node_id.clone(),
+                                        None,
+                                    );
                                     web_sys::console::log_1(&format!("Created valid connection from {} ({}) to {} ({}) (edge ID: {})", source_node_id, source_handle, target_node_id, target_handle, edge_id).into());
                                     state.state_modified = true;
                                     connection_created = true;
                                 } else {
-                                    web_sys::console::log_1(&format!("Invalid connection: {} ({}) to {} ({})", source_node_id, source_handle, target_node_id, target_handle).into());
+                                    web_sys::console::log_1(
+                                        &format!(
+                                            "Invalid connection: {} ({}) to {} ({})",
+                                            source_node_id,
+                                            source_handle,
+                                            target_node_id,
+                                            target_handle
+                                        )
+                                        .into(),
+                                    );
                                 }
                                 break;
                             }
                         }
                     }
-                    
+
                     // Fallback: if not dropped on a handle, check if dropped on a node (auto-route to input)
                     if !connection_created {
-                        if let Some((target_node_id, _, _)) = state.find_node_at_position(*end_x, *end_y) {
+                        if let Some((target_node_id, _, _)) =
+                            state.find_node_at_position(*end_x, *end_y)
+                        {
                             if target_node_id != source_node_id {
                                 // Auto-route: output -> input only
-                                if state.is_valid_connection(&source_handle, "input", &source_node_id, &target_node_id) {
-                                    let edge_id = state.add_edge(source_node_id.clone(), target_node_id.clone(), None);
+                                if state.is_valid_connection(
+                                    &source_handle,
+                                    "input",
+                                    &source_node_id,
+                                    &target_node_id,
+                                ) {
+                                    let edge_id = state.add_edge(
+                                        source_node_id.clone(),
+                                        target_node_id.clone(),
+                                        None,
+                                    );
                                     web_sys::console::log_1(&format!("Created auto-routed connection from {} ({}) to {} (input) (edge ID: {})", source_node_id, source_handle, target_node_id, edge_id).into());
                                     state.state_modified = true;
                                 } else {
-                                    web_sys::console::log_1(&format!("Invalid auto-route connection: {} ({}) to {} (input)", source_node_id, source_handle, target_node_id).into());
+                                    web_sys::console::log_1(
+                                        &format!(
+                                            "Invalid auto-route connection: {} ({}) to {} (input)",
+                                            source_node_id, source_handle, target_node_id
+                                        )
+                                        .into(),
+                                    );
                                 }
                             } else {
                                 web_sys::console::log_1(&"Cannot connect node to itself".into());
@@ -652,7 +907,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         }
                     }
                 }
-                
+
                 // Clear drag state
                 state.connection_drag_active = false;
                 state.connection_drag_start = None;

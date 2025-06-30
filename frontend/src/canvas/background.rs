@@ -1,6 +1,6 @@
-use web_sys::CanvasRenderingContext2d;
-use wasm_bindgen::prelude::*;
 use js_sys::Math;
+use wasm_bindgen::prelude::*;
+use web_sys::CanvasRenderingContext2d;
 
 #[wasm_bindgen]
 pub struct Particle {
@@ -22,7 +22,14 @@ impl Particle {
         let radius = Math::random() * 1.5 + 0.5;
         let alpha = Math::random() * 0.5 + 0.2;
 
-        Particle { x, y, vx, vy, radius, alpha }
+        Particle {
+            x,
+            y,
+            vx,
+            vy,
+            radius,
+            alpha,
+        }
     }
 
     pub fn update(&mut self, canvas_width: f64, canvas_height: f64) {
@@ -40,7 +47,10 @@ impl Particle {
     pub fn draw(&self, context: &CanvasRenderingContext2d) {
         context.begin_path();
         let _ = context.arc(self.x, self.y, self.radius, 0.0, 2.0 * std::f64::consts::PI);
-        context.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!("rgba(100, 255, 218, {})", self.alpha)));
+        context.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!(
+            "rgba(100, 255, 218, {})",
+            self.alpha
+        )));
         context.fill();
     }
 }
@@ -57,7 +67,11 @@ impl ParticleSystem {
         for _ in 0..num_particles {
             particles.push(Particle::new(canvas_width, canvas_height));
         }
-        ParticleSystem { particles, canvas_width, canvas_height }
+        ParticleSystem {
+            particles,
+            canvas_width,
+            canvas_height,
+        }
     }
 
     pub fn update(&mut self) {

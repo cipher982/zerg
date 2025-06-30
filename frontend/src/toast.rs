@@ -53,7 +53,9 @@ pub fn show(message: &str, kind: ToastKind) {
     // Auto-remove after 4s.
     let toast_clone: HtmlElement = toast.unchecked_into();
     let cb = Closure::once_into_js(move || {
-        let _ = toast_clone.parent_node().map(|p| p.remove_child(&toast_clone));
+        let _ = toast_clone
+            .parent_node()
+            .map(|p| p.remove_child(&toast_clone));
     });
     let _ = window
         .set_timeout_with_callback_and_timeout_and_arguments_0(cb.as_ref().unchecked_ref(), 4000);

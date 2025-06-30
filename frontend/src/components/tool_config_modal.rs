@@ -1,23 +1,26 @@
-use wasm_bindgen::prelude::*;
-use web_sys::{Document, HtmlInputElement, HtmlSelectElement};
-use wasm_bindgen::JsCast;
+use crate::models::{InputMapping, NodeType, ToolConfig, UiNodeState, WorkflowEdge, WorkflowNode};
 use std::collections::HashMap;
-use crate::models::{InputMapping, ToolConfig, Node, NodeType};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use web_sys::{Document, HtmlInputElement, HtmlSelectElement};
 
 /// Enhanced tool configuration modal with validation and parameter mapping.
 pub struct ToolConfigModal;
 
 impl ToolConfigModal {
     /// Opens the tool config modal for the given node with validation and enhanced UI.
-    pub fn open(
-        document: &Document,
-        node: &Node,
-    ) -> Result<(), JsValue> {
-        let (modal, modal_content) = crate::components::modal::ensure_modal(document, "tool-config-modal")?;
+    pub fn open(document: &Document, node: &WorkflowNode) -> Result<(), JsValue> {
+        let (modal, modal_content) =
+            crate::components::modal::ensure_modal(document, "tool-config-modal")?;
 
         // Only allow opening for tool nodes
-        let (tool_name, _server_name, config) = match &node.node_type {
-            NodeType::Tool { tool_name, server_name, config, .. } => (tool_name, server_name, config),
+        let (tool_name, _server_name, config) = match node.get_semantic_type() {
+            NodeType::Tool {
+                tool_name,
+                server_name,
+                config,
+                ..
+            } => (tool_name, server_name, config),
             _ => return Err(JsValue::from_str("Not a tool node")),
         };
 
@@ -46,13 +49,19 @@ impl ToolConfigModal {
                 _ => "".to_string(),
             };
             let node_ref = match config.input_mappings.get(*input_key) {
-                Some(InputMapping::FromNode { node_id, output_key }) => 
-                    format!("{}:{}", node_id, output_key),
+                Some(InputMapping::FromNode {
+                    node_id,
+                    output_key,
+                }) => format!("{}:{}", node_id, output_key),
                 _ => "".to_string(),
             };
-            
-            let required_html = if *is_required { "<span class='required text-red-500'>*</span>" } else { "" };
-            
+
+            let required_html = if *is_required {
+                "<span class='required text-red-500'>*</span>"
+            } else {
+                ""
+            };
+
             body_html.push_str(&format!(
                 "<div class='form-group mb-4'>
                     <label class='block mb-2 font-medium'>{} {}</label>
@@ -103,24 +112,45 @@ impl ToolConfigModal {
 
         // Add dynamic behavior for each selector individually
         for (input_key, _, _) in &tool_inputs {
-            if let Some(selector) = document.query_selector(&format!(".mapping-type-selector[data-input-key='{}']", input_key))
-                .ok().flatten().and_then(|el| el.dyn_into::<HtmlSelectElement>().ok()) {
-                
+            if let Some(selector) = document
+                .query_selector(&format!(
+                    ".mapping-type-selector[data-input-key='{}']",
+                    input_key
+                ))
+                .ok()
+                .flatten()
+                .and_then(|el| el.dyn_into::<HtmlSelectElement>().ok())
+            {
                 let input_key_clone = input_key.to_string();
                 let document_clone = document.clone();
-                
+
                 let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_event: web_sys::Event| {
-                    let selector = document_clone.query_selector(&format!(".mapping-type-selector[data-input-key='{}']", input_key_clone))
-                        .ok().flatten()
+                    let selector = document_clone
+                        .query_selector(&format!(
+                            ".mapping-type-selector[data-input-key='{}']",
+                            input_key_clone
+                        ))
+                        .ok()
+                        .flatten()
                         .and_then(|el| el.dyn_into::<HtmlSelectElement>().ok());
-                    
+
                     if let Some(sel) = selector {
                         let value = sel.value();
-                        let static_input = document_clone.query_selector(&format!(".static-value-input[data-input-key='{}']", input_key_clone))
-                            .ok().flatten();
-                        let node_input = document_clone.query_selector(&format!(".node-ref-input[data-input-key='{}']", input_key_clone))
-                            .ok().flatten();
-                        
+                        let static_input = document_clone
+                            .query_selector(&format!(
+                                ".static-value-input[data-input-key='{}']",
+                                input_key_clone
+                            ))
+                            .ok()
+                            .flatten();
+                        let node_input = document_clone
+                            .query_selector(&format!(
+                                ".node-ref-input[data-input-key='{}']",
+                                input_key_clone
+                            ))
+                            .ok()
+                            .flatten();
+
                         if value == "static" {
                             if let Some(input) = static_input {
                                 let _ = input.class_list().remove_1("hidden");
@@ -138,7 +168,7 @@ impl ToolConfigModal {
                         }
                     }
                 }));
-                
+
                 selector.add_event_listener_with_callback("change", cb.as_ref().unchecked_ref())?;
                 cb.forget();
             }
@@ -175,14 +205,18 @@ impl ToolConfigModal {
                 let mut validation_errors = Vec::new();
 
                 // Get auto-execute setting
-                new_config.auto_execute = document.get_element_by_id("tool-auto-execute")
+                new_config.auto_execute = document
+                    .get_element_by_id("tool-auto-execute")
                     .and_then(|el| el.dyn_into::<web_sys::HtmlInputElement>().ok())
                     .map(|checkbox| checkbox.checked())
                     .unwrap_or(true);
 
                 for (input_key, input_label, is_required) in &tool_inputs_clone {
                     let mapping_type = document
-                        .query_selector(&format!(".mapping-type-selector[data-input-key='{}']", input_key))
+                        .query_selector(&format!(
+                            ".mapping-type-selector[data-input-key='{}']",
+                            input_key
+                        ))
                         .ok()
                         .flatten()
                         .and_then(|sel| sel.dyn_into::<HtmlSelectElement>().ok())
@@ -191,7 +225,10 @@ impl ToolConfigModal {
 
                     if mapping_type == "static" {
                         let value = document
-                            .query_selector(&format!(".static-value-input[data-input-key='{}']", input_key))
+                            .query_selector(&format!(
+                                ".static-value-input[data-input-key='{}']",
+                                input_key
+                            ))
                             .ok()
                             .flatten()
                             .and_then(|inp| inp.dyn_into::<HtmlInputElement>().ok())
@@ -209,7 +246,10 @@ impl ToolConfigModal {
                         }
                     } else {
                         let node_ref = document
-                            .query_selector(&format!(".node-ref-input[data-input-key='{}']", input_key))
+                            .query_selector(&format!(
+                                ".node-ref-input[data-input-key='{}']",
+                                input_key
+                            ))
                             .ok()
                             .flatten()
                             .and_then(|inp| inp.dyn_into::<HtmlInputElement>().ok())
@@ -218,11 +258,15 @@ impl ToolConfigModal {
 
                         // Validate node reference format
                         if *is_required && node_ref.trim().is_empty() {
-                            validation_errors.push(format!("{} node reference is required", input_label));
+                            validation_errors
+                                .push(format!("{} node reference is required", input_label));
                         } else if !node_ref.trim().is_empty() {
                             let parts: Vec<&str> = node_ref.split(':').collect();
                             if parts.len() != 2 {
-                                validation_errors.push(format!("{} node reference must be in format 'node_id:output_key'", input_label));
+                                validation_errors.push(format!(
+                                    "{} node reference must be in format 'node_id:output_key'",
+                                    input_label
+                                ));
                             } else {
                                 new_config.input_mappings.insert(
                                     input_key.to_string(),

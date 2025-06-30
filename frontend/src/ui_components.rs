@@ -1,12 +1,12 @@
 //! Reusable UI component helpers to reduce code duplication and ensure consistency.
-//! 
+//!
 //! This module provides factory functions for common UI patterns like buttons,
 //! form fields, and modal structures. All components follow accessibility best
 //! practices and use consistent styling from constants.
 
+use crate::constants::*;
 use wasm_bindgen::prelude::*;
 use web_sys::{Document, Element};
-use crate::constants::*;
 
 /// Button configuration for the button factory
 #[derive(Debug, Clone)]
@@ -69,34 +69,34 @@ impl ButtonConfig {
 /// Create a button element with consistent attributes and styling
 pub fn create_button(document: &Document, config: ButtonConfig) -> Result<Element, JsValue> {
     let button = document.create_element("button")?;
-    
+
     // Always set type="button" to prevent form submission
     button.set_attribute(ATTR_TYPE, BUTTON_TYPE_BUTTON)?;
-    
+
     // Set text content
     button.set_inner_html(&config.text);
-    
+
     // Set optional attributes
     if let Some(id) = config.id {
         button.set_id(&id);
     }
-    
+
     if let Some(class_name) = config.class_name {
         button.set_class_name(&class_name);
     }
-    
+
     if let Some(testid) = config.data_testid {
         button.set_attribute(ATTR_DATA_TESTID, &testid)?;
     }
-    
+
     if let Some(aria_label) = config.aria_label {
         button.set_attribute("aria-label", &aria_label)?;
     }
-    
+
     if config.disabled {
         button.set_attribute("disabled", "true")?;
     }
-    
+
     Ok(button)
 }
 
@@ -128,49 +128,61 @@ pub fn set_button_loading(btn: &Element, loading: bool) {
 }
 
 /// Create a primary action button (blue background)
-pub fn create_primary_button(document: &Document, text: &str, id: Option<&str>) -> Result<Element, JsValue> {
+pub fn create_primary_button(
+    document: &Document,
+    text: &str,
+    id: Option<&str>,
+) -> Result<Element, JsValue> {
     let mut config = ButtonConfig::new(text).with_class("btn-primary");
-    
+
     if let Some(id) = id {
         config = config.with_id(id);
     }
-    
+
     create_button(document, config)
 }
 
 /// Create a secondary action button (default styling)
-pub fn create_secondary_button(document: &Document, text: &str, id: Option<&str>) -> Result<Element, JsValue> {
+pub fn create_secondary_button(
+    document: &Document,
+    text: &str,
+    id: Option<&str>,
+) -> Result<Element, JsValue> {
     let mut config = ButtonConfig::new(text).with_class("btn");
-    
+
     if let Some(id) = id {
         config = config.with_id(id);
     }
-    
+
     create_button(document, config)
 }
 
 /// Create an icon-only action button with proper accessibility
 pub fn create_icon_button(
-    document: &Document, 
-    icon: &str, 
+    document: &Document,
+    icon: &str,
     aria_label: &str,
-    class_name: Option<&str>
+    class_name: Option<&str>,
 ) -> Result<Element, JsValue> {
     let config = ButtonConfig::new(icon)
         .with_class(class_name.unwrap_or("action-btn"))
         .with_aria_label(aria_label);
-    
+
     create_button(document, config)
 }
 
 /// Create a delete/danger button (red styling)
-pub fn create_danger_button(document: &Document, text: &str, id: Option<&str>) -> Result<Element, JsValue> {
+pub fn create_danger_button(
+    document: &Document,
+    text: &str,
+    id: Option<&str>,
+) -> Result<Element, JsValue> {
     let mut config = ButtonConfig::new(text).with_class("btn-danger");
-    
+
     if let Some(id) = id {
         config = config.with_id(id);
     }
-    
+
     create_button(document, config)
 }
 
@@ -225,72 +237,76 @@ impl FormFieldConfig {
 pub fn create_form_field(document: &Document, config: FormFieldConfig) -> Result<Element, JsValue> {
     let container = document.create_element("div")?;
     container.set_class_name(CSS_FORM_ROW);
-    
+
     // Create label
     let label = document.create_element("label")?;
     label.set_inner_html(&config.label_text);
     label.set_attribute("for", &config.id)?;
     container.append_child(&label)?;
-    
+
     // Create input or textarea
     let input = if config.input_type == "textarea" {
         let textarea = document.create_element("textarea")?;
         textarea.set_id(&config.id);
-        
+
         if let Some(rows) = config.rows {
             textarea.set_attribute("rows", &rows.to_string())?;
         }
-        
+
         if let Some(placeholder) = &config.placeholder {
             textarea.set_attribute("placeholder", placeholder)?;
         }
-        
+
         if config.required {
             textarea.set_attribute("required", "true")?;
         }
-        
+
         if let Some(testid) = &config.data_testid {
             textarea.set_attribute(ATTR_DATA_TESTID, testid)?;
         }
-        
+
         textarea
     } else {
         let input = document.create_element("input")?;
         input.set_id(&config.id);
         input.set_attribute("type", &config.input_type)?;
-        
+
         if let Some(placeholder) = &config.placeholder {
             input.set_attribute("placeholder", placeholder)?;
         }
-        
+
         if config.required {
             input.set_attribute("required", "true")?;
         }
-        
+
         if let Some(testid) = &config.data_testid {
             input.set_attribute(ATTR_DATA_TESTID, testid)?;
         }
-        
+
         input
     };
-    
+
     container.append_child(&input)?;
     Ok(container)
 }
 
 /// Create a modal header with title and close button
-pub fn create_modal_header(document: &Document, title: &str, close_id: &str) -> Result<Element, JsValue> {
+pub fn create_modal_header(
+    document: &Document,
+    title: &str,
+    close_id: &str,
+) -> Result<Element, JsValue> {
     let header = document.create_element("div")?;
     header.set_class_name("modal-header");
-    
+
     let title_element = document.create_element("h2")?;
     title_element.set_inner_html(title);
     header.append_child(&title_element)?;
-    
+
     let close_button = create_icon_button(document, "&times;", "Close modal", Some("close"))?;
     close_button.set_id(close_id);
     header.append_child(&close_button)?;
-    
+
     Ok(header)
 }
 
@@ -305,10 +321,10 @@ pub fn create_actions_row(document: &Document) -> Result<Element, JsValue> {
 pub fn create_card(document: &Document, id: Option<&str>) -> Result<Element, JsValue> {
     let card = document.create_element("div")?;
     card.set_class_name("card");
-    
+
     if let Some(id) = id {
         card.set_id(id);
     }
-    
+
     Ok(card)
 }

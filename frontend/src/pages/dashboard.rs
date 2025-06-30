@@ -3,42 +3,43 @@
 // This file contains the Dashboard page component, responsible for
 // mounting and unmounting the dashboard view.
 //
-use web_sys::{Document, Element};
 use wasm_bindgen::JsValue;
+use web_sys::{Document, Element};
 
 /// Mount the dashboard view by creating necessary DOM elements
 /// This function is called when switching to the dashboard view
-pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {    
+pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {
     // Get app container for adding dashboard
     let app_container = document
         .get_element_by_id("app-container")
         .ok_or(JsValue::from_str("Could not find app-container"))?;
-    
+
     // Ensure we're using the default layout (not canvas-view)
     app_container.set_class_name("");
 
     // Create dashboard container if needed
-    let dashboard_container = if let Some(container) = document.get_element_by_id("dashboard-container") {
-        container
-    } else {
-        // Create the container
-        let container = document.create_element("div")?;
-        container.set_id("dashboard-container");
-        container.set_class_name("dashboard-container");
-        
-        // Create dashboard element
-        let dashboard = document.create_element("div")?;
-        dashboard.set_id("dashboard");
-        dashboard.set_class_name("dashboard");
-        container.append_child(&dashboard)?;
-        
-        app_container.append_child(&container)?;
-        container
-    };
+    let dashboard_container =
+        if let Some(container) = document.get_element_by_id("dashboard-container") {
+            container
+        } else {
+            // Create the container
+            let container = document.create_element("div")?;
+            container.set_id("dashboard-container");
+            container.set_class_name("dashboard-container");
+
+            // Create dashboard element
+            let dashboard = document.create_element("div")?;
+            dashboard.set_id("dashboard");
+            dashboard.set_class_name("dashboard");
+            container.append_child(&dashboard)?;
+
+            app_container.append_child(&container)?;
+            container
+        };
 
     // Ensure the dashboard is visible with proper styling
     crate::dom_utils::show(&dashboard_container);
-    
+
     // Verify the dashboard inner element exists
     if document.get_element_by_id("dashboard").is_none() {
         let dashboard = document.create_element("div")?;
@@ -46,19 +47,19 @@ pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {
         dashboard.set_class_name("dashboard");
         dashboard_container.append_child(&dashboard)?;
     }
-    
+
     // Update tab styling
     if let Some(dashboard_tab) = document.get_element_by_id("global-dashboard-tab") {
         dashboard_tab.set_class_name("tab-button active");
     }
-    
+
     if let Some(canvas_tab) = document.get_element_by_id("global-canvas-tab") {
         canvas_tab.set_class_name("tab-button");
     }
-    
+
     // Initialize or refresh the dashboard content
     crate::components::dashboard::refresh_dashboard(document)?;
-    
+
     Ok(())
 }
 
@@ -72,7 +73,7 @@ pub fn unmount_dashboard(document: &Document) -> Result<(), JsValue> {
             parent.remove_child(&container)?;
         }
     }
-    
+
     Ok(())
 }
 
@@ -85,4 +86,4 @@ pub fn get_dashboard_container(document: &Document) -> Option<Element> {
 /// Check if the dashboard is currently mounted
 pub fn is_dashboard_mounted(document: &Document) -> bool {
     document.get_element_by_id("dashboard-container").is_some()
-} 
+}

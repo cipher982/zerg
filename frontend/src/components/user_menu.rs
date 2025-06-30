@@ -4,11 +4,11 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, HtmlElement};
 
-use crate::state::APP_STATE;
 use crate::components::avatar_badge;
 use crate::messages::Message;
-use crate::storage::ActiveView;
 use crate::state::dispatch_global_message;
+use crate::state::APP_STATE;
+use crate::storage::ActiveView;
 
 /// Create & mount the user menu inside the `header` element.  Calling this
 /// multiple times is safe – it will update the avatar if the element already
@@ -19,7 +19,8 @@ pub fn mount_user_menu(document: &Document) -> Result<(), JsValue> {
         .ok_or(JsValue::from_str("header element missing"))?;
 
     // Ensure container exists
-    let container: HtmlElement = if let Some(el) = document.get_element_by_id("user-menu-container") {
+    let container: HtmlElement = if let Some(el) = document.get_element_by_id("user-menu-container")
+    {
         el.dyn_into()?
     } else {
         let el: HtmlElement = document.create_element("div")?.dyn_into()?;
@@ -85,7 +86,11 @@ pub fn mount_user_menu(document: &Document) -> Result<(), JsValue> {
             let dropdown_clone = dropdown.clone();
             let _cb = Closure::wrap(Box::new(move |_evt: web_sys::MouseEvent| {
                 let cls = dropdown_clone.class_list();
-                if cls.contains("hidden") { let _ = cls.remove_1("hidden"); } else { let _ = cls.add_1("hidden"); }
+                if cls.contains("hidden") {
+                    let _ = cls.remove_1("hidden");
+                } else {
+                    let _ = cls.add_1("hidden");
+                }
             }) as Box<dyn FnMut(_)>);
             avatar_el
                 .unchecked_ref::<HtmlElement>()
@@ -93,36 +98,43 @@ pub fn mount_user_menu(document: &Document) -> Result<(), JsValue> {
             _cb.forget();
         }
     }
-/// Create a menu item with a checkbox toggle for "Power Mode" (keyboard shortcuts)
-fn create_power_mode_toggle(document: &Document) -> Result<Element, JsValue> {
-    use wasm_bindgen::JsCast;
-    use web_sys::HtmlInputElement;
-    // Render as: [ ] ⚡ Power Mode: Keyboard Shortcuts
-    let item = document.create_element("div")?;
-    item.set_class_name("user-menu-item");
+    /// Create a menu item with a checkbox toggle for "Power Mode" (keyboard shortcuts)
+    fn create_power_mode_toggle(document: &Document) -> Result<Element, JsValue> {
+        use wasm_bindgen::JsCast;
+        use web_sys::HtmlInputElement;
+        // Render as: [ ] ⚡ Power Mode: Keyboard Shortcuts
+        let item = document.create_element("div")?;
+        item.set_class_name("user-menu-item");
 
-    let label = document.create_element("label")?;
-    label.set_class_name("user-menu-power-toggle");
-    label.set_text_content(Some("⚡ Power Mode: Keyboard shortcuts"));
+        let label = document.create_element("label")?;
+        label.set_class_name("user-menu-power-toggle");
+        label.set_text_content(Some("⚡ Power Mode: Keyboard shortcuts"));
 
-    let checkbox = document.create_element("input")?.dyn_into::<HtmlInputElement>()?;
-    checkbox.set_type("checkbox");
-    // Set initial value from AppState
-    let checked = APP_STATE.with(|s| s.borrow().power_mode);
-    checkbox.set_checked(checked);
+        let checkbox = document
+            .create_element("input")?
+            .dyn_into::<HtmlInputElement>()?;
+        checkbox.set_type("checkbox");
+        // Set initial value from AppState
+        let checked = APP_STATE.with(|s| s.borrow().power_mode);
+        checkbox.set_checked(checked);
 
-    // --- Handle toggle ---
-    let cb = Closure::wrap(Box::new(move |evt: web_sys::Event| {
-        let checked = evt.target().unwrap().dyn_ref::<HtmlInputElement>().map(|el| el.checked()).unwrap_or(false);
-        crate::state::dispatch_global_message(crate::messages::Message::SetPowerMode(checked));
-    }) as Box<dyn FnMut(_)>);
-    checkbox.add_event_listener_with_callback("change", cb.as_ref().unchecked_ref())?;
-    cb.forget();
+        // --- Handle toggle ---
+        let cb = Closure::wrap(Box::new(move |evt: web_sys::Event| {
+            let checked = evt
+                .target()
+                .unwrap()
+                .dyn_ref::<HtmlInputElement>()
+                .map(|el| el.checked())
+                .unwrap_or(false);
+            crate::state::dispatch_global_message(crate::messages::Message::SetPowerMode(checked));
+        }) as Box<dyn FnMut(_)>);
+        checkbox.add_event_listener_with_callback("change", cb.as_ref().unchecked_ref())?;
+        cb.forget();
 
-    label.insert_before(&checkbox, label.first_child().as_ref())?;
-    item.append_child(&label)?;
-    Ok(item)
-}
+        label.insert_before(&checkbox, label.first_child().as_ref())?;
+        item.append_child(&label)?;
+        Ok(item)
+    }
 
     Ok(())
 }

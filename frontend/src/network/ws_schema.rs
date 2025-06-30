@@ -69,10 +69,7 @@ pub enum WsMessage {
     // A freshly created message in a thread – emitted both when the user
     // posts a message (`thread_message`) and when the backend inserts a new
     // assistant/tool message automatically (alias `thread_message_created`).
-    #[serde(
-        rename = "thread_message",
-        alias = "thread_message_created"
-    )]
+    #[serde(rename = "thread_message", alias = "thread_message_created")]
     ThreadMessage { data: WsThreadMessage },
 
     // Profile update of the authenticated user.
@@ -271,9 +268,15 @@ impl WsMessage {
             WsMessage::AssistantId(data) => Some(format!("thread:{}", data.thread_id)),
             WsMessage::ThreadMessage { data } => Some(format!("thread:{}", data.thread_id)),
             WsMessage::UserUpdate { data } => Some(format!("user:{}", data.id)),
-            WsMessage::NodeState { data } => Some(format!("workflow_execution:{}", data.execution_id)),
-            WsMessage::ExecutionFinished { data } => Some(format!("workflow_execution:{}", data.execution_id)),
-            WsMessage::NodeLog { data } => Some(format!("workflow_execution:{}", data.execution_id)),
+            WsMessage::NodeState { data } => {
+                Some(format!("workflow_execution:{}", data.execution_id))
+            }
+            WsMessage::ExecutionFinished { data } => {
+                Some(format!("workflow_execution:{}", data.execution_id))
+            }
+            WsMessage::NodeLog { data } => {
+                Some(format!("workflow_execution:{}", data.execution_id))
+            }
             WsMessage::Unknown => None,
         }
     }

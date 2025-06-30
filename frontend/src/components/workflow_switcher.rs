@@ -1,14 +1,14 @@
 //! Simple tab-bar widget that lists workflows and lets the user switch or
 //! create new ones.  First iteration – no rename or delete yet.
 
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::closure::Closure;
+use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{Document};
+use web_sys::Document;
 
-use crate::state::{APP_STATE, dispatch_global_message};
-use crate::messages::Message;
 use crate::dom_utils::mount_in_overlay;
+use crate::messages::Message;
+use crate::state::{dispatch_global_message, APP_STATE};
 
 /// Call once on canvas view mount.  Renders the bar under the header.
 pub fn init(document: &Document) -> Result<(), JsValue> {
@@ -57,7 +57,9 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
         let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
             // Read current workflow id at click time (avoid stale capture)
             if let Some(current_id) = APP_STATE.with(|st| st.borrow().current_workflow_id) {
-                dispatch_global_message(Message::StartWorkflowExecution { workflow_id: current_id });
+                dispatch_global_message(Message::StartWorkflowExecution {
+                    workflow_id: current_id,
+                });
             } else {
                 web_sys::console::warn_1(&"No workflow selected – cannot run".into());
             }
@@ -67,7 +69,6 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
     }
 
     let _ = actions_el.append_child(&run_btn);
-
 
     // --------------------------------------------------------------------
     // Schedule (⏰) button – schedule workflow execution
@@ -122,7 +123,9 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
             crate::state::APP_STATE.with(|st| {
                 if st.borrow().exec_history_open {
                     if let Some(wf_id) = st.borrow().current_workflow_id {
-                        crate::state::dispatch_global_message(crate::messages::Message::LoadExecutionHistory { workflow_id: wf_id });
+                        crate::state::dispatch_global_message(
+                            crate::messages::Message::LoadExecutionHistory { workflow_id: wf_id },
+                        );
                     }
                 }
             });
@@ -225,22 +228,26 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
 
             // Ask for new name & description
             let win = web_sys::window().unwrap();
-            let new_name_opt = win.prompt_with_message("New workflow name?").unwrap_or(None);
+            let new_name_opt = win
+                .prompt_with_message("New workflow name?")
+                .unwrap_or(None);
             if let Some(new_name) = new_name_opt {
                 let new_name = new_name.trim();
                 if !new_name.is_empty() {
-                    let desc_opt = win.prompt_with_message("Description (optional)").unwrap_or(None);
+                    let desc_opt = win
+                        .prompt_with_message("Description (optional)")
+                        .unwrap_or(None);
                     let description = desc_opt.unwrap_or_default();
                     // Dispatch rename command
                     crate::state::APP_STATE.with(|st| {
                         if let Some(current_id) = st.borrow().current_workflow_id {
-                    crate::state::dispatch_global_message(
-                        crate::messages::Message::RenameWorkflow {
-                            workflow_id: current_id,
-                            name: new_name.to_string(),
-                            description: description.clone(),
-                        }
-                    );
+                            crate::state::dispatch_global_message(
+                                crate::messages::Message::RenameWorkflow {
+                                    workflow_id: current_id,
+                                    name: new_name.to_string(),
+                                    description: description.clone(),
+                                },
+                            );
                         } else {
                             web_sys::console::warn_1(&"No workflow selected to rename".into());
                         }
@@ -269,7 +276,8 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
             let _ = dropdown_toggle_clone.class_list().remove_1("active");
 
             // Check if deletion is already in progress
-            let is_deleting = crate::state::APP_STATE.with(|st| st.borrow().deleting_workflow.is_some());
+            let is_deleting =
+                crate::state::APP_STATE.with(|st| st.borrow().deleting_workflow.is_some());
             if is_deleting {
                 return; // Prevent double-submission
             }
@@ -282,7 +290,9 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
             crate::state::APP_STATE.with(|st| {
                 if let Some(current_id) = st.borrow().current_workflow_id {
                     crate::state::dispatch_global_message(
-                        crate::messages::Message::DeleteWorkflow { workflow_id: current_id }
+                        crate::messages::Message::DeleteWorkflow {
+                            workflow_id: current_id,
+                        },
                     );
                 } else {
                     web_sys::console::warn_1(&"No workflow selected to delete".into());
@@ -326,8 +336,12 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
                 let left_px = bbox.right() + scroll_x - dropdown_menu_clone.client_width() as f64;
 
                 if let Some(html_el) = dropdown_menu_clone.dyn_ref::<web_sys::HtmlElement>() {
-                    let _ = html_el.style().set_property("top", &format!("{}px", top_px));
-                    let _ = html_el.style().set_property("left", &format!("{}px", left_px));
+                    let _ = html_el
+                        .style()
+                        .set_property("top", &format!("{}px", top_px));
+                    let _ = html_el
+                        .style()
+                        .set_property("left", &format!("{}px", left_px));
                 }
 
                 let _ = dropdown_menu_clone.class_list().add_1("show");
@@ -377,7 +391,9 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
 
     let main_content = document
         .get_element_by_id("main-content-area")
-        .ok_or_else(|| JsValue::from_str("main-content-area missing – canvas layout not initialised"))?;
+        .ok_or_else(|| {
+            JsValue::from_str("main-content-area missing – canvas layout not initialised")
+        })?;
 
     // Insert the bar at the very top of the main content column.
     main_content.insert_before(&bar_el, main_content.first_child().as_ref())?;
@@ -389,14 +405,12 @@ pub fn init(document: &Document) -> Result<(), JsValue> {
 
 /// Rebuild the tab list from current AppState
 pub fn refresh(document: &Document) -> Result<(), JsValue> {
-    
     // Only refresh workflow bar if we're in canvas view (main-content-area exists)
     if document.get_element_by_id("main-content-area").is_none() {
         // Not in canvas view, skip workflow bar refresh
         return Ok(());
     }
-    
-    
+
     // Make sure workflow bar is initialized first
     let workflow_bar = match document.get_element_by_id("workflow-bar") {
         Some(bar) => bar,
@@ -408,10 +422,12 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
                 .ok_or_else(|| JsValue::from_str("workflow-bar element not found after init"))?
         }
     };
-    
+
     let list_el = workflow_bar
         .first_child()
-        .ok_or_else(|| JsValue::from_str("workflow-bar has no children - initialization may have failed"))?
+        .ok_or_else(|| {
+            JsValue::from_str("workflow-bar has no children - initialization may have failed")
+        })?
         .dyn_into::<web_sys::Element>()?;
 
     // Clear existing children
@@ -422,19 +438,31 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
     // Borrow state once
     let (workflows_vec, current_id) = APP_STATE.with(|state| {
         let st = state.borrow();
-        (st.workflows.values().cloned().collect::<Vec<_>>(), st.current_workflow_id)
+        (
+            st.workflows.values().cloned().collect::<Vec<_>>(),
+            st.current_workflow_id,
+        )
     });
 
     for wf in workflows_vec {
         let li = document.create_element("li")?;
-        li.set_attribute("class", if Some(wf.id) == current_id { "tab active" } else { "tab" })?;
+        li.set_attribute(
+            "class",
+            if Some(wf.id) == current_id {
+                "tab active"
+            } else {
+                "tab"
+            },
+        )?;
         li.set_attribute("data-id", &wf.id.to_string())?;
         li.set_text_content(Some(&wf.name));
 
         // Click handler – select workflow
         let id_clone = wf.id;
         let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
-            dispatch_global_message(Message::SelectWorkflow { workflow_id: id_clone });
+            dispatch_global_message(Message::SelectWorkflow {
+                workflow_id: id_clone,
+            });
         }));
         li.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
         cb.forget();
@@ -453,12 +481,17 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
         if is_creating {
             return; // Prevent double-submission
         }
-        
+
         // Prompt for name
-        let name = web_sys::window().unwrap().prompt_with_message("Workflow name?").unwrap_or(None);
+        let name = web_sys::window()
+            .unwrap()
+            .prompt_with_message("Workflow name?")
+            .unwrap_or(None);
         if let Some(n) = name {
             if !n.trim().is_empty() {
-                dispatch_global_message(Message::CreateWorkflow { name: n.trim().to_string() });
+                dispatch_global_message(Message::CreateWorkflow {
+                    name: n.trim().to_string(),
+                });
                 // UI will refresh via below command from reducer – but we also manually refresh after short delay
             }
         }
@@ -470,19 +503,18 @@ pub fn refresh(document: &Document) -> Result<(), JsValue> {
 
     // Update run button state if it exists
     update_run_button(document)?;
-    
+
     // Update workflow buttons (plus button, delete buttons) loading states
     update_workflow_buttons(document)?;
-    
+
     Ok(())
 }
 
 /// Update the ▶︎ Run button CSS classes based on AppState.current_execution.
 /// Adds one of: `running`, `success`, `failed` or removes all for idle.
 pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
-    use crate::state::{APP_STATE, ExecPhase};
     use crate::models::NodeExecStatus;
-    
+    use crate::state::{ExecPhase, APP_STATE};
 
     if let Some(btn) = document.get_element_by_id("run-workflow-btn") {
         let class_list = btn.class_list();
@@ -493,12 +525,32 @@ pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
         let (phase_opt, progress_info) = APP_STATE.with(|st| {
             let state = st.borrow();
             let phase = state.current_execution.clone().map(|e| e.status);
-            
+
             // Count node progress for enhanced feedback
-            let total_nodes = state.nodes.len();
-            let running_nodes = state.nodes.values().filter(|n| n.exec_status == Some(NodeExecStatus::Running)).count();
-            let completed_nodes = state.nodes.values().filter(|n| matches!(n.exec_status, Some(NodeExecStatus::Success) | Some(NodeExecStatus::Failed))).count();
-            
+            let total_nodes = state.workflow_nodes.len();
+            let running_nodes = state
+                .workflow_nodes
+                .iter()
+                .filter(|(id, _)| {
+                    state
+                        .ui_state
+                        .get(*id)
+                        .map_or(false, |ui| ui.exec_status == Some(NodeExecStatus::Running))
+                })
+                .count();
+            let completed_nodes = state
+                .workflow_nodes
+                .iter()
+                .filter(|(id, _)| {
+                    state.ui_state.get(*id).map_or(false, |ui| {
+                        matches!(
+                            ui.exec_status,
+                            Some(NodeExecStatus::Success) | Some(NodeExecStatus::Failed)
+                        )
+                    })
+                })
+                .count();
+
             (phase, (total_nodes, running_nodes, completed_nodes))
         });
 
@@ -508,7 +560,7 @@ pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
             match phase {
                 ExecPhase::Running | ExecPhase::Starting => {
                     let _ = class_list.add_1("running");
-                    
+
                     // Update button text with progress during execution only
                     if total_nodes > 0 {
                         let progress_text = if running_nodes > 0 {
@@ -536,18 +588,21 @@ pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
     Ok(())
 }
 
-
 /// Update the plus button visual state based on workflow loading states
 pub fn update_workflow_buttons(document: &Document) -> Result<(), JsValue> {
     use crate::state::APP_STATE;
-    
+
     // Update plus button for creation state
     if let Some(plus_btn) = document.query_selector(".plus-tab").ok().flatten() {
         let (is_creating, _deleting_id, _updating_id) = APP_STATE.with(|st| {
             let state = st.borrow();
-            (state.creating_workflow, state.deleting_workflow, state.updating_workflow)
+            (
+                state.creating_workflow,
+                state.deleting_workflow,
+                state.updating_workflow,
+            )
         });
-        
+
         if is_creating {
             plus_btn.set_text_content(Some("⟳")); // Spinner character
             let _ = plus_btn.set_attribute("style", "pointer-events: none; opacity: 0.6;");
@@ -556,9 +611,13 @@ pub fn update_workflow_buttons(document: &Document) -> Result<(), JsValue> {
             let _ = plus_btn.set_attribute("style", "");
         }
     }
-    
+
     // Update delete buttons in dropdown (if any are showing delete state)
-    if let Some(delete_btn) = document.query_selector(".dropdown-item.danger").ok().flatten() {
+    if let Some(delete_btn) = document
+        .query_selector(".dropdown-item.danger")
+        .ok()
+        .flatten()
+    {
         let is_deleting = APP_STATE.with(|st| st.borrow().deleting_workflow.is_some());
         if is_deleting {
             delete_btn.set_text_content(Some("Deleting..."));
@@ -568,7 +627,7 @@ pub fn update_workflow_buttons(document: &Document) -> Result<(), JsValue> {
             let _ = delete_btn.set_attribute("style", "");
         }
     }
-    
+
     Ok(())
 }
 
@@ -578,7 +637,7 @@ fn show_schedule_modal(workflow_id: u32) {
         Some(w) => w,
         None => return,
     };
-    
+
     let document = match window.document() {
         Some(d) => d,
         None => return,
@@ -591,14 +650,14 @@ fn show_schedule_modal(workflow_id: u32) {
     };
     let _ = overlay.set_attribute("class", "modal-overlay");
     let _ = overlay.set_attribute("id", "schedule-modal-overlay");
-    
+
     // Create modal content
     let modal = match document.create_element("div") {
         Ok(el) => el,
         Err(_) => return,
     };
     let _ = modal.set_attribute("class", "modal schedule-modal");
-    
+
     // Modal header
     let header = match document.create_element("div") {
         Ok(el) => el,
@@ -606,14 +665,14 @@ fn show_schedule_modal(workflow_id: u32) {
     };
     let _ = header.set_attribute("class", "modal-header");
     header.set_inner_html("<h3>Schedule Workflow</h3>");
-    
+
     // Modal body
     let body = match document.create_element("div") {
         Ok(el) => el,
         Err(_) => return,
     };
     let _ = body.set_attribute("class", "modal-body");
-    
+
     // Cron expression input
     let input_html = r#"
         <div class="form-group">
@@ -633,14 +692,14 @@ fn show_schedule_modal(workflow_id: u32) {
         </div>
     "#;
     body.set_inner_html(input_html);
-    
+
     // Modal footer
     let footer = match document.create_element("div") {
         Ok(el) => el,
         Err(_) => return,
     };
     let _ = footer.set_attribute("class", "modal-footer");
-    
+
     let cancel_btn = match document.create_element("button") {
         Ok(el) => el,
         Err(_) => return,
@@ -648,7 +707,7 @@ fn show_schedule_modal(workflow_id: u32) {
     let _ = cancel_btn.set_attribute("type", "button");
     let _ = cancel_btn.set_attribute("class", "btn btn-secondary");
     cancel_btn.set_text_content(Some("Cancel"));
-    
+
     let schedule_btn = match document.create_element("button") {
         Ok(el) => el,
         Err(_) => return,
@@ -657,16 +716,16 @@ fn show_schedule_modal(workflow_id: u32) {
     let _ = schedule_btn.set_attribute("class", "btn btn-primary");
     let _ = schedule_btn.set_attribute("id", "confirm-schedule-btn");
     schedule_btn.set_text_content(Some("Schedule"));
-    
+
     let _ = footer.append_child(&cancel_btn);
     let _ = footer.append_child(&schedule_btn);
-    
+
     // Assemble modal
     let _ = modal.append_child(&header);
     let _ = modal.append_child(&body);
     let _ = modal.append_child(&footer);
     let _ = overlay.append_child(&modal);
-    
+
     // Add event handlers
     {
         let overlay_clone = overlay.clone();
@@ -676,7 +735,7 @@ fn show_schedule_modal(workflow_id: u32) {
         let _ = cancel_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref());
         cb.forget();
     }
-    
+
     // Schedule button handler
     {
         let overlay_clone = overlay.clone();
@@ -695,7 +754,8 @@ fn show_schedule_modal(workflow_id: u32) {
                     } else {
                         // Show error for empty cron expression
                         if let Some(window) = web_sys::window() {
-                            let _ = window.alert_with_message("Please enter a valid cron expression");
+                            let _ =
+                                window.alert_with_message("Please enter a valid cron expression");
                         }
                     }
                 }
@@ -704,7 +764,7 @@ fn show_schedule_modal(workflow_id: u32) {
         let _ = schedule_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref());
         cb.forget();
     }
-    
+
     // Close on overlay click (outside modal)
     {
         let overlay_clone = overlay.clone();
@@ -721,10 +781,10 @@ fn show_schedule_modal(workflow_id: u32) {
         let _ = overlay.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref());
         cb.forget();
     }
-    
+
     // Add to body and focus input
     let _ = document.body().unwrap().append_child(&overlay);
-    
+
     // Focus the cron expression input
     if let Some(input) = document.get_element_by_id("cron-expression") {
         if let Some(html_input) = input.dyn_ref::<web_sys::HtmlInputElement>() {
@@ -737,10 +797,13 @@ fn show_schedule_modal(workflow_id: u32) {
 pub fn update_connection_button(document: &Document) -> Result<(), JsValue> {
     if let Some(btn) = document.get_element_by_id("connection-mode-btn") {
         let is_active = APP_STATE.with(|state| state.borrow().connection_mode);
-        
+
         if is_active {
             btn.set_attribute("class", "toolbar-btn active")?;
-            btn.set_attribute("title", "Exit Connection Mode (Click nodes to connect them)")?;
+            btn.set_attribute(
+                "title",
+                "Exit Connection Mode (Click nodes to connect them)",
+            )?;
         } else {
             btn.set_attribute("class", "toolbar-btn")?;
             btn.set_attribute("title", "Toggle Connection Mode")?;

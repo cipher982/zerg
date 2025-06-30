@@ -33,7 +33,9 @@ pub fn render(document: &Document, user: &CurrentUser) -> Result<Element, JsValu
 
         // Apply deterministic background colour based on user id
         let hue = (user.id % 360) as i32; // simple hash
-        wrapper.style().set_property("background", &format!("hsl({},70%,60%)", hue))?;
+        wrapper
+            .style()
+            .set_property("background", &format!("hsl({},70%,60%)", hue))?;
     }
 
     Ok(wrapper.into())

@@ -3,11 +3,11 @@
 // This file contains functions to render different parts of the UI
 // based on the current application state.
 //
-use web_sys::Document;
-use crate::storage::ActiveView;
-use wasm_bindgen::JsValue;
 use crate::components::agent_config_modal::AgentConfigModal;
 use crate::dom_utils;
+use crate::storage::ActiveView;
+use wasm_bindgen::JsValue;
+use web_sys::Document;
 
 /// Helper: hide a DOM element (`display:none`) if it exists.
 fn hide_by_id(document: &web_sys::Document, id: &str) {
@@ -24,13 +24,12 @@ fn show_block_by_id(document: &web_sys::Document, id: &str) {
     }
 }
 
-
 // Handle agent modal display
 pub fn hide_agent_modal(document: &Document) -> Result<(), JsValue> {
     if let Some(modal) = document.get_element_by_id("agent-modal") {
         dom_utils::hide(&modal);
     }
-    
+
     Ok(())
 }
 
@@ -43,10 +42,13 @@ pub fn show_agent_modal(agent_id: u32, document: &Document) -> Result<(), JsValu
 
 // Render the appropriate view based on the explicit view type
 // This avoids requiring a reference to AppState, preventing potential borrow issues
-pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -> Result<(), JsValue> {
+pub fn render_active_view_by_type(
+    view_type: &ActiveView,
+    document: &Document,
+) -> Result<(), JsValue> {
     // First log which view we're switching to for debugging
     web_sys::console::log_1(&format!("Switching to view: {:?}", view_type).into());
-    
+
     // -------------------------------------------------------------
     // Step 1: Hide *all* view containers (if they exist).
     // -------------------------------------------------------------
@@ -62,7 +64,7 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
     hide_by_id(document, "node-palette-shelf");
     hide_by_id(document, "profile-container");
     hide_by_id(document, "chat-view-container");
-    
+
     // -------------------------------------------------------------
     // Step 2: Ensure requested view is mounted once, then show it.
     // -------------------------------------------------------------
@@ -77,7 +79,7 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
             if let Some(app_container) = document.get_element_by_id("app-container") {
                 app_container.set_class_name("");
             }
-        },
+        }
         ActiveView::Canvas => {
             if !crate::pages::canvas::is_canvas_mounted(document) {
                 crate::pages::canvas::mount_canvas(document)?;
@@ -86,17 +88,17 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
             show_block_by_id(document, "main-content-area");
             show_block_by_id(document, "canvas-input-panel");
             show_block_by_id(document, "workflow-bar");
-            
+
             show_block_by_id(document, "agent-shelf");
 
             // Canvas view uses flex row layout via the .canvas-view class
             if let Some(app_container) = document.get_element_by_id("app-container") {
                 app_container.set_class_name("canvas-view");
             }
-            
+
             // Ensure trigger node exists every time we switch to Canvas view
             crate::pages::canvas::ensure_trigger_node_exists();
-        },
+        }
         ActiveView::Profile => {
             if !crate::pages::profile::is_profile_mounted(document) {
                 crate::pages::profile::mount_profile(document)?;
@@ -106,7 +108,7 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
             if let Some(app_container) = document.get_element_by_id("app-container") {
                 app_container.set_class_name("");
             }
-        },
+        }
         ActiveView::ChatView => {
             // Setup chat view once
             if document.get_element_by_id("chat-view-container").is_none() {
@@ -122,10 +124,10 @@ pub fn render_active_view_by_type(view_type: &ActiveView, document: &Document) -
             }
         }
     }
-    
+
     // Update tab styling based on active view
     update_tab_styling(view_type, document)?;
-    
+
     Ok(())
 }
 
@@ -135,30 +137,30 @@ fn update_tab_styling(view_type: &ActiveView, document: &Document) -> Result<(),
     if let Some(dashboard_tab) = document.get_element_by_id("global-dashboard-tab") {
         dashboard_tab.set_class_name("tab-button");
     }
-    
+
     if let Some(canvas_tab) = document.get_element_by_id("global-canvas-tab") {
         canvas_tab.set_class_name("tab-button");
     }
-    
+
     // Now set the active tab based on the current view
     match view_type {
         ActiveView::Dashboard => {
             if let Some(dashboard_tab) = document.get_element_by_id("global-dashboard-tab") {
                 dashboard_tab.set_class_name("tab-button active");
             }
-        },
+        }
         ActiveView::Canvas => {
             if let Some(canvas_tab) = document.get_element_by_id("global-canvas-tab") {
                 canvas_tab.set_class_name("tab-button active");
             }
-        },
+        }
         ActiveView::Profile => {
             // Profile currently has no tab; ensure others are inactive.
-        },
+        }
         ActiveView::ChatView => {
             // Chat doesn't have a tab currently, could add one in the future
         }
     }
-    
+
     Ok(())
 }

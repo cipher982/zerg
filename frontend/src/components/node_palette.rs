@@ -1,9 +1,9 @@
-use web_sys::{Document, Element, MouseEvent, DragEvent};
-use wasm_bindgen::{JsCast, JsValue};
-use crate::models::{NodeType, TriggerType, TriggerConfig, ToolConfig, ToolVisibility};
-use crate::state::{APP_STATE, AppState};
-use crate::generated::{ToolName, ServerName};
+use crate::generated::{ServerName, ToolName};
+use crate::models::{NodeType, ToolConfig, ToolVisibility, TriggerConfig, TriggerType};
+use crate::state::{AppState, APP_STATE};
 use std::collections::HashMap;
+use wasm_bindgen::{JsCast, JsValue};
+use web_sys::{Document, DragEvent, Element, MouseEvent};
 
 /// Node palette component for dragging tools and triggers onto the canvas
 pub struct NodePalette {
@@ -40,16 +40,19 @@ impl NodePalette {
         // Add header
         let header = document.create_element("div")?;
         header.set_class_name("palette-header");
-        header.set_inner_html("
+        header.set_inner_html(
+            "
             <h3>
                 Node Palette
             </h3>
-        ");
+        ",
+        );
         container.append_child(&header)?;
 
         // Add search box
         let search_container = document.create_element("div")?;
-        search_container.set_inner_html(&format!("
+        search_container.set_inner_html(&format!(
+            "
             <input 
                 type='text' 
                 placeholder='Search nodes...' 
@@ -57,7 +60,9 @@ impl NodePalette {
                 class='palette-search-input'
                 id='palette-search'
             />
-        ", self.search_query));
+        ",
+            self.search_query
+        ));
         container.append_child(&search_container)?;
 
         // Get available palette nodes
@@ -66,7 +71,8 @@ impl NodePalette {
         // Group nodes by category
         let mut categories: HashMap<String, Vec<PaletteNode>> = HashMap::new();
         for node in nodes {
-            categories.entry(node.category.clone())
+            categories
+                .entry(node.category.clone())
                 .or_insert_with(Vec::new)
                 .push(node);
         }
@@ -77,13 +83,13 @@ impl NodePalette {
             // Define a specific order for categories
             let order = |cat: &str| match cat {
                 "Triggers" => 0,
-                "I/O Tools" => 1, 
+                "I/O Tools" => 1,
                 "Optional Tools" => 2,
-                _ => 999 // Unknown categories go last
+                _ => 999, // Unknown categories go last
             };
             order(a.0).cmp(&order(b.0))
         });
-        
+
         for (category_name, category_nodes) in sorted_categories {
             self.render_category(document, container, category_name, category_nodes)?;
         }
@@ -102,11 +108,14 @@ impl NodePalette {
         // Category header
         let category_header = document.create_element("div")?;
         category_header.set_class_name("category-header");
-        category_header.set_inner_html(&format!("
+        category_header.set_inner_html(&format!(
+            "
             <h4 class='palette-category-header'>
                 {}
             </h4>
-        ", category_name));
+        ",
+            category_name
+        ));
         container.append_child(&category_header)?;
 
         // Render nodes in this category
@@ -147,21 +156,30 @@ impl NodePalette {
             let _ = node_clone2.set_class_name("palette-node"); // Remove hover class
         }) as Box<dyn FnMut(_)>);
 
-        node_element.add_event_listener_with_callback("mouseenter", onmouseenter.as_ref().unchecked_ref())?;
-        node_element.add_event_listener_with_callback("mouseleave", onmouseleave.as_ref().unchecked_ref())?;
+        node_element.add_event_listener_with_callback(
+            "mouseenter",
+            onmouseenter.as_ref().unchecked_ref(),
+        )?;
+        node_element.add_event_listener_with_callback(
+            "mouseleave",
+            onmouseleave.as_ref().unchecked_ref(),
+        )?;
 
         // Store closures to prevent them from being dropped
         onmouseenter.forget();
         onmouseleave.forget();
 
         // Node content
-        node_element.set_inner_html(&format!("
+        node_element.set_inner_html(&format!(
+            "
             <span class='palette-node-icon'>{}</span>
             <div>
                 <div class='palette-node-name'>{}</div>
                 <div class='palette-node-description'>{}</div>
             </div>
-        ", node.icon, node.name, node.description));
+        ",
+            node.icon, node.name, node.description
+        ));
 
         // Add drag event listeners
         self.add_drag_listeners(&node_element, node)?;
@@ -173,7 +191,7 @@ impl NodePalette {
     /// Add drag event listeners to a palette node
     fn add_drag_listeners(&self, element: &Element, node: &PaletteNode) -> Result<(), JsValue> {
         let node_data = node.clone();
-        
+
         // Drag start event
         let ondragstart = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: DragEvent| {
             if let Some(data_transfer) = event.data_transfer() {
@@ -181,59 +199,68 @@ impl NodePalette {
                 let node_json = serde_json::to_string(&node_data).unwrap_or_default();
                 let _ = data_transfer.set_data("application/json", &node_json);
                 let _ = data_transfer.set_data("text/plain", &node_data.id);
-                
+
                 // Set drag effect
                 data_transfer.set_effect_allowed("copy");
-                
+
                 // Create a clean drag image instead of showing the full element
                 if let Ok(document) = web_sys::window().unwrap().document().ok_or("No document") {
                     let drag_image = document.create_element("div").unwrap();
-                    
+
                     // Choose color based on node type
                     let (bg_color, text) = match &node_data.node_type {
                         crate::models::NodeType::Tool { .. } => ("#10b981", "Tool"),
                         crate::models::NodeType::Trigger { .. } => ("#f59e0b", "Trigger"),
-                        _ => ("#6366f1", "Node")
+                        _ => ("#6366f1", "Node"),
                     };
-                    
-                    drag_image.set_attribute("style", &format!(
-                        "position: absolute; top: -1000px; left: -1000px; \
+
+                    drag_image
+                        .set_attribute(
+                            "style",
+                            &format!(
+                                "position: absolute; top: -1000px; left: -1000px; \
                          width: 80px; height: 30px; \
                          background: {}; color: white; \
                          border-radius: 15px; \
                          display: flex; align-items: center; justify-content: center; \
                          font-size: 12px; font-weight: 500; \
-                         box-shadow: 0 2px 8px rgba(0,0,0,0.2);", 
-                        bg_color
-                    )).unwrap();
+                         box-shadow: 0 2px 8px rgba(0,0,0,0.2);",
+                                bg_color
+                            ),
+                        )
+                        .unwrap();
                     drag_image.set_inner_html(text);
-                    
+
                     if let Some(body) = document.body() {
                         body.append_child(&drag_image).unwrap();
-                        
+
                         // Set the custom drag image
                         data_transfer.set_drag_image(&drag_image, 40, 15);
-                        
+
                         // Clean up the temporary element after a short delay
                         let cleanup_drag_image = drag_image.clone();
-                        let cleanup_closure = wasm_bindgen::closure::Closure::once(Box::new(move || {
-                            if let Some(parent) = cleanup_drag_image.parent_node() {
-                                let _ = parent.remove_child(&cleanup_drag_image);
-                            }
-                        }));
-                        
-                        web_sys::window().unwrap()
+                        let cleanup_closure =
+                            wasm_bindgen::closure::Closure::once(Box::new(move || {
+                                if let Some(parent) = cleanup_drag_image.parent_node() {
+                                    let _ = parent.remove_child(&cleanup_drag_image);
+                                }
+                            }));
+
+                        web_sys::window()
+                            .unwrap()
                             .set_timeout_with_callback_and_timeout_and_arguments_0(
-                                cleanup_closure.as_ref().unchecked_ref(), 
-                                100
-                            ).unwrap();
+                                cleanup_closure.as_ref().unchecked_ref(),
+                                100,
+                            )
+                            .unwrap();
                         cleanup_closure.forget();
                     }
                 }
             }
         }) as Box<dyn FnMut(_)>);
 
-        element.add_event_listener_with_callback("dragstart", ondragstart.as_ref().unchecked_ref())?;
+        element
+            .add_event_listener_with_callback("dragstart", ondragstart.as_ref().unchecked_ref())?;
         ondragstart.forget();
 
         Ok(())
@@ -395,7 +422,6 @@ pub fn init_node_palette(document: &Document) -> Result<(), JsValue> {
     Ok(())
 }
 
-
 /// Initialize drag and drop handling for the canvas
 fn init_canvas_drop_handling(document: &Document) -> Result<(), JsValue> {
     if let Some(canvas) = document.get_element_by_id("canvas") {
@@ -406,16 +432,21 @@ fn init_canvas_drop_handling(document: &Document) -> Result<(), JsValue> {
 
         let ondrop = wasm_bindgen::closure::Closure::wrap(Box::new(move |event: DragEvent| {
             event.prevent_default();
-            
+
             if let Some(data_transfer) = event.data_transfer() {
                 if let Ok(node_data) = data_transfer.get_data("application/json") {
                     // Parse the node data
                     if let Ok(palette_node) = serde_json::from_str::<PaletteNode>(&node_data) {
                         // Get drop position
-                        let rect = event.current_target().unwrap().dyn_into::<Element>().unwrap().get_bounding_client_rect();
+                        let rect = event
+                            .current_target()
+                            .unwrap()
+                            .dyn_into::<Element>()
+                            .unwrap()
+                            .get_bounding_client_rect();
                         let x = event.client_x() as f64 - rect.left();
                         let y = event.client_y() as f64 - rect.top();
-                        
+
                         // Create node on canvas
                         APP_STATE.with(|state| {
                             let mut state = state.borrow_mut();
@@ -428,7 +459,7 @@ fn init_canvas_drop_handling(document: &Document) -> Result<(), JsValue> {
 
         canvas.add_event_listener_with_callback("dragover", ondragover.as_ref().unchecked_ref())?;
         canvas.add_event_listener_with_callback("drop", ondrop.as_ref().unchecked_ref())?;
-        
+
         ondragover.forget();
         ondrop.forget();
     }
@@ -453,30 +484,31 @@ pub fn create_node_from_palette(state: &mut AppState, palette_node: &PaletteNode
     let node_type = palette_node.node_type.clone();
     let name = palette_node.name.clone();
 
-    // Create the node directly in the state.nodes HashMap
-    use crate::models::Node;
-    let node = Node {
-        node_id: node_id.clone(),
-        agent_id: None,
-        x: world_x,
-        y: world_y,
-        width: 200.0,
-        height: 80.0,
-        color: "#f59e0b".to_string(),
-        parent_id: None,
-        text: name,
-        node_type,
-        is_selected: false,
-        is_dragging: false,
-        exec_status: None,
-        transition_animation: None,
-    };
-    state.nodes.insert(node_id.clone(), node.clone());
-    
+    // Create the node directly in the state.workflow_nodes HashMap
+    use crate::models::WorkflowNode;
+    use serde_json::json;
+
+    let mut config = serde_json::Map::new();
+    config.insert("x".to_string(), json!(world_x));
+    config.insert("y".to_string(), json!(world_y));
+    config.insert("width".to_string(), json!(200.0));
+    config.insert("height".to_string(), json!(80.0));
+    config.insert("color".to_string(), json!("#f59e0b"));
+    config.insert("text".to_string(), json!(name));
+
+    let mut node = WorkflowNode::new_with_type(node_id.clone(), &node_type);
+    node.config = config;
+    state.workflow_nodes.insert(node_id.clone(), node.clone());
+    state
+        .ui_state
+        .insert(node_id.clone(), crate::models::UiNodeState::default());
+
     // Add node to current workflow structure (same as agent nodes)
     state.add_node_to_current_workflow(node);
 
-    web_sys::console::log_1(&format!("Created node {} at ({}, {})", node_id, world_x, world_y).into());
+    web_sys::console::log_1(
+        &format!("Created node {} at ({}, {})", node_id, world_x, world_y).into(),
+    );
 
     // Mark state as dirty for re-render
     state.mark_dirty();

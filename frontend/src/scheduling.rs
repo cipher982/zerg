@@ -36,8 +36,8 @@ pub enum Frequency {
 
     /// `M H D * *` – every month on day *D* at *HH:MM* (1-31).
     Monthly {
-        day: u8,   // 1-31
-        hour: u8,  // 0-23
+        day: u8,    // 1-31
+        hour: u8,   // 0-23
         minute: u8, // 0-59
     },
 }
@@ -54,11 +54,7 @@ impl Frequency {
                 hour,
                 minute,
             } => format!("{} {} * * {}", minute, hour, weekday),
-            Frequency::Monthly {
-                day,
-                hour,
-                minute,
-            } => format!("{} {} {} * *", minute, hour, day),
+            Frequency::Monthly { day, hour, minute } => format!("{} {} {} * *", minute, hour, day),
         }
     }
 }
@@ -136,7 +132,9 @@ impl TryFrom<&str> for Frequency {
 impl fmt::Display for Frequency {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Frequency::EveryNMinutes(n) => write!(f, "Every {} minute{}", n, if *n == 1 { "" } else { "s" }),
+            Frequency::EveryNMinutes(n) => {
+                write!(f, "Every {} minute{}", n, if *n == 1 { "" } else { "s" })
+            }
             Frequency::Hourly { minute } => write!(f, "Hourly at minute {:02}", minute),
             Frequency::Daily { hour, minute } => write!(f, "Daily at {:02}:{:02}", hour, minute),
             Frequency::Weekly {
@@ -145,17 +143,13 @@ impl fmt::Display for Frequency {
                 minute,
             } => {
                 // Map 0-6 to weekday names for readability (Sun=0)
-                const DAYS: [&str; 7] = [
-                    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat",
-                ];
+                const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
                 let day_name = DAYS.get(*weekday as usize).unwrap_or(&"???");
                 write!(f, "Weekly on {} at {:02}:{:02}", day_name, hour, minute)
             }
-            Frequency::Monthly { day, hour, minute } => write!(
-                f,
-                "Monthly on {:02} at {:02}:{:02}",
-                day, hour, minute
-            ),
+            Frequency::Monthly { day, hour, minute } => {
+                write!(f, "Monthly on {:02} at {:02}:{:02}", day, hour, minute)
+            }
         }
     }
 }
@@ -176,7 +170,10 @@ mod tests {
     fn test_to_cron_mappings() {
         assert_eq!(Frequency::EveryNMinutes(15).to_cron(), "*/15 * * * *");
         assert_eq!(Frequency::Hourly { minute: 30 }.to_cron(), "30 * * * *");
-        assert_eq!(Frequency::Daily { hour: 9, minute: 0 }.to_cron(), "0 9 * * *");
+        assert_eq!(
+            Frequency::Daily { hour: 9, minute: 0 }.to_cron(),
+            "0 9 * * *"
+        );
         assert_eq!(
             Frequency::Weekly {
                 weekday: 1,

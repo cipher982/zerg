@@ -1,14 +1,14 @@
 //! MCP Server Management Component
-//! 
+//!
 //! Provides UI for managing MCP servers attached to agents - both preset
 //! integrations (GitHub, Linear, etc.) and custom server URLs.
 
-use wasm_bindgen::prelude::*;
-use web_sys::{Document, Element, HtmlInputElement};
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use web_sys::{Document, Element, HtmlInputElement};
 
 use crate::dom_utils;
 use crate::network::api_client::ApiClient;
@@ -126,7 +126,7 @@ impl MCPServerManager {
 
         let quick_tab = self.create_tab_button(document, "Quick Connect", &MCPTab::QuickConnect)?;
         let custom_tab = self.create_tab_button(document, "Custom Server", &MCPTab::Custom)?;
-        
+
         tabs_wrapper.append_child(&quick_tab)?;
         tabs_wrapper.append_child(&custom_tab)?;
 
@@ -178,7 +178,7 @@ impl MCPServerManager {
 
         let builtin_tools = [
             "Date/Time (get_current_time)",
-            "Math (math_eval)", 
+            "Math (math_eval)",
             "HTTP Requests (http_request)",
         ];
 
@@ -194,7 +194,12 @@ impl MCPServerManager {
         Ok(section)
     }
 
-    fn create_tab_button(&self, document: &Document, label: &str, tab_type: &MCPTab) -> Result<Element, JsValue> {
+    fn create_tab_button(
+        &self,
+        document: &Document,
+        label: &str,
+        tab_type: &MCPTab,
+    ) -> Result<Element, JsValue> {
         let button = document.create_element("button")?;
         button.set_attribute("type", "button")?;
         button.set_class_name("mcp-tab");
@@ -205,9 +210,9 @@ impl MCPServerManager {
         let tab_clone = tab_type.clone();
         let agent_id = self.agent_id;
         let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::Event| {
-            dispatch_global_message(crate::messages::Message::SetMCPTab { 
+            dispatch_global_message(crate::messages::Message::SetMCPTab {
                 agent_id,
-                tab: tab_clone.clone()
+                tab: tab_clone.clone(),
             });
         }));
         button.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
@@ -240,7 +245,11 @@ impl MCPServerManager {
         Ok(content)
     }
 
-    fn create_preset_card(&self, document: &Document, preset: &MCPPreset) -> Result<Element, JsValue> {
+    fn create_preset_card(
+        &self,
+        document: &Document,
+        preset: &MCPPreset,
+    ) -> Result<Element, JsValue> {
         let card = document.create_element("div")?;
         card.set_class_name("mcp-preset-card");
         card.set_class_name("mcp-preset-card");
@@ -269,9 +278,9 @@ impl MCPServerManager {
         let preset_id = preset.id.clone();
         let agent_id = self.agent_id;
         let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::Event| {
-            dispatch_global_message(crate::messages::Message::ConnectMCPPreset { 
+            dispatch_global_message(crate::messages::Message::ConnectMCPPreset {
                 agent_id,
-                preset_id: preset_id.clone()
+                preset_id: preset_id.clone(),
             });
         }));
         button.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
@@ -350,19 +359,19 @@ impl MCPServerManager {
 
         // Add event listeners
         let agent_id = self.agent_id;
-        
+
         let test_cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::Event| {
             if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
                 let url = Self::get_input_value(&doc, "mcp-custom-url").unwrap_or_default();
                 let name = Self::get_input_value(&doc, "mcp-custom-name").unwrap_or_default();
                 let token = Self::get_input_value(&doc, "mcp-custom-token").unwrap_or_default();
-                
+
                 if !url.is_empty() && !name.is_empty() {
-                    dispatch_global_message(crate::messages::Message::TestMCPConnection { 
+                    dispatch_global_message(crate::messages::Message::TestMCPConnection {
                         agent_id,
                         url,
                         name,
-                        auth_token: token
+                        auth_token: token,
                     });
                 }
             }
@@ -375,14 +384,14 @@ impl MCPServerManager {
                 let url = Self::get_input_value(&doc, "mcp-custom-url").unwrap_or_default();
                 let name = Self::get_input_value(&doc, "mcp-custom-name").unwrap_or_default();
                 let token = Self::get_input_value(&doc, "mcp-custom-token").unwrap_or_default();
-                
+
                 if !url.is_empty() && !name.is_empty() {
-                    dispatch_global_message(crate::messages::Message::AddMCPServer { 
+                    dispatch_global_message(crate::messages::Message::AddMCPServer {
                         agent_id,
                         url: Some(url),
                         name,
                         preset: None,
-                        auth_token: token
+                        auth_token: token,
                     });
                 }
             }
@@ -442,7 +451,11 @@ impl MCPServerManager {
         Ok(section)
     }
 
-    fn create_server_card(&self, document: &Document, server: &MCPServerConfig) -> Result<Element, JsValue> {
+    fn create_server_card(
+        &self,
+        document: &Document,
+        server: &MCPServerConfig,
+    ) -> Result<Element, JsValue> {
         let card = document.create_element("div")?;
         card.set_class_name("mcp-server-card");
         card.set_class_name("mcp-server-card");
@@ -451,18 +464,18 @@ impl MCPServerManager {
         header.set_class_name("mcp-server-card-header");
 
         let info = document.create_element("div")?;
-        
+
         let name = document.create_element("strong")?;
         name.set_inner_html(&server.name);
 
         let details = document.create_element("div")?;
         details.set_class_name("mcp-server-details");
-        
+
         let tools_text = match server.tools_count {
             Some(count) => format!("{} tools", count),
             None => "? tools".to_string(),
         };
-        
+
         let status_text = match &server.status {
             Some(ConnectionStatus::Success) => "✅ Online",
             Some(ConnectionStatus::Failed { .. }) => "❌ Failed",
@@ -486,9 +499,9 @@ impl MCPServerManager {
         let server_name = server.name.clone();
         let agent_id = self.agent_id;
         let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::Event| {
-            dispatch_global_message(crate::messages::Message::RemoveMCPServer { 
+            dispatch_global_message(crate::messages::Message::RemoveMCPServer {
                 agent_id,
-                server_name: server_name.clone()
+                server_name: server_name.clone(),
             });
         }));
         remove_btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref())?;
@@ -516,7 +529,7 @@ impl MCPServerManager {
         let response = ApiClient::list_mcp_servers(self.agent_id).await?;
         let servers: Vec<MCPServerConfig> = serde_json::from_str(&response)
             .map_err(|e| JsValue::from_str(&format!("Failed to parse MCP servers: {:?}", e)))?;
-        
+
         self.servers = servers;
         Ok(())
     }
@@ -525,11 +538,11 @@ impl MCPServerManager {
     pub async fn add_server(&mut self, config: MCPServerConfig) -> Result<(), JsValue> {
         let config_json = serde_json::to_string(&config)
             .map_err(|e| JsValue::from_str(&format!("Failed to serialize config: {:?}", e)))?;
-        
+
         let response = ApiClient::add_mcp_server(self.agent_id, &config_json).await?;
         let server: MCPServerConfig = serde_json::from_str(&response)
             .map_err(|e| JsValue::from_str(&format!("Failed to parse server response: {:?}", e)))?;
-        
+
         self.servers.push(server);
         Ok(())
     }
@@ -542,28 +555,37 @@ impl MCPServerManager {
     }
 
     /// Test connection to an MCP server
-    pub async fn test_connection(&mut self, url: &str, name: &str, auth_token: &str) -> Result<ConnectionStatus, JsValue> {
+    pub async fn test_connection(
+        &mut self,
+        url: &str,
+        name: &str,
+        auth_token: &str,
+    ) -> Result<ConnectionStatus, JsValue> {
         let test_config = serde_json::json!({
             "url": url,
             "name": name,
             "auth_token": auth_token
         });
-        
+
         let test_json = test_config.to_string();
         let response = ApiClient::test_mcp_connection(self.agent_id, &test_json).await?;
-        
+
         // Parse test result
         let result: serde_json::Value = serde_json::from_str(&response)
             .map_err(|e| JsValue::from_str(&format!("Failed to parse test result: {:?}", e)))?;
-        
+
         let status = if result["success"].as_bool().unwrap_or(false) {
             ConnectionStatus::Success
         } else {
-            let error = result["error"].as_str().unwrap_or("Unknown error").to_string();
+            let error = result["error"]
+                .as_str()
+                .unwrap_or("Unknown error")
+                .to_string();
             ConnectionStatus::Failed { error }
         };
-        
-        self.connection_tests.insert(name.to_string(), status.clone());
+
+        self.connection_tests
+            .insert(name.to_string(), status.clone());
         Ok(status)
     }
 }

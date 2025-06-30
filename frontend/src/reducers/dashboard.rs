@@ -1,6 +1,6 @@
 //! Dashboard domain reducer: handles dashboard navigation, UI refresh, scope toggling, database reset, run history toggling.
 
-use crate::messages::{Message, Command};
+use crate::messages::{Command, Message};
 use crate::state::AppState;
 
 /// Handles dashboard-related messages. Returns true if the message was handled.
@@ -13,12 +13,18 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(document) = web_sys::window().unwrap().document() {
                     // First hide the chat view container
-                    if let Some(chat_container) = document.get_element_by_id("chat-view-container") {
+                    if let Some(chat_container) = document.get_element_by_id("chat-view-container")
+                    {
                         crate::dom_utils::hide(&chat_container);
                     }
 
-                    if let Err(e) = crate::views::render_active_view_by_type(&crate::storage::ActiveView::Dashboard, &document) {
-                        web_sys::console::error_1(&format!("Failed to render dashboard: {:?}", e).into());
+                    if let Err(e) = crate::views::render_active_view_by_type(
+                        &crate::storage::ActiveView::Dashboard,
+                        &document,
+                    ) {
+                        web_sys::console::error_1(
+                            &format!("Failed to render dashboard: {:?}", e).into(),
+                        );
                     }
                 }
             })));
@@ -36,8 +42,12 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
 
                         if is_dashboard {
                             // Refresh only the dashboard to avoid borrowing state mutably while inside refresh.
-                            if let Err(e) = crate::components::dashboard::refresh_dashboard(&document) {
-                                web_sys::console::error_1(&format!("Failed to refresh dashboard: {:?}", e).into());
+                            if let Err(e) =
+                                crate::components::dashboard::refresh_dashboard(&document)
+                            {
+                                web_sys::console::error_1(
+                                    &format!("Failed to refresh dashboard: {:?}", e).into(),
+                                );
                             }
                         }
                     }
@@ -95,20 +105,27 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             })));
             true
         }
-        Message::RequestCreateAgent { name, system_instructions, task_instructions } => {
-            web_sys::console::log_1(&format!("Dashboard: Creating agent with name: {}", name).into());
-            
+        Message::RequestCreateAgent {
+            name,
+            system_instructions,
+            task_instructions,
+        } => {
+            web_sys::console::log_1(
+                &format!("Dashboard: Creating agent with name: {}", name).into(),
+            );
+
             // Use the default model from state - no fallbacks, backend should always provide this
             let model = &state.default_model_id;
-            
+
             // Create the agent via API using NetworkCall command
             let payload = serde_json::json!({
                 "name": name,
                 "system_instructions": system_instructions,
                 "task_instructions": task_instructions,
                 "model": model
-            }).to_string();
-            
+            })
+            .to_string();
+
             commands.push(Command::NetworkCall {
                 endpoint: "/api/agents".to_string(),
                 method: "POST".to_string(),
@@ -118,7 +135,6 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             });
             true
         }
-
 
         // -------------------------------------------------------------
         // Sort toggling
@@ -130,7 +146,10 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                 asc = !state.dashboard_sort.ascending;
             }
 
-            state.dashboard_sort = crate::state::DashboardSort { key: *key, ascending: asc };
+            state.dashboard_sort = crate::state::DashboardSort {
+                key: *key,
+                ascending: asc,
+            };
 
             // Persist to storage
             if let Some(window) = web_sys::window() {

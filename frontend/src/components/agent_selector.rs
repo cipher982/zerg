@@ -1,9 +1,9 @@
 //! Helper for populating the "agent-select" <select> element in the canvas
 //! toolbar with the list of current agents.
 
-use wasm_bindgen::JsValue;
-use web_sys::{Document, HtmlSelectElement, HtmlElement};
 use wasm_bindgen::JsCast;
+use wasm_bindgen::JsValue;
+use web_sys::{Document, HtmlElement, HtmlSelectElement};
 
 use crate::state::APP_STATE;
 
@@ -20,7 +20,9 @@ pub fn update_agent_dropdown(document: &Document) -> Result<(), JsValue> {
 
     // Insert a placeholder option
 
-    let placeholder = document.create_element("option")?.dyn_into::<HtmlElement>()?;
+    let placeholder = document
+        .create_element("option")?
+        .dyn_into::<HtmlElement>()?;
     placeholder.set_attribute("value", "")?;
     placeholder.set_inner_text("-- choose agent --");
     select.append_child(&placeholder)?;
@@ -30,7 +32,11 @@ pub fn update_agent_dropdown(document: &Document) -> Result<(), JsValue> {
         let state = state.borrow();
         for agent in state.agents.values() {
             if let Some(id) = agent.id {
-                let opt = document.create_element("option").unwrap().dyn_into::<HtmlElement>().unwrap();
+                let opt = document
+                    .create_element("option")
+                    .unwrap()
+                    .dyn_into::<HtmlElement>()
+                    .unwrap();
                 opt.set_attribute("value", &id.to_string()).unwrap();
                 opt.set_inner_text(&agent.name);
                 select.append_child(&opt).unwrap();

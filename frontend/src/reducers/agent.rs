@@ -1,24 +1,45 @@
 //! Agent domain reducer: handles all agent CRUD, config, modal, error, run history, debug modal, and MCP integration logic.
 
-use crate::messages::{Message, Command};
-use crate::state::{AppState};
+use crate::messages::{Command, Message};
+use crate::state::AppState;
 
 /// Handles agent-related messages. Returns true if the message was handled.
 pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) -> bool {
     match msg {
         Message::CreateAgent(name) => {
             // Create a new agent node at a default position
-            let _ = state.add_node(name.to_string(), 100.0, 100.0, crate::models::NodeType::AgentIdentity);
+            let _ = state.add_node(
+                name.to_string(),
+                100.0,
+                100.0,
+                crate::models::NodeType::AgentIdentity,
+            );
             state.state_modified = true;
             true
         }
-        Message::CreateAgentWithDetails { name, agent_id, system_instructions: _system_instructions, task_instructions: _task_instructions } => {
+        Message::CreateAgentWithDetails {
+            name,
+            agent_id,
+            system_instructions: _system_instructions,
+            task_instructions: _task_instructions,
+        } => {
             // DO NOT automatically create canvas nodes for dashboard-created agents
             // Users should drag them from the shelf to the canvas when needed
-            web_sys::console::log_1(&format!("Agent {} created - available in shelf for dragging to canvas", name).into());
+            web_sys::console::log_1(
+                &format!(
+                    "Agent {} created - available in shelf for dragging to canvas",
+                    name
+                )
+                .into(),
+            );
 
             // After creating the agent, immediately create a default thread
-            commands.push(Command::SendMessage(crate::messages::Message::CreateThread(*agent_id, crate::constants::DEFAULT_THREAD_TITLE.to_string())));
+            commands.push(Command::SendMessage(
+                crate::messages::Message::CreateThread(
+                    *agent_id,
+                    crate::constants::DEFAULT_THREAD_TITLE.to_string(),
+                ),
+            ));
 
             // IMPORTANT: We intentionally don't set state_modified = true here
             // This prevents the auto-save mechanism from making redundant API calls
@@ -28,13 +49,21 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             true
         }
         Message::EditAgent(agent_id) => {
-            web_sys::console::log_1(&format!("Update: Handling EditAgent for agent_id: {}", agent_id).into());
+            web_sys::console::log_1(
+                &format!("Update: Handling EditAgent for agent_id: {}", agent_id).into(),
+            );
             // Quick O(1) lookup via the explicit map
             let node_id_to_select = state.agent_id_to_node_id.get(agent_id).cloned();
 
             if let Some(node_id) = node_id_to_select {
                 // Happy‑path: we already have a visual node for this agent
-                web_sys::console::log_1(&format!("Found node_id {} for agent_id {}, selecting it.", node_id, agent_id).into());
+                web_sys::console::log_1(
+                    &format!(
+                        "Found node_id {} for agent_id {}, selecting it.",
+                        node_id, agent_id
+                    )
+                    .into(),
+                );
                 let node_id_cloned = node_id.clone();
                 state.selected_node_id = Some(node_id);
                 state.state_modified = true;
@@ -51,9 +80,14 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                     let _node_id = node_id_cloned;
                     let agent_id = *agent_id;
                     move || {
-                        if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
+                        if let (_, Some(document)) = (
+                            web_sys::window(),
+                            web_sys::window().and_then(|w| w.document()),
+                        ) {
                             if let Err(e) = crate::views::show_agent_modal(agent_id, &document) {
-                                web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
+                                web_sys::console::error_1(
+                                    &format!("Failed to show modal: {:?}", e).into(),
+                                );
                             }
                         }
                     }
@@ -64,9 +98,14 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
 
                 let agent_id = *agent_id;
                 commands.push(Command::UpdateUI(Box::new(move || {
-                    if let (_, Some(document)) = (web_sys::window(), web_sys::window().and_then(|w| w.document())) {
+                    if let (_, Some(document)) = (
+                        web_sys::window(),
+                        web_sys::window().and_then(|w| w.document()),
+                    ) {
                         if let Err(e) = crate::views::show_agent_modal(agent_id, &document) {
-                            web_sys::console::error_1(&format!("Failed to show modal: {:?}", e).into());
+                            web_sys::console::error_1(
+                                &format!("Failed to show modal: {:?}", e).into(),
+                            );
                         }
                     }
                 })));
@@ -75,23 +114,35 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             }
             true
         }
-        Message::SaveAgentDetails { name, system_instructions, task_instructions, model, schedule } => {
+        Message::SaveAgentDetails {
+            name,
+            system_instructions,
+            task_instructions,
+            model,
+            schedule,
+        } => {
             // Get the current AGENT ID from the modal's data attribute
             let agent_id = if let Some(window) = web_sys::window() {
                 if let Some(document) = window.document() {
                     if let Some(modal) = document.get_element_by_id("agent-modal") {
                         // Read "data-agent-id" instead of "data-node-id"
-                        modal.get_attribute("data-agent-id")
-                             .and_then(|id_str| id_str.parse::<u32>().ok()) // Parse directly to u32
+                        modal
+                            .get_attribute("data-agent-id")
+                            .and_then(|id_str| id_str.parse::<u32>().ok()) // Parse directly to u32
                     } else {
                         web_sys::console::warn_1(&"Modal element not found!".into());
                         None
                     }
-                } else { None }
-            } else { None };
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
 
             // Process the save operation (NO node lookup needed)
-            if let Some(id) = agent_id { // Use the agent_id directly
+            if let Some(id) = agent_id {
+                // Use the agent_id directly
                 if let Some(agent) = state.agents.get_mut(&id) {
                     // Update agent properties
                     agent.name = name.to_string();
@@ -107,16 +158,23 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                     let api_update = ApiAgentUpdate {
                         name: Some(agent.name.clone()),
                         status: None,
-                        system_instructions: Some(agent.system_instructions.clone().unwrap_or_default()),
+                        system_instructions: Some(
+                            agent.system_instructions.clone().unwrap_or_default(),
+                        ),
                         task_instructions: Some(task_instructions.clone()),
-                        model: if model.is_empty() { None } else { Some(model.clone()) },
+                        model: if model.is_empty() {
+                            None
+                        } else {
+                            Some(model.clone())
+                        },
                         schedule: schedule.clone(),
                         config: None,
                         last_error: None,
                     };
 
                     // Serialize to JSON
-                    let update_payload = serde_json::to_string(&api_update).unwrap_or_else(|_| "{}".to_string());
+                    let update_payload =
+                        serde_json::to_string(&api_update).unwrap_or_else(|_| "{}".to_string());
 
                     // Return a command to update the agent via API
                     commands.push(Command::UpdateAgent {
@@ -150,8 +208,12 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             if let Some(window) = web_sys::window() {
                 if let Some(document) = window.document() {
                     // Close the modal using the modal helper function
-                    if let Err(e) = crate::components::agent_config_modal::AgentConfigModal::close(&document) {
-                        web_sys::console::error_1(&format!("Failed to close modal: {:?}", e).into());
+                    if let Err(e) =
+                        crate::components::agent_config_modal::AgentConfigModal::close(&document)
+                    {
+                        web_sys::console::error_1(
+                            &format!("Failed to close modal: {:?}", e).into(),
+                        );
                     }
                 }
             }
@@ -166,7 +228,10 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             // Update the currently-selected agent’s system instructions directly.
             if let Some(node_id) = &state.selected_node_id {
                 // Try to resolve the underlying agent_id.
-                let agent_id_opt = state.nodes.get(node_id).and_then(|n| n.agent_id);
+                let agent_id_opt = state
+                    .workflow_nodes
+                    .get(node_id)
+                    .and_then(|n| n.get_agent_id());
 
                 if let Some(agent_id) = agent_id_opt {
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
@@ -180,17 +245,17 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
         Message::UpdateAgentName(name) => {
             if let Some(id) = &state.selected_node_id {
                 let id_clone = id.clone();
-                if let Some(node) = state.nodes.get_mut(&id_clone) {
+                if let Some(node) = state.workflow_nodes.get_mut(&id_clone) {
                     // Only update if name is not empty
                     if !name.trim().is_empty() {
-                        node.text = name.clone();
+                        node.set_text(name.clone());
                         state.state_modified = true;
 
                         // Update modal title for consistency
                         let window = web_sys::window().expect("no global window exists");
                         let document = window.document().expect("should have a document");
                         if let Some(modal_title) = document.get_element_by_id("modal-title") {
-                            modal_title.set_inner_html(&format!("Agent: {}", node.text));
+                            modal_title.set_inner_html(&format!("Agent: {}", node.get_text()));
                         }
                     }
                 }
@@ -211,10 +276,14 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
 
                 match result {
                     Ok(boxed_agent) => {
-                        crate::state::dispatch_global_message(Message::AgentInfoLoaded(boxed_agent));
-                    },
+                        crate::state::dispatch_global_message(Message::AgentInfoLoaded(
+                            boxed_agent,
+                        ));
+                    }
                     Err(e) => {
-                        web_sys::console::error_1(&format!("Failed to load/parse agent info: {:?}", e).into());
+                        web_sys::console::error_1(
+                            &format!("Failed to load/parse agent info: {:?}", e).into(),
+                        );
                     }
                 }
             });
@@ -223,11 +292,13 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
         Message::AgentInfoLoaded(agent_box) => {
             // Data is already Box<ApiAgent>
             let agent = agent_box.as_ref(); // Borrow the agent, do not move
-            web_sys::console::log_1(&format!("Update: Handling AgentInfoLoaded: {:?}", agent).into()); // Use {:?}
+            web_sys::console::log_1(
+                &format!("Update: Handling AgentInfoLoaded: {:?}", agent).into(),
+            ); // Use {:?}
             if state.active_view == crate::storage::ActiveView::ChatView {
                 if let Some(agent_id) = agent.id {
                     state.agents.insert(agent_id, (**agent_box).clone()); // Clone the agent to insert
-                    // Trigger UI update for agent info display implicitly via state change
+                                                                          // Trigger UI update for agent info display implicitly via state change
                 } else {
                     web_sys::console::error_1(&"AgentInfoLoaded message missing agent ID".into());
                 }
@@ -280,10 +351,17 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             true
         }
         Message::AgentsRefreshed(agents) => {
-            web_sys::console::log_1(&format!("Update: Handling AgentsRefreshed with {} agents", agents.len()).into());
+            web_sys::console::log_1(
+                &format!(
+                    "Update: Handling AgentsRefreshed with {} agents",
+                    agents.len()
+                )
+                .into(),
+            );
 
             // Get the current set of agent IDs BEFORE updating
-            let old_agent_ids: std::collections::HashSet<u32> = state.agents.keys().cloned().collect();
+            let old_agent_ids: std::collections::HashSet<u32> =
+                state.agents.keys().cloned().collect();
 
             // Update state.agents with the new list
             state.agents.clear();
@@ -294,17 +372,29 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                     new_agent_ids.insert(id);
                 }
             }
-            
+
             // Mark that agents have been loaded
             state.agents_loaded = true;
 
             // Check for newly created agent
-            let just_created_agent_ids: Vec<u32> = new_agent_ids.difference(&old_agent_ids).cloned().collect();
+            let just_created_agent_ids: Vec<u32> =
+                new_agent_ids.difference(&old_agent_ids).cloned().collect();
 
             if just_created_agent_ids.len() == 1 {
                 let new_agent_id = just_created_agent_ids[0];
-                web_sys::console::log_1(&format!("Detected newly created agent ID: {}. Creating default thread.", new_agent_id).into());
-                commands.push(Command::SendMessage(crate::messages::Message::CreateThread(new_agent_id, crate::constants::DEFAULT_THREAD_TITLE.to_string())));
+                web_sys::console::log_1(
+                    &format!(
+                        "Detected newly created agent ID: {}. Creating default thread.",
+                        new_agent_id
+                    )
+                    .into(),
+                );
+                commands.push(Command::SendMessage(
+                    crate::messages::Message::CreateThread(
+                        new_agent_id,
+                        crate::constants::DEFAULT_THREAD_TITLE.to_string(),
+                    ),
+                ));
             } else if just_created_agent_ids.len() > 1 {
                 web_sys::console::warn_1(&"Detected multiple new agents after refresh, cannot auto-create default thread.".into());
             }
@@ -315,9 +405,9 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             // This handles the case where agents load *while* Canvas is already the active view.
             if state.active_view == crate::storage::ActiveView::Canvas {
                 commands.push(Command::UpdateUI(Box::new(|| {
-                     if let Some(doc_ref) = web_sys::window().and_then(|w| w.document()){
+                    if let Some(doc_ref) = web_sys::window().and_then(|w| w.document()) {
                         let _ = crate::components::agent_shelf::refresh_agent_shelf(&doc_ref);
-                     }
+                    }
                 })));
             } else {
             }
@@ -325,18 +415,24 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             // Schedule a general UI refresh for other views or broader updates
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                    web_sys::console::error_1(&format!("Failed to refresh UI after AgentsRefreshed: {:?}", e).into());
+                    web_sys::console::error_1(
+                        &format!("Failed to refresh UI after AgentsRefreshed: {:?}", e).into(),
+                    );
                 }
 
                 // Ensure Dashboard WS manager is subscribed to all current agents.
                 if let Err(e) = crate::components::dashboard::ws_manager::init_dashboard_ws() {
-                    web_sys::console::error_1(&format!("Failed to re-init dashboard WS subscriptions: {:?}", e).into());
+                    web_sys::console::error_1(
+                        &format!("Failed to re-init dashboard WS subscriptions: {:?}", e).into(),
+                    );
                 }
             })));
 
             // After updating the agent list trigger a label refresh so all
             // visual nodes show the latest agent names.
-            commands.push(Command::SendMessage(crate::messages::Message::RefreshCanvasLabels));
+            commands.push(Command::SendMessage(
+                crate::messages::Message::RefreshCanvasLabels,
+            ));
 
             // Reconcile placeholder canvas nodes that were inserted while the
             // agent list was still loading.  Calling `fix_stub_nodes()`
@@ -358,10 +454,10 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             for (agent_id, node_id) in state.agent_id_to_node_id.iter() {
                 if let (Some(agent), Some(node)) = (
                     state.agents.get(agent_id),
-                    state.nodes.get_mut(node_id),
+                    state.workflow_nodes.get_mut(node_id),
                 ) {
-                    if node.text != agent.name {
-                        node.text = agent.name.clone();
+                    if node.get_text() != agent.name {
+                        node.set_text(agent.name.clone());
                         updated_nodes.insert(node_id.clone());
                     }
                 }
@@ -373,12 +469,16 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             true
         }
         Message::RequestAgentDeletion { agent_id } => {
-            commands.push(Command::DeleteAgentApi { agent_id: *agent_id });
+            commands.push(Command::DeleteAgentApi {
+                agent_id: *agent_id,
+            });
             true
         }
         Message::DeleteAgentApi { agent_id } => {
             // Just delegate to the Command that handles the API call
-            commands.push(Command::DeleteAgentApi { agent_id: *agent_id });
+            commands.push(Command::DeleteAgentApi {
+                agent_id: *agent_id,
+            });
             true
         }
         Message::AgentDeletionSuccess { agent_id } => {
@@ -386,8 +486,8 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             state.agents.remove(agent_id);
 
             // Remove any nodes associated with this agent
-            state.nodes.retain(|_, node| {
-                if let Some(node_agent_id) = node.agent_id {
+            state.workflow_nodes.retain(|_, node| {
+                if let Some(node_agent_id) = node.get_agent_id() {
                     node_agent_id != *agent_id
                 } else {
                     true
@@ -401,7 +501,13 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             true
         }
         Message::AgentDeletionFailure { agent_id, error } => {
-            web_sys::console::error_1(&format!("Update: Received AgentDeletionFailure for {}: {}", agent_id, error).into());
+            web_sys::console::error_1(
+                &format!(
+                    "Update: Received AgentDeletionFailure for {}: {}",
+                    agent_id, error
+                )
+                .into(),
+            );
             // Optionally, update UI to show error message
             // For now, just log the error
             true
@@ -428,9 +534,13 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             }
 
             // Remove runs for this agent that are no longer running
-            state
-                .running_runs
-                .retain(|rid| still_running_ids.contains(rid) || !state.agent_runs.values().any(|v| v.iter().any(|r| r.id == *rid && r.status != "running")) );
+            state.running_runs.retain(|rid| {
+                still_running_ids.contains(rid)
+                    || !state
+                        .agent_runs
+                        .values()
+                        .any(|v| v.iter().any(|r| r.id == *rid && r.status != "running"))
+            });
 
             // Add new running ones
             state.running_runs.extend(still_running_ids);

@@ -1,15 +1,15 @@
-use wasm_bindgen_test::*;
 use super::ws_manager::DashboardWsManager;
+use wasm_bindgen_test::*;
 // TopicManager currently unused in this unit-test; remove once test expands.
-use wasm_bindgen::JsValue;
-use std::rc::Rc;
-use std::cell::RefCell;
+use crate::network::topic_manager::{ITopicManager, Topic, TopicHandler};
 use crate::network::ws_client_v2::{ConnectionState, IWsClient};
 use serde_json::Value;
 use std::any::Any;
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::default::Default;
-use crate::network::topic_manager::{TopicHandler, Topic, ITopicManager};
+use std::rc::Rc;
+use wasm_bindgen::JsValue;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -51,7 +51,9 @@ impl IWsClient for MockWsClient {
         if *self.state.borrow() != ConnectionState::Connected {
             return Err(JsValue::from_str("WebSocket is not connected"));
         }
-        self.sent_messages.borrow_mut().push(message_json.to_string());
+        self.sent_messages
+            .borrow_mut()
+            .push(message_json.to_string());
         Ok(())
     }
 
@@ -100,10 +102,16 @@ impl MockWsClient {
             if let Ok(mut cb) = callback_rc.try_borrow_mut() {
                 (*cb)(message);
             } else {
-                 web_sys::console::error_1(&"Failed to borrow on_message callback mutably in simulate_receive_message".into());
+                web_sys::console::error_1(
+                    &"Failed to borrow on_message callback mutably in simulate_receive_message"
+                        .into(),
+                );
             }
         } else {
-             web_sys::console::warn_1(&"simulate_receive_message called but no on_message handler is set on MockWsClient".into());
+            web_sys::console::warn_1(
+                &"simulate_receive_message called but no on_message handler is set on MockWsClient"
+                    .into(),
+            );
         }
     }
 }
@@ -119,55 +127,74 @@ impl MockTopicManager {
     fn new() -> Self {
         Self::default()
     }
-    
+
     // Keep helper methods specific to the mock
     fn get_calls(&self) -> VecDeque<String> {
         self.calls.borrow().clone()
     }
 
     fn get_handlers(&self, topic: &str) -> Vec<TopicHandler> {
-        self.handlers.borrow().get(topic).cloned().unwrap_or_default()
+        self.handlers
+            .borrow()
+            .get(topic)
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
-// --- Implement the ITopicManager trait for the mock --- 
+// --- Implement the ITopicManager trait for the mock ---
 impl ITopicManager for MockTopicManager {
     fn subscribe(&mut self, topic: Topic, handler: TopicHandler) -> Result<(), JsValue> {
         let call_log = format!("subscribe::{}", topic);
         self.calls.borrow_mut().push_back(call_log);
-        self.handlers.borrow_mut().entry(topic).or_default().push(handler);
+        self.handlers
+            .borrow_mut()
+            .entry(topic)
+            .or_default()
+            .push(handler);
         Ok(())
     }
 
-    fn unsubscribe_handler(&mut self, topic: &Topic, handler_to_remove: &TopicHandler) -> Result<(), JsValue> {
+    fn unsubscribe_handler(
+        &mut self,
+        topic: &Topic,
+        handler_to_remove: &TopicHandler,
+    ) -> Result<(), JsValue> {
         let call_log = format!("unsubscribe_handler::{}", topic);
         self.calls.borrow_mut().push_back(call_log);
-        
+
         let mut removed = false;
         if let Some(handlers) = self.handlers.borrow_mut().get_mut(topic) {
-            if let Some(pos) = handlers.iter().position(|h| Rc::ptr_eq(h, handler_to_remove)) {
+            if let Some(pos) = handlers
+                .iter()
+                .position(|h| Rc::ptr_eq(h, handler_to_remove))
+            {
                 handlers.remove(pos);
                 removed = true;
             }
         }
         if !removed {
-             web_sys::console::warn_1(&format!("MockTopicManager: unsubscribe_handler called but handler not found for topic {}", topic).into());
+            web_sys::console::warn_1(&format!("MockTopicManager: unsubscribe_handler called but handler not found for topic {}", topic).into());
         }
         Ok(())
     }
-    
+
     // Implement other trait methods if needed by tests
 }
 
 // Test Setup Helper
 // Now returns the manager, the concrete mock Rc, and the trait object Rc
-fn setup_test() -> (DashboardWsManager, Rc<RefCell<MockTopicManager>>, Rc<RefCell<dyn ITopicManager>>) {
+fn setup_test() -> (
+    DashboardWsManager,
+    Rc<RefCell<MockTopicManager>>,
+    Rc<RefCell<dyn ITopicManager>>,
+) {
     let mock_topic_manager = MockTopicManager::new();
     // Create Rc for the concrete type
     let concrete_mock_rc = Rc::new(RefCell::new(mock_topic_manager));
     // Create Rc for the trait object by cloning and casting
     let trait_object_rc = concrete_mock_rc.clone() as Rc<RefCell<dyn ITopicManager>>;
-    let manager = DashboardWsManager::new(); 
+    let manager = DashboardWsManager::new();
     (manager, concrete_mock_rc, trait_object_rc)
 }
 
@@ -182,8 +209,8 @@ async fn test_dashboard_manager_subscribe() {
     // concrete topic ("agent:1") instead of zero, which is expected runtime
     // behaviour.
     {
-        use crate::models::ApiAgent;
         use crate::messages::Message;
+        use crate::models::ApiAgent;
 
         // Construct a *single* dummy agent and dispatch via the global message
         // bus so state mutation happens inside `update()` – keeps tests aligned
@@ -209,7 +236,7 @@ async fn test_dashboard_manager_subscribe() {
 
         crate::state::dispatch_global_message(Message::AgentsRefreshed(vec![dummy_agent]));
     }
-    
+
     // Pass the TRAIT OBJECT to the method under test
     let result = manager.subscribe_to_agent_events(trait_object_rc.clone());
     assert!(result.is_ok(), "subscribe_to_agent_events failed");
@@ -217,16 +244,26 @@ async fn test_dashboard_manager_subscribe() {
     // Use the CONCRETE MOCK Rc to verify calls
     let calls = concrete_mock_rc.borrow().get_calls();
     assert_eq!(calls.len(), 1, "Expected 1 call to mock topic manager");
-    assert_eq!(calls[0], "subscribe::agent:1", "Expected subscribe call for agent:1");
-    
-    assert!(manager.agent_subscription_handler.is_some(), "Manager should store the handler");
+    assert_eq!(
+        calls[0], "subscribe::agent:1",
+        "Expected subscribe call for agent:1"
+    );
+
+    assert!(
+        manager.agent_subscription_handler.is_some(),
+        "Manager should store the handler"
+    );
 
     // Use the CONCRETE MOCK Rc to verify handlers
     // Ensure the handler was registered on the concrete per-agent topic that
     // the DashboardWsManager subscribes to (wild-card topics are *not*
     // supported by the backend at runtime).
     let handlers = concrete_mock_rc.borrow().get_handlers("agent:1");
-    assert_eq!(handlers.len(), 1, "Mock should have one handler for agent:1");
+    assert_eq!(
+        handlers.len(),
+        1,
+        "Mock should have one handler for agent:1"
+    );
 }
 
 #[wasm_bindgen_test]
@@ -236,8 +273,8 @@ async fn test_dashboard_manager_cleanup() {
 
     // Insert dummy agent with id 1 as in subscribe test
     {
-        use crate::models::ApiAgent;
         use crate::messages::Message;
+        use crate::models::ApiAgent;
 
         let dummy_agent = ApiAgent {
             id: Some(1),
@@ -261,10 +298,15 @@ async fn test_dashboard_manager_cleanup() {
     }
 
     // Setup: Subscribe first using the TRAIT OBJECT
-    manager.subscribe_to_agent_events(trait_object_rc.clone()).expect("Subscribe failed during setup");
-    let handler_rc = manager.agent_subscription_handler.clone().expect("Handler should exist after subscribe");
+    manager
+        .subscribe_to_agent_events(trait_object_rc.clone())
+        .expect("Subscribe failed during setup");
+    let handler_rc = manager
+        .agent_subscription_handler
+        .clone()
+        .expect("Handler should exist after subscribe");
     // Clear calls using the CONCRETE MOCK Rc
-    concrete_mock_rc.borrow_mut().calls.borrow_mut().clear(); 
+    concrete_mock_rc.borrow_mut().calls.borrow_mut().clear();
 
     // Action: Call cleanup using the TRAIT OBJECT
     let result = manager.cleanup(trait_object_rc.clone());
@@ -272,14 +314,29 @@ async fn test_dashboard_manager_cleanup() {
 
     // Verification: Check calls using the CONCRETE MOCK Rc
     let calls = concrete_mock_rc.borrow().get_calls();
-    assert_eq!(calls.len(), 1, "Expected 1 call to mock topic manager during cleanup");
-    assert_eq!(calls[0], "unsubscribe_handler::agent:1", "Expected unsubscribe_handler call for agent:1");
+    assert_eq!(
+        calls.len(),
+        1,
+        "Expected 1 call to mock topic manager during cleanup"
+    );
+    assert_eq!(
+        calls[0], "unsubscribe_handler::agent:1",
+        "Expected unsubscribe_handler call for agent:1"
+    );
 
-    assert!(manager.agent_subscription_handler.is_none(), "Manager should clear the handler on cleanup");
+    assert!(
+        manager.agent_subscription_handler.is_none(),
+        "Manager should clear the handler on cleanup"
+    );
 
     // Verification: Check handlers using the CONCRETE MOCK Rc
     let handlers_after_cleanup = concrete_mock_rc.borrow().get_handlers("agent:1");
-    assert!(!handlers_after_cleanup.iter().any(|h| Rc::ptr_eq(h, &handler_rc)), "Handler should be removed from mock topic manager");
+    assert!(
+        !handlers_after_cleanup
+            .iter()
+            .any(|h| Rc::ptr_eq(h, &handler_rc)),
+        "Handler should be removed from mock topic manager"
+    );
 }
 
 // TODO: Add test for event handling side effect (requires mocking api_client::load_agents)
@@ -298,4 +355,4 @@ async fn test_subscription_management() { ... }
 async fn test_reconnection_handling() { ... }
 #[wasm_bindgen_test]
 async fn test_agent_event_handling() { ... }
-*/ 
+*/

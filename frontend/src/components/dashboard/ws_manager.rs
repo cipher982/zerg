@@ -1,13 +1,13 @@
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen::JsValue;
 // Remove direct dependency on specific types if we get them from AppState
 // use crate::network::{WsClientV2, TopicManager};
- // Keep for borrowing
- // Keep for borrowing
-use crate::state::APP_STATE;
-use crate::network::topic_manager::{TopicHandler, ITopicManager}; // Import Trait
+// Keep for borrowing
+// Keep for borrowing
+use crate::network::topic_manager::{ITopicManager, TopicHandler}; // Import Trait
 use crate::network::ws_schema::WsAgentEvent;
+use crate::state::APP_STATE;
 
 /// Convert a raw JSON payload coming from run_update into an ApiAgentRun.
 /// The websocket messages are *slim* – many optional fields from the REST
@@ -70,16 +70,20 @@ impl DashboardWsManager {
 
     /// Subscribe to agent-related events using the provided ITopicManager.
     // Change signature to accept the trait object
-    pub(crate) fn subscribe_to_agent_events(&mut self, topic_manager_rc: Rc<RefCell<dyn ITopicManager>>) -> Result<(), JsValue> {
+    pub(crate) fn subscribe_to_agent_events(
+        &mut self,
+        topic_manager_rc: Rc<RefCell<dyn ITopicManager>>,
+    ) -> Result<(), JsValue> {
         // Get current agent IDs
-        let agent_ids: Vec<u32> = crate::state::APP_STATE.with(|state_ref| {
-            state_ref.borrow().agents.keys().cloned().collect()
-        });
+        let agent_ids: Vec<u32> = crate::state::APP_STATE
+            .with(|state_ref| state_ref.borrow().agents.keys().cloned().collect());
 
         // If we already have a handler, just subscribe new agents to it
         if let Some(existing_handler) = &self.agent_subscription_handler {
-            web_sys::console::log_1(&"DashboardWsManager: Using existing handler for new agents".into());
-            
+            web_sys::console::log_1(
+                &"DashboardWsManager: Using existing handler for new agents".into(),
+            );
+
             let mut topic_manager = topic_manager_rc.borrow_mut();
             for aid in agent_ids {
                 let topic = format!("agent:{}", aid);
@@ -111,7 +115,9 @@ impl DashboardWsManager {
                     }
                     "ERROR" => {
                         if let Some(error_msg) = data.get("message").and_then(|v| v.as_str()) {
-                            web_sys::console::error_1(&format!("WebSocket error: {}", error_msg).into());
+                            web_sys::console::error_1(
+                                &format!("WebSocket error: {}", error_msg).into(),
+                            );
                         } else {
                             web_sys::console::error_1(&"WebSocket error: unknown error".into());
                         }
@@ -145,16 +151,24 @@ impl DashboardWsManager {
                     match status_for_toast.as_str() {
                         "success" => {
                             let name = crate::state::APP_STATE.with(|s| {
-                                s.borrow().agents.get(&agent_id).map(|a| a.name.clone()).unwrap_or_else(|| "Agent".into())
+                                s.borrow()
+                                    .agents
+                                    .get(&agent_id)
+                                    .map(|a| a.name.clone())
+                                    .unwrap_or_else(|| "Agent".into())
                             });
                             crate::toast::success(&format!("{} finished", name));
-                        },
+                        }
                         "failed" | "error" => {
                             let name = crate::state::APP_STATE.with(|s| {
-                                s.borrow().agents.get(&agent_id).map(|a| a.name.clone()).unwrap_or_else(|| "Agent".into())
+                                s.borrow()
+                                    .agents
+                                    .get(&agent_id)
+                                    .map(|a| a.name.clone())
+                                    .unwrap_or_else(|| "Agent".into())
                             });
                             crate::toast::error(&format!("{} failed", name));
-                        },
+                        }
                         _ => {}
                     }
                     return; // handled
@@ -234,12 +248,17 @@ impl DashboardWsManager {
                 }
 
                 Ok(WsMessage::Unknown) => {
-                    web_sys::console::warn_1(&"DashboardWsManager: received unknown WS message type".into());
+                    web_sys::console::warn_1(
+                        &"DashboardWsManager: received unknown WS message type".into(),
+                    );
                     return; // handled - don't fallback to polling for unknown messages
                 }
 
                 Err(e) => {
-                    web_sys::console::warn_2(&"DashboardWsManager: failed to parse WS message".into(), &format!("{:?}", e).into());
+                    web_sys::console::warn_2(
+                        &"DashboardWsManager: failed to parse WS message".into(),
+                        &format!("{:?}", e).into(),
+                    );
                     return; // handled - don't fallback to polling for parse errors
                 }
             }
@@ -260,24 +279,30 @@ impl DashboardWsManager {
     /// Clean up WebSocket subscriptions for the dashboard.
     // Change signature to accept the trait object
     #[allow(dead_code)]
-    pub fn cleanup(&mut self, topic_manager_rc: Rc<RefCell<dyn ITopicManager>>) -> Result<(), JsValue> {
+    pub fn cleanup(
+        &mut self,
+        topic_manager_rc: Rc<RefCell<dyn ITopicManager>>,
+    ) -> Result<(), JsValue> {
         let mut topic_manager = topic_manager_rc.borrow_mut();
-        
+
         if let Some(handler) = self.agent_subscription_handler.take() {
-             web_sys::console::log_1(&"DashboardWsManager: Cleaning up agent subscription handler".into());
+            web_sys::console::log_1(
+                &"DashboardWsManager: Cleaning up agent subscription handler".into(),
+            );
             // We do not track which specific agent topics we subscribed to.
             // As a simple cleanup we iterate over the agents currently in
             // state and attempt to unsubscribe from their topics.
-            let agent_ids: Vec<u32> = crate::state::APP_STATE.with(|state_ref| {
-                state_ref.borrow().agents.keys().cloned().collect()
-            });
+            let agent_ids: Vec<u32> = crate::state::APP_STATE
+                .with(|state_ref| state_ref.borrow().agents.keys().cloned().collect());
 
             for aid in agent_ids {
                 let topic = format!("agent:{}", aid);
                 let _ = topic_manager.unsubscribe_handler(&topic, &handler);
             }
         } else {
-            web_sys::console::warn_1(&"DashboardWsManager cleanup: No handler found to unsubscribe.".into());
+            web_sys::console::warn_1(
+                &"DashboardWsManager cleanup: No handler found to unsubscribe.".into(),
+            );
         }
         Ok(())
     }
@@ -306,7 +331,9 @@ pub fn init_dashboard_ws() -> Result<(), JsValue> {
         let mut manager_opt = cell.borrow_mut();
         if let Some(mgr) = manager_opt.as_mut() {
             // Already initialised – ensure we are subscribed to any new agents.
-            web_sys::console::log_1(&"DashboardWsManager: refreshing subscriptions for new agents".into());
+            web_sys::console::log_1(
+                &"DashboardWsManager: refreshing subscriptions for new agents".into(),
+            );
             let topic_manager_trait_rc = APP_STATE.with(|state_ref| {
                 state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>
             });

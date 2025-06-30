@@ -12,11 +12,11 @@
 //! handlers when given a closure factory, but that requires higher-order
 //! generics that complicate wasm-bindgen lifetimes – out of scope for now.
 
-use wasm_bindgen::prelude::*;
-use web_sys::{Document, HtmlElement, KeyboardEvent};
-use wasm_bindgen::{JsCast, closure::Closure};
+use crate::constants::{ATTR_TYPE, BUTTON_TYPE_BUTTON, CSS_TAB_BUTTON, CSS_TAB_BUTTON_ACTIVE};
 use std::cell::RefCell;
-use crate::constants::{CSS_TAB_BUTTON, CSS_TAB_BUTTON_ACTIVE, BUTTON_TYPE_BUTTON, ATTR_TYPE};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::{closure::Closure, JsCast};
+use web_sys::{Document, HtmlElement, KeyboardEvent};
 
 // Thread-local storage for keyboard event handlers to prevent memory leaks
 thread_local! {
@@ -43,7 +43,11 @@ pub fn build_tab_bar(
         let btn = document.create_element("button")?;
         btn.set_attribute(ATTR_TYPE, BUTTON_TYPE_BUTTON)?;
         btn.set_inner_html(label);
-        btn.set_class_name(if *active { CSS_TAB_BUTTON_ACTIVE } else { CSS_TAB_BUTTON });
+        btn.set_class_name(if *active {
+            CSS_TAB_BUTTON_ACTIVE
+        } else {
+            CSS_TAB_BUTTON
+        });
         container.append_child(&btn)?;
     }
 
@@ -52,7 +56,7 @@ pub fn build_tab_bar(
 
 /// Add keyboard navigation to a tab container. This enables arrow key navigation
 /// between tabs and Enter/Space to activate tabs.
-/// 
+///
 /// * `container` - The tab container element returned by `build_tab_bar`
 /// * `container_id` - Unique identifier for this tab container (for cleanup)
 /// * `on_tab_change` - Callback function that takes the tab index when a tab is activated
@@ -77,7 +81,7 @@ where
             }
         }
     }
-    
+
     if buttons.is_empty() {
         return Ok(());
     }
@@ -98,10 +102,10 @@ where
     // Create keyboard event handler
     let container_clone = container.clone();
     let on_tab_change = std::rc::Rc::new(on_tab_change);
-    
+
     let keydown_handler = Closure::wrap(Box::new(move |event: KeyboardEvent| {
         let key = event.key();
-        
+
         // Only handle arrow keys, Enter, and Space
         if !matches!(key.as_str(), "ArrowLeft" | "ArrowRight" | "Enter" | " ") {
             return;
@@ -123,7 +127,7 @@ where
                         }
                     }
                 }
-                
+
                 // Find current tab index
                 let mut current_index = None;
                 for (i, button) in buttons.iter().enumerate() {
@@ -161,11 +165,14 @@ where
     }) as Box<dyn FnMut(KeyboardEvent)>);
 
     // Add event listener to container
-    container.add_event_listener_with_callback("keydown", keydown_handler.as_ref().unchecked_ref())?;
+    container
+        .add_event_listener_with_callback("keydown", keydown_handler.as_ref().unchecked_ref())?;
 
     // Store handler for cleanup
     TAB_KEYBOARD_HANDLERS.with(|handlers| {
-        handlers.borrow_mut().push((container_id.to_string(), keydown_handler));
+        handlers
+            .borrow_mut()
+            .push((container_id.to_string(), keydown_handler));
     });
 
     Ok(())

@@ -1,14 +1,14 @@
 // frontend/src/update.rs
 //
-use crate::messages::{Message, Command};
-use crate::state::{AppState, APP_STATE, dispatch_global_message};
-use crate::models::{ApiThread, ApiThreadMessage};
-use web_sys::Document;
-use wasm_bindgen::JsValue;
-use std::collections::HashMap;
 use crate::components::chat_view::update_thread_list_ui;
+use crate::dom_utils::{hide, set_active, set_inactive, show};
+use crate::messages::{Command, Message};
+use crate::models::{ApiThread, ApiThreadMessage};
 use crate::state::AgentConfigTab;
-use crate::dom_utils::{hide, show, set_active, set_inactive};
+use crate::state::{dispatch_global_message, AppState, APP_STATE};
+use std::collections::HashMap;
+use wasm_bindgen::JsValue;
+use web_sys::Document;
 
 // ---------------------------------------------------------------------------
 // Internal helper – encapsulates all DOM + side-effects when the user switches
@@ -16,7 +16,11 @@ use crate::dom_utils::{hide, show, set_active, set_inactive};
 // `Message::SetAgentTab` handler.
 // ---------------------------------------------------------------------------
 
-pub fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>, tab: AgentConfigTab) {
+pub fn handle_agent_tab_switch(
+    state: &mut AppState,
+    commands: &mut Vec<Command>,
+    tab: AgentConfigTab,
+) {
     state.agent_modal_tab = tab;
 
     let window = match web_sys::window() {
@@ -33,51 +37,82 @@ pub fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>
     // Content sections
     let main_c = by_id("agent-main-content");
     let hist_c = by_id("agent-history-content");
-    let trg_c  = by_id("agent-triggers-content");
+    let trg_c = by_id("agent-triggers-content");
 
     // Tab buttons
     let main_t = by_id("agent-main-tab");
     let hist_t = by_id("agent-history-tab");
-    let trg_t  = by_id("agent-triggers-tab");
+    let trg_t = by_id("agent-triggers-tab");
 
     // Reset all visibility / active state first
-    if let Some(el) = &main_c { hide(el); }
-    if let Some(el) = &hist_c { hide(el); }
-    if let Some(el) = &trg_c  { hide(el); }
+    if let Some(el) = &main_c {
+        hide(el);
+    }
+    if let Some(el) = &hist_c {
+        hide(el);
+    }
+    if let Some(el) = &trg_c {
+        hide(el);
+    }
 
-    if let Some(btn) = &main_t { set_inactive(btn); }
-    if let Some(btn) = &hist_t { set_inactive(btn); }
-    if let Some(btn) = &trg_t  { set_inactive(btn); }
+    if let Some(btn) = &main_t {
+        set_inactive(btn);
+    }
+    if let Some(btn) = &hist_t {
+        set_inactive(btn);
+    }
+    if let Some(btn) = &trg_t {
+        set_inactive(btn);
+    }
 
     // Content sections
     let tools_c = by_id("agent-tools-content");
-    
+
     // Tab buttons
     let tools_t = by_id("agent-tools-tab");
-    
+
     // Reset all visibility / active state first
-    if let Some(el) = &tools_c { hide(el); }
-    if let Some(btn) = &tools_t { set_inactive(btn); }
-    
+    if let Some(el) = &tools_c {
+        hide(el);
+    }
+    if let Some(btn) = &tools_t {
+        set_inactive(btn);
+    }
+
     // Activate selected tab
     match tab {
         AgentConfigTab::Main => {
-            if let Some(el) = &main_c { show(el); }
-            if let Some(btn) = &main_t { set_active(btn); }
+            if let Some(el) = &main_c {
+                show(el);
+            }
+            if let Some(btn) = &main_t {
+                set_active(btn);
+            }
         }
-
 
         AgentConfigTab::History => {
-            if let Some(el) = &hist_c { show(el); }
-            if let Some(btn) = &hist_t { set_active(btn); }
+            if let Some(el) = &hist_c {
+                show(el);
+            }
+            if let Some(btn) = &hist_t {
+                set_active(btn);
+            }
         }
         AgentConfigTab::Triggers => {
-            if let Some(el) = &trg_c { show(el); }
-            if let Some(btn) = &trg_t { set_active(btn); }
+            if let Some(el) = &trg_c {
+                show(el);
+            }
+            if let Some(btn) = &trg_t {
+                set_active(btn);
+            }
         }
         AgentConfigTab::ToolsIntegrations => {
-            if let Some(el) = &tools_c { show(el); }
-            if let Some(btn) = &tools_t { set_active(btn); }
+            if let Some(el) = &tools_c {
+                show(el);
+            }
+            if let Some(btn) = &tools_t {
+                set_active(btn);
+            }
         }
     }
 
@@ -96,7 +131,9 @@ pub fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
                     if let Some(doc) = win.document() {
-                        let _ = crate::components::agent_config_modal::render_triggers_list(&doc, agent_id);
+                        let _ = crate::components::agent_config_modal::render_triggers_list(
+                            &doc, agent_id,
+                        );
                     }
                 }
             })));
@@ -119,7 +156,10 @@ pub fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>
                 if let Some(win) = web_sys::window() {
                     if let Some(doc) = win.document() {
                         if let Some(container) = doc.get_element_by_id("agent-tools-content") {
-                            let mcp_manager = crate::components::mcp_server_manager::MCPServerManager::new(agent_id);
+                            let mcp_manager =
+                                crate::components::mcp_server_manager::MCPServerManager::new(
+                                    agent_id,
+                                );
                             let _ = mcp_manager.build_ui(&doc, &container);
                         }
                     }
@@ -131,7 +171,6 @@ pub fn handle_agent_tab_switch(state: &mut AppState, commands: &mut Vec<Command>
 
 // Bring legacy helper trait into scope so its methods are usable on CanvasNode
 // Legacy helper trait no longer needed after decoupling cleanup.
-
 
 pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     let mut needs_refresh = true; // We'll still track this internally for now
@@ -200,7 +239,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
                         // ------- Update header greeting ------------------
                         if let Some(title_el) = doc.get_element_by_id("header-title") {
-                            let greeting = if let Some(name) = user_for_ui.display_name.as_ref().filter(|s| !s.is_empty()) {
+                            let greeting = if let Some(name) =
+                                user_for_ui.display_name.as_ref().filter(|s| !s.is_empty())
+                            {
                                 format!("Welcome, {}!", name)
                             } else {
                                 format!("Welcome, {}!", user_for_ui.email)
@@ -220,17 +261,26 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     {
                         let mut tm = topic_manager_rc.borrow_mut();
                         // Prepare handler closure
-                        use std::rc::Rc;
                         use std::cell::RefCell;
-                        let handler: crate::network::topic_manager::TopicHandler = Rc::new(RefCell::new(move |payload: serde_json::Value| {
-                        if let Ok(msg) = serde_json::from_value::<crate::network::ws_schema::WsMessage>(payload.clone()) {
-                            if let crate::network::ws_schema::WsMessage::UserUpdate { data } = msg {
-                                let profile: crate::models::CurrentUser = data.into();
-                                crate::state::dispatch_global_message(Message::CurrentUserLoaded(profile));
-                                return;
-                            }
-                        }
-                        }));
+                        use std::rc::Rc;
+                        let handler: crate::network::topic_manager::TopicHandler =
+                            Rc::new(RefCell::new(move |payload: serde_json::Value| {
+                                if let Ok(msg) = serde_json::from_value::<
+                                    crate::network::ws_schema::WsMessage,
+                                >(payload.clone())
+                                {
+                                    if let crate::network::ws_schema::WsMessage::UserUpdate {
+                                        data,
+                                    } = msg
+                                    {
+                                        let profile: crate::models::CurrentUser = data.into();
+                                        crate::state::dispatch_global_message(
+                                            Message::CurrentUserLoaded(profile),
+                                        );
+                                        return;
+                                    }
+                                }
+                            }));
 
                         let _ = tm.subscribe(topic, handler);
                     }
@@ -241,9 +291,10 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::ToggleView(view) => {
             let view_clone = view.clone();
             let view_clone_for_shelf = view.clone();
+
             state.active_view = view;
             state.state_modified = true;
-            
+
             // Use a command to update the UI after this function returns
             // This avoids borrowing issues by executing after the current state borrow is released
             commands.push(Command::UpdateUI(Box::new(move || {
@@ -251,73 +302,55 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 if let Some(window) = web_sys::window() {
                     // Keep location.hash in sync for basic routing
                     let _ = match view_clone {
-                        crate::storage::ActiveView::Profile => window.location().set_hash("#/profile"),
-                        crate::storage::ActiveView::Dashboard => window.location().set_hash("#/dashboard"),
-                        crate::storage::ActiveView::Canvas => window.location().set_hash("#/canvas"),
-                        crate::storage::ActiveView::ChatView => window.location().set_hash("#/chat"),
+                        crate::storage::ActiveView::Profile => {
+                            window.location().set_hash("#/profile")
+                        }
+                        crate::storage::ActiveView::Dashboard => {
+                            window.location().set_hash("#/dashboard")
+                        }
+                        crate::storage::ActiveView::Canvas => {
+                            window.location().set_hash("#/canvas")
+                        }
+                        crate::storage::ActiveView::ChatView => {
+                            window.location().set_hash("#/chat")
+                        }
                     };
 
                     if let Some(document) = window.document() {
                         // Directly call render_active_view_by_type without using refresh_ui_after_state_change
-                        if let Err(e) = crate::views::render_active_view_by_type(&view_clone, &document) {
-                            web_sys::console::error_1(&format!("Failed to switch view: {:?}", e).into());
+                        if let Err(e) =
+                            crate::views::render_active_view_by_type(&view_clone, &document)
+                        {
+                            web_sys::console::error_1(
+                                &format!("Failed to switch view: {:?}", e).into(),
+                            );
                         }
                     }
                 }
             })));
-            
+
             // If switching to Canvas, always fetch agents and current workflow
             if view_clone_for_shelf == crate::storage::ActiveView::Canvas {
                 commands.push(Command::FetchAgents);
                 commands.push(Command::FetchCurrentWorkflow);
             }
-        },
-       
-       
-       
-       
+        }
+
         Message::ResetDatabase => {
             // The actual database reset happens via API call (already done in dashboard.rs)
             // We don't need to do anything here because:
             // 1. The page will be refreshed immediately after this (in dashboard.rs)
             // 2. On refresh, it will automatically load the fresh state from the backend
             web_sys::console::log_1(&"Reset database message received - state will refresh".into());
-        },
-       
-       
+        }
 
-       
         // Thread-related messages
-       
-       
-       
-       
-       
-       
-       
+
         // Navigation messages
-       
-       
-
-
-
-
-
-
-
-        
-
 
         // Force re-render of Dashboard when active
 
-        
-
-       
-
         // --- NEW WebSocket Received Messages ---
-
-
-
 
         // -----------------------------------------------------------------
         // AssistantId – arrives once per *token-mode* stream right after the
@@ -327,87 +360,105 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // operations have the correct PK.
         // -----------------------------------------------------------------
 
-        
         // Toggle collapse/expand state for a tool call indicator
-        
+
         // Toggle full vs truncated tool output view for a tool call
 
         // --- NEW WebSocket Event Handlers ---
         Message::ReceiveAgentUpdate(agent_data) => {
-            web_sys::console::log_1(&format!("Update handler: Received agent update: {:?}", agent_data).into());
+            web_sys::console::log_1(
+                &format!("Update handler: Received agent update: {:?}", agent_data).into(),
+            );
             // TODO: Update agent list/details in AppState if needed
             // state.agents.insert(agent_data.id as u32, agent_data.into()); // Example update
             needs_refresh = true; // Assume agent list UI might need refresh
-        },
-        
+        }
+
         Message::ReceiveAgentDelete(agent_id) => {
-            web_sys::console::log_1(&format!("Update handler: Received agent delete: {}", agent_id).into());
+            web_sys::console::log_1(
+                &format!("Update handler: Received agent delete: {}", agent_id).into(),
+            );
             // TODO: Remove agent from AppState if needed
             // state.agents.remove(&(agent_id as u32)); // Example removal
             needs_refresh = true; // Assume agent list UI might need refresh
-        },
-        
+        }
+
         Message::ReceiveThreadHistory(messages) => {
             let system_messages_count = messages.iter().filter(|msg| msg.role == "system").count();
             if system_messages_count > 0 {
                 web_sys::console::log_1(&format!("Thread history contains {} system messages which won't be displayed in the chat UI", system_messages_count).into());
             }
-            web_sys::console::log_1(&format!("Update handler: Received thread history ({} messages, {} displayable)", 
-                messages.len(), messages.len() - system_messages_count).into());
-            
+            web_sys::console::log_1(
+                &format!(
+                    "Update handler: Received thread history ({} messages, {} displayable)",
+                    messages.len(),
+                    messages.len() - system_messages_count
+                )
+                .into(),
+            );
+
             // Use the correct field name: current_thread_id
             if let Some(active_thread_id) = state.current_thread_id {
                 // Store the received history messages in the correct cache: thread_messages
                 // Clone messages here before the insert
-                let messages_clone_for_dispatch = messages.clone(); 
+                let messages_clone_for_dispatch = messages.clone();
                 state.thread_messages.insert(active_thread_id, messages);
-                
+
                 // Dispatch a message to update the UI instead of calling render directly
                 // This keeps the update flow consistent
                 commands.push(Command::UpdateUI(Box::new(move || {
-                    dispatch_global_message(Message::UpdateConversation(messages_clone_for_dispatch));
+                    dispatch_global_message(Message::UpdateConversation(
+                        messages_clone_for_dispatch,
+                    ));
                 })));
 
                 needs_refresh = false; // UI update handled by UpdateConversation
             } else {
-                web_sys::console::warn_1(&"Received thread history but no active thread selected in state.".into());
+                web_sys::console::warn_1(
+                    &"Received thread history but no active thread selected in state.".into(),
+                );
                 needs_refresh = false;
             }
-        },
+        }
 
         // Agent Debug Modal messages
         Message::UpdateLoadingState(is_loading) => {
             state.is_chat_loading = is_loading;
-            
+
             // Update the UI
-            if let Some(document) = web_sys::window().expect("no global window exists").document() {
+            if let Some(document) = web_sys::window()
+                .expect("no global window exists")
+                .document()
+            {
                 let _ = crate::components::chat_view::update_loading_state(&document, is_loading);
             }
-        },
+        }
 
         Message::RequestThreadTitleUpdate => {
             // Get the current thread title from state
-            let current_title = state.current_thread_id
+            let current_title = state
+                .current_thread_id
                 .and_then(|thread_id| state.threads.get(&thread_id))
                 .map(|thread| thread.title.clone())
                 .unwrap_or_default();
-            
+
             // Store the title for later use
             let title_to_update = current_title.clone();
-            
+
             // Schedule UI update for after this function completes
             commands.push(Command::UpdateUI(Box::new(move || {
                 // Dispatch a message to update the thread title UI
                 dispatch_global_message(Message::UpdateThreadTitleUI(title_to_update));
             })));
-        },
+        }
 
         // Agent Debug Modal
 
-
-
         // Model management
-        Message::SetAvailableModels { models, default_model_id } => {
+        Message::SetAvailableModels {
+            models,
+            default_model_id,
+        } => {
             state.available_models = models.clone();
             state.default_model_id = default_model_id.clone();
             state.state_modified = true;
@@ -418,15 +469,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // Trigger management (Phase A minimal state sync)
         // -----------------------------------------------------------------
 
-
-
-
-
         // -----------------------------------------------------------
         // Gmail OAuth flow – Phase C (frontend-only stub)
         // -----------------------------------------------------------
-
-
 
         // Toggle compact/full run history view
 
@@ -438,9 +483,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // -------------------------------------------------------------------
 
         // --- MCP UI message handlers ---
-        
-        
-        
+
         // Canvas-related messages are handled by the canvas reducer
         Message::UpdateNodePosition { .. }
         | Message::AddNode { .. }
@@ -466,7 +509,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             unreachable!("Canvas messages should be handled by the canvas reducer")
         }
         // (handled later)
-        | Message::AnimationTick => {
+        Message::AnimationTick => {
             // Fire async command to backend
             // These are handled elsewhere or in canvas reducer. No-op here.
         }
@@ -480,8 +523,8 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 execution_id,
                 status: crate::state::ExecPhase::Running,
             });
-            
-            // Refresh results panel for execution start via command  
+
+            // Refresh results panel for execution start via command
             commands.push(Command::UpdateUI(Box::new(|| {
                 // (results panel removed)
             })));
@@ -494,39 +537,52 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 use std::rc::Rc;
                 let mut tm = topic_manager_rc.borrow_mut();
 
-                let handler: crate::network::topic_manager::TopicHandler = Rc::new(RefCell::new(move |payload: serde_json::Value| {
-                    use crate::network::ws_schema::WsMessage;
-                    if let Ok(parsed) = serde_json::from_value::<WsMessage>(payload.clone()) {
-                        match parsed {
-                            WsMessage::NodeState { data } => {
-                                crate::state::dispatch_global_message(Message::UpdateNodeStatus {
-                                    node_id: data.node_id.clone(),
-                                    status: data.status.clone(),
-                                });
+                let handler: crate::network::topic_manager::TopicHandler =
+                    Rc::new(RefCell::new(move |payload: serde_json::Value| {
+                        use crate::network::ws_schema::WsMessage;
+                        if let Ok(parsed) = serde_json::from_value::<WsMessage>(payload.clone()) {
+                            match parsed {
+                                WsMessage::NodeState { data } => {
+                                    crate::state::dispatch_global_message(
+                                        Message::UpdateNodeStatus {
+                                            node_id: data.node_id.clone(),
+                                            status: data.status.clone(),
+                                        },
+                                    );
+                                }
+                                WsMessage::ExecutionFinished { data } => {
+                                    crate::state::dispatch_global_message(
+                                        Message::ExecutionFinished {
+                                            execution_id: data.execution_id,
+                                            status: data.status.clone(),
+                                            error: data.error.clone(),
+                                        },
+                                    );
+                                }
+                                WsMessage::NodeLog { data } => {
+                                    crate::state::dispatch_global_message(
+                                        Message::AppendExecutionLog {
+                                            execution_id: data.execution_id,
+                                            node_id: data.node_id.clone(),
+                                            stream: data.stream.clone(),
+                                            text: data.text.clone(),
+                                        },
+                                    );
+                                }
+                                _ => {
+                                    // Other message types not handled by this subscription
+                                }
                             }
-                            WsMessage::ExecutionFinished { data } => {
-                                crate::state::dispatch_global_message(Message::ExecutionFinished {
-                                    execution_id: data.execution_id,
-                                    status: data.status.clone(),
-                                    error: data.error.clone(),
-                                });
-                            }
-                            WsMessage::NodeLog { data } => {
-                                crate::state::dispatch_global_message(Message::AppendExecutionLog {
-                                    execution_id: data.execution_id,
-                                    node_id: data.node_id.clone(),
-                                    stream: data.stream.clone(),
-                                    text: data.text.clone(),
-                                });
-                            }
-                            _ => {
-                                // Other message types not handled by this subscription
-                            }
+                        } else {
+                            web_sys::console::error_1(
+                                &format!(
+                                    "WorkflowExecution failed to parse WsMessage from: {}",
+                                    payload
+                                )
+                                .into(),
+                            );
                         }
-                    } else {
-                        web_sys::console::error_1(&format!("WorkflowExecution failed to parse WsMessage from: {}", payload).into());
-                    }
-                }));
+                    }));
 
                 let _ = tm.subscribe(topic.clone(), handler);
             })));
@@ -547,7 +603,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 status: crate::state::ExecPhase::Starting,
             });
             state.execution_logs.clear();
-            
+
             // Use the new reserve-first approach to avoid race conditions
             commands.push(Command::ReserveWorkflowExecutionApi { workflow_id });
 
@@ -582,9 +638,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 exec.execution_id = execution_id;
                 exec.status = crate::state::ExecPhase::Running;
             }
-            
+
             commands.push(Command::StartReservedExecutionApi { execution_id });
-            
+
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
                     let _ = crate::components::workflow_switcher::update_run_button(&doc);
@@ -596,32 +652,46 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             commands.push(Command::CreateWorkflowApi { name: name.clone() });
         }
 
-        Message::RenameWorkflow { workflow_id, name, description } => {
+        Message::RenameWorkflow {
+            workflow_id,
+            name,
+            description,
+        } => {
             state.updating_workflow = Some(workflow_id);
-            commands.push(Command::RenameWorkflowApi { workflow_id, name: name.clone(), description: description.clone() });
+            commands.push(Command::RenameWorkflowApi {
+                workflow_id,
+                name: name.clone(),
+                description: description.clone(),
+            });
         }
 
         Message::DeleteWorkflow { workflow_id } => {
             state.deleting_workflow = Some(workflow_id);
             commands.push(Command::DeleteWorkflowApi { workflow_id });
         }
-        
+
         // Loading state handlers
         Message::WorkflowCreationStarted => {
             state.creating_workflow = true;
         }
-        
+
         Message::WorkflowDeletionStarted { workflow_id } => {
             state.deleting_workflow = Some(workflow_id);
         }
-        
+
         Message::WorkflowUpdateStarted { workflow_id } => {
             state.updating_workflow = Some(workflow_id);
         }
 
         // Workflow scheduling messages
-        Message::ScheduleWorkflow { workflow_id, cron_expression } => {
-            commands.push(Command::ScheduleWorkflowApi { workflow_id, cron_expression });
+        Message::ScheduleWorkflow {
+            workflow_id,
+            cron_expression,
+        } => {
+            commands.push(Command::ScheduleWorkflowApi {
+                workflow_id,
+                cron_expression,
+            });
         }
 
         Message::UnscheduleWorkflow { workflow_id } => {
@@ -663,15 +733,48 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             let wf_id = wf.id;
             state.workflows.insert(wf_id, wf.clone());
             state.current_workflow_id = Some(wf_id);
-            
-            // Load the workflow's nodes onto the canvas
-            state.nodes.clear();
-            for node in &wf.nodes {
-                state.nodes.insert(node.node_id.clone(), node.clone());
+
+            // CARMACK PRINCIPLE: Workflow IS the single source of truth
+            // Canvas state is completely rebuilt from workflow - no merging, no confusion
+
+            // 1. Clear canvas state - workflow will repopulate it
+            state.workflow_nodes.clear();
+            state.agents_on_canvas.clear();
+            state.agent_id_to_node_id.clear();
+
+            // 2. Rebuild canvas from workflow (single source of truth)
+            for node in &wf.get_nodes() {
+                state
+                    .workflow_nodes
+                    .insert(node.node_id.clone(), node.clone());
+
+                // Rebuild derived state from workflow data
+                if let Some(agent_id) = node.get_agent_id() {
+                    if matches!(
+                        node.get_semantic_type(),
+                        crate::models::NodeType::AgentIdentity
+                    ) {
+                        state.agents_on_canvas.insert(agent_id);
+                        state
+                            .agent_id_to_node_id
+                            .insert(agent_id, node.node_id.clone());
+                    }
+                }
             }
-            
+
+            // 3. Edges are already in workflow - no duplication needed
+            // The renderer reads directly from workflow.edges
+
             needs_refresh = true;
-            web_sys::console::log_1(&format!("🎨 Loaded current workflow '{}' - ready for connections!", wf.name).into());
+            web_sys::console::log_1(
+                &format!(
+                    "🎨 Rebuilt canvas from workflow '{}': {} nodes + {} edges",
+                    wf.name,
+                    state.workflow_nodes.len(),
+                    wf.get_edges().len()
+                )
+                .into(),
+            );
         }
 
         // (ExecutionFinished & AppendExecutionLog handled in dedicated arms
@@ -704,24 +807,27 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // -------------------------------------------------------------------
         // Live workflow execution updates
         // -------------------------------------------------------------------
-
-        Message::ExecutionFinished { execution_id, status, error } => {
+        Message::ExecutionFinished {
+            execution_id,
+            status,
+            error,
+        } => {
             // Show toast notification for completion
             let status_msg = if status == "success" {
                 "Workflow completed successfully"
             } else {
                 "Workflow execution failed"
             };
-            
+
             if status == "success" {
                 crate::toast::success(status_msg);
             } else {
                 crate::toast::error(status_msg);
             }
-            
+
             // Status feedback is handled purely by toast notifications
             // No UI elements are added/modified to avoid layout shifts
-            
+
             // Update execution status for internal tracking, but don't affect run button
             if let Some(exec) = &mut state.current_execution {
                 if exec.execution_id == 0 || exec.execution_id == execution_id {
@@ -743,17 +849,26 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             needs_refresh = true;
         }
 
-        Message::AppendExecutionLog { execution_id, node_id, stream, text } => {
+        Message::AppendExecutionLog {
+            execution_id,
+            node_id,
+            stream,
+            text,
+        } => {
             if let Some(exec) = &state.current_execution {
                 if exec.execution_id == 0 || exec.execution_id == execution_id {
-                    state.execution_logs.push(crate::state::ExecutionLog { node_id: node_id.clone(), stream: stream.clone(), text: text.clone() });
+                    state.execution_logs.push(crate::state::ExecutionLog {
+                        node_id: node_id.clone(),
+                        stream: stream.clone(),
+                        text: text.clone(),
+                    });
                     needs_refresh = true;
                 }
             }
 
             // Refresh results panel for log updates via command
             // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
-            
+
             // Live append means drawer needs repaint if open
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
@@ -776,14 +891,16 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // -------------------------------------------------------------------
         // Template Gallery Messages
         // -------------------------------------------------------------------
-
-        Message::LoadTemplates { category, my_templates } => {
+        Message::LoadTemplates {
+            category,
+            my_templates,
+        } => {
             state.templates_loading = true;
             state.selected_template_category = category.clone();
             state.show_my_templates_only = my_templates;
-            commands.push(Command::LoadTemplatesApi { 
-                category: category.clone(), 
-                my_templates 
+            commands.push(Command::LoadTemplatesApi {
+                category: category.clone(),
+                my_templates,
             });
         }
 
@@ -817,26 +934,30 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::SetTemplateCategory(category) => {
             state.selected_template_category = category.clone();
             // Reload templates with new category filter
-            commands.push(Command::LoadTemplatesApi { 
-                category: category.clone(), 
-                my_templates: state.show_my_templates_only 
+            commands.push(Command::LoadTemplatesApi {
+                category: category.clone(),
+                my_templates: state.show_my_templates_only,
             });
         }
 
         Message::ToggleMyTemplatesOnly => {
             state.show_my_templates_only = !state.show_my_templates_only;
             // Reload templates with new filter
-            commands.push(Command::LoadTemplatesApi { 
-                category: state.selected_template_category.clone(), 
-                my_templates: state.show_my_templates_only 
+            commands.push(Command::LoadTemplatesApi {
+                category: state.selected_template_category.clone(),
+                my_templates: state.show_my_templates_only,
             });
         }
 
-        Message::DeployTemplate { template_id, name, description } => {
-            commands.push(Command::DeployTemplateApi { 
-                template_id, 
-                name: Some(name.clone()), 
-                description: Some(description.clone()) 
+        Message::DeployTemplate {
+            template_id,
+            name,
+            description,
+        } => {
+            commands.push(Command::DeployTemplateApi {
+                template_id,
+                name: Some(name.clone()),
+                description: Some(description.clone()),
             });
         }
 
@@ -856,9 +977,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
         Message::ShowTemplateGallery => {
             // Load templates and categories when showing gallery
-            commands.push(Command::LoadTemplatesApi { 
-                category: state.selected_template_category.clone(), 
-                my_templates: state.show_my_templates_only 
+            commands.push(Command::LoadTemplatesApi {
+                category: state.selected_template_category.clone(),
+                my_templates: state.show_my_templates_only,
             });
             commands.push(Command::LoadTemplateCategoriesApi);
         }
@@ -886,33 +1007,35 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 }
             })));
         }
-        Message::AddEdge { .. } |
-        Message::ToggleConnectionMode |
-        Message::SelectNodeForConnection { .. } |
-        Message::CreateConnectionFromSelected { .. } |
-        Message::ClearNodeSelection |
-        Message::StartConnectionDrag { .. } |
-        Message::UpdateConnectionDrag { .. } |
-        Message::EndConnectionDrag { .. } |
-        Message::GenerateCanvasFromAgents => {
+        Message::AddEdge { .. }
+        | Message::ToggleConnectionMode
+        | Message::SelectNodeForConnection { .. }
+        | Message::CreateConnectionFromSelected { .. }
+        | Message::ClearNodeSelection
+        | Message::StartConnectionDrag { .. }
+        | Message::UpdateConnectionDrag { .. }
+        | Message::EndConnectionDrag { .. }
+        | Message::GenerateCanvasFromAgents => {
             // These are handled by the canvas reducer which returns early
             unreachable!("Canvas messages should be handled by the canvas reducer")
         }
-        
+
         Message::InitializeParticleSystem { width, height } => {
-            state.particle_system = Some(crate::canvas::background::ParticleSystem::new(width, height, 50));
+            state.particle_system = Some(crate::canvas::background::ParticleSystem::new(
+                width, height, 50,
+            ));
             needs_refresh = true; // Particle system initialized, likely needs a redraw
-        },
+        }
         Message::ClearParticleSystem => {
             state.particle_system = None;
             needs_refresh = true; // Particle system cleared, likely needs a redraw
-        },
+        }
         // Catch-all for any unhandled messages
         _ => {
             // Warn about unexpected messages so nothing silently fails
-            web_sys::console::warn_1(&format!(
-                "[update.rs] Unexpected or unhandled message: {:?}", msg
-            ).into());
+            web_sys::console::warn_1(
+                &format!("[update.rs] Unexpected or unhandled message: {:?}", msg).into(),
+            );
             needs_refresh = false;
         }
     }
@@ -957,7 +1080,7 @@ pub fn update_thread_list_with_data(
     document: &Document,
     threads: &[ApiThread],
     current_thread_id: Option<u32>,
-    thread_messages: &HashMap<u32, Vec<ApiThreadMessage>>
+    thread_messages: &HashMap<u32, Vec<ApiThreadMessage>>,
 ) -> Result<(), JsValue> {
     update_thread_list_ui(document, threads, current_thread_id, thread_messages)
 }
@@ -969,8 +1092,13 @@ pub fn update_conversation(document: &Document) -> Result<(), JsValue> {
         let state = state.borrow();
         if let Some(thread_id) = state.current_thread_id {
             if let Some(messages) = state.thread_messages.get(&thread_id) {
-                let current_user_opt = crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
-                return crate::components::chat_view::update_conversation_ui(document, messages, current_user_opt.as_ref());
+                let current_user_opt =
+                    crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
+                return crate::components::chat_view::update_conversation_ui(
+                    document,
+                    messages,
+                    current_user_opt.as_ref(),
+                );
             }
         }
 
