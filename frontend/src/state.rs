@@ -361,12 +361,9 @@ pub struct AppState {
     /// Loading state for chat interface
     pub is_chat_loading: bool,
     
-    // DEPRECATED: Legacy compatibility fields (to be removed after full migration)
-    #[deprecated(note = "Use agent_states instead")]
+    // LEGACY: Keep for compatibility during gradual migration
     pub current_thread_id: Option<u32>,
-    #[deprecated(note = "Use agent_states instead")]
     pub threads: HashMap<u32, ApiThread>,
-    #[deprecated(note = "Use agent_states instead")]
     pub thread_messages: HashMap<u32, Vec<ApiThreadMessage>>,
     // New field for handling streaming responses
     /// Tracks the **current assistant message** id for every thread that is
@@ -658,7 +655,7 @@ impl AppState {
             current_agent_id: None,
             is_chat_loading: false,
             
-            // DEPRECATED: Legacy compatibility fields
+            // LEGACY: Keep for compatibility during gradual migration
             current_thread_id: None,
             threads: HashMap::new(),
             thread_messages: HashMap::new(),

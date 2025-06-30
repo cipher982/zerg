@@ -669,66 +669,18 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         crate::messages::Message::ThreadsLoaded(threads) => {
-            web_sys::console::log_1(&format!("LEGACY ThreadsLoaded: {} threads", threads.len()).into());
-
-            // LEGACY HANDLER - Clear existing threads before loading new ones to fix thread pollution
-            state.threads.clear();
-            state.thread_messages.clear();
-
-            // Update state with loaded threads
-            for thread in threads {
-                if let Some(thread_id) = thread.id {
-                    state.threads.insert(thread_id, thread.clone());
-                }
+            web_sys::console::warn_1(&"DEPRECATED: ThreadsLoaded handler called. Use AgentThreadsLoaded instead.".into());
+            
+            // For compatibility, if we have a current agent, redirect to the new handler
+            if let Some(agent_id) = state.current_agent_id {
+                return update(state, &crate::messages::Message::AgentThreadsLoaded { 
+                    agent_id, 
+                    threads: threads.clone() 
+                }, cmds);
             }
-
-            // Auto-select the first thread if none is selected and threads exist
-            if state.current_thread_id.is_none() && !state.threads.is_empty() {
-                // Sort threads by updated_at (newest first), fallback to created_at
-                let mut threads_vec: Vec<_> = state.threads.values().collect();
-                threads_vec.sort_by(|a, b| {
-                    let a_time = a
-                        .updated_at
-                        .as_ref()
-                        .or(a.created_at.as_ref())
-                        .map(|s| s.as_str())
-                        .unwrap_or("");
-                    let b_time = b
-                        .updated_at
-                        .as_ref()
-                        .or(b.created_at.as_ref())
-                        .map(|s| s.as_str())
-                        .unwrap_or("");
-                    b_time.cmp(a_time)
-                });
-                if let Some(first_thread) = threads_vec.first() {
-                    if let Some(first_thread_id) = first_thread.id {
-                        cmds.push(crate::messages::Command::SendMessage(
-                            crate::messages::Message::SelectThread(first_thread_id),
-                        ));
-                    }
-                }
-            }
-
-            // Update UI with thread list
-            let threads_data: Vec<crate::models::ApiThread> =
-                state.threads.values().cloned().collect();
-            let current_thread_id = state.current_thread_id;
-            let thread_messages = state.thread_messages.clone();
-
-            cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
-                crate::state::dispatch_global_message(crate::messages::Message::UpdateThreadList(
-                    threads_data,
-                    current_thread_id,
-                    thread_messages,
-                ));
-            })));
-
-            // Stop loading state
-            cmds.push(crate::messages::Command::SendMessage(
-                crate::messages::Message::UpdateLoadingState(false),
-            ));
-
+            
+            // Otherwise just ignore
+            web_sys::console::warn_1(&"ThreadsLoaded called without current agent - ignoring".into());
             true
         }
         
@@ -831,9 +783,6 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             
             if let Some(agent_state) = state.get_agent_state_mut(*agent_id) {
                 agent_state.current_thread_id = Some(*thread_id);
-                
-                // Update legacy state for compatibility
-                state.current_thread_id = Some(*thread_id);
                 
                 // Update UI
                 let current_agent_id = *agent_id;

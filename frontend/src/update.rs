@@ -397,25 +397,31 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 .into(),
             );
 
-            // Use the correct field name: current_thread_id
-            if let Some(active_thread_id) = state.current_thread_id {
-                // Store the received history messages in the correct cache: thread_messages
-                // Clone messages here before the insert
-                let messages_clone_for_dispatch = messages.clone();
-                state.thread_messages.insert(active_thread_id, messages);
+            // Use agent-scoped state for thread messages
+            if let Some(agent_state) = state.current_agent_mut() {
+                if let Some(active_thread_id) = agent_state.current_thread_id {
+                    // Store the received history messages in the agent's thread_messages
+                    // Clone messages here before the insert
+                    let messages_clone_for_dispatch = messages.clone();
+                    agent_state.thread_messages.insert(active_thread_id, messages);
 
-                // Dispatch a message to update the UI instead of calling render directly
-                // This keeps the update flow consistent
-                commands.push(Command::UpdateUI(Box::new(move || {
-                    dispatch_global_message(Message::UpdateConversation(
-                        messages_clone_for_dispatch,
-                    ));
-                })));
+                    // Dispatch a message to update the UI instead of calling render directly
+                    // This keeps the update flow consistent
+                    commands.push(Command::UpdateUI(Box::new(move || {
+                        dispatch_global_message(Message::UpdateConversation(
+                            messages_clone_for_dispatch,
+                        ));
+                    })));
 
-                needs_refresh = false; // UI update handled by UpdateConversation
+                    needs_refresh = false; // UI update handled by UpdateConversation
+                } else {
+                    web_sys::console::warn_1(
+                        &"Received thread history but agent has no current thread selected.".into(),
+                    );
+                }
             } else {
                 web_sys::console::warn_1(
-                    &"Received thread history but no active thread selected in state.".into(),
+                    &"Received thread history but no current agent selected in state.".into(),
                 );
                 needs_refresh = false;
             }
@@ -435,10 +441,11 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         }
 
         Message::RequestThreadTitleUpdate => {
-            // Get the current thread title from state
+            // Get the current thread title from agent state
             let current_title = state
-                .current_thread_id
-                .and_then(|thread_id| state.threads.get(&thread_id))
+                .current_agent()
+                .and_then(|agent| agent.current_thread_id)
+                .and_then(|thread_id| state.current_agent()?.threads.get(&thread_id))
                 .map(|thread| thread.title.clone())
                 .unwrap_or_default();
 
@@ -1067,10 +1074,15 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 pub fn update_thread_list(document: &Document) -> Result<(), JsValue> {
     APP_STATE.with(|state| {
         let state = state.borrow();
-        let threads: Vec<ApiThread> = state.threads.values().cloned().collect();
-        let current_thread_id = state.current_thread_id;
-        let thread_messages = state.thread_messages.clone();
-        update_thread_list_ui(document, &threads, current_thread_id, &thread_messages)
+        if let Some(agent_state) = state.current_agent() {
+            let threads: Vec<ApiThread> = agent_state.threads.values().cloned().collect();
+            let current_thread_id = agent_state.current_thread_id;
+            let thread_messages = agent_state.thread_messages.clone();
+            update_thread_list_ui(document, &threads, current_thread_id, &thread_messages)
+        } else {
+            // No current agent, show empty thread list
+            update_thread_list_ui(document, &[], None, &HashMap::new())
+        }
     })
 }
 
@@ -1090,15 +1102,16 @@ pub fn update_thread_list_with_data(
 pub fn update_conversation(document: &Document) -> Result<(), JsValue> {
     APP_STATE.with(|state| {
         let state = state.borrow();
-        if let Some(thread_id) = state.current_thread_id {
-            if let Some(messages) = state.thread_messages.get(&thread_id) {
-                let current_user_opt =
-                    crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
-                return crate::components::chat_view::update_conversation_ui(
-                    document,
-                    messages,
-                    current_user_opt.as_ref(),
-                );
+        if let Some(agent_state) = state.current_agent() {
+            if let Some(thread_id) = agent_state.current_thread_id {
+                if let Some(messages) = agent_state.thread_messages.get(&thread_id) {
+                    let current_user_opt = state.current_user.clone();
+                    return crate::components::chat_view::update_conversation_ui(
+                        document,
+                        messages,
+                        current_user_opt.as_ref(),
+                    );
+                }
             }
         }
 
