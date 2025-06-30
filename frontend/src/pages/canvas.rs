@@ -166,7 +166,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
                 });
 
                 // Create default manual trigger node
-                use crate::models::{UiNodeState, WorkflowEdge, WorkflowNode};
+                
                 let trigger_config = TriggerConfig {
                     params: std::collections::HashMap::new(),
                     enabled: true,
@@ -266,7 +266,7 @@ pub fn ensure_trigger_node_exists() {
         });
 
         // Create default manual trigger node
-        use crate::models::{UiNodeState, WorkflowEdge, WorkflowNode};
+        
         let trigger_config = TriggerConfig {
             params: std::collections::HashMap::new(),
             enabled: true,

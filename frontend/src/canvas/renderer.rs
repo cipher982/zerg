@@ -112,7 +112,7 @@ fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
 /// Apply transition animation effects to a node
 fn apply_transition_effects(
     context: &CanvasRenderingContext2d,
-    node: &WorkflowNode,
+    _node: &WorkflowNode,
     ui_state: &crate::models::UiNodeState,
     layout: &crate::models::NodeLayout,
 ) {
@@ -171,9 +171,9 @@ fn apply_transition_effects(
 /// Restore context after transition effects
 fn restore_after_transition_effects(
     context: &CanvasRenderingContext2d,
-    node: &WorkflowNode,
+    _node: &WorkflowNode,
     ui_state: &crate::models::UiNodeState,
-    layout: &crate::models::NodeLayout,
+    _layout: &crate::models::NodeLayout,
 ) {
     if let Some(animation) = &ui_state.transition_animation {
         if matches!(animation.animation_type, TransitionType::ErrorShake) {
@@ -267,7 +267,7 @@ pub fn draw_node(
     context: &CanvasRenderingContext2d,
     node: &WorkflowNode,
     agents: &HashMap<u32, ApiAgent>,
-    selected_node_id: &Option<String>,
+    _selected_node_id: &Option<String>,
     connection_source_node: &Option<String>,
     connection_mode: bool,
     hovered_handle: &Option<(String, String)>,
