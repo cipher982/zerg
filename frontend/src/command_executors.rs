@@ -13,7 +13,10 @@ pub fn execute_fetch_command(cmd: Command) {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_threads(Some(agent_id)).await {
                     Ok(response) => match serde_json::from_str::<Vec<ApiThread>>(&response) {
-                        Ok(threads) => dispatch_global_message(Message::ThreadsLoaded(threads)),
+                        Ok(threads) => dispatch_global_message(Message::AgentThreadsLoaded { 
+                            agent_id, 
+                            threads 
+                        }),
                         Err(e) => web_sys::console::error_1(
                             &format!("Failed to parse threads: {:?}", e).into(),
                         ),
