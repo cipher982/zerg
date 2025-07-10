@@ -11,6 +11,10 @@ const config = {
     },
   },
 
+  // Modern test practices: Proper setup and cleanup
+  globalSetup: require.resolve('./test-setup.js'),
+  globalTeardown: require.resolve('./test-teardown.js'),
+
   fullyParallel: true,
   workers: 16,
   retries: process.env.CI ? 2 : 0,
@@ -23,7 +27,7 @@ const config = {
       // and occasionally fails with EPERM inside the sandbox.
       command: 'cd ../backend && NODE_ENV=test TESTING=1 WORKER_ID=$PW_TEST_WORKER_INDEX ./.venv/bin/python -m uvicorn zerg.main:app --port 8001 --log-level warning',
       port: 8001,
-      reuseExistingServer: false,
+      reuseExistingServer: true,
       timeout: 120_000,
     },
     {

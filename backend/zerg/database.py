@@ -178,20 +178,16 @@ def get_session_factory() -> sessionmaker:
         if worker_id in _WORKER_SESSIONMAKERS:
             return _WORKER_SESSIONMAKERS[worker_id]
 
-        # Use file-based database for test workers to ensure proper connection sharing
-        # Each worker gets its own isolated database file for proper SQLAlchemy pooling
+        # Use modern test database manager for proper isolation and cleanup
         if _settings.testing or os.getenv("NODE_ENV") == "test":
-            # Use temporary file-based database for better connection pooling support
-            import tempfile
+            # Use the test database manager for automatic cleanup and isolation
+            from zerg.test_db_manager import test_db_manager
 
-            temp_dir = Path(tempfile.gettempdir()) / "zerg_test_dbs"
-            temp_dir.mkdir(exist_ok=True)
-            db_path = temp_dir / f"test_worker_{worker_id}.db"
-            db_url = f"sqlite:///{db_path}"
-
-            # Clean up existing database file to ensure fresh state
-            if db_path.exists():
-                db_path.unlink()
+            # Get isolated database with automatic cleanup
+            db_url = test_db_manager.get_test_database_url(
+                worker_id=str(worker_id),
+                use_memory=False,  # Use file-based for connection sharing
+            )
         else:
             # Fallback to file-based databases for non-test environments
             db_path = Path(__file__).resolve().parents[1] / f"test_worker_{worker_id}.db"
