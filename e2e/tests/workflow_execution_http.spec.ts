@@ -83,7 +83,7 @@ test.describe('Workflow Execution with HTTP Tools', () => {
         
         // Step 3: Execute the workflow
         console.log('📊 Step 3: Executing workflow...');
-        const executionResponse = await page.request.post(`http://localhost:8001/api/workflows/${workflow.id}/execute`, {
+        const executionResponse = await page.request.post(`http://localhost:8001/api/workflow-executions/${workflow.id}/start`, {
           headers: {
             'Content-Type': 'application/json',
           },

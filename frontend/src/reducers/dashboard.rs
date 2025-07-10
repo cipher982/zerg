@@ -10,6 +10,10 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             // Set the active view to Dashboard
             state.active_view = crate::storage::ActiveView::Dashboard;
 
+            // Trigger agent refresh when navigating to dashboard
+            // This ensures agents are always up-to-date when dashboard loads
+            commands.push(Command::FetchAgents);
+
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(document) = web_sys::window().unwrap().document() {
                     // First hide the chat view container
@@ -31,6 +35,9 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             true
         }
         Message::RefreshDashboard => {
+            // Trigger agent fetch to ensure data is fresh
+            commands.push(Command::FetchAgents);
+
             // Schedule UI update outside the current mutable borrow scope
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(window) = web_sys::window() {
