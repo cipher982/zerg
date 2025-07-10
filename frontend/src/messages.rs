@@ -350,7 +350,7 @@ pub enum Message {
 
     // Thread-related messages
     LoadThreads(u32),                                 // Load threads for an agent
-    ThreadsLoaded(Vec<ApiThread>), // Changed String to Vec<ApiThread> for direct use
+    ThreadsLoaded(Vec<ApiThread>), // DEPRECATED: Use AgentThreadsLoaded instead
     CreateThread(u32, String),     // Create a new thread for an agent
     ThreadCreated(ApiThread),      // Changed String to ApiThread for direct use
     SelectThread(u32),             // Select a thread
@@ -367,8 +367,8 @@ pub enum Message {
     LoadThreadMessages(u32),       // Load messages for a thread
     ThreadMessagesLoaded(u32, Vec<ApiThreadMessage>), // Changed String to Vec<ApiThreadMessage> + thread_id
     SendThreadMessage(u32, String),                   // Send a message to a thread
-    ThreadMessageSent(String, String),                // Message sent response with client_id
-    ThreadMessageFailed(u32, String),                 // Message failed to send with client_id
+    ThreadMessageSent(String, String),                // DEPRECATED: Remove after migration complete
+    ThreadMessageFailed(u32, String),                 // DEPRECATED: Remove after migration complete
     UpdateThreadTitle(u32, String),                   // Update thread title (request)
     DeleteThread(u32),                                // Delete thread
 
@@ -470,7 +470,7 @@ pub enum Message {
     // --- END NEW WebSocket Received Messages ---
 
     // Navigation messages
-    NavigateToChatView(u32),   // Navigate to chat view with agent
+    NavigateToChatView(u32),   // DEPRECATED: Use NavigateToAgentChat instead
     NavigateToThreadView(u32), // Navigate to specific thread
     NavigateToDashboard,       // Back to dashboard
 

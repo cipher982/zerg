@@ -664,10 +664,8 @@ pub fn execute_thread_command(cmd: Command) {
                         )
                         .into(),
                     );
-                    dispatch_global_message(Message::ThreadMessageFailed(
-                        thread_id,
-                        client_id_str.clone(),
-                    ));
+                    // Show error toast directly instead of using deprecated message
+                    crate::toast::error("Failed to send message. Please try again.");
                     return;
                 }
 
@@ -676,7 +674,8 @@ pub fn execute_thread_command(cmd: Command) {
                     web_sys::console::error_1(
                         &format!("Executor: Failed to run thread {}: {:?}", thread_id, e).into(),
                     );
-                    dispatch_global_message(Message::ThreadMessageFailed(thread_id, client_id_str));
+                    // Show error toast directly instead of using deprecated message
+                    crate::toast::error("Failed to process message. Please try again.");
                 } else {
                     web_sys::console::log_1(
                         &format!("Executor: Processing started for thread {}", thread_id).into(),
