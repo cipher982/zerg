@@ -1025,9 +1025,8 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         event.stop_propagation();
         web_sys::console::log_1(&format!("Chat with agent: {}", agent_id).into());
 
-        // Dispatch NavigateToChatView message with the u32 ID
-        // NOTE: Message::NavigateToChatView needs to be updated to accept u32
-        crate::state::dispatch_global_message(crate::messages::Message::NavigateToChatView(
+        // Dispatch NavigateToAgentChat message with the u32 ID
+        crate::state::dispatch_global_message(crate::messages::Message::NavigateToAgentChat(
             agent_id,
         ));
 
