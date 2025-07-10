@@ -78,10 +78,7 @@ test.describe('Thread & Chat – basic flows', () => {
     await page.locator(`[data-testid="chat-agent-${agentId}"]`).click();
     
     const newThreadBtn = page.locator('.new-thread-btn');
-    if (await newThreadBtn.count() === 0) {
-      test.skip(true, 'Thread management UI not implemented yet');
-      return;
-    }
+    await expect(newThreadBtn).toBeVisible({ timeout: 5000 }); // REQUIRE thread management
     
     await page.waitForSelector('.new-thread-btn');
 
@@ -90,10 +87,7 @@ test.describe('Thread & Chat – basic flows', () => {
     await newThreadBtn.click();
 
     const listItems = page.locator('.thread-list .thread-row');
-    if ((await listItems.count()) < 2) {
-      test.skip(true, 'Thread list not rendered');
-      return;
-    }
+    await expect(listItems).toHaveCount(2, { timeout: 5000 }); // REQUIRE thread list
 
     const first = listItems.nth(0);
     const second = listItems.nth(1);
@@ -108,24 +102,15 @@ test.describe('Thread & Chat – basic flows', () => {
     await page.locator(`[data-testid="chat-agent-${agentId}"]`).click();
     
     const newThreadBtn = page.locator('.new-thread-btn');
-    if (await newThreadBtn.count() === 0) {
-      test.skip(true, 'Thread management UI not implemented yet');
-      return;
-    }
+    await expect(newThreadBtn).toBeVisible({ timeout: 5000 }); // REQUIRE thread management
     
     await page.waitForSelector('.new-thread-btn');
     await newThreadBtn.click();
     const threadRow = page.locator('.thread-list .thread-row').first();
-    if ((await threadRow.count()) === 0) {
-      test.skip(true, 'Thread list not rendered');
-      return;
-    }
+    await expect(threadRow).toBeVisible({ timeout: 5000 }); // REQUIRE thread list
     
     const deleteBtn = threadRow.locator('button', { hasText: 'Delete' });
-    if (await deleteBtn.count() === 0) {
-      test.skip(true, 'Delete button not implemented');
-      return;
-    }
+    await expect(deleteBtn).toBeVisible({ timeout: 5000 }); // REQUIRE delete functionality
     
     await deleteBtn.click();
     page.once('dialog', (d) => d.accept());
@@ -137,10 +122,7 @@ test.describe('Thread & Chat – basic flows', () => {
     await page.locator(`[data-testid="chat-agent-${agentId}"]`).click();
     
     const newThreadBtn = page.locator('.new-thread-btn');
-    if (await newThreadBtn.count() === 0) {
-      test.skip(true, 'Thread management UI not implemented yet');
-      return;
-    }
+    await expect(newThreadBtn).toBeVisible({ timeout: 5000 }); // REQUIRE thread management
     
     await newThreadBtn.click();
     const threadRow = page.locator('.thread-list .thread-row').first();
@@ -151,10 +133,7 @@ test.describe('Thread & Chat – basic flows', () => {
     
     await threadRow.dblclick();
     const titleInput = threadRow.locator('input');
-    if (await titleInput.count() === 0) {
-      test.skip(true, 'Thread title editing not implemented');
-      return;
-    }
+    await expect(titleInput).toBeVisible({ timeout: 5000 }); // REQUIRE title editing
     
     await titleInput.fill('Renamed');
     await titleInput.press('Enter');
@@ -165,11 +144,8 @@ test.describe('Thread & Chat – basic flows', () => {
     const agentId = await createAgentAndGetId(page);
     await page.locator(`[data-testid="chat-agent-${agentId}"]`).click();
     
-    const chatExists = await page.locator('.chat-input').count() > 0;
-    if (!chatExists) {
-      test.skip(true, 'Chat UI not fully implemented yet');
-      return;
-    }
+    // REQUIRE chat UI to exist - core functionality
+    await expect(page.locator('.chat-input')).toBeVisible({ timeout: 5000 });
     
     const newThreadBtn = page.locator('.new-thread-btn');
     if (await newThreadBtn.count() > 0) {

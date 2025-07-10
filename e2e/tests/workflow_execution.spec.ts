@@ -184,7 +184,7 @@ test.describe('Workflow Execution End-to-End Tests', () => {
       // Verify history now shows two executions
       await expect(page.locator('.execution-item, .execution-entry')).toHaveCount.toBeGreaterThan(1, { timeout: 5000 });
     } else {
-      test.skip(true, 'Execution history UI not implemented');
+      throw new Error('Execution history UI is required - must be implemented for workflow monitoring');
     }
   });
 
@@ -214,7 +214,7 @@ test.describe('Workflow Execution End-to-End Tests', () => {
       const finalClass = await runBtn.getAttribute('class');
       expect(finalClass).not.toMatch(/running/);
     } else {
-      test.skip(true, 'Cancel execution UI not implemented');
+      throw new Error('Cancel execution functionality is required - must be implemented for workflow control');
     }
   });
 
@@ -396,7 +396,7 @@ test.describe('Workflow Execution Performance Tests', () => {
       const finalState = await runBtn.getAttribute('class');
       expect(finalState).toMatch(/(success|failed)/);
     } else {
-      test.skip(true, 'No agents available for large workflow test');
+      throw new Error('Agents must be available for workflow testing - check test data setup');
     }
   });
 });

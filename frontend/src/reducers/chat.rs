@@ -140,24 +140,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 };
                 
                 if should_update_ui {
-                    let messages_clone = messages.clone();
+                    // Use agent-scoped UI refresh instead of global dispatches
                     cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
-                        if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-                            let current_user_opt =
-                                crate::state::APP_STATE.with(|s| s.borrow().current_user.clone());
-                            let _ = crate::components::chat_view::update_conversation_ui(
-                                &document,
-                                &messages_clone,
-                                current_user_opt.as_ref(),
-                            );
-                        }
-                    })));
-                    
-                    // Update thread list for this agent
-                    cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
-                        crate::state::dispatch_global_message(
-                            crate::messages::Message::RequestThreadListUpdate(agent_id)
-                        );
+                        crate::components::chat_view::refresh_chat_ui_from_agent_state(agent_id);
                     })));
                 }
             } else {
@@ -914,7 +899,12 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             
             // Update UI - agent-scoped state is already updated above
             state.is_chat_loading = false;
-            // TODO: Update chat view UI to read directly from agent state instead of global dispatches
+            
+            // Trigger UI refresh for the current agent
+            let current_agent_id = *agent_id;
+            cmds.push(Command::UpdateUI(Box::new(move || {
+                crate::components::chat_view::refresh_chat_ui_from_agent_state(current_agent_id);
+            })));
             true
         }
         
