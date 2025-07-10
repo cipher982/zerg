@@ -878,6 +878,38 @@ fn get_current_agent_id(state: &std::cell::Ref<crate::state::AppState>) -> Optio
     state.current_agent_id
 }
 
+/// Refresh chat UI from agent-scoped state instead of global dispatches
+pub fn refresh_chat_ui_from_agent_state(agent_id: u32) {
+    use crate::state::APP_STATE;
+    
+    if let Some(document) = web_sys::window().and_then(|w| w.document()) {
+        APP_STATE.with(|state| {
+            let state = state.borrow();
+            
+            if let Some(agent_state) = state.agent_states.get(&agent_id) {
+                // Update thread list from agent state
+                let threads: Vec<&crate::models::ApiThread> = agent_state.get_threads_sorted();
+                let thread_refs: Vec<crate::models::ApiThread> = threads.into_iter().cloned().collect();
+                
+                let _ = update_thread_list_ui(
+                    &document,
+                    &thread_refs,
+                    agent_state.current_thread_id,
+                    &agent_state.thread_messages,
+                );
+                
+                // Update conversation UI if we have a current thread
+                if let Some(current_thread_id) = agent_state.current_thread_id {
+                    if let Some(messages) = agent_state.thread_messages.get(&current_thread_id) {
+                        let current_user_opt = state.current_user.clone();
+                        let _ = update_conversation_ui(&document, messages, current_user_opt.as_ref());
+                    }
+                }
+            }
+        });
+    }
+}
+
 // Helper function to format timestamps
 fn format_timestamp(timestamp: &str) -> String {
     // Basic formatting - in a real app you'd want more sophisticated date handling

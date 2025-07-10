@@ -192,3 +192,4 @@ frontend/generated/
 node_modules/
 test-results/
 e2e/*.png
+e2e/*/*.txt
