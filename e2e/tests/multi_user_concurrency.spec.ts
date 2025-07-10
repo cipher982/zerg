@@ -255,7 +255,7 @@ test.describe('Multi-User and Concurrency', () => {
             const session = workflowSessions.find(s => s.userId === wf.userId);
             if (!session) return { success: false, reason: 'Session not found' };
             
-            const executionResponse = await session.page.request.post(`http://localhost:8001/api/workflows/${wf.workflow.id}/execute`, {
+            const executionResponse = await session.page.request.post(`http://localhost:8001/api/workflow-executions/${wf.workflow.id}/start`, {
               headers: {
                 'X-Test-Worker': wf.userId,
                 'Content-Type': 'application/json',

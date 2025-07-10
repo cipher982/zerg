@@ -61,6 +61,17 @@ pub fn execute_fetch_command(cmd: Command) {
             });
         }
         Command::FetchAgents => {
+            // Set loading state before starting fetch
+            APP_STATE.with(|state_ref| {
+                let mut state = state_ref.borrow_mut();
+                state.is_loading = true;
+            });
+
+            // Trigger UI refresh to show loading state
+            if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
+                web_sys::console::error_1(&format!("Failed to refresh UI for loading state: {:?}", e).into());
+            }
+
             // Determine current dashboard scope before starting the async
             // task so we don’t hold a RefCell borrow across await points.
             let scope_str = crate::state::APP_STATE.with(|state_ref| {
@@ -78,15 +89,34 @@ pub fn execute_fetch_command(cmd: Command) {
                             web_sys::console::log_1(
                                 &format!("Fetched {} agents from API", agents.len()).into(),
                             );
+                            // Clear loading state before dispatching agents
+                            APP_STATE.with(|state_ref| {
+                                let mut state = state_ref.borrow_mut();
+                                state.is_loading = false;
+                            });
                             dispatch_global_message(Message::AgentsRefreshed(agents))
                         }
-                        Err(e) => web_sys::console::error_1(
-                            &format!("Failed to parse agents: {:?}", e).into(),
-                        ),
+                        Err(e) => {
+                            // Clear loading state on error
+                            APP_STATE.with(|state_ref| {
+                                let mut state = state_ref.borrow_mut();
+                                state.is_loading = false;
+                            });
+                            web_sys::console::error_1(
+                                &format!("Failed to parse agents: {:?}", e).into(),
+                            );
+                        }
                     },
-                    Err(e) => web_sys::console::error_1(
-                        &format!("Failed to fetch agents: {:?}", e).into(),
-                    ),
+                    Err(e) => {
+                        // Clear loading state on error
+                        APP_STATE.with(|state_ref| {
+                            let mut state = state_ref.borrow_mut();
+                            state.is_loading = false;
+                        });
+                        web_sys::console::error_1(
+                            &format!("Failed to fetch agents: {:?}", e).into(),
+                        );
+                    }
                 }
             });
         }
