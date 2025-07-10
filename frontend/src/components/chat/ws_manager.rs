@@ -83,10 +83,17 @@ impl ChatViewWsManager {
         // Strongly-typed handler using WsMessage enum
         // -----------------------------------------------------------------
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
+            web_sys::console::log_1(
+                &format!("🔍 [CHAT WS] Received message for thread {}: {:?}", thread_id, data).into(),
+            );
+            
             // -----------------------------------------------------------------
             // 1. Structured path using the canonical `{ type, data {…}}` shape
             // -----------------------------------------------------------------
             if let Ok(parsed) = serde_json::from_value::<WsMessage>(data.clone()) {
+                web_sys::console::log_1(
+                    &format!("🔍 [CHAT WS] Successfully parsed message type: {:?}", parsed).into(),
+                );
                 match parsed {
                     WsMessage::ThreadMessage { data: msg } => {
                         let api_msg: ApiThreadMessage = msg.into();
@@ -126,6 +133,10 @@ impl ChatViewWsManager {
                         // Fall through to flat handler below
                     }
                 }
+            } else {
+                web_sys::console::warn_1(
+                    &format!("🔍 [CHAT WS] Failed to parse message: {:?}", data).into(),
+                );
             }
 
             // If we reached here the message did not match any known variant
