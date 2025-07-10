@@ -7,6 +7,9 @@
 
 # SQLite DB used for local dev & tests
 app.db
+*.db-shm
+*.db-wal
+test_worker_*.db*
 
 # PyTest cache
 .pytest_cache/

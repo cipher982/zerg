@@ -651,6 +651,7 @@ pub fn execute_thread_command(cmd: Command) {
                 )
                 .into(),
             );
+            
             let client_id_str = client_id.map(|id| id.to_string()).unwrap_or_default();
 
             // Minimal required flow: (1) create message, (2) trigger processing
