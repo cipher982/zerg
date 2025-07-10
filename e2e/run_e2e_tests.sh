@@ -124,6 +124,14 @@ if [ ! -f "playwright.config.js" ] && [ ! -f "playwright.config.ts" ]; then
     exit 1
 fi
 
+# Check if jq is available for JSON parsing
+if ! command -v jq &> /dev/null; then
+    print_color $YELLOW "⚠️  jq not found - test summary will be basic (install jq for detailed breakdown)"
+    HAS_JQ=false
+else
+    HAS_JQ=true
+fi
+
 print_color $GREEN "✅ Pre-flight checks completed"
 print_color $CYAN "ℹ️  Playwright will automatically start backend and frontend servers"
 echo ""
@@ -162,13 +170,13 @@ if [[ -n "$TEST_FILES" ]]; then
     done
 fi
 
-# Add reporter based on mode
+# Add reporter based on mode (JSON will be added separately for summary)
 case $MODE in
     basic)
         PLAYWRIGHT_CMD="$PLAYWRIGHT_CMD --reporter=line"
         ;;
     full)
-        PLAYWRIGHT_CMD="$PLAYWRIGHT_CMD --reporter=html --reporter=json"
+        PLAYWRIGHT_CMD="$PLAYWRIGHT_CMD --reporter=list"
         ;;
 esac
 
@@ -202,7 +210,8 @@ START_TIME=$(date +%s)
 
 # Run the tests and capture exit code
 set +e
-eval $PLAYWRIGHT_CMD
+TEMP_OUTPUT="${REPORTS_DIR}/temp_output_${TIMESTAMP}.txt"
+eval "$PLAYWRIGHT_CMD" 2>&1 | tee "$TEMP_OUTPUT"
 TEST_EXIT_CODE=$?
 set -e
 
@@ -215,6 +224,69 @@ print_color $BLUE "========================"
 echo "Mode: $MODE"
 echo "Duration: ${DURATION}s"
 echo "Exit Code: $TEST_EXIT_CODE"
+
+# Parse test results from output for pytest-style summary
+if [[ -f "$TEMP_OUTPUT" ]]; then
+    echo ""
+    
+    # Extract basic stats from Playwright output (works with different reporters)
+    PASSED=$(grep -o "[0-9]\+ passed" "$TEMP_OUTPUT" | grep -o "[0-9]\+" | head -1 || echo 0)
+    FAILED=$(grep -o "[0-9]\+ failed" "$TEMP_OUTPUT" | grep -o "[0-9]\+" | head -1 || echo 0)
+    SKIPPED=$(grep -o "[0-9]\+ skipped" "$TEMP_OUTPUT" | grep -o "[0-9]\+" | head -1 || echo 0)
+    
+    # If we can't parse the numbers, try to get them from the exit code and output patterns
+    if [[ "$PASSED" == "0" && "$FAILED" == "0" && "$SKIPPED" == "0" ]]; then
+        if [[ $TEST_EXIT_CODE -eq 0 ]]; then
+            # Count test files or estimate from test descriptions
+            PASSED=$(grep -c "✓" "$TEMP_OUTPUT" 2>/dev/null || echo "unknown")
+            FAILED=0
+        else
+            # Look for error patterns
+            FAILED=$(grep -c "✗\|×\|FAIL" "$TEMP_OUTPUT" 2>/dev/null || echo "1+")
+            PASSED=$(grep -c "✓\|PASS" "$TEMP_OUTPUT" 2>/dev/null || echo "0")
+        fi
+    fi
+    
+    # Summary line like pytest
+    if [[ $TEST_EXIT_CODE -eq 0 ]]; then
+        STATUS_COLOR=$GREEN
+        STATUS_ICON="✅"
+    else
+        STATUS_COLOR=$RED
+        STATUS_ICON="❌"
+    fi
+    
+    printf "${STATUS_COLOR}${STATUS_ICON} "
+    if [[ "$PASSED" != "0" ]]; then
+        printf "${GREEN}$PASSED passed${NC}"
+    fi
+    if [[ "$FAILED" != "0" && "$FAILED" != "" ]]; then
+        if [[ "$PASSED" != "0" ]]; then printf ", "; fi
+        printf "${RED}$FAILED failed${NC}"
+    fi
+    if [[ "$SKIPPED" != "0" && "$SKIPPED" != "" ]]; then
+        if [[ "$PASSED" != "0" || "$FAILED" != "0" ]]; then printf ", "; fi
+        printf "${YELLOW}$SKIPPED skipped${NC}"
+    fi
+    echo " in ${DURATION}s"
+    
+    # Show failing test names if we can extract them
+    if [[ $TEST_EXIT_CODE -ne 0 ]]; then
+        echo ""
+        print_color $RED "💥 FAILURES:"
+        # Try to extract error details from common Playwright output patterns
+        grep -A 2 -B 1 "✗\|×\|FAIL\|Error:" "$TEMP_OUTPUT" 2>/dev/null | head -10 | sed 's/^/  /' || \
+        grep -A 1 "failing" "$TEMP_OUTPUT" 2>/dev/null | head -5 | sed 's/^/  /' || \
+        echo "  Check the full output above for details"
+    fi
+else
+    echo ""
+    if [[ $TEST_EXIT_CODE -eq 0 ]]; then
+        print_color $GREEN "✅ Tests completed successfully"
+    else
+        print_color $RED "❌ Some tests failed"
+    fi
+fi
 
 # Generate mode-specific summary
 case $MODE in
