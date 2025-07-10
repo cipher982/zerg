@@ -7,35 +7,37 @@ test.describe('Agent run history view', () => {
     const agentId = await page.locator('tr[data-agent-id]').first().getAttribute('data-agent-id');
     
     const debugBtn = page.locator(`[data-testid="debug-agent-${agentId}"]`);
-    if (await debugBtn.count() === 0) {
-      test.skip(true, 'Debug button not found - may not be implemented yet');
-      return;
-    }
+    // REQUIRE debug button to exist - core agent management functionality
+    await expect(debugBtn).toBeVisible({ timeout: 5000 });
     
     await debugBtn.click();
     
-    // Modal should open (read-only debug modal) - check if it exists
+    // Modal MUST open - core agent debugging functionality
     const debugModal = page.locator('[data-testid="agent-debug-modal"]');
-    if (await debugModal.count() === 0) {
-      test.skip(true, 'Debug modal not implemented yet');
-      return;
-    }
+    await expect(debugModal).toBeVisible({ timeout: 5000 });
     
     await page.waitForSelector('[data-testid="agent-debug-modal"]', { timeout: 5000 });
 
-    // Click Runs tab (if exists)
+    // Runs tab MUST exist - essential for monitoring agent execution
     const runsTab = page.locator('button', { hasText: 'Runs' });
-    if (await runsTab.count() === 0) {
-      test.skip(true, 'Runs tab not implemented yet');
-      return;
-    }
+    await expect(runsTab).toBeVisible({ timeout: 5000 });
     
     await runsTab.click();
     // Just verify the tab switched - don't assert on specific content yet
   });
 
-  test('Run list filters placeholder', async () => {
-    test.skip();
+  test('Run list filters and basic functionality', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('[data-testid="create-agent-btn"]').click();
+    const agentId = await page.locator('tr[data-agent-id]').first().getAttribute('data-agent-id');
+    
+    await page.locator(`[data-testid="debug-agent-${agentId}"]`).click();
+    await expect(page.locator('[data-testid="agent-debug-modal"]')).toBeVisible({ timeout: 5000 });
+    await page.locator('button', { hasText: 'Runs' }).click();
+    
+    // Basic run list should exist
+    const runsList = page.locator('[data-testid="runs-list"], .runs-list, .run-history');
+    await expect(runsList).toBeVisible({ timeout: 5000 });
   });
 
   test('Run pagination placeholder', async () => {
