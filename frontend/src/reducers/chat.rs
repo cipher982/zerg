@@ -799,11 +799,14 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             }
             true
         }
-        crate::messages::Message::SendThreadMessage(_, _) => {
-            web_sys::console::warn_1(
-                &"Received legacy SendThreadMessage; ignoring to avoid duplicate network call"
-                    .into(),
-            );
+        crate::messages::Message::SendThreadMessage(thread_id, content) => {
+            web_sys::console::log_1(&format!("Processing SendThreadMessage for thread {}: {}", thread_id, content).into());
+            // This message might be sent from UI components that expect it to trigger the command
+            cmds.push(crate::messages::Command::SendThreadMessage {
+                thread_id: *thread_id,
+                content: content.clone(),
+                client_id: None,
+            });
             true
         }
         crate::messages::Message::ThreadMessageSent(_response, _client_id) => {
@@ -824,19 +827,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             cmds.push(crate::messages::Command::FetchThreads(*agent_id));
             true
         }
-        crate::messages::Message::ThreadsLoaded(threads) => {
-            web_sys::console::warn_1(&"DEPRECATED: ThreadsLoaded handler called. Use AgentThreadsLoaded instead.".into());
-            
-            // For compatibility, if we have a current agent, redirect to the new handler
-            if let Some(agent_id) = state.current_agent_id {
-                return update(state, &crate::messages::Message::AgentThreadsLoaded { 
-                    agent_id, 
-                    threads: threads.clone() 
-                }, cmds);
-            }
-            
-            // Otherwise just ignore
-            web_sys::console::warn_1(&"ThreadsLoaded called without current agent - ignoring".into());
+        crate::messages::Message::ThreadsLoaded(_threads) => {
+            web_sys::console::error_1(&"DEPRECATED: ThreadsLoaded should not be used. Use AgentThreadsLoaded instead.".into());
+            // No longer redirecting - this should be fixed at the source
             true
         }
         
