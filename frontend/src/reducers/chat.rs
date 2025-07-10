@@ -810,16 +810,12 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         crate::messages::Message::ThreadMessageSent(_response, _client_id) => {
-            web_sys::console::warn_1(
-                &"ThreadMessageSent is deprecated, use ThreadMessagesLoaded instead".into(),
-            );
+            web_sys::console::error_1(&"ThreadMessageSent is fully deprecated and should not be used".into());
             true
         }
         crate::messages::Message::ThreadMessageFailed(_thread_id, _client_id) => {
-            web_sys::console::warn_1(&"ThreadMessageFailed is deprecated".into());
-            cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
-                crate::toast::error("Message failed to send. Please try again.");
-            })));
+            web_sys::console::error_1(&"ThreadMessageFailed is fully deprecated and should not be used".into());
+            // Remove functionality - this should be handled by proper error handling in commands
             true
         }
         crate::messages::Message::LoadThreads(agent_id) => {
@@ -916,14 +912,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 }
             }
             
-            // Update UI
+            // Update UI - agent-scoped state is already updated above
             state.is_chat_loading = false;
-            let current_agent_id = *agent_id;
-            cmds.push(Command::UpdateUI(Box::new(move || {
-                crate::state::dispatch_global_message(
-                    crate::messages::Message::RequestThreadListUpdate(current_agent_id),
-                );
-            })));
+            // TODO: Update chat view UI to read directly from agent state instead of global dispatches
             true
         }
         

@@ -20,12 +20,8 @@ test.describe('Thread & Chat – basic flows', () => {
     // Enter chat view via dashboard action button.
     await page.locator(`[data-testid="chat-agent-${agentId}"]`).click();
 
-    // Chat view should appear - check if the expected elements exist
-    const chatInputExists = await page.locator('.chat-input').count() > 0;
-    if (!chatInputExists) {
-      test.skip(true, 'Chat UI not fully implemented yet');
-      return;
-    }
+    // Chat view should appear - REQUIRE that elements exist (no more skipping!)
+    await expect(page.locator('.chat-input')).toBeVisible({ timeout: 5000 });
 
     await page.waitForSelector('.chat-input', { state: 'visible' });
 
@@ -39,10 +35,7 @@ test.describe('Thread & Chat – basic flows', () => {
     const INPUT = page.locator('.chat-input');
     await INPUT.fill('Hello agent');
     const sendBtn = page.locator('.send-button');
-    if (await sendBtn.count() === 0) {
-      test.skip(true, 'Send button not implemented yet');
-      return;
-    }
+    await expect(sendBtn).toBeVisible({ timeout: 5000 });
     await sendBtn.click();
 
     // Verify the message appears in messages container.
@@ -64,11 +57,8 @@ test.describe('Thread & Chat – basic flows', () => {
     const agentId = await createAgentAndGetId(page);
     await page.locator(`[data-testid="chat-agent-${agentId}"]`).click();
     
-    const chatInputExists = await page.locator('.chat-input').count() > 0;
-    if (!chatInputExists) {
-      test.skip(true, 'Chat UI not fully implemented yet');
-      return;
-    }
+    // REQUIRE chat input to exist - no more skipping!
+    await expect(page.locator('.chat-input')).toBeVisible({ timeout: 5000 });
     
     await page.waitForSelector('.chat-input');
 
@@ -77,10 +67,7 @@ test.describe('Thread & Chat – basic flows', () => {
     await INPUT.fill('Follow-up');
     
     const sendBtn = page.locator('.send-button');
-    if (await sendBtn.count() === 0) {
-      test.skip(true, 'Send button not implemented yet');
-      return;
-    }
+    await expect(sendBtn).toBeVisible({ timeout: 5000 });
     
     await sendBtn.click();
     await expect(page.locator('.messages-container')).toContainText('Follow-up', { timeout: 5000 });

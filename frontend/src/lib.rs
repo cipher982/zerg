@@ -154,7 +154,7 @@ mod scheduling;
 mod schema_validation;
 mod state;
 mod storage;
-mod thread_handlers;
+// mod thread_handlers; // REMOVED: Replaced by agent-scoped chat handling
 mod toast;
 mod ui;
 mod update;
