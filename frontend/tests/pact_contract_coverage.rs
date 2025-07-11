@@ -10,64 +10,60 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
-/// Extract all message type names from the WsMessage enum.
-/// This is done by parsing the source code to get the exact enum variants
-/// and their serde rename attributes.
+/// Extract all message type names from the schema, including aliases.
+/// Since we migrated to generated types, we read from the ws-protocol.yml schema file.
 fn get_ws_message_types() -> HashSet<String> {
     let mut message_types = HashSet::new();
 
-    // Read the ws_schema.rs file
-    let ws_schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/network/ws_schema.rs");
+    // Read the ws-protocol.yml file
+    let schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../ws-protocol.yml");
 
-    let content = fs::read_to_string(&ws_schema_path).expect("Failed to read ws_schema.rs");
+    let content = fs::read_to_string(&schema_path).expect("Failed to read ws-protocol.yml");
 
-    // Parse the file to find WsMessage enum variants
-    let mut in_ws_message_enum = false;
-    let mut in_serde_attribute = false;
-    let mut attribute_buffer = String::new();
-
+    // Parse the YAML to find message types and their aliases
+    let mut in_messages_section = false;
+    
     for line in content.lines() {
         let trimmed = line.trim();
 
-        // Start of WsMessage enum
-        if trimmed.starts_with("pub enum WsMessage") {
-            in_ws_message_enum = true;
+        // Start of messages section
+        if trimmed == "messages:" {
+            in_messages_section = true;
             continue;
         }
 
-        // End of enum
-        if in_ws_message_enum && trimmed == "}" {
+        // End of messages section (when we hit another top-level section)
+        if in_messages_section && !line.starts_with(" ") && !line.starts_with("\t") && !line.is_empty() && trimmed != "messages:" {
             break;
         }
 
-        if !in_ws_message_enum {
+        if !in_messages_section {
             continue;
         }
 
-        // Skip the Unknown variant as it's a catch-all
-        if trimmed.contains("Unknown") {
-            continue;
-        }
-
-        // Handle multi-line serde attributes
-        if trimmed.starts_with("#[serde(") {
-            in_serde_attribute = true;
-            attribute_buffer.clear();
-            attribute_buffer.push_str(trimmed);
-
-            // If the attribute ends on the same line
-            if trimmed.ends_with(")]") {
-                in_serde_attribute = false;
-                parse_serde_attribute(&attribute_buffer, &mut message_types);
+        // Look for message type definitions (they start with two spaces and end with colon)
+        if line.starts_with("  ") && !line.starts_with("    ") && line.contains(":") && !line.contains("payload:") {
+            let message_type = trimmed.trim_end_matches(':');
+            // Skip comments and empty lines
+            if !message_type.starts_with('#') && !message_type.is_empty() {
+                message_types.insert(message_type.to_string());
             }
-        } else if in_serde_attribute {
-            // Continue collecting multi-line attribute
-            attribute_buffer.push(' ');
-            attribute_buffer.push_str(trimmed);
-
-            if trimmed.ends_with(")]") {
-                in_serde_attribute = false;
-                parse_serde_attribute(&attribute_buffer, &mut message_types);
+        }
+        
+        // Look for aliases within a message definition
+        if line.starts_with("    aliases:") {
+            // Parse the aliases array
+            let aliases_part = line.trim_start_matches("    aliases:").trim();
+            if aliases_part.starts_with('[') && aliases_part.ends_with(']') {
+                // Extract content between brackets
+                let aliases_content = &aliases_part[1..aliases_part.len()-1];
+                // Split by comma and clean up each alias
+                for alias in aliases_content.split(',') {
+                    let clean_alias = alias.trim().trim_matches('"').trim_matches('\'');
+                    if !clean_alias.is_empty() {
+                        message_types.insert(clean_alias.to_string());
+                    }
+                }
             }
         }
     }
@@ -75,30 +71,6 @@ fn get_ws_message_types() -> HashSet<String> {
     message_types
 }
 
-/// Parse a serde attribute string and extract rename and alias values
-fn parse_serde_attribute(attr: &str, message_types: &mut HashSet<String>) {
-    // Extract rename attribute
-    if let Some(rename_start) = attr.find("rename = \"") {
-        let start = rename_start + 10;
-        let remaining = &attr[start..];
-        if let Some(end) = remaining.find('"') {
-            let rename_value = &remaining[..end];
-            message_types.insert(rename_value.to_string());
-        }
-    }
-
-    // Extract alias attributes
-    let mut remaining = attr;
-    while let Some(alias_start) = remaining.find("alias = \"") {
-        let start = alias_start + 9;
-        remaining = &remaining[start..];
-        if let Some(end) = remaining.find('"') {
-            let alias_value = &remaining[..end];
-            message_types.insert(alias_value.to_string());
-            remaining = &remaining[end + 1..];
-        }
-    }
-}
 
 /// Extract all message types that have Pact contracts defined.
 fn get_pact_contract_types() -> HashSet<String> {
@@ -150,8 +122,14 @@ fn test_all_ws_message_types_have_contracts() {
     // Special cases: Some message types might not need contracts
     // (e.g., client-only messages or special internal types)
     let exceptions = HashSet::from([
-        // Add any message types here that should be excluded from contract testing
-        // Example: "internal_debug".to_string(),
+        // Control messages - handled by infrastructure, not business logic
+        "ping".to_string(),
+        "pong".to_string(),
+        "error".to_string(),
+        // Client-to-server only messages don't need contracts since we're testing server responses
+        "subscribe".to_string(),
+        "unsubscribe".to_string(),
+        "send_message".to_string(),
     ]);
 
     // Filter out exceptions
