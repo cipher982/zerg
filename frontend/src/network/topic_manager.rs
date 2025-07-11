@@ -6,6 +6,7 @@ use wasm_bindgen::JsValue;
 
 use super::messages::builders::{create_subscribe, create_unsubscribe};
 use super::ws_client_v2::IWsClient; // Update import
+use crate::generated::ws_messages::{Envelope, WsMessage};
 
 /// Represents a topic string like "agent:123" or "thread:45"
 pub type Topic = String;
@@ -215,75 +216,23 @@ impl TopicManager {
     }
 
     /// Routes an incoming message (parsed JSON) to the appropriate topic handlers.
-    /// Determines the topic based on message content (e.g., `type` and `data` fields).
+    /// Expects all messages to be in envelope format - no transformation needed.
     pub fn route_incoming_message(&self, message: serde_json::Value) {
-        use crate::network::ws_schema::Envelope;
-
-        // Attempt to parse as a v2 Envelope first
-        if let Ok(envelope) = serde_json::from_value::<Envelope>(message.clone()) {
-            // v2 path: need to transform Envelope → legacy flat shape that
-            // downstream handlers (`ChatViewWsManager`, dashboard managers…)
-            // still expect: `{ "type": "…", <payload-fields…> }`.
-            // Move every key from `envelope.data` to the root object and add
-            // the `type` attribute from the envelope itself so the existing
-            // `WsMessage` enum can deserialize successfully.
-
-            use serde_json::{json, Value};
-
-            // For certain message types, we need to preserve the nested structure
-            // instead of flattening. This matches what the WsMessage enum expects.
-            let message_type = envelope.r#type.to_lowercase();
-            let needs_data_wrapper = matches!(
-                message_type.as_str(),
-                "execution_finished" | "node_state" | "node_log" | "user_update"
-            );
-
-            if needs_data_wrapper {
-                // Keep the data nested as expected by WsMessage enum variants
-                let wrapped = json!({
-                    "type": message_type,
-                    "data": envelope.data,
+        // Parse as envelope - all messages must be in this format
+        match serde_json::from_value::<Envelope>(message.clone()) {
+            Ok(envelope) => {
+                // Direct deserialization of envelope data to typed message
+                let message_payload = serde_json::json!({
+                    "type": envelope.message_type,
+                    "data": envelope.data
                 });
-                self.dispatch_to_topic_handlers(&envelope.topic, wrapped);
-            } else {
-                // Original flattening behavior for other message types
-                let mut merged = match envelope.data {
-                    Value::Object(map) => map,
-                    other => {
-                        // In the unlikely case `data` is not an object pass the
-                        // original envelope for debugging – downstream will log
-                        // an error for unmatched shape.
-                        self.dispatch_to_topic_handlers(
-                            &envelope.topic,
-                            json!({
-                                "type": envelope.r#type,
-                                "data": other,
-                            }),
-                        );
-                        return;
-                    }
-                };
-
-                // Insert the `type` discriminator (always lower-case to match
-                // `WsMessage` discriminators and avoid a huge alias list).
-                merged.insert("type".to_string(), Value::String(message_type));
-
-                self.dispatch_to_topic_handlers(&envelope.topic, Value::Object(merged));
+                
+                // Dispatch to topic handlers with the envelope topic and typed payload
+                self.dispatch_to_topic_handlers(&envelope.topic, message_payload);
             }
-        } else {
-            // Fallback to v1 parsing
-            use crate::network::ws_schema::WsMessage;
-            if let Ok(parsed) = serde_json::from_value::<WsMessage>(message.clone()) {
-                if let Some(topic_str) = parsed.topic() {
-                    self.dispatch_to_topic_handlers(&topic_str, message);
-                }
-            } else {
+            Err(e) => {
                 web_sys::console::error_1(
-                    &format!(
-                        "Failed to parse incoming message as Envelope or WsMessage: {:?}",
-                        message
-                    )
-                    .into(),
+                    &format!("Invalid envelope format: {}. Raw message: {:?}", e, message).into()
                 );
             }
         }

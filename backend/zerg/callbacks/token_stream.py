@@ -25,7 +25,8 @@ from typing import Optional
 # Fallbacks are deliberately avoided to keep behaviour deterministic.
 from langchain_core.callbacks.base import AsyncCallbackHandler  # type: ignore
 
-from zerg.schemas.ws_messages import StreamChunkMessage
+from zerg.generated.ws_messages import Envelope
+from zerg.generated.ws_messages import StreamChunkData
 from zerg.websocket.manager import topic_manager
 
 logger = logging.getLogger(__name__)
@@ -104,17 +105,19 @@ class WsTokenCallback(AsyncCallbackHandler):
         topic = f"thread:{thread_id}"
 
         try:
-            await topic_manager.broadcast_to_topic(
-                topic,
-                StreamChunkMessage(
-                    thread_id=thread_id,
-                    message_id=None,
-                    content=token,
-                    chunk_type="assistant_token",
-                    tool_name=None,
-                    tool_call_id=None,
-                ).model_dump(),
+            chunk_data = StreamChunkData(
+                thread_id=thread_id,
+                content=token,
+                chunk_type="assistant_token",
+                tool_name=None,
+                tool_call_id=None,
             )
+            envelope = Envelope.create(
+                message_type="stream_chunk",
+                topic=topic,
+                data=chunk_data.model_dump(),
+            )
+            await topic_manager.broadcast_to_topic(topic, envelope.model_dump())
         except Exception:  # noqa: BLE001 – we log then swallow; token streaming is best-effort
             logger.exception("Error broadcasting token chunk for thread %s", thread_id)
 
