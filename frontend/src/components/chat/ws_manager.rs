@@ -6,8 +6,28 @@ use web_sys;
 use crate::messages::Message; // UI message enum
 use crate::models::ApiThreadMessage;
 use crate::network::topic_manager::{ITopicManager, TopicHandler};
-use crate::network::ws_schema::{WsMessage, WsStreamChunk};
+use crate::generated::ws_messages::{ThreadMessageData, StreamChunkData, AssistantIdData};
 use crate::state::dispatch_global_message; // Import dispatch_global_message
+
+// Conversion from generated ThreadMessageData to ApiThreadMessage
+impl From<ThreadMessageData> for ApiThreadMessage {
+    fn from(data: ThreadMessageData) -> Self {
+        // Extract fields from the message dictionary
+        let message = &data.message;
+        ApiThreadMessage {
+            id: message.get("id").and_then(|v| v.as_u64()).map(|v| v as u32),
+            thread_id: data.thread_id,
+            role: message.get("role").and_then(|v| v.as_str()).unwrap_or("unknown").to_string(),
+            content: message.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            timestamp: message.get("timestamp").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            message_type: message.get("message_type").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            tool_name: message.get("tool_name").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            tool_call_id: message.get("tool_call_id").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            tool_input: message.get("tool_input").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            parent_id: message.get("parent_id").and_then(|v| v.as_u64()).map(|v| v as u32),
+        }
+    }
+}
 
 /// Manages WebSocket subscriptions and message handling for the Chat View lifecycle.
 pub struct ChatViewWsManager {
@@ -38,28 +58,16 @@ impl ChatViewWsManager {
         Ok(())
     }
 
-    /// Internal helper to convert a structured `WsStreamChunk` into the
+    /// Internal helper to convert a structured `StreamChunkData` into the
     /// `Message::ReceiveStreamChunk` UI event.
-    fn forward_stream_chunk(thread_id: u32, chunk: WsStreamChunk) {
-        let WsStreamChunk {
+    fn forward_stream_chunk(thread_id: u32, chunk: StreamChunkData) {
+        let StreamChunkData {
             thread_id: _tid,
             chunk_type,
             content,
-            extra,
+            tool_name,
+            tool_call_id,
         } = chunk;
-
-        let tool_name = extra
-            .get("tool_name")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let tool_call_id = extra
-            .get("tool_call_id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-        let message_id = extra
-            .get("message_id")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
 
         dispatch_global_message(Message::ReceiveStreamChunk {
             thread_id,
@@ -67,7 +75,7 @@ impl ChatViewWsManager {
             chunk_type: Some(chunk_type),
             tool_name,
             tool_call_id,
-            message_id,
+            message_id: None, // Not available in generated StreamChunkData
         });
     }
 
@@ -80,70 +88,79 @@ impl ChatViewWsManager {
         let mut topic_manager = topic_manager_rc.borrow_mut();
 
         // -----------------------------------------------------------------
-        // Strongly-typed handler using WsMessage enum
+        // Strongly-typed handler using generated envelope format
         // -----------------------------------------------------------------
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
             web_sys::console::log_1(
                 &format!("🔍 [CHAT WS] Received message for thread {}: {:?}", thread_id, data).into(),
             );
             
-            // -----------------------------------------------------------------
-            // 1. Structured path using the canonical `{ type, data {…}}` shape
-            // -----------------------------------------------------------------
-            if let Ok(parsed) = serde_json::from_value::<WsMessage>(data.clone()) {
-                web_sys::console::log_1(
-                    &format!("🔍 [CHAT WS] Successfully parsed message type: {:?}", parsed).into(),
-                );
-                match parsed {
-                    WsMessage::ThreadMessage { data: msg } => {
-                        let api_msg: ApiThreadMessage = msg.into();
-                        dispatch_global_message(Message::ReceiveNewMessage(api_msg));
-                        return;
+            // Extract message type and data from envelope-style payload
+            let message_type = data.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let message_data = data.get("data").unwrap_or(&data);
+            
+            web_sys::console::log_1(
+                &format!("🔍 [CHAT WS] Processing message type: {}", message_type).into(),
+            );
+            
+            match message_type {
+                "thread_message" => {
+                    match serde_json::from_value::<ThreadMessageData>(message_data.clone()) {
+                        Ok(msg) => {
+                            let api_msg: ApiThreadMessage = msg.into();
+                            dispatch_global_message(Message::ReceiveNewMessage(api_msg));
+                        }
+                        Err(e) => {
+                            web_sys::console::error_1(
+                                &format!("Failed to parse thread_message: {}", e).into(),
+                            );
+                        }
                     }
-                    WsMessage::StreamStart(_) => {
-                        dispatch_global_message(Message::ReceiveStreamStart(thread_id));
-                        return;
+                    return;
+                }
+                "stream_start" => {
+                    dispatch_global_message(Message::ReceiveStreamStart(thread_id));
+                    return;
+                }
+                "stream_chunk" => {
+                    match serde_json::from_value::<StreamChunkData>(message_data.clone()) {
+                        Ok(chunk) => {
+                            Self::forward_stream_chunk(thread_id, chunk);
+                        }
+                        Err(e) => {
+                            web_sys::console::error_1(
+                                &format!("Failed to parse stream_chunk: {}", e).into(),
+                            );
+                        }
                     }
-                    WsMessage::StreamChunk(chunk) => {
-                        Self::forward_stream_chunk(thread_id, chunk);
-                        return;
-                    }
-                    WsMessage::StreamEnd(_) => {
-                        dispatch_global_message(Message::ReceiveStreamEnd(thread_id));
-                        return;
-                    }
-                    WsMessage::ThreadEvent { data: thread_evt } => {
-                        let maybe_title = thread_evt.extra.get("title").and_then(|v| v.as_str());
-                        if let Some(title) = maybe_title {
-                            dispatch_global_message(Message::ReceiveThreadUpdate {
-                                thread_id: thread_evt.thread_id,
-                                title: Some(title.to_string()),
+                    return;
+                }
+                "stream_end" => {
+                    dispatch_global_message(Message::ReceiveStreamEnd(thread_id));
+                    return;
+                }
+                "assistant_id" => {
+                    match serde_json::from_value::<AssistantIdData>(message_data.clone()) {
+                        Ok(data) => {
+                            dispatch_global_message(Message::ReceiveAssistantId {
+                                thread_id: data.thread_id,
+                                message_id: data.message_id,
                             });
                         }
-                        return;
+                        Err(e) => {
+                            web_sys::console::error_1(
+                                &format!("Failed to parse assistant_id: {}", e).into(),
+                            );
+                        }
                     }
-                    WsMessage::AssistantId(data) => {
-                        dispatch_global_message(Message::ReceiveAssistantId {
-                            thread_id: data.thread_id,
-                            message_id: data.message_id,
-                        });
-                        return;
-                    }
-                    _ => {
-                        // Fall through to flat handler below
-                    }
+                    return;
                 }
-            } else {
-                web_sys::console::warn_1(
-                    &format!("🔍 [CHAT WS] Failed to parse message: {:?}", data).into(),
-                );
-            }
-
-            // If we reached here the message did not match any known variant
-            if let Some(t) = data.get("type").and_then(|v| v.as_str()) {
-                web_sys::console::error_1(
-                    &format!("ChatViewWsManager: unhandled WS message type {}", t).into(),
-                );
+                _ => {
+                    // Unhandled message type
+                    web_sys::console::warn_1(
+                        &format!("ChatViewWsManager: unhandled message type: {}", message_type).into(),
+                    );
+                }
             }
         }));
 
