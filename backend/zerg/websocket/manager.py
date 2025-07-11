@@ -19,7 +19,7 @@ from fastapi.encoders import jsonable_encoder
 from zerg.config import get_settings
 from zerg.events import EventType
 from zerg.events import event_bus
-from zerg.schemas.ws_messages import Envelope
+from zerg.generated.ws_messages import Envelope
 
 logger = logging.getLogger(__name__)
 

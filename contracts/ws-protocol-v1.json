@@ -1,0 +1,259 @@
+{
+  "version": 1,
+  "generated_at": "2025-07-11T11:35:15.740597Z",
+  "envelope_schema": {
+    "type": "object",
+    "required": [
+      "v",
+      "type",
+      "topic",
+      "ts",
+      "data"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "v": {
+        "type": "integer",
+        "const": 1,
+        "description": "Protocol version"
+      },
+      "type": {
+        "type": "string",
+        "description": "Message type identifier"
+      },
+      "topic": {
+        "type": "string",
+        "description": "Topic routing string (e.g., 'agent:123', 'thread:456')"
+      },
+      "req_id": {
+        "type": "string",
+        "description": "Optional request correlation ID"
+      },
+      "ts": {
+        "type": "integer",
+        "description": "Timestamp in milliseconds since epoch"
+      },
+      "data": {
+        "type": "object",
+        "description": "Message payload - structure depends on type"
+      }
+    }
+  },
+  "message_types": {
+    "ping": {
+      "payload_schema": {
+        "$ref": "#/definitions/PingData"
+      },
+      "topic_pattern": "system",
+      "direction": [
+        "client_to_server",
+        "server_to_client"
+      ],
+      "aliases": []
+    },
+    "pong": {
+      "payload_schema": {
+        "$ref": "#/definitions/PongData"
+      },
+      "topic_pattern": "system",
+      "direction": [
+        "client_to_server",
+        "server_to_client"
+      ],
+      "aliases": []
+    },
+    "error": {
+      "payload_schema": {
+        "$ref": "#/definitions/ErrorData"
+      },
+      "topic_pattern": "system",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": []
+    },
+    "subscribe": {
+      "payload_schema": {
+        "$ref": "#/definitions/SubscribeData"
+      },
+      "topic_pattern": "system",
+      "direction": [
+        "client_to_server"
+      ],
+      "aliases": []
+    },
+    "unsubscribe": {
+      "payload_schema": {
+        "$ref": "#/definitions/UnsubscribeData"
+      },
+      "topic_pattern": "system",
+      "direction": [
+        "client_to_server"
+      ],
+      "aliases": []
+    },
+    "send_message": {
+      "payload_schema": {
+        "$ref": "#/definitions/SendMessageData"
+      },
+      "topic_pattern": "thread:{thread_id}",
+      "direction": [
+        "client_to_server"
+      ],
+      "aliases": []
+    },
+    "thread_message": {
+      "payload_schema": {
+        "$ref": "#/definitions/ThreadMessageData"
+      },
+      "topic_pattern": "thread:{thread_id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": [
+        "thread_message_created"
+      ]
+    },
+    "stream_start": {
+      "payload_schema": {
+        "$ref": "#/definitions/StreamStartData"
+      },
+      "topic_pattern": "thread:{thread_id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": []
+    },
+    "stream_chunk": {
+      "payload_schema": {
+        "$ref": "#/definitions/StreamChunkData"
+      },
+      "topic_pattern": "thread:{thread_id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": []
+    },
+    "stream_end": {
+      "payload_schema": {
+        "$ref": "#/definitions/StreamEndData"
+      },
+      "topic_pattern": "thread:{thread_id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": []
+    },
+    "assistant_id": {
+      "payload_schema": {
+        "$ref": "#/definitions/AssistantIdData"
+      },
+      "topic_pattern": "thread:{thread_id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": []
+    },
+    "agent_event": {
+      "payload_schema": {
+        "$ref": "#/definitions/AgentEventData"
+      },
+      "topic_pattern": "agent:{id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": [
+        "agent_created",
+        "agent_updated",
+        "agent_deleted",
+        "agent_state"
+      ]
+    },
+    "thread_event": {
+      "payload_schema": {
+        "$ref": "#/definitions/ThreadEventData"
+      },
+      "topic_pattern": "thread:{thread_id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": [
+        "thread_created",
+        "thread_updated",
+        "thread_deleted"
+      ]
+    },
+    "run_update": {
+      "payload_schema": {
+        "$ref": "#/definitions/RunUpdateData"
+      },
+      "topic_pattern": "agent:{agent_id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": []
+    },
+    "user_update": {
+      "payload_schema": {
+        "$ref": "#/definitions/UserUpdateData"
+      },
+      "topic_pattern": "user:{id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": []
+    },
+    "node_state": {
+      "payload_schema": {
+        "$ref": "#/definitions/NodeStateData"
+      },
+      "topic_pattern": "workflow_execution:{execution_id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": []
+    },
+    "execution_finished": {
+      "payload_schema": {
+        "$ref": "#/definitions/ExecutionFinishedData"
+      },
+      "topic_pattern": "workflow_execution:{execution_id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": []
+    },
+    "node_log": {
+      "payload_schema": {
+        "$ref": "#/definitions/NodeLogData"
+      },
+      "topic_pattern": "workflow_execution:{execution_id}",
+      "direction": [
+        "server_to_client"
+      ],
+      "aliases": []
+    }
+  },
+  "topic_patterns": {
+    "agent": {
+      "pattern": "agent:{id}",
+      "description": "Agent lifecycle events and run updates"
+    },
+    "thread": {
+      "pattern": "thread:{thread_id}",
+      "description": "Thread messages, streaming, and lifecycle events"
+    },
+    "user": {
+      "pattern": "user:{id}",
+      "description": "User profile updates"
+    },
+    "workflow_execution": {
+      "pattern": "workflow_execution:{execution_id}",
+      "description": "Workflow execution state and logs"
+    },
+    "system": {
+      "pattern": "system",
+      "description": "Control messages, errors, and system announcements"
+    }
+  }
+}

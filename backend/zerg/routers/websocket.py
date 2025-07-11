@@ -25,7 +25,8 @@ from zerg.database import get_session_factory
 
 # Auth helper --------------------------------------------------------------
 from zerg.dependencies.auth import validate_ws_jwt
-from zerg.schemas.ws_messages import ErrorMessage
+from zerg.generated.ws_messages import Envelope
+from zerg.generated.ws_messages import ErrorData
 from zerg.websocket.handlers import dispatch_message
 from zerg.websocket.manager import topic_manager
 
@@ -117,14 +118,20 @@ async def websocket_endpoint(
 
             except json.JSONDecodeError as e:
                 logger.warning(f"Invalid JSON from client {client_id}: {e}")
-                await websocket.send_json(ErrorMessage(error="Invalid JSON payload").model_dump())
+                error_envelope = Envelope.create(
+                    message_type="error", topic="system", data=ErrorData(error="Invalid JSON payload").model_dump()
+                )
+                await websocket.send_json(error_envelope.model_dump())
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket connection closed for client {client_id}")
     except Exception as e:
         logger.error(f"WebSocket error for client {client_id}: {str(e)}")
         try:
-            await websocket.send_json(ErrorMessage(error="Internal server error").model_dump())
+            error_envelope = Envelope.create(
+                message_type="error", topic="system", data=ErrorData(error="Internal server error").model_dump()
+            )
+            await websocket.send_json(error_envelope.model_dump())
         except Exception:
             pass
     finally:

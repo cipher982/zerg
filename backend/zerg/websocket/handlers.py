@@ -7,7 +7,6 @@ supporting subscription to agent and thread events.
 import logging
 from typing import Any
 from typing import Dict
-from typing import List
 from typing import Optional
 
 from fastapi.encoders import jsonable_encoder
@@ -16,40 +15,27 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from zerg.crud import crud
-from zerg.schemas.schemas import UserOut
-from zerg.schemas.ws_messages import AgentStateMessage
+from zerg.generated.ws_messages import AgentEventData
 
 # ---------------------------------------------------------------------------
-# Message & envelope helpers
+# Generated message types - single source of truth
 # ---------------------------------------------------------------------------
-from zerg.schemas.ws_messages import Envelope
-from zerg.schemas.ws_messages import ErrorMessage
-from zerg.schemas.ws_messages import MessageEnvelopeHelper
-from zerg.schemas.ws_messages import MessageType
-from zerg.schemas.ws_messages import PingMessage
-from zerg.schemas.ws_messages import PongMessage
-from zerg.schemas.ws_messages import SendMessageRequest
-from zerg.schemas.ws_messages import SubscribeThreadMessage
-from zerg.schemas.ws_messages import ThreadMessageData
+from zerg.generated.ws_messages import Envelope
+from zerg.generated.ws_messages import ErrorData
+from zerg.generated.ws_messages import MessageType
+from zerg.generated.ws_messages import PingData
+from zerg.generated.ws_messages import PongData
+from zerg.generated.ws_messages import SendMessageData
+from zerg.generated.ws_messages import SubscribeData
+from zerg.generated.ws_messages import ThreadMessageData
+from zerg.generated.ws_messages import UnsubscribeData
+from zerg.generated.ws_messages import UserUpdateData
 from zerg.websocket.manager import topic_manager
 
 logger = logging.getLogger(__name__)
 
 
-class SubscribeMessage(BaseModel):
-    """Request to subscribe to one or more topics."""
-
-    type: str = "subscribe"
-    topics: List[str]
-    message_id: str
-
-
-class UnsubscribeMessage(BaseModel):
-    """Request to unsubscribe from one or more topics."""
-
-    type: str = "unsubscribe"
-    topics: List[str]
-    message_id: str
+# SubscribeMessage and UnsubscribeMessage now use generated SubscribeData/UnsubscribeData
 
 
 async def send_to_client(
@@ -98,16 +84,29 @@ async def send_to_client(
     # Envelope structure is mandatory – wrap any payload that does not yet
     # include the required keys.
 
-    # Use MessageEnvelopeHelper instead of isinstance checks
+    # All outgoing messages must use unified Envelope format
     try:
         # Extract req_id if available from the original message
         req_id = None
         if isinstance(message, dict):
             req_id = message.get("message_id")
 
-        envelope = MessageEnvelopeHelper.ensure_envelope(message=message, topic=topic, req_id=req_id)
+        # If message is already an envelope, use it directly
+        if isinstance(message, dict) and all(k in message for k in ["v", "type", "topic", "ts", "data"]):
+            payload = message
+        else:
+            # Create envelope for non-envelope messages
+            message_type = message.get("type", "unknown") if isinstance(message, dict) else "unknown"
+            envelope_topic = topic or "system"
+            data = message.get("data", message) if isinstance(message, dict) else message
 
-        payload = envelope.model_dump()
+            envelope = Envelope.create(
+                message_type=message_type,
+                topic=envelope_topic,
+                data=data,
+                req_id=req_id,
+            )
+            payload = envelope.model_dump()
 
         await topic_manager.active_connections[client_id].send_json(payload)  # type: ignore[arg-type]
         return True
@@ -130,12 +129,17 @@ async def send_error(
         error_msg: The error message
         message_id: Optional message ID to correlate with request
     """
-    error = ErrorMessage(
-        type=MessageType.ERROR,
+    error_data = ErrorData(
         error=error_msg,
-        message_id=message_id,
+        details={"message_id": message_id} if message_id else None,
     )
-    await send_to_client(client_id, error.model_dump(), topic="system")
+    envelope = Envelope.create(
+        message_type=MessageType.ERROR,
+        topic="system",
+        data=error_data.model_dump(),
+        req_id=message_id,
+    )
+    await send_to_client(client_id, envelope.model_dump())
 
     # Optionally close the socket with a specific WebSocket close code.  We
     # perform the close *after* sending the error frame so the client learns
@@ -147,25 +151,21 @@ async def send_error(
             pass
 
 
-async def handle_ping(client_id: str, message: Dict[str, Any], _: Session) -> None:
+async def handle_ping(client_id: str, envelope: Envelope, _: Session) -> None:
     """Handle ping messages to keep connection alive.
 
     Args:
         client_id: The client ID that sent the ping
-        message: The ping message
+        envelope: The ping message envelope
         _: Unused database session
     """
     try:
-        ping_msg = PingMessage(**message)
+        ping_data = PingData.model_validate(envelope.data)
 
-        # Build the *raw* pong payload (same shape as before the envelope
-        # upgrade) so existing consumers that have not opted in to V2 still
-        # work unchanged.
-        pong_payload = PongMessage(
-            type=MessageType.PONG,
-            message_id=ping_msg.message_id,
-            timestamp=ping_msg.timestamp,
-        ).model_dump()
+        # Build the pong payload using generated types
+        pong_data = PongData(
+            timestamp=ping_data.timestamp,
+        )
 
         # Recompute envelope flag on **every** ping so tests that mutate the
         # environment mid-process pick up the change without clearing
@@ -175,14 +175,14 @@ async def handle_ping(client_id: str, message: Dict[str, Any], _: Session) -> No
         # Wrap in protocol-level envelope so the frontend can rely on the
         # unified structure.  We treat all ping/pong traffic as a
         # *system* message which is consistent with the heartbeat logic.
-        envelope = Envelope.create(
-            message_type="PONG",
+        response_envelope = Envelope.create(
+            message_type="pong",
             topic="system",
-            data=pong_payload,
-            req_id=ping_msg.message_id,
+            data=pong_data.model_dump(),
+            req_id=envelope.req_id,
         )
 
-        await send_to_client(client_id, envelope.model_dump())
+        await send_to_client(client_id, response_envelope.model_dump())
 
     except Exception as e:
         logger.error("Error handling ping: %s", e)
@@ -194,7 +194,7 @@ async def handle_ping(client_id: str, message: Dict[str, Any], _: Session) -> No
 # ---------------------------------------------------------------------------
 
 
-async def handle_pong(client_id: str, message: Dict[str, Any], _: Session) -> None:  # noqa: D401
+async def handle_pong(client_id: str, envelope: Envelope, _: Session) -> None:  # noqa: D401
     """Handle *pong* frames sent by clients.
 
     Simply updates the TopicConnectionManager watchdog so the connection is
@@ -257,15 +257,27 @@ async def _subscribe_agent(client_id: str, agent_id: int, message_id: str, db: S
         await topic_manager.subscribe_to_topic(client_id, topic)
 
         # Send initial agent state back to the client
-        agent_state_msg = AgentStateMessage(
-            type=MessageType.AGENT_STATE,
-            message_id=message_id,
-            data=agent,
+        last_run_at = getattr(agent, "last_run_at", None)
+        next_run_at = getattr(agent, "next_run_at", None)
+
+        agent_data = AgentEventData(
+            id=agent.id,
+            status=getattr(agent, "status", None),
+            name=getattr(agent, "name", None),
+            description=getattr(agent, "system_instructions", None),  # Use system_instructions as description
+            last_run_at=last_run_at.isoformat() if last_run_at else None,
+            next_run_at=next_run_at.isoformat() if next_run_at else None,
+            last_error=getattr(agent, "last_error", None),
+        )
+        envelope = Envelope.create(
+            message_type="agent_state",
+            topic=topic,
+            data=agent_data.model_dump(),
+            req_id=message_id,
         )
         await send_to_client(
             client_id,
-            jsonable_encoder(agent_state_msg),
-            topic=topic,
+            envelope.model_dump(),
         )
         logger.info(f"Sent initial agent_state for agent {agent_id} to client {client_id}")
 
@@ -312,19 +324,22 @@ async def _subscribe_user(client_id: str, user_id: int, message_id: str, db: Ses
         topic = f"user:{user_id}"
         await topic_manager.subscribe_to_topic(client_id, topic)
 
-        # Send initial user state – we re-use the *user_update* payload shape
-        # already handled by the frontend rather than introducing a new
-        # message type.
-        user_payload = jsonable_encoder(UserOut.model_validate(user))
-
+        # Send initial user state using generated types
+        user_data = UserUpdateData(
+            id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            avatar_url=user.avatar_url,
+        )
+        envelope = Envelope.create(
+            message_type="user_update",
+            topic=topic,
+            data=user_data.model_dump(),
+            req_id=message_id,
+        )
         await send_to_client(
             client_id,
-            {
-                "type": "user_update",
-                "message_id": message_id,
-                "data": user_payload,
-            },
-            topic=topic,
+            envelope.model_dump(),
         )
 
         logger.info("Sent initial user_update for user %s to client %s", user_id, client_id)
@@ -409,48 +424,48 @@ async def _subscribe_workflow_execution(client_id: str, execution_id: int, messa
         await send_error(client_id, "Failed to subscribe to workflow execution", message_id)
 
 
-async def handle_subscribe(client_id: str, message: Dict[str, Any], db: Session) -> None:
+async def handle_subscribe(client_id: str, envelope: Envelope, db: Session) -> None:
     """Handle topic subscription requests.
 
     Args:
         client_id: The client ID that sent the message
-        message: The subscription message
+        envelope: The subscription message envelope
         db: Database session
     """
     try:
-        subscribe_msg = SubscribeMessage(**message)
+        subscribe_data = SubscribeData.model_validate(envelope.data)
 
-        for topic in subscribe_msg.topics:
+        for topic in subscribe_data.topics:
             try:
                 # Parse topic to validate and get initial data if needed
                 topic_type, topic_id = topic.split(":", 1)
 
                 if topic_type == "thread":
-                    await _subscribe_thread(client_id, int(topic_id), subscribe_msg.message_id, db)
+                    await _subscribe_thread(client_id, int(topic_id), subscribe_data.message_id, db)
                 elif topic_type == "agent":
-                    await _subscribe_agent(client_id, int(topic_id), subscribe_msg.message_id, db)
+                    await _subscribe_agent(client_id, int(topic_id), subscribe_data.message_id, db)
                 elif topic_type == "user":
-                    await _subscribe_user(client_id, int(topic_id), subscribe_msg.message_id, db)
+                    await _subscribe_user(client_id, int(topic_id), subscribe_data.message_id, db)
                 elif topic_type == "workflow_execution":
-                    await _subscribe_workflow_execution(client_id, int(topic_id), subscribe_msg.message_id, db)
+                    await _subscribe_workflow_execution(client_id, int(topic_id), subscribe_data.message_id, db)
                 else:
                     await send_error(
                         client_id,
                         f"Invalid topic format: Unsupported topic type '{topic_type}'",
-                        subscribe_msg.message_id,
+                        subscribe_data.message_id,
                     )
             except ValueError as e:
                 await send_error(
                     client_id,
                     f"Invalid topic format: {topic}. Error: {str(e)}",
-                    subscribe_msg.message_id,
+                    subscribe_data.message_id,
                 )
 
     except ValueError as e:
-        await send_error(client_id, f"Invalid topic format: {str(e)}", message.get("message_id", ""))
+        await send_error(client_id, f"Invalid topic format: {str(e)}", envelope.req_id)
     except Exception as e:
         logger.error(f"Error handling subscription: {str(e)}")
-        await send_error(client_id, "Failed to process subscription", message.get("message_id", ""))
+        await send_error(client_id, "Failed to process subscription", envelope.req_id)
 
 
 async def handle_unsubscribe(client_id: str, message: Dict[str, Any], _: Session) -> None:
@@ -500,12 +515,12 @@ MESSAGE_HANDLERS = {
 # malformed payloads are rejected consistently in one place.
 
 _INBOUND_SCHEMA_MAP: Dict[str, type[BaseModel]] = {
-    "ping": PingMessage,
-    "pong": PongMessage,
-    "subscribe": SubscribeMessage,
-    "unsubscribe": UnsubscribeMessage,
-    "subscribe_thread": SubscribeThreadMessage,
-    "send_message": SendMessageRequest,
+    "ping": PingData,
+    "pong": PongData,
+    "subscribe": SubscribeData,
+    "unsubscribe": UnsubscribeData,
+    "send_message": SendMessageData,
+    # Note: All messages now validated as envelope + payload data
 }
 
 
@@ -523,8 +538,13 @@ async def handle_subscribe_thread(client_id: str, message: Dict[str, Any], db: S
     is now provided via the REST endpoint; WebSocket only delivers updates.
     """
     try:
-        sub_msg = SubscribeThreadMessage(**message)
-        await _subscribe_thread(client_id, sub_msg.thread_id, sub_msg.message_id, db)
+        # Extract data from message dict - no need for complex validation here
+        thread_id = message.get("thread_id")
+        message_id = message.get("message_id", "")
+        if thread_id is None:
+            await send_error(client_id, "Missing thread_id in subscribe_thread", message_id)
+            return
+        await _subscribe_thread(client_id, thread_id, message_id, db)
     except Exception as e:  # broad catch ensures client gets feedback
         logger.error(f"Error in handle_subscribe_thread: {str(e)}")
         await send_error(client_id, "Failed to subscribe to thread", message.get("message_id"))
@@ -533,22 +553,28 @@ async def handle_subscribe_thread(client_id: str, message: Dict[str, Any], db: S
 async def handle_send_message(client_id: str, message: Dict[str, Any], db: Session) -> None:  # noqa: D401
     """Persist a new message to a thread and broadcast it."""
 
-    # Ensure ThreadMessageData is in scope for outgoing messages
     try:
-        send_req = SendMessageRequest(**message)
+        # Extract and validate data from message dict
+        thread_id = message.get("thread_id")
+        content = message.get("content")
+        message_id = message.get("message_id", "")
+
+        if thread_id is None or content is None:
+            await send_error(client_id, "Missing thread_id or content in send_message", message_id)
+            return
 
         # Validate thread exists
-        thread = crud.get_thread(db, send_req.thread_id)
+        thread = crud.get_thread(db, thread_id)
         if not thread:
-            await send_error(client_id, f"Thread {send_req.thread_id} not found", send_req.message_id)
+            await send_error(client_id, f"Thread {thread_id} not found", message_id)
             return
 
         # Persist the message
         db_msg = crud.create_thread_message(
             db,
-            thread_id=send_req.thread_id,
+            thread_id=thread_id,
             role="user",
-            content=send_req.content,
+            content=content,
             processed=False,
         )
 
@@ -561,14 +587,22 @@ async def handle_send_message(client_id: str, message: Dict[str, Any], db: Sessi
             "processed": db_msg.processed,
         }
 
-        outgoing = ThreadMessageData(
-            thread_id=send_req.thread_id,
+        # Create structured ThreadMessageData
+        thread_msg_data = ThreadMessageData(
+            thread_id=thread_id,
             message=msg_dict,
-            message_id=send_req.message_id,
         )
 
-        topic = f"thread:{send_req.thread_id}"
-        await topic_manager.broadcast_to_topic(topic, outgoing.model_dump())
+        # Wrap in envelope for broadcast
+        envelope = Envelope.create(
+            message_type="thread_message",
+            topic=f"thread:{thread_id}",
+            data=thread_msg_data.model_dump(),
+            req_id=message_id,
+        )
+
+        topic = f"thread:{thread_id}"
+        await topic_manager.broadcast_to_topic(topic, envelope.model_dump())
 
         # We intentionally do **not** publish a secondary
         # ``THREAD_MESSAGE_CREATED`` event here. The freshly‑created
@@ -591,11 +625,22 @@ async def dispatch_message(client_id: str, message: Dict[str, Any], db: Session)
 
     Args:
         client_id: The client ID that sent the message
-        message: The message to dispatch
+        message: The message to dispatch (raw dict or envelope)
         db: Database session
     """
     try:
-        message_type = message.get("type")
+        # Handle both envelope and legacy format messages
+        if "type" in message and "data" in message and "topic" in message:
+            # New envelope format
+            envelope = Envelope.model_validate(message)
+            message_type = envelope.type
+            message_data = envelope.data
+        else:
+            # Legacy format - convert to envelope-like structure
+            message_type = message.get("type")
+            envelope = None
+            message_data = message
+
         # ------------------------------------------------------------------
         # 1) Fast-fail on completely unknown "type" field.
         # ------------------------------------------------------------------
@@ -613,21 +658,33 @@ async def dispatch_message(client_id: str, message: Dict[str, Any], db: Session)
         model_cls = _INBOUND_SCHEMA_MAP.get(message_type)
         if model_cls is not None:
             try:
-                # Pydantic v2 – ``model_validate`` is the zero-copy validator.
-                model_cls.model_validate(message)
+                # Validate the data portion, not the entire envelope
+                model_cls.model_validate(message_data)
             except ValidationError as exc:
                 logger.debug("Schema validation failed for %s: %s", message_type, exc)
                 await send_error(
                     client_id,
                     "INVALID_PAYLOAD",
-                    message.get("message_id"),
+                    envelope.req_id if envelope else message.get("message_id"),
                     close_code=1002,
                 )
                 # Draft spec says we should close with 1002 on protocol error;
                 return
 
-        # If validation passed (or no schema yet), forward to handler.
-        await MESSAGE_HANDLERS[message_type](client_id, message, db)
+        # Forward to handler - pass envelope for envelope-aware handlers, message for legacy handlers
+        handler = MESSAGE_HANDLERS[message_type]
+        if message_type in ["ping", "pong", "subscribe"]:
+            # These handlers expect Envelope objects
+            if envelope is None:
+                # Create envelope for legacy messages
+                envelope = Envelope.create(
+                    message_type=message_type, topic="system", data=message_data, req_id=message.get("message_id")
+                )
+            await handler(client_id, envelope, db)
+        else:
+            # Legacy handlers expect dict messages
+            await handler(client_id, message, db)
+
     except Exception as e:
         logger.error(f"Error dispatching message: {str(e)}")
         await send_error(client_id, "Failed to process message")
