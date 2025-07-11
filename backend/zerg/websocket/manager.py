@@ -505,7 +505,13 @@ class TopicConnectionManager:
 
         agent_id = data["agent_id"]
         topic = f"agent:{agent_id}"
-        serialized_data = jsonable_encoder(data)
+
+        # Map run_id to id to match schema expectations
+        clean_data = {k: v for k, v in data.items() if k != "event_type"}
+        if "run_id" in clean_data:
+            clean_data["id"] = clean_data.pop("run_id")
+
+        serialized_data = jsonable_encoder(clean_data)
         await self.broadcast_to_topic(topic, {"type": "run_update", "data": serialized_data})
 
     async def _handle_user_event(self, data: Dict[str, Any]) -> None:
