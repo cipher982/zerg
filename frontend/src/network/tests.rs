@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use super::super::ws_schema::{Envelope, WsMessage, WsThreadMessage};
+    use crate::generated::ws_messages::{Envelope, ThreadMessageData};
     use serde_json::json;
 
     #[test]

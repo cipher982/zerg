@@ -6,6 +6,20 @@ use crate::messages::{Command, Message};
 use crate::models::{ApiThread, ApiThreadMessage};
 use crate::state::AgentConfigTab;
 use crate::state::{dispatch_global_message, AppState, APP_STATE};
+
+// Conversion from generated UserUpdateData to CurrentUser
+impl From<crate::generated::ws_messages::UserUpdateData> for crate::models::CurrentUser {
+    fn from(data: crate::generated::ws_messages::UserUpdateData) -> Self {
+        crate::models::CurrentUser {
+            id: data.id,
+            email: data.email.unwrap_or_default(),
+            display_name: data.display_name,
+            avatar_url: data.avatar_url,
+            prefs: None, // Not provided in WebSocket update
+            gmail_connected: false, // Not provided in WebSocket update
+        }
+    }
+}
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
 use web_sys::Document;
@@ -265,15 +279,16 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         use std::rc::Rc;
                         let handler: crate::network::topic_manager::TopicHandler =
                             Rc::new(RefCell::new(move |payload: serde_json::Value| {
-                                if let Ok(msg) = serde_json::from_value::<
-                                    crate::network::ws_schema::WsMessage,
-                                >(payload.clone())
-                                {
-                                    if let crate::network::ws_schema::WsMessage::UserUpdate {
-                                        data,
-                                    } = msg
+                                // Extract message type and data from envelope-style payload
+                                let message_type = payload.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+                                let message_data = payload.get("data").unwrap_or(&payload);
+                                
+                                if message_type == "user_update" {
+                                    if let Ok(user_data) = serde_json::from_value::<
+                                        crate::generated::ws_messages::UserUpdateData,
+                                    >(message_data.clone())
                                     {
-                                        let profile: crate::models::CurrentUser = data.into();
+                                        let profile: crate::models::CurrentUser = user_data.into();
                                         crate::state::dispatch_global_message(
                                             Message::CurrentUserLoaded(profile),
                                         );
@@ -546,48 +561,49 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
                 let handler: crate::network::topic_manager::TopicHandler =
                     Rc::new(RefCell::new(move |payload: serde_json::Value| {
-                        use crate::network::ws_schema::WsMessage;
-                        if let Ok(parsed) = serde_json::from_value::<WsMessage>(payload.clone()) {
-                            match parsed {
-                                WsMessage::NodeState { data } => {
-                                    crate::state::dispatch_global_message(
-                                        Message::UpdateNodeStatus {
-                                            node_id: data.node_id.clone(),
-                                            status: data.status.clone(),
-                                        },
-                                    );
-                                }
-                                WsMessage::ExecutionFinished { data } => {
-                                    crate::state::dispatch_global_message(
-                                        Message::ExecutionFinished {
-                                            execution_id: data.execution_id,
-                                            status: data.status.clone(),
-                                            error: data.error.clone(),
-                                        },
-                                    );
-                                }
-                                WsMessage::NodeLog { data } => {
-                                    crate::state::dispatch_global_message(
-                                        Message::AppendExecutionLog {
-                                            execution_id: data.execution_id,
-                                            node_id: data.node_id.clone(),
-                                            stream: data.stream.clone(),
-                                            text: data.text.clone(),
-                                        },
-                                    );
-                                }
-                                _ => {
-                                    // Other message types not handled by this subscription
-                                }
+                        // Extract message type and data from envelope-style payload
+                        let message_type = payload.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+                        let message_data = payload.get("data").unwrap_or(&payload);
+                        
+                        if message_type == "node_state" {
+                            if let Ok(data) = serde_json::from_value::<
+                                crate::generated::ws_messages::NodeStateData,
+                            >(message_data.clone())
+                            {
+                                crate::state::dispatch_global_message(
+                                    Message::UpdateNodeStatus {
+                                        node_id: data.node_id.clone(),
+                                        status: data.status.clone(),
+                                    },
+                                );
                             }
-                        } else {
-                            web_sys::console::error_1(
-                                &format!(
-                                    "WorkflowExecution failed to parse WsMessage from: {}",
-                                    payload
-                                )
-                                .into(),
-                            );
+                        } else if message_type == "execution_finished" {
+                            if let Ok(data) = serde_json::from_value::<
+                                crate::generated::ws_messages::ExecutionFinishedData,
+                            >(message_data.clone())
+                            {
+                                crate::state::dispatch_global_message(
+                                    Message::ExecutionFinished {
+                                        execution_id: data.execution_id,
+                                        status: data.status.clone(),
+                                        error: data.error.clone(),
+                                    },
+                                );
+                            }
+                        } else if message_type == "node_log" {
+                            if let Ok(data) = serde_json::from_value::<
+                                crate::generated::ws_messages::NodeLogData,
+                            >(message_data.clone())
+                            {
+                                crate::state::dispatch_global_message(
+                                    Message::AppendExecutionLog {
+                                        execution_id: data.execution_id,
+                                        node_id: data.node_id.clone(),
+                                        stream: data.stream.clone(),
+                                        text: data.text.clone(),
+                                    },
+                                );
+                            }
                         }
                     }));
 

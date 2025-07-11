@@ -6,15 +6,34 @@ use wasm_bindgen::JsValue;
 // Keep for borrowing
 // Keep for borrowing
 use crate::network::topic_manager::{ITopicManager, TopicHandler}; // Import Trait
-use crate::network::ws_schema::WsAgentEvent;
+use crate::generated::ws_messages::{AgentEventData, RunUpdateData, ExecutionFinishedData, NodeStateData, NodeLogData};
 use crate::state::APP_STATE;
+
+// Conversion from generated RunUpdateData to ApiAgentRun
+impl From<RunUpdateData> for crate::models::ApiAgentRun {
+    fn from(data: RunUpdateData) -> Self {
+        crate::models::ApiAgentRun {
+            id: data.id,
+            agent_id: data.agent_id,
+            thread_id: data.thread_id,
+            status: data.status,
+            trigger: data.trigger.unwrap_or_else(|| "manual".to_string()),
+            started_at: data.started_at,
+            finished_at: data.finished_at,
+            duration_ms: data.duration_ms.map(|d| d as u64), // Convert u32 to u64
+            total_tokens: None, // Not provided in generated schema
+            total_cost_usd: None, // Not provided in generated schema
+            error: data.error,
+        }
+    }
+}
 
 /// Convert a raw JSON payload coming from run_update into an ApiAgentRun.
 /// The websocket messages are *slim* – many optional fields from the REST
 /// schema are missing.  We fill sensible defaults so that the struct can be
 /// used right away by the dashboard without forcing an extra REST reload.
-// Helper: apply agent_event delta to AppState in-place
-fn apply_agent_event(evt: WsAgentEvent) {
+// Helper: apply agent_event delta to AppState in-place  
+fn apply_agent_event(evt: AgentEventData) {
     crate::state::APP_STATE.with(|state_ref| {
         let mut state = state_ref.borrow_mut();
         if let Some(agent) = state.agents.get_mut(&evt.id) {
@@ -98,168 +117,175 @@ impl DashboardWsManager {
         web_sys::console::log_1(&"DashboardWsManager: Creating new handler".into());
         let mut topic_manager = topic_manager_rc.borrow_mut();
 
-        // Structured handler – parse incoming JSON into strongly-typed enums
+        // Structured handler – parse incoming JSON into strongly-typed data from envelope
         let handler = Rc::new(RefCell::new(|data: serde_json::Value| {
-            use crate::network::ws_schema::WsMessage;
+            // Extract message type and data from the envelope-style payload
+            let message_type = data.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let message_data = data.get("data").unwrap_or(&data);
 
-            // Handle system-level messages first (PING, PONG, ERROR)
-            if let Ok(type_value) = data.get("type").and_then(|v| v.as_str()).ok_or("no type") {
-                match type_value {
-                    "PING" => {
-                        // PING messages are handled by the WebSocket connection itself
-                        return; // handled
+            match message_type {
+                "ping" | "pong" => {
+                    // System messages are handled by the WebSocket connection itself
+                    return; 
+                }
+                "error" => {
+                    if let Some(error_msg) = message_data.get("error").and_then(|v| v.as_str()) {
+                        web_sys::console::error_1(
+                            &format!("WebSocket error: {}", error_msg).into(),
+                        );
+                    } else {
+                        web_sys::console::error_1(&"WebSocket error: unknown error".into());
                     }
-                    "PONG" => {
-                        // PONG responses are handled by the WebSocket connection itself
-                        return; // handled
-                    }
-                    "ERROR" => {
-                        if let Some(error_msg) = data.get("message").and_then(|v| v.as_str()) {
-                            web_sys::console::error_1(
-                                &format!("WebSocket error: {}", error_msg).into(),
+                    return;
+                }
+                "unsubscribe_success" => {
+                    // Unsubscribe confirmations don't need special handling
+                    return;
+                }
+                "run_update" => {
+                    // Parse structured RunUpdateData
+                    match serde_json::from_value::<RunUpdateData>(message_data.clone()) {
+                        Ok(run) => {
+                            let run_struct: crate::models::ApiAgentRun = run.into();
+                            let agent_id = run_struct.agent_id;
+
+                            // Capture status before we move run_struct into the message.
+                            let status_for_toast = run_struct.status.clone();
+
+                            crate::state::dispatch_global_message(
+                                crate::messages::Message::ReceiveRunUpdate {
+                                    agent_id,
+                                    run: run_struct,
+                                },
                             );
-                        } else {
-                            web_sys::console::error_1(&"WebSocket error: unknown error".into());
+
+                            // Toast success/failure once we have a terminal status.
+                            match status_for_toast.as_str() {
+                                "success" => {
+                                    let name = crate::state::APP_STATE.with(|s| {
+                                        s.borrow()
+                                            .agents
+                                            .get(&agent_id)
+                                            .map(|a| a.name.clone())
+                                            .unwrap_or_else(|| "Agent".into())
+                                    });
+                                    crate::toast::success(&format!("{} finished", name));
+                                }
+                                "failed" | "error" => {
+                                    let name = crate::state::APP_STATE.with(|s| {
+                                        s.borrow()
+                                            .agents
+                                            .get(&agent_id)
+                                            .map(|a| a.name.clone())
+                                            .unwrap_or_else(|| "Agent".into())
+                                    });
+                                    crate::toast::error(&format!("{} failed", name));
+                                }
+                                _ => {}
+                            }
                         }
-                        return; // handled
-                    }
-                    "unsubscribe_success" => {
-                        // Unsubscribe confirmations don't need special handling
-                        return; // handled
-                    }
-                    _ => {} // Continue to structured message parsing
-                }
-            }
-
-            // Attempt to parse structured messages
-            match serde_json::from_value::<WsMessage>(data.clone()) {
-                Ok(WsMessage::RunUpdate { data: run }) => {
-                    let run_struct: crate::models::ApiAgentRun = run.into();
-                    let agent_id = run_struct.agent_id;
-
-                    // Capture status before we move run_struct into the message.
-                    let status_for_toast = run_struct.status.clone();
-
-                    crate::state::dispatch_global_message(
-                        crate::messages::Message::ReceiveRunUpdate {
-                            agent_id,
-                            run: run_struct,
-                        },
-                    );
-
-                    // Toast success/failure once we have a terminal status.
-                    match status_for_toast.as_str() {
-                        "success" => {
-                            let name = crate::state::APP_STATE.with(|s| {
-                                s.borrow()
-                                    .agents
-                                    .get(&agent_id)
-                                    .map(|a| a.name.clone())
-                                    .unwrap_or_else(|| "Agent".into())
-                            });
-                            crate::toast::success(&format!("{} finished", name));
+                        Err(e) => {
+                            web_sys::console::error_1(
+                                &format!("Failed to parse run_update: {}", e).into(),
+                            );
                         }
-                        "failed" | "error" => {
-                            let name = crate::state::APP_STATE.with(|s| {
-                                s.borrow()
-                                    .agents
-                                    .get(&agent_id)
-                                    .map(|a| a.name.clone())
-                                    .unwrap_or_else(|| "Agent".into())
-                            });
-                            crate::toast::error(&format!("{} failed", name));
-                        }
-                        _ => {}
                     }
-                    return; // handled
+                    return;
+                }
+                "agent_event" | "agent_state" => {
+                    // Parse structured AgentEventData
+                    match serde_json::from_value::<AgentEventData>(message_data.clone()) {
+                        Ok(evt) => {
+                            apply_agent_event(evt);
+                        }
+                        Err(e) => {
+                            web_sys::console::error_1(
+                                &format!("Failed to parse agent_event: {}", e).into(),
+                            );
+                        }
+                    }
+                    return;
                 }
 
-                Ok(WsMessage::AgentEvent { data: evt }) => {
-                    apply_agent_event(evt);
-                    return; // handled
+                "execution_finished" => {
+                    // Parse structured ExecutionFinishedData
+                    match serde_json::from_value::<ExecutionFinishedData>(message_data.clone()) {
+                        Ok(data) => {
+                            crate::state::dispatch_global_message(
+                                crate::messages::Message::ExecutionFinished {
+                                    execution_id: data.execution_id,
+                                    status: data.status.clone(),
+                                    error: data.error.clone(),
+                                },
+                            );
+                        }
+                        Err(e) => {
+                            web_sys::console::error_1(
+                                &format!("Failed to parse execution_finished: {}", e).into(),
+                            );
+                        }
+                    }
+                    return;
+                }
+                "node_state" => {
+                    // Parse structured NodeStateData
+                    match serde_json::from_value::<NodeStateData>(message_data.clone()) {
+                        Ok(data) => {
+                            crate::state::dispatch_global_message(
+                                crate::messages::Message::UpdateNodeStatus {
+                                    node_id: data.node_id.clone(),
+                                    status: data.status.clone(),
+                                },
+                            );
+                        }
+                        Err(e) => {
+                            web_sys::console::error_1(
+                                &format!("Failed to parse node_state: {}", e).into(),
+                            );
+                        }
+                    }
+                    return;
+                }
+                "node_log" => {
+                    // Parse structured NodeLogData
+                    match serde_json::from_value::<NodeLogData>(message_data.clone()) {
+                        Ok(data) => {
+                            crate::state::dispatch_global_message(
+                                crate::messages::Message::AppendExecutionLog {
+                                    execution_id: data.execution_id,
+                                    node_id: data.node_id.clone(),
+                                    stream: data.stream.clone(),
+                                    text: data.text.clone(),
+                                },
+                            );
+                        }
+                        Err(e) => {
+                            web_sys::console::error_1(
+                                &format!("Failed to parse node_log: {}", e).into(),
+                            );
+                        }
+                    }
+                    return;
                 }
 
-                Ok(WsMessage::ExecutionFinished { data }) => {
-                    crate::state::dispatch_global_message(
-                        crate::messages::Message::ExecutionFinished {
-                            execution_id: data.execution_id,
-                            status: data.status.clone(),
-                            error: data.error.clone(),
-                        },
-                    );
-                    return; // handled
-                }
-
-                Ok(WsMessage::NodeState { data }) => {
-                    crate::state::dispatch_global_message(
-                        crate::messages::Message::UpdateNodeStatus {
-                            node_id: data.node_id.clone(),
-                            status: data.status.clone(),
-                        },
-                    );
-                    return; // handled
-                }
-
-                Ok(WsMessage::NodeLog { data }) => {
-                    crate::state::dispatch_global_message(
-                        crate::messages::Message::AppendExecutionLog {
-                            execution_id: data.execution_id,
-                            node_id: data.node_id.clone(),
-                            stream: data.stream.clone(),
-                            text: data.text.clone(),
-                        },
-                    );
-                    return; // handled
-                }
-
-                Ok(WsMessage::ThreadEvent { .. }) => {
+                "thread_event" | "thread_message" => {
                     // Thread events are handled by thread-specific components
-                    return; // handled
+                    return;
+                }
+                "stream_start" | "stream_chunk" | "stream_end" | "assistant_id" => {
+                    // Stream events are handled by thread-specific components  
+                    return;
                 }
 
-                Ok(WsMessage::StreamStart(_)) => {
-                    // Stream start events are handled by thread-specific components
-                    return; // handled
-                }
-
-                Ok(WsMessage::StreamChunk(_)) => {
-                    // Stream chunk events are handled by thread-specific components
-                    return; // handled
-                }
-
-                Ok(WsMessage::StreamEnd(_)) => {
-                    // Stream end events are handled by thread-specific components
-                    return; // handled
-                }
-
-                Ok(WsMessage::AssistantId(_)) => {
-                    // Assistant ID events are handled by thread-specific components
-                    return; // handled
-                }
-
-                Ok(WsMessage::ThreadMessage { .. }) => {
-                    // Thread message events are handled by thread-specific components
-                    return; // handled
-                }
-
-                Ok(WsMessage::UserUpdate { .. }) => {
+                "user_update" => {
                     // User update events are handled by profile components
-                    return; // handled
+                    return;
                 }
-
-                Ok(WsMessage::Unknown) => {
+                _ => {
                     web_sys::console::warn_1(
-                        &"DashboardWsManager: received unknown WS message type".into(),
+                        &format!("DashboardWsManager: received unknown message type: {}", message_type).into(),
                     );
                     return; // handled - don't fallback to polling for unknown messages
-                }
-
-                Err(e) => {
-                    web_sys::console::warn_2(
-                        &"DashboardWsManager: failed to parse WS message".into(),
-                        &format!("{:?}", e).into(),
-                    );
-                    return; // handled - don't fallback to polling for parse errors
                 }
             }
         }));
