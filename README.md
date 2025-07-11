@@ -883,6 +883,17 @@ The CI pipeline also runs:
 *   Agent plugins for external services (email, db, http).  
 *   Graphical editor: condition/branch nodes, tool nodes.  
 *   PostgreSQL migration & async SQLAlchemy once multi-worker fan-out lands.
+*   **JetStream / Message-bus for multi-pod fan-out** – today a single-process
+    in-memory `EventBus` is enough, but the moment we deploy **≥2 FastAPI
+    pods** or external background workers, broadcast events will no longer
+    reach every WebSocket client.  The plan is to swap the internal
+    publisher/subscriber layer for **NATS JetStream** (or Redis Streams) so
+    events are durably persisted and fanned out across all instances.  This
+    isn’t needed for the MVP – keep it in mind once :
+      * you add a second API replica behind a load-balancer, or
+      * you introduce out-of-process workers that must emit `THREAD_*` /
+        `AGENT_*` events.
+
 
 -------------------------------------------------------------------------------
 ### Design-System playground
