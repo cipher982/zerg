@@ -6,7 +6,7 @@ use wasm_bindgen::JsValue;
 
 use super::messages::builders::{create_subscribe, create_unsubscribe};
 use super::ws_client_v2::IWsClient; // Update import
-use crate::generated::ws_messages::{Envelope, WsMessage};
+use crate::generated::ws_messages::Envelope;
 
 /// Represents a topic string like "agent:123" or "thread:45"
 pub type Topic = String;

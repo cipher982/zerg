@@ -7,7 +7,7 @@ use proptest::prelude::*;
 use serde_json::Value;
 use wasm_bindgen_test::*;
 
-use crate::network::ws_schema::Envelope;
+use crate::generated::ws_messages::Envelope;
 use crate::schema_validation::validate_envelope;
 
 // Make wasm-bindgen execute the tests in a headless browser when available.

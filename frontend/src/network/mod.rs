@@ -6,7 +6,6 @@ pub mod messages;
 pub mod topic_manager;
 pub mod ui_updates;
 pub mod ws_client_v2;
-pub mod ws_schema;
 
 // Re-export commonly used items
 pub use api_client::ApiClient;
