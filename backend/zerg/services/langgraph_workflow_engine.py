@@ -163,7 +163,12 @@ class LangGraphWorkflowEngine:
     async def _execute_workflow_internal(self, workflow: Workflow, execution: WorkflowExecution, db) -> None:
         """Internal method to execute workflow with existing execution record."""
         # Transform canvas data first
+        logger.info(f"[DEBUG] Raw canvas_data: {workflow.canvas_data}")
         canvas = CanvasTransformer.from_database(workflow.canvas_data)
+        logger.info(f"[DEBUG] Transformed canvas: {len(canvas.nodes)} nodes, {len(canvas.edges)} edges")
+        if canvas.nodes:
+            for i, node in enumerate(canvas.nodes):
+                logger.info(f"[DEBUG] Node {i}: {node}")
 
         # Handle empty workflows gracefully - complete immediately
         if not canvas.nodes:
@@ -307,7 +312,11 @@ class LangGraphWorkflowEngine:
                 elif node.config:
                     # Handle both dict and object configs
                     if isinstance(node.config, dict):
+                        # Try direct access first
                         agent_id = node.config.get("agent_id")
+                        # If not found, try nested config structure
+                        if agent_id is None and "config" in node.config and isinstance(node.config["config"], dict):
+                            agent_id = node.config["config"].get("agent_id")
                     else:
                         agent_id = getattr(node.config, "agent_id", None)
                 else:
@@ -618,7 +627,15 @@ class LangGraphWorkflowEngine:
             if node_config.config:
                 # Handle both dict and object configs
                 if isinstance(node_config.config, dict):
+                    # Try direct access first
                     agent_id = node_config.config.get("agent_id")
+                    # If not found, try nested config structure
+                    if (
+                        agent_id is None
+                        and "config" in node_config.config
+                        and isinstance(node_config.config["config"], dict)
+                    ):
+                        agent_id = node_config.config["config"].get("agent_id")
                 else:
                     agent_id = getattr(node_config.config, "agent_id", None)
 
