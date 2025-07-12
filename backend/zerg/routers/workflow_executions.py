@@ -12,7 +12,7 @@ from zerg.crud import crud
 from zerg.database import get_db
 from zerg.dependencies.auth import get_current_user
 from zerg.models.models import User
-from zerg.services.langgraph_workflow_engine import langgraph_workflow_engine
+from zerg.services.workflow_engine import workflow_engine
 from zerg.services.workflow_scheduler import workflow_scheduler
 
 router = APIRouter(
@@ -71,7 +71,7 @@ async def start_workflow_execution(
         raise HTTPException(status_code=404, detail="Workflow not found")
 
     # Execute workflow with LangGraph engine (original approach)
-    execution_id = await langgraph_workflow_engine.execute_workflow(workflow_id)
+    execution_id = await workflow_engine.execute_workflow(workflow_id)
 
     return {"execution_id": execution_id, "status": "running"}
 
@@ -101,7 +101,7 @@ async def start_reserved_execution(
 
     async def run_execution():
         try:
-            await langgraph_workflow_engine.execute_workflow_with_id(execution.workflow_id, execution_id)
+            await workflow_engine.execute_workflow_with_id(execution.workflow_id, execution_id)
         except Exception as e:
             import logging
 
@@ -206,10 +206,8 @@ def cancel_execution(
     db.commit()
 
     # Emit EXECUTION_FINISHED event with cancelled status so UI updates
-    import asyncio
-
     from zerg.events import EventType  # local import to avoid cycles
-    from zerg.events import event_bus  # local import to avoid cycles
+    from zerg.events.publisher import publish_event_fire_and_forget
 
     payload_dict = {
         "execution_id": execution.id,
@@ -219,12 +217,7 @@ def cancel_execution(
         "event_type": EventType.EXECUTION_FINISHED,
     }
 
-    try:
-        asyncio.run(event_bus.publish(EventType.EXECUTION_FINISHED, payload_dict))
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(event_bus.publish(EventType.EXECUTION_FINISHED, payload_dict))
-        loop.close()
+    publish_event_fire_and_forget(EventType.EXECUTION_FINISHED, payload_dict)
 
     return Response(status_code=204)
 
