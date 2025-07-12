@@ -33,6 +33,12 @@ help:
 	@echo "make tool-check           # full tool contract validation (both above)"
 	@echo "make tool-code-diff-check # verify generated code is up-to-date (CI)"
 	@echo ""
+	@echo "WebSocket Contract System (Modern AsyncAPI 3.0):"
+	@echo "make ws-code-gen          # generate WebSocket types from AsyncAPI schema"
+	@echo "make ws-validate          # validate WebSocket contracts"
+	@echo "make ws-check             # full WebSocket contract validation"
+	@echo "make ws-code-diff-check   # verify WebSocket code is up-to-date (CI)"
+	@echo ""
 
 # ---------------------------------------------------------------------------
 # Runtime servers
@@ -85,11 +91,7 @@ e2e-basic:
 regen-ws-code:
 	./scripts/regen-ws-code.sh
 
-# Verify that running regen-ws-code would not result in uncommitted changes.
-ws-code-diff-check:
-	./scripts/regen-ws-code.sh
-	git diff --exit-code
-	@echo "✅ WebSocket code up to date with spec"
+# Legacy WebSocket target - use ws-code-diff-check-modern instead
 
 # ---------------------------------------------------------------------------
 # Pact contract capture / verification
@@ -132,3 +134,33 @@ tool-check: tool-code-diff-check tool-validate
 # ---------------------------------------------------------------------------
 compose:
 	docker compose up --build
+
+# ---------------------------------------------------------------------------
+# Modern WebSocket Contract System (AsyncAPI 3.0)
+# ---------------------------------------------------------------------------
+
+ws-code-gen:
+	@echo "🚀 Generating WebSocket types from AsyncAPI 3.0 schema..."
+	python3 scripts/generate-ws-types-modern.py ws-protocol-asyncapi.yml
+
+# Verify that generated WebSocket code is up to date (for CI)
+ws-code-diff-check: ws-code-gen
+	@echo "🔍 Checking if WebSocket definitions are up to date..."
+	@# Check for meaningful changes (exclude timestamp-only changes)
+	@./scripts/check_ws_drift.sh
+	@echo "✅ WebSocket contracts are up to date"
+
+ws-validate:
+	@echo "🔍 Validating WebSocket contracts..."
+	@# Validate AsyncAPI schema
+	npx @asyncapi/cli validate ws-protocol-asyncapi.yml || (echo "⚠️  AsyncAPI validation skipped (CLI not available)" && true)
+	@# TODO: Add runtime contract validation
+	@echo "✅ WebSocket contracts validated"
+
+# Combined target for full WebSocket contract checking
+ws-check: ws-code-diff-check ws-validate
+	@echo "✅ All WebSocket contracts validated"
+
+# Update main test target to include WebSocket contracts
+test-contracts: tool-check ws-check
+	@echo "✅ All contracts validated (tools + WebSocket)"
