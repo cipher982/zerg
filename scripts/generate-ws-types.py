@@ -44,6 +44,9 @@ class ProtocolCodeGenerator:
         # Generate contract validation JSON
         self.generate_contract_json()
         
+        # Generate handler interfaces and routing
+        self.generate_handler_interfaces()
+        
         print("Code generation complete!")
         
     def generate_python_types(self):
@@ -423,6 +426,171 @@ impl Envelope {
 pub fn validate_envelope(data: &Value) -> Result<(), String> {
     // TODO: Implement JSON schema validation
     Ok(())
+}
+
+"""
+
+    def generate_handler_interfaces(self):
+        """Generate handler trait interfaces and message routing."""
+        output_path = self.output_dir / "frontend" / "src" / "generated" / "ws_handlers.rs"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        code = self._generate_handler_header()
+        code += self._generate_handler_traits()
+        code += self._generate_message_router()
+        code += self._generate_routing_helpers()
+        
+        with open(output_path, 'w') as f:
+            f.write(code)
+            
+        print(f"Generated handler interfaces: {output_path}")
+        
+    def _generate_handler_header(self) -> str:
+        """Generate handler file header."""
+        return f"""// AUTO-GENERATED FILE - DO NOT EDIT
+// Generated from {self.schema_path.name} at {datetime.utcnow().isoformat()}Z
+//
+// This file contains handler traits and message routing infrastructure.
+// To update, modify the schema file and run: python scripts/generate-ws-types.py
+
+use std::{{cell::RefCell, rc::Rc}};
+use serde_json::Value;
+use wasm_bindgen::JsValue;
+use crate::generated::ws_messages::*;
+
+"""
+
+    def _generate_handler_traits(self) -> str:
+        """Generate handler trait definitions."""
+        code = "// Handler trait definitions\n\n"
+        
+        if "handlers" not in self.schema:
+            return code + "// No handlers defined in schema\n\n"
+            
+        for handler_name, handler_config in self.schema["handlers"].items():
+            trait_name = self._to_pascal_case(handler_name) + "Handler"
+            
+            code += f"/// Handler trait for {handler_config.get('description', f'{handler_name} messages')}\n"
+            code += f"pub trait {trait_name} {{\n"
+            
+            # Generate method signatures for each handled message type
+            handled_messages = handler_config.get("handles", [])
+            for msg_type in handled_messages:
+                if msg_type in self.schema["messages"]:
+                    msg_config = self.schema["messages"][msg_type]
+                    handler_method = msg_config.get("handler_method", f"handle_{msg_type}")
+                    payload_ref = msg_config["payload"].get("$ref", "")
+                    
+                    if payload_ref:
+                        payload_type = payload_ref.split("/")[-1]
+                        code += f"    fn {handler_method}(&self, data: {payload_type}) -> Result<(), JsValue>;\n"
+                    
+            code += "}\n\n"
+            
+        return code
+        
+    def _generate_message_router(self) -> str:
+        """Generate message router implementation."""
+        code = "// Message router implementation\n\n"
+        
+        if "handlers" not in self.schema:
+            return code + "// No handlers defined in schema\n\n"
+            
+        for handler_name, handler_config in self.schema["handlers"].items():
+            trait_name = self._to_pascal_case(handler_name) + "Handler"
+            router_name = self._to_pascal_case(handler_name) + "MessageRouter"
+            
+            code += f"/// Message router for {handler_name} handler\n"
+            code += f"pub struct {router_name}<T: {trait_name}> {{\n"
+            code += f"    handler: Rc<RefCell<T>>,\n"
+            code += f"}}\n\n"
+            
+            code += f"impl<T: {trait_name}> {router_name}<T> {{\n"
+            code += f"    pub fn new(handler: Rc<RefCell<T>>) -> Self {{\n"
+            code += f"        Self {{ handler }}\n"
+            code += f"    }}\n\n"
+            
+            code += f"    /// Route a message to the appropriate handler method\n"
+            code += f"    pub fn route_message(&self, envelope: &Envelope) -> Result<(), JsValue> {{\n"
+            code += f"        let message_type = &envelope.message_type;\n"
+            code += f"        let message_data = &envelope.data;\n\n"
+            
+            code += f"        match message_type.as_str() {{\n"
+            
+            # Generate routing cases for each handled message type
+            handled_messages = handler_config.get("handles", [])
+            for msg_type in handled_messages:
+                if msg_type in self.schema["messages"]:
+                    msg_config = self.schema["messages"][msg_type]
+                    handler_method = msg_config.get("handler_method", f"handle_{msg_type}")
+                    payload_ref = msg_config["payload"].get("$ref", "")
+                    
+                    if payload_ref:
+                        payload_type = payload_ref.split("/")[-1]
+                        
+                        # Add main message type
+                        code += f'            "{msg_type}" => {{\n'
+                        code += f'                match serde_json::from_value::<{payload_type}>(message_data.clone()) {{\n'
+                        code += f'                    Ok(data) => self.handler.borrow().{handler_method}(data),\n'
+                        code += f'                    Err(e) => {{\n'
+                        code += f'                        web_sys::console::error_1(&format!("Failed to parse {msg_type}: {{}}", e).into());\n'
+                        code += f'                        Ok(())\n'
+                        code += f'                    }}\n'
+                        code += f'                }}\n'
+                        code += f'            }}\n'
+                        
+                        # Add aliases
+                        aliases = msg_config.get("aliases", [])
+                        for alias in aliases:
+                            code += f'            "{alias}" => {{\n'
+                            code += f'                match serde_json::from_value::<{payload_type}>(message_data.clone()) {{\n'
+                            code += f'                    Ok(data) => self.handler.borrow().{handler_method}(data),\n'
+                            code += f'                    Err(e) => {{\n'
+                            code += f'                        web_sys::console::error_1(&format!("Failed to parse {alias}: {{}}", e).into());\n'
+                            code += f'                        Ok(())\n'
+                            code += f'                    }}\n'
+                            code += f'                }}\n'
+                            code += f'            }}\n'
+            
+            code += f'            _ => {{\n'
+            code += f'                web_sys::console::warn_1(&format!("{router_name}: Unknown message type: {{}}", message_type).into());\n'
+            code += f'                Ok(())\n'
+            code += f'            }}\n'
+            code += f'        }}\n'
+            code += f'    }}\n'
+            code += f'}}\n\n'
+            
+        return code
+        
+    def _generate_routing_helpers(self) -> str:
+        """Generate routing helper functions."""
+        return """// Routing helper functions
+
+/// Validate that a message type is handled by a specific handler
+pub fn is_message_handled_by(message_type: &str, handler_type: &str) -> bool {
+    // TODO: Generate validation based on schema message_routing
+    match handler_type {
+        "dashboard" => matches!(message_type, 
+            "run_update" | "agent_event" | "agent_created" | "agent_updated" | 
+            "agent_deleted" | "agent_state" | "execution_finished" | "node_state" | "node_log"
+        ),
+        "chat" => matches!(message_type,
+            "thread_message" | "thread_message_created" | "stream_start" | 
+            "stream_chunk" | "stream_end" | "assistant_id"
+        ),
+        _ => false,
+    }
+}
+
+/// Extract handler type from topic pattern
+pub fn get_handler_for_topic(topic: &str) -> Option<&'static str> {
+    if topic.starts_with("agent:") || topic.starts_with("workflow_execution:") {
+        Some("dashboard")
+    } else if topic.starts_with("thread:") {
+        Some("chat")
+    } else {
+        None
+    }
 }
 
 """
