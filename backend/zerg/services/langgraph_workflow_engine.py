@@ -163,12 +163,7 @@ class LangGraphWorkflowEngine:
     async def _execute_workflow_internal(self, workflow: Workflow, execution: WorkflowExecution, db) -> None:
         """Internal method to execute workflow with existing execution record."""
         # Transform canvas data first
-        logger.info(f"[DEBUG] Raw canvas_data: {workflow.canvas_data}")
         canvas = CanvasTransformer.from_database(workflow.canvas_data)
-        logger.info(f"[DEBUG] Transformed canvas: {len(canvas.nodes)} nodes, {len(canvas.edges)} edges")
-        if canvas.nodes:
-            for i, node in enumerate(canvas.nodes):
-                logger.info(f"[DEBUG] Node {i}: {node}")
 
         # Handle empty workflows gracefully - complete immediately
         if not canvas.nodes:
@@ -305,27 +300,17 @@ class LangGraphWorkflowEngine:
                 logger.info(f"[LangGraphEngine] Creating tool node for {node_id}")
                 node_func = self._create_tool_node(node)
             elif node_type == "agentidentity" or node_type == "agent":
-                # Extract agent_id from typed config or fallback to node config
+                # Extract agent_id from typed config or node config - single clean path
                 agent_id = None
                 if typed_config and hasattr(typed_config, "agent_id"):
                     agent_id = typed_config.agent_id
-                elif node.config:
-                    # Handle both dict and object configs
-                    if isinstance(node.config, dict):
-                        # Try direct access first
-                        agent_id = node.config.get("agent_id")
-                        # If not found, try nested config structure
-                        if agent_id is None and "config" in node.config and isinstance(node.config["config"], dict):
-                            agent_id = node.config["config"].get("agent_id")
-                    else:
-                        agent_id = getattr(node.config, "agent_id", None)
-                else:
-                    # For AgentIdentity nodes, try to extract from node_type dict
-                    if isinstance(node.node_type, dict):
-                        for key, value in node.node_type.items():
-                            if key.lower() == "agentidentity" and isinstance(value, dict) and "agent_id" in value:
-                                agent_id = value["agent_id"]
-                                break
+                elif node.config and isinstance(node.config, dict):
+                    agent_id = node.config.get("agent_id")
+
+                if agent_id is None:
+                    raise ValueError(
+                        f"Agent node {node_id} missing required agent_id in config. Expected config.agent_id to be set."
+                    )
 
                 logger.info(f"[LangGraphEngine] Creating agent node for {node_id} (agent_id={agent_id})")
                 node_func = self._create_agent_node(node)
@@ -622,29 +607,15 @@ class LangGraphWorkflowEngine:
         async def agent_node(state: WorkflowState) -> WorkflowState:
             node_id = node_config.node_id
 
-            # Extract agent_id from node configuration
+            # Extract agent_id from node configuration - single clean path
             agent_id = None
-            if node_config.config:
-                # Handle both dict and object configs
-                if isinstance(node_config.config, dict):
-                    # Try direct access first
-                    agent_id = node_config.config.get("agent_id")
-                    # If not found, try nested config structure
-                    if (
-                        agent_id is None
-                        and "config" in node_config.config
-                        and isinstance(node_config.config["config"], dict)
-                    ):
-                        agent_id = node_config.config["config"].get("agent_id")
-                else:
-                    agent_id = getattr(node_config.config, "agent_id", None)
+            if node_config.config and isinstance(node_config.config, dict):
+                agent_id = node_config.config.get("agent_id")
 
-            # If not found in config, try to extract from node_type dict (AgentIdentity format)
-            if agent_id is None and isinstance(node_config.node_type, dict):
-                for key, value in node_config.node_type.items():
-                    if key.lower() == "agentidentity" and isinstance(value, dict) and "agent_id" in value:
-                        agent_id = value["agent_id"]
-                        break
+            if agent_id is None:
+                raise ValueError(
+                    f"Agent node {node_id} missing required agent_id in config. Expected config.agent_id to be set."
+                )
 
             logger.info(
                 (
