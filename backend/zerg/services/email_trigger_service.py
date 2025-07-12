@@ -22,6 +22,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
+from zerg.database import db_session
 from zerg.database import get_session_factory
 from zerg.email.providers import get_provider
 from zerg.events.event_bus import EventType
@@ -132,7 +133,7 @@ class EmailTriggerService:
 
         # Fetch *full* trigger rows so we can mutate their config JSON later
         def _db_query() -> list["Trigger"]:
-            with self._session_factory() as session:
+            with db_session(self._session_factory) as session:
                 return session.query(Trigger).filter(Trigger.type == "email").all()
 
         triggers = await asyncio.to_thread(_db_query)
@@ -214,7 +215,7 @@ class EmailTriggerService:
 
         # Re-load trigger inside a fresh session so it is attached => we can
         # mutate ``config`` and commit at the end.
-        with self._session_factory() as session:
+        with db_session(self._session_factory) as session:
             trg: Trigger | None = session.query(Trigger).filter(Trigger.id == trigger_id).first()
             if trg is None:
                 log.warning("email-trigger", event="trigger-disappeared", trigger_id=trigger_id)
@@ -423,9 +424,8 @@ class EmailTriggerService:
             pass
 
         # Persist
-        with self._session_factory() as session:
+        with db_session(self._session_factory) as session:
             session.merge(trigger)
-            session.commit()
 
     @staticmethod
     def _renew_gmail_watch_stub():
