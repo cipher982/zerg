@@ -10,11 +10,13 @@ from zerg.crud import crud
 from zerg.database import get_db
 from zerg.dependencies.auth import get_current_user
 from zerg.models.models import User
+from zerg.schemas.canonical_serialization import DatabaseWorkflowAdapter
+from zerg.schemas.canonical_validators import ValidationError
+from zerg.schemas.canonical_validators import validate_workflow_json
 from zerg.schemas.schemas import TemplateDeployRequest
 from zerg.schemas.schemas import Workflow
 from zerg.schemas.schemas import WorkflowTemplate
 from zerg.schemas.schemas import WorkflowTemplateCreate
-from zerg.services.canvas_transformer import CanvasTransformer
 
 router = APIRouter(
     prefix="/templates",
@@ -33,9 +35,21 @@ def create_template(
     """
     Create new workflow template.
     """
-    # Transform frontend data to canonical format
-    canvas = CanvasTransformer.from_frontend(template_in.canvas_data)
-    canonical_canvas_data = CanvasTransformer.to_database(canvas)
+    # Validate and convert to canonical format
+    try:
+        canonical_workflow = validate_workflow_json(
+            {
+                "id": 0,  # Will be set by database
+                "name": template_in.name,
+                "description": template_in.description or "",
+                **template_in.canvas_data,
+            }
+        )
+
+        # Convert to database format
+        canonical_canvas_data = DatabaseWorkflowAdapter.save_workflow_to_database(canonical_workflow)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid template data: {e.message}")
 
     template = crud.create_workflow_template(
         db=db,

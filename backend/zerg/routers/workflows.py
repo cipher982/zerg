@@ -17,11 +17,12 @@ from zerg.models.models import User
 
 # Canvas layout helper models reused from graph router to avoid duplication.
 from zerg.routers.graph_layout import LayoutUpdate
+from zerg.schemas.canonical_serialization import DatabaseWorkflowAdapter
+from zerg.schemas.canonical_validators import ValidationError
+from zerg.schemas.canonical_validators import validate_workflow_json
 from zerg.schemas.schemas import Workflow
 from zerg.schemas.schemas import WorkflowBase
 from zerg.schemas.schemas import WorkflowCreate
-from zerg.services.canvas_transformer import CanvasTransformer
-from zerg.services.workflow_validator import WorkflowValidator
 
 router = APIRouter(
     prefix="/workflows",
@@ -51,25 +52,35 @@ def validate_workflow(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Validate workflow canvas data without saving.
+    Validate workflow canvas data without saving using canonical validation.
     """
-    # Transform frontend data to canonical format
-    canvas = CanvasTransformer.from_frontend(payload.canvas_data)
+    try:
+        # Use canonical validation - fail fast with clear errors
+        validate_workflow_json(
+            {
+                "id": 1,  # Dummy ID for validation
+                "name": "Validation Test",  # Dummy name for validation
+                **payload.canvas_data,
+            }
+        )
 
-    validator = WorkflowValidator()
-    result = validator.validate_workflow(canvas)
+        # If we get here, validation passed
+        return ValidationResponse(is_valid=True, errors=[], warnings=[])
 
-    return ValidationResponse(
-        is_valid=result.is_valid,
-        errors=[
-            {"code": error.code, "message": error.message, "node_id": error.node_id, "severity": error.severity}
-            for error in result.errors
-        ],
-        warnings=[
-            {"code": warning.code, "message": warning.message, "node_id": warning.node_id, "severity": warning.severity}
-            for warning in result.warnings
-        ],
-    )
+    except ValidationError as e:
+        # Clear validation error from canonical system
+        return ValidationResponse(
+            is_valid=False,
+            errors=[{"code": "VALIDATION_ERROR", "message": e.message, "node_id": e.field_path, "severity": "error"}],
+            warnings=[],
+        )
+    except Exception as e:
+        # Unexpected error
+        return ValidationResponse(
+            is_valid=False,
+            errors=[{"code": "UNKNOWN_ERROR", "message": str(e), "node_id": "", "severity": "error"}],
+            warnings=[],
+        )
 
 
 @router.post("/", response_model=Workflow)
@@ -86,11 +97,21 @@ def create_workflow(
     progressive workflow building. Use /validate endpoint to
     check validity before execution.
     """
-    # Transform frontend data to canonical format
-    canvas = CanvasTransformer.from_frontend(workflow_in.canvas_data)
+    # Validate and convert to canonical format
+    try:
+        canonical_workflow = validate_workflow_json(
+            {
+                "id": 0,  # Will be set by database
+                "name": workflow_in.name,
+                "description": workflow_in.description or "",
+                **workflow_in.canvas_data,
+            }
+        )
 
-    # Store canonical format in database
-    canonical_canvas_data = CanvasTransformer.to_database(canvas)
+        # Convert to database format
+        canonical_canvas_data = DatabaseWorkflowAdapter.save_workflow_to_database(canonical_workflow)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid workflow data: {e.message}")
 
     workflow = crud.create_workflow(
         db=db,
@@ -158,11 +179,14 @@ def update_current_workflow_canvas_data(
             canvas_data={"nodes": [], "edges": []},
         )
 
-    # Transform frontend data to canonical format
-    canvas = CanvasTransformer.from_frontend(payload.canvas_data)
+    # Validate and convert to canonical format
+    try:
+        canonical_workflow = validate_workflow_json({"id": workflow.id, "name": workflow.name, **payload.canvas_data})
 
-    # Store canonical format in database
-    workflow.canvas_data = CanvasTransformer.to_database(canvas)
+        # Convert to database format
+        workflow.canvas_data = DatabaseWorkflowAdapter.save_workflow_to_database(canonical_workflow)
+    except ValidationError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid workflow data: {e.message}")
     db.commit()
     db.refresh(workflow)
 
