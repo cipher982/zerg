@@ -1,5 +1,5 @@
 # AUTO-GENERATED FILE - DO NOT EDIT
-# Generated from ws-protocol.yml at 2025-07-11T11:35:15.739547Z
+# Generated from ws-protocol.yml at 2025-07-11T13:28:20.712836Z
 #
 # This file contains all WebSocket message types and schemas.
 # To update, modify the schema file and run: python scripts/generate-ws-types.py
