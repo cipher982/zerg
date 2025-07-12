@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from zerg.generated.ws_messages import Envelope
 from zerg.websocket.manager import topic_manager
 
 # Envelope structure is always enabled - no configuration needed
@@ -50,7 +51,8 @@ async def test_no_hang_on_slow_client(test_client: TestClient):
     ) as fast_client:
         # Simulate slow client by not reading from _slow_client
         for i in range(3):
-            await topic_manager.broadcast_to_topic("system", {"type": "test", "data": {"i": i}})
+            envelope = Envelope.create(message_type="test", topic="system", data={"i": i})
+            await topic_manager.broadcast_to_topic("system", envelope.model_dump())
 
         # fast_client should still be able to receive messages
         for _ in range(3):

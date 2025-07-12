@@ -8,7 +8,7 @@ use serde_json::Value;
 use wasm_bindgen_test::*;
 
 use crate::generated::ws_messages::Envelope;
-use crate::schema_validation::validate_envelope;
+use crate::generated::ws_messages::validate_envelope;
 
 // Make wasm-bindgen execute the tests in a headless browser when available.
 wasm_bindgen_test_configure!(run_in_browser);

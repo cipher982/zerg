@@ -28,7 +28,7 @@
 ### Generated Artifacts
 
 ✅ **Schema Definition**: `ws-protocol.yml` - Single source of truth
-✅ **Code Generation**: `scripts/generate-ws-types.py` - Automated type generation  
+✅ **Code Generation**: `scripts/generate-ws-types-modern.py` - Modern AsyncAPI-based type generation  
 ✅ **Generated Types**: 
   - `backend/zerg/generated/ws_messages.py` - Pydantic models
   - `frontend/src/generated/ws_messages.rs` - Rust structs/enums

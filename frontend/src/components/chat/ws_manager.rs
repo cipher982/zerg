@@ -142,8 +142,8 @@ impl ChatViewWsManager {
                 &format!("🔍 [CHAT WS] Received message for thread {}: {:?}", thread_id, data).into(),
             );
             
-            // Extract message type and data from envelope-style payload
-            let message_type = data.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+            // Extract message type from envelope format
+            let message_type = data.get("message_type").and_then(|v| v.as_str()).unwrap_or("unknown");
             
             web_sys::console::log_1(
                 &format!("🔍 [CHAT WS] Processing message type: {}", message_type).into(),

@@ -390,7 +390,7 @@ class TopicConnectionManager:
 
         Args:
             topic: The topic to broadcast to
-            message: The message to broadcast (will be wrapped in envelope if feature flag enabled)
+            message: The message to broadcast (must be in envelope format)
         """
         # If there are no active subscribers we silently skip to avoid log
         # spam – this situation is perfectly normal when scheduled agents or
@@ -406,23 +406,13 @@ class TopicConnectionManager:
                 for client_id in self.topic_subscriptions[topic]
             }
 
-        # Always wrap message in envelope format
-        # Envelope structure is mandatory for all WebSocket messages.
+        # Envelope format is mandatory - no legacy format support
+        # All callers must provide properly formatted envelope messages
+        if not (isinstance(message, dict) and "v" in message and "topic" in message and "ts" in message):
+            logger.error("broadcast_to_topic: Invalid message format - envelope required")
+            raise ValueError("Message must be in envelope format")
 
-        is_already_enveloped = isinstance(message, dict) and "v" in message and "topic" in message and "ts" in message
-
-        if not is_already_enveloped:
-            message_type = message.get("type", "UNKNOWN")
-            # Ensure data is always a dict - if message has "data" field and it's a dict, use it
-            # Otherwise, use the entire message as the data payload
-            if "data" in message and isinstance(message["data"], dict):
-                message_data = message["data"]
-            else:
-                message_data = message
-            envelope = Envelope.create(message_type=message_type, topic=topic, data=message_data)
-            final_message = envelope.model_dump()
-        else:
-            final_message = message
+        final_message = message
 
         # Queue / immediately send the message for each client
         for client_id, queue in client_queues.items():
@@ -479,7 +469,9 @@ class TopicConnectionManager:
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
         serialized_data = jsonable_encoder(clean_data)
 
-        await self.broadcast_to_topic(topic, {"type": event_type, "data": serialized_data})
+        # Use envelope format
+        envelope = Envelope.create(message_type=event_type, topic=topic, data=serialized_data)
+        await self.broadcast_to_topic(topic, envelope.model_dump())
 
     async def _handle_thread_event(self, data: Dict[str, Any]) -> None:
         """Handle thread-related events from the event bus."""
@@ -496,7 +488,9 @@ class TopicConnectionManager:
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
         serialized_data = jsonable_encoder(clean_data)
 
-        await self.broadcast_to_topic(topic, {"type": event_type, "data": serialized_data})
+        # Use envelope format
+        envelope = Envelope.create(message_type=event_type, topic=topic, data=serialized_data)
+        await self.broadcast_to_topic(topic, envelope.model_dump())
 
     async def _handle_run_event(self, data: Dict[str, Any]) -> None:
         """Forward run events to the *agent:* topic so dashboards update."""
@@ -512,7 +506,10 @@ class TopicConnectionManager:
             clean_data["id"] = clean_data.pop("run_id")
 
         serialized_data = jsonable_encoder(clean_data)
-        await self.broadcast_to_topic(topic, {"type": "run_update", "data": serialized_data})
+
+        # Use envelope format
+        envelope = Envelope.create(message_type="run_update", topic=topic, data=serialized_data)
+        await self.broadcast_to_topic(topic, envelope.model_dump())
 
     async def _handle_user_event(self, data: Dict[str, Any]) -> None:
         """Forward user events to `user:{id}` topic so other tabs update."""
@@ -524,7 +521,9 @@ class TopicConnectionManager:
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
         serialized_data = jsonable_encoder(clean_data)
 
-        await self.broadcast_to_topic(topic, {"type": "user_update", "data": serialized_data})
+        # Use envelope format
+        envelope = Envelope.create(message_type="user_update", topic=topic, data=serialized_data)
+        await self.broadcast_to_topic(topic, envelope.model_dump())
 
     # ------------------------------------------------------------------
     # Workflow execution node updates
@@ -541,7 +540,9 @@ class TopicConnectionManager:
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
         serialized_data = jsonable_encoder(clean_data)
 
-        await self.broadcast_to_topic(topic, {"type": "node_state", "data": serialized_data})
+        # Use envelope format
+        envelope = Envelope.create(message_type="node_state", topic=topic, data=serialized_data)
+        await self.broadcast_to_topic(topic, envelope.model_dump())
 
     # ------------------------------------------------------------------
     # Execution finished
@@ -553,9 +554,13 @@ class TopicConnectionManager:
 
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
+        serialized_data = jsonable_encoder(clean_data)
 
         logger.info("Broadcasting execution_finished for execution %s to topic %s", exec_id, topic)
-        await self.broadcast_to_topic(topic, {"type": "execution_finished", "data": jsonable_encoder(clean_data)})
+
+        # Use envelope format
+        envelope = Envelope.create(message_type="execution_finished", topic=topic, data=serialized_data)
+        await self.broadcast_to_topic(topic, envelope.model_dump())
 
     # ------------------------------------------------------------------
     # Node log streaming
@@ -567,8 +572,11 @@ class TopicConnectionManager:
 
         # Create clean data payload without event_type (since it's in message type)
         clean_data = {k: v for k, v in data.items() if k != "event_type"}
+        serialized_data = jsonable_encoder(clean_data)
 
-        await self.broadcast_to_topic(topic, {"type": "node_log", "data": jsonable_encoder(clean_data)})
+        # Use envelope format
+        envelope = Envelope.create(message_type="node_log", topic=topic, data=serialized_data)
+        await self.broadcast_to_topic(topic, envelope.model_dump())
 
 
 # Create a global instance of the new connection manager
