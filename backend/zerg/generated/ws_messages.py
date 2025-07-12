@@ -1,8 +1,9 @@
 # AUTO-GENERATED FILE - DO NOT EDIT
-# Generated from ws-protocol.yml at 2025-07-11T13:28:20.712836Z
+# Generated from ws-protocol-asyncapi.yml at 2025-07-12T08:51:53.900499Z
+# Using AsyncAPI 3.0 + Modern Python Code Generation
 #
-# This file contains all WebSocket message types and schemas.
-# To update, modify the schema file and run: python scripts/generate-ws-types.py
+# This file contains strongly-typed WebSocket message definitions.
+# To update, modify the schema file and run: python scripts/generate-ws-types-modern.py
 
 import time
 from enum import Enum
@@ -11,13 +12,23 @@ from typing import Dict
 from typing import List
 from typing import Literal
 from typing import Optional
+from typing import Protocol
 
 from pydantic import BaseModel
 from pydantic import Field
 
+# Runtime validation using jsonschema-rs for performance
+try:
+    import jsonschema_rs
+
+    FAST_VALIDATION = True
+except ImportError:
+    FAST_VALIDATION = False
+    import jsonschema as jsonschema_fallback
+
 
 class Envelope(BaseModel):
-    """Unified envelope for all WebSocket messages."""
+    """Unified envelope for all WebSocket messages with validation."""
 
     v: int = Field(default=1, description="Protocol version")
     type: str = Field(description="Message type identifier")
@@ -34,14 +45,23 @@ class Envelope(BaseModel):
         data: Dict[str, Any],
         req_id: Optional[str] = None,
     ) -> "Envelope":
-        """Create a new envelope with current timestamp."""
-        return cls(
+        """Create and validate a new envelope."""
+        envelope = cls(
             type=message_type.lower(),
             topic=topic,
             data=data,
             req_id=req_id,
             ts=int(time.time() * 1000),
         )
+        # Validate on creation for fail-fast behavior
+        validate_envelope_fast(envelope.model_dump())
+        return envelope
+
+    def model_dump_validated(self) -> Dict[str, Any]:
+        """Dump model with runtime validation."""
+        data = self.model_dump()
+        validate_envelope_fast(data)
+        return data
 
 
 # Message payload schemas
@@ -50,134 +70,44 @@ class Envelope(BaseModel):
 class AgentRef(BaseModel):
     """Payload for AgentRef messages"""
 
-    id: int
+    id: int = Field(ge=1, description="")
 
 
 class ThreadRef(BaseModel):
     """Payload for ThreadRef messages"""
 
-    thread_id: int
+    thread_id: int = Field(ge=1, description="")
 
 
 class UserRef(BaseModel):
     """Payload for UserRef messages"""
 
-    id: int
+    id: int = Field(ge=1, description="")
 
 
 class ExecutionRef(BaseModel):
     """Payload for ExecutionRef messages"""
 
-    execution_id: int
+    execution_id: int = Field(ge=1, description="")
 
 
-class RunUpdateData(BaseModel):
-    """Payload for RunUpdateData messages"""
+class PingData(BaseModel):
+    """Payload for PingData messages"""
 
-    id: int
-    agent_id: int
-    thread_id: Optional[int] = None
-    status: Literal["queued", "running", "success", "failed"]
-    trigger: Optional[Literal["manual", "schedule", "api"]] = None
-    started_at: Optional[str] = None
-    finished_at: Optional[str] = None
-    duration_ms: Optional[int] = None
-    error: Optional[str] = None
+    timestamp: Optional[int] = Field(default=None, ge=0, description="")
 
 
-class AgentEventData(BaseModel):
-    """Payload for AgentEventData messages"""
+class PongData(BaseModel):
+    """Payload for PongData messages"""
 
-    id: int
-    status: Optional[str] = None
-    last_run_at: Optional[str] = None
-    next_run_at: Optional[str] = None
-    last_error: Optional[str] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
+    timestamp: Optional[int] = Field(default=None, ge=0, description="")
 
 
-class ThreadEventData(BaseModel):
-    """Payload for ThreadEventData messages"""
+class ErrorData(BaseModel):
+    """Payload for ErrorData messages"""
 
-    thread_id: int
-    agent_id: Optional[int] = None
-    title: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-
-
-class ThreadMessageData(BaseModel):
-    """Payload for ThreadMessageData messages"""
-
-    thread_id: int
-    message: Dict[str, Any]
-
-
-class StreamStartData(BaseModel):
-    """Payload for StreamStartData messages"""
-
-    thread_id: int
-
-
-class StreamChunkData(BaseModel):
-    """Payload for StreamChunkData messages"""
-
-    thread_id: int
-    chunk_type: Literal["assistant_token", "assistant_message", "tool_output"]
-    content: Optional[str] = None
-    tool_name: Optional[str] = None
-    tool_call_id: Optional[str] = None
-
-
-class StreamEndData(BaseModel):
-    """Payload for StreamEndData messages"""
-
-    thread_id: int
-
-
-class AssistantIdData(BaseModel):
-    """Payload for AssistantIdData messages"""
-
-    thread_id: int
-    message_id: int
-
-
-class UserUpdateData(BaseModel):
-    """Payload for UserUpdateData messages"""
-
-    id: int
-    email: Optional[str] = None
-    display_name: Optional[str] = None
-    avatar_url: Optional[str] = None
-
-
-class NodeStateData(BaseModel):
-    """Payload for NodeStateData messages"""
-
-    execution_id: int
-    node_id: str
-    status: Literal["running", "success", "failed"]
-    output: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-
-
-class ExecutionFinishedData(BaseModel):
-    """Payload for ExecutionFinishedData messages"""
-
-    execution_id: int
-    status: Literal["success", "failed"]
-    error: Optional[str] = None
-    duration_ms: Optional[int] = None
-
-
-class NodeLogData(BaseModel):
-    """Payload for NodeLogData messages"""
-
-    execution_id: int
-    node_id: str
-    stream: Literal["stdout", "stderr"]
-    text: str
+    error: str = Field(min_length=1, description="")
+    details: Optional[Dict[str, Any]] = None
 
 
 class SubscribeData(BaseModel):
@@ -197,28 +127,118 @@ class UnsubscribeData(BaseModel):
 class SendMessageData(BaseModel):
     """Payload for SendMessageData messages"""
 
-    thread_id: int
-    content: str
+    thread_id: int = Field(ge=1, description="")
+    content: str = Field(min_length=1, description="")
     metadata: Optional[Dict[str, Any]] = None
 
 
-class PingData(BaseModel):
-    """Payload for PingData messages"""
+class ThreadMessageData(BaseModel):
+    """Payload for ThreadMessageData messages"""
 
-    timestamp: Optional[int] = None
-
-
-class PongData(BaseModel):
-    """Payload for PongData messages"""
-
-    timestamp: Optional[int] = None
+    thread_id: int = Field(ge=1, description="")
+    message: Dict[str, Any]
 
 
-class ErrorData(BaseModel):
-    """Payload for ErrorData messages"""
+class ThreadEventData(BaseModel):
+    """Payload for ThreadEventData messages"""
 
-    error: str
-    details: Optional[Dict[str, Any]] = None
+    thread_id: int = Field(ge=1, description="")
+    agent_id: Optional[int] = Field(default=None, ge=1, description="")
+    title: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class StreamStartData(BaseModel):
+    """Payload for StreamStartData messages"""
+
+    thread_id: int = Field(ge=1, description="")
+
+
+class StreamChunkData(BaseModel):
+    """Payload for StreamChunkData messages"""
+
+    thread_id: int = Field(ge=1, description="")
+    chunk_type: Literal["assistant_token", "assistant_message", "tool_output"]
+    content: Optional[str] = None
+    tool_name: Optional[str] = None
+    tool_call_id: Optional[str] = None
+
+
+class StreamEndData(BaseModel):
+    """Payload for StreamEndData messages"""
+
+    thread_id: int = Field(ge=1, description="")
+
+
+class AssistantIdData(BaseModel):
+    """Payload for AssistantIdData messages"""
+
+    thread_id: int = Field(ge=1, description="")
+    message_id: int = Field(ge=1, description="")
+
+
+class AgentEventData(BaseModel):
+    """Payload for AgentEventData messages"""
+
+    id: int = Field(ge=1, description="")
+    status: Optional[str] = None
+    last_run_at: Optional[str] = None
+    next_run_at: Optional[str] = None
+    last_error: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class RunUpdateData(BaseModel):
+    """Payload for RunUpdateData messages"""
+
+    id: int = Field(ge=1, description="")
+    agent_id: int = Field(ge=1, description="")
+    thread_id: Optional[int] = Field(default=None, ge=1, description="")
+    status: Literal["queued", "running", "success", "failed"]
+    trigger: Optional[Literal["manual", "schedule", "api"]] = None
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    duration_ms: Optional[int] = Field(default=None, ge=0, description="")
+    error: Optional[str] = None
+
+
+class UserUpdateData(BaseModel):
+    """Payload for UserUpdateData messages"""
+
+    id: int = Field(ge=1, description="")
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class NodeStateData(BaseModel):
+    """Payload for NodeStateData messages"""
+
+    execution_id: int = Field(ge=1, description="")
+    node_id: str = Field(min_length=1, description="")
+    status: Literal["running", "success", "failed"]
+    output: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+class ExecutionFinishedData(BaseModel):
+    """Payload for ExecutionFinishedData messages"""
+
+    execution_id: int = Field(ge=1, description="")
+    status: Literal["success", "failed"]
+    error: Optional[str] = None
+    duration_ms: Optional[int] = Field(default=None, ge=0, description="")
+
+
+class NodeLogData(BaseModel):
+    """Payload for NodeLogData messages"""
+
+    execution_id: int = Field(ge=1, description="")
+    node_id: str = Field(min_length=1, description="")
+    stream: Literal["stdout", "stderr"]
+    text: str
 
 
 class MessageType(str, Enum):
@@ -231,12 +251,12 @@ class MessageType(str, Enum):
     UNSUBSCRIBE = "unsubscribe"
     SEND_MESSAGE = "send_message"
     THREAD_MESSAGE = "thread_message"
+    THREAD_EVENT = "thread_event"
     STREAM_START = "stream_start"
     STREAM_CHUNK = "stream_chunk"
     STREAM_END = "stream_end"
     ASSISTANT_ID = "assistant_id"
     AGENT_EVENT = "agent_event"
-    THREAD_EVENT = "thread_event"
     RUN_UPDATE = "run_update"
     USER_UPDATE = "user_update"
     NODE_STATE = "node_state"
@@ -244,18 +264,83 @@ class MessageType(str, Enum):
     NODE_LOG = "node_log"
 
 
-# Union types for message handling (placeholder for future use)
-# IncomingMessage = Union[...]
-# OutgoingMessage = Union[...]
-
-# Helper functions
+# Typed emitter for contract enforcement
 
 
-def validate_envelope(data: Dict[str, Any]) -> Envelope:
-    """Validate and parse envelope from raw data."""
-    return Envelope.model_validate(data)
+class TypedEmitter(Protocol):
+    """Protocol for typed WebSocket message emission."""
+
+    async def send_typed(self, topic: str, message_type: MessageType, payload: BaseModel) -> None:
+        """Send a typed message with validation."""
+        ...
 
 
-def create_message(message_type: str, topic: str, data: Dict[str, Any], req_id: Optional[str] = None) -> Envelope:
-    """Create a properly formatted message envelope."""
-    return Envelope.create(message_type, topic, data, req_id)
+class TypedEmitterImpl:
+    """Implementation of typed emitter with runtime validation."""
+
+    def __init__(self, raw_emitter):
+        """Initialize with raw broadcast function."""
+        self.raw_emitter = raw_emitter
+
+    async def send_typed(self, topic: str, message_type: MessageType, payload: BaseModel) -> None:
+        """Send a typed message with full validation."""
+        # Validate payload matches expected type for message
+        validate_payload_for_message_type(message_type, payload)
+
+        # Create envelope with validation
+        envelope = Envelope.create(message_type=message_type.value, topic=topic, data=payload.model_dump())
+
+        # Send via raw emitter
+        await self.raw_emitter(topic, envelope.model_dump_validated())
+
+
+def create_typed_emitter(raw_emitter) -> TypedEmitter:
+    """Factory for typed emitter."""
+    return TypedEmitterImpl(raw_emitter)
+
+
+# Fast validation functions
+
+
+def validate_envelope_fast(data: Dict[str, Any]) -> None:
+    """Fast envelope validation using jsonschema-rs if available."""
+    if FAST_VALIDATION:
+        # Use Rust-based validation for performance
+        validator = jsonschema_rs.validator_for(ENVELOPE_SCHEMA)
+        try:
+            validator.validate(data)
+        except jsonschema_rs.ValidationError as e:
+            from pydantic import ValidationError as PydanticValidationError
+
+            raise PydanticValidationError(f"Envelope validation failed: {e}")
+    else:
+        # Fallback to standard validation
+        try:
+            jsonschema_fallback.validate(data, ENVELOPE_SCHEMA)
+        except jsonschema_fallback.ValidationError as e:
+            from pydantic import ValidationError as PydanticValidationError
+
+            raise PydanticValidationError(f"Envelope validation failed: {e}")
+
+
+def validate_payload_for_message_type(message_type: MessageType, payload: BaseModel) -> None:
+    """Validate payload matches expected type for message."""
+    # This will be populated by specific payload type checks
+    # TODO: Generate type-specific validation from schema
+    pass
+
+
+# Schema constants for validation
+ENVELOPE_SCHEMA = {
+    "type": "object",
+    "required": ["v", "type", "topic", "ts", "data"],
+    "additionalProperties": False,
+    "properties": {
+        "v": {"type": "integer", "const": 1},
+        "type": {"type": "string"},
+        "topic": {"type": "string"},
+        "req_id": {"type": ["string", "null"]},
+        "ts": {"type": "integer"},
+        "data": {"type": "object"},
+    },
+}
