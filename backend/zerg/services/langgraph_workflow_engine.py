@@ -305,7 +305,11 @@ class LangGraphWorkflowEngine:
                 if typed_config and hasattr(typed_config, "agent_id"):
                     agent_id = typed_config.agent_id
                 elif node.config:
-                    agent_id = node.config.get("agent_id")
+                    # Handle both dict and object configs
+                    if isinstance(node.config, dict):
+                        agent_id = node.config.get("agent_id")
+                    else:
+                        agent_id = getattr(node.config, "agent_id", None)
                 else:
                     # For AgentIdentity nodes, try to extract from node_type dict
                     if isinstance(node.node_type, dict):
@@ -612,7 +616,11 @@ class LangGraphWorkflowEngine:
             # Extract agent_id from node configuration
             agent_id = None
             if node_config.config:
-                agent_id = getattr(node_config.config, "agent_id", None)
+                # Handle both dict and object configs
+                if isinstance(node_config.config, dict):
+                    agent_id = node_config.config.get("agent_id")
+                else:
+                    agent_id = getattr(node_config.config, "agent_id", None)
 
             # If not found in config, try to extract from node_type dict (AgentIdentity format)
             if agent_id is None and isinstance(node_config.node_type, dict):
