@@ -44,8 +44,9 @@ def workflow_with_agent_and_tool(db: Session):
                 },
                 {
                     "id": "agent_node",
-                    "type": {"AgentIdentity": {"agent_id": agent.id}},
+                    "type": "AgentIdentity",
                     "position": {"x": 300, "y": 100},
+                    "agent_id": agent.id,
                     "message": "Make an HTTP request to https://httpbin.org/get to test the connection",
                 },
                 {
@@ -91,10 +92,9 @@ def test_agent_gets_configured_with_connected_tools(workflow_with_agent_and_tool
         # Find the agent node
         agent_node_id = None
         for node in canvas.nodes:
-            if hasattr(node, "node_type") and isinstance(node.node_type, dict):
-                if "AgentIdentity" in node.node_type:
-                    agent_node_id = engine._get_node_id(node)
-                    break
+            if hasattr(node, "node_type") and (node.node_type == "AgentIdentity" or node.node_type == "agentidentity"):
+                agent_node_id = engine._get_node_id(node)
+                break
 
         assert agent_node_id is not None, "Should find agent node"
 
@@ -211,8 +211,9 @@ async def test_agent_id_extraction_regression(db_session):
                 },
                 {
                     "id": "agent_node",
-                    "type": {"AgentIdentity": {"agent_id": agent.id}},
+                    "type": "AgentIdentity",
                     "position": {"x": 300, "y": 100},
+                    "agent_id": agent.id,
                     "message": "Test agent_id extraction",
                 },
             ],
@@ -235,44 +236,19 @@ async def test_agent_id_extraction_regression(db_session):
     # Find the agent node
     agent_node_config = None
     for node in canvas.nodes:
-        if hasattr(node, "node_type") and isinstance(node.node_type, dict) and "AgentIdentity" in node.node_type:
+        if hasattr(node, "node_type") and (node.node_type == "AgentIdentity" or node.node_type == "agentidentity"):
             agent_node_config = node
             break
 
     assert agent_node_config is not None, "Should find AgentIdentity node"
 
-    # Test the actual agent_id extraction logic that was fixed
-    # This simulates the exact code path in _create_agent_node()
+    # Test the actual agent_id extraction logic - using our new clean single path
+    agent_id = None
+    if agent_node_config.config and isinstance(agent_node_config.config, dict):
+        agent_id = agent_node_config.config.get("agent_id")
 
-    # First try: Extract from config (this is what our fixed code path tests)
-    extracted_agent_id_from_config = None
-    if agent_node_config.config:
-        # This is the fixed line - using getattr instead of .get()
-        extracted_agent_id_from_config = getattr(agent_node_config.config, "agent_id", None)
-
-    # Second try: Extract from node_type dict (fallback logic)
-    extracted_agent_id_from_node_type = None
-    if extracted_agent_id_from_config is None and isinstance(agent_node_config.node_type, dict):
-        for key, value in agent_node_config.node_type.items():
-            if key.lower() == "agentidentity" and isinstance(value, dict) and "agent_id" in value:
-                extracted_agent_id_from_node_type = value["agent_id"]
-                break
-
-    # One of these methods should work
-    final_agent_id = extracted_agent_id_from_config or extracted_agent_id_from_node_type
-
-    assert final_agent_id is not None, "agent_id should be extracted from either config or node_type"
-    assert final_agent_id == agent.id, f"Expected agent_id {agent.id}, got {final_agent_id}"
-
-    # Verify that the getattr approach works with both dict and object configs
-    # This validates that our fix handles both cases properly
-    print(f"✅ agent_id extracted successfully: {final_agent_id}")
-    print(f"   - From config: {extracted_agent_id_from_config}")
-    print(f"   - From node_type: {extracted_agent_id_from_node_type}")
-    print(f"   - Config type: {type(agent_node_config.config)}")
-
-    # The key insight: our fix using getattr() handles both dict and object configs,
-    # while the old .get() approach only worked with dict configs
+    assert agent_id is not None, f"agent_id should be extracted from config. Found: {agent_id}"
+    assert agent_id == agent.id, f"Extracted agent_id {agent_id} should match created agent.id {agent.id}"
 
     # Finally, test that workflow execution doesn't fail with "Agent None not found"
     try:
