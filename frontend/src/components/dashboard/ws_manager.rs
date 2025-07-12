@@ -1,12 +1,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::JsValue;
-// Remove direct dependency on specific types if we get them from AppState
-// use crate::network::{WsClientV2, TopicManager};
-// Keep for borrowing
-// Keep for borrowing
 use crate::network::topic_manager::{ITopicManager, TopicHandler}; // Import Trait
 use crate::generated::ws_messages::{AgentEventData, RunUpdateData, ExecutionFinishedData, NodeStateData, NodeLogData};
+use crate::generated::ws_handlers::{DashboardHandler, DashboardMessageRouter};
 use crate::state::APP_STATE;
 
 // Conversion from generated RunUpdateData to ApiAgentRun
@@ -64,6 +61,88 @@ pub struct DashboardWsManager {
     // Store the handler Rc to allow unsubscribing later.
     // Make pub(crate) for test access
     pub(crate) agent_subscription_handler: Option<TopicHandler>,
+    // Store the message router for generated routing
+    pub(crate) message_router: Option<DashboardMessageRouter<DashboardWsManager>>,
+}
+
+// Implement the generated DashboardHandler trait
+impl DashboardHandler for DashboardWsManager {
+    fn handle_run_update(&self, data: RunUpdateData) -> Result<(), JsValue> {
+        let run_struct: crate::models::ApiAgentRun = data.into();
+        let agent_id = run_struct.agent_id;
+        let status_for_toast = run_struct.status.clone();
+
+        crate::state::dispatch_global_message(
+            crate::messages::Message::ReceiveRunUpdate {
+                agent_id,
+                run: run_struct,
+            },
+        );
+
+        // Toast success/failure once we have a terminal status.
+        match status_for_toast.as_str() {
+            "success" => {
+                let name = crate::state::APP_STATE.with(|s| {
+                    s.borrow()
+                        .agents
+                        .get(&agent_id)
+                        .map(|a| a.name.clone())
+                        .unwrap_or_else(|| "Agent".into())
+                });
+                crate::toast::success(&format!("{} finished", name));
+            }
+            "failed" | "error" => {
+                let name = crate::state::APP_STATE.with(|s| {
+                    s.borrow()
+                        .agents
+                        .get(&agent_id)
+                        .map(|a| a.name.clone())
+                        .unwrap_or_else(|| "Agent".into())
+                });
+                crate::toast::error(&format!("{} failed", name));
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_agent_event(&self, data: AgentEventData) -> Result<(), JsValue> {
+        apply_agent_event(data);
+        Ok(())
+    }
+
+    fn handle_execution_finished(&self, data: ExecutionFinishedData) -> Result<(), JsValue> {
+        crate::state::dispatch_global_message(
+            crate::messages::Message::ExecutionFinished {
+                execution_id: data.execution_id,
+                status: data.status.clone(),
+                error: data.error.clone(),
+            },
+        );
+        Ok(())
+    }
+
+    fn handle_node_state(&self, data: NodeStateData) -> Result<(), JsValue> {
+        crate::state::dispatch_global_message(
+            crate::messages::Message::UpdateNodeStatus {
+                node_id: data.node_id.clone(),
+                status: data.status.clone(),
+            },
+        );
+        Ok(())
+    }
+
+    fn handle_node_log(&self, data: NodeLogData) -> Result<(), JsValue> {
+        crate::state::dispatch_global_message(
+            crate::messages::Message::AppendExecutionLog {
+                execution_id: data.execution_id,
+                node_id: data.node_id.clone(),
+                stream: data.stream.clone(),
+                text: data.text.clone(),
+            },
+        );
+        Ok(())
+    }
 }
 
 impl DashboardWsManager {
@@ -72,6 +151,7 @@ impl DashboardWsManager {
     pub fn new() -> Self {
         Self {
             agent_subscription_handler: None,
+            message_router: None,
         }
     }
 
@@ -114,178 +194,42 @@ impl DashboardWsManager {
         }
 
         // Create new handler only if we don't have one
-        web_sys::console::log_1(&"DashboardWsManager: Creating new handler".into());
+        web_sys::console::log_1(&"DashboardWsManager: Creating new handler with generated routing".into());
         let mut topic_manager = topic_manager_rc.borrow_mut();
 
-        // Structured handler – parse incoming JSON into strongly-typed data from envelope
-        let handler = Rc::new(RefCell::new(|data: serde_json::Value| {
-            // Extract message type and data from the envelope-style payload
-            let message_type = data.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
-            let message_data = data.get("data").unwrap_or(&data);
+        // Create the message router using generated infrastructure
+        let manager_rc = Rc::new(RefCell::new(DashboardWsManager::new()));
+        let router = DashboardMessageRouter::new(manager_rc.clone());
 
+        // Create envelope-based handler that uses the generated router
+        let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
+            // Handle system messages that don't go through the router
+            let message_type = data.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+            
             match message_type {
-                "ping" | "pong" => {
+                "ping" | "pong" | "error" | "unsubscribe_success" => {
                     // System messages are handled by the WebSocket connection itself
                     return; 
                 }
-                "error" => {
-                    if let Some(error_msg) = message_data.get("error").and_then(|v| v.as_str()) {
-                        web_sys::console::error_1(
-                            &format!("WebSocket error: {}", error_msg).into(),
-                        );
-                    } else {
-                        web_sys::console::error_1(&"WebSocket error: unknown error".into());
-                    }
-                    return;
-                }
-                "unsubscribe_success" => {
-                    // Unsubscribe confirmations don't need special handling
-                    return;
-                }
-                "run_update" => {
-                    // Parse structured RunUpdateData
-                    match serde_json::from_value::<RunUpdateData>(message_data.clone()) {
-                        Ok(run) => {
-                            let run_struct: crate::models::ApiAgentRun = run.into();
-                            let agent_id = run_struct.agent_id;
-
-                            // Capture status before we move run_struct into the message.
-                            let status_for_toast = run_struct.status.clone();
-
-                            crate::state::dispatch_global_message(
-                                crate::messages::Message::ReceiveRunUpdate {
-                                    agent_id,
-                                    run: run_struct,
-                                },
-                            );
-
-                            // Toast success/failure once we have a terminal status.
-                            match status_for_toast.as_str() {
-                                "success" => {
-                                    let name = crate::state::APP_STATE.with(|s| {
-                                        s.borrow()
-                                            .agents
-                                            .get(&agent_id)
-                                            .map(|a| a.name.clone())
-                                            .unwrap_or_else(|| "Agent".into())
-                                    });
-                                    crate::toast::success(&format!("{} finished", name));
-                                }
-                                "failed" | "error" => {
-                                    let name = crate::state::APP_STATE.with(|s| {
-                                        s.borrow()
-                                            .agents
-                                            .get(&agent_id)
-                                            .map(|a| a.name.clone())
-                                            .unwrap_or_else(|| "Agent".into())
-                                    });
-                                    crate::toast::error(&format!("{} failed", name));
-                                }
-                                _ => {}
-                            }
-                        }
-                        Err(e) => {
-                            web_sys::console::error_1(
-                                &format!("Failed to parse run_update: {}", e).into(),
-                            );
-                        }
-                    }
-                    return;
-                }
-                "agent_event" | "agent_state" => {
-                    // Parse structured AgentEventData
-                    match serde_json::from_value::<AgentEventData>(message_data.clone()) {
-                        Ok(evt) => {
-                            apply_agent_event(evt);
-                        }
-                        Err(e) => {
-                            web_sys::console::error_1(
-                                &format!("Failed to parse agent_event: {}", e).into(),
-                            );
-                        }
-                    }
-                    return;
-                }
-
-                "execution_finished" => {
-                    // Parse structured ExecutionFinishedData
-                    match serde_json::from_value::<ExecutionFinishedData>(message_data.clone()) {
-                        Ok(data) => {
-                            crate::state::dispatch_global_message(
-                                crate::messages::Message::ExecutionFinished {
-                                    execution_id: data.execution_id,
-                                    status: data.status.clone(),
-                                    error: data.error.clone(),
-                                },
-                            );
-                        }
-                        Err(e) => {
-                            web_sys::console::error_1(
-                                &format!("Failed to parse execution_finished: {}", e).into(),
-                            );
-                        }
-                    }
-                    return;
-                }
-                "node_state" => {
-                    // Parse structured NodeStateData
-                    match serde_json::from_value::<NodeStateData>(message_data.clone()) {
-                        Ok(data) => {
-                            crate::state::dispatch_global_message(
-                                crate::messages::Message::UpdateNodeStatus {
-                                    node_id: data.node_id.clone(),
-                                    status: data.status.clone(),
-                                },
-                            );
-                        }
-                        Err(e) => {
-                            web_sys::console::error_1(
-                                &format!("Failed to parse node_state: {}", e).into(),
-                            );
-                        }
-                    }
-                    return;
-                }
-                "node_log" => {
-                    // Parse structured NodeLogData
-                    match serde_json::from_value::<NodeLogData>(message_data.clone()) {
-                        Ok(data) => {
-                            crate::state::dispatch_global_message(
-                                crate::messages::Message::AppendExecutionLog {
-                                    execution_id: data.execution_id,
-                                    node_id: data.node_id.clone(),
-                                    stream: data.stream.clone(),
-                                    text: data.text.clone(),
-                                },
-                            );
-                        }
-                        Err(e) => {
-                            web_sys::console::error_1(
-                                &format!("Failed to parse node_log: {}", e).into(),
-                            );
-                        }
-                    }
-                    return;
-                }
-
-                "thread_event" | "thread_message" => {
+                "thread_event" | "thread_message" | "stream_start" | "stream_chunk" | "stream_end" | "assistant_id" => {
                     // Thread events are handled by thread-specific components
                     return;
                 }
-                "stream_start" | "stream_chunk" | "stream_end" | "assistant_id" => {
-                    // Stream events are handled by thread-specific components  
-                    return;
-                }
-
                 "user_update" => {
                     // User update events are handled by profile components
                     return;
                 }
                 _ => {
-                    web_sys::console::warn_1(
-                        &format!("DashboardWsManager: received unknown message type: {}", message_type).into(),
-                    );
-                    return; // handled - don't fallback to polling for unknown messages
+                    // Use the generated router for dashboard messages
+                    if let Ok(envelope) = serde_json::from_value::<crate::generated::ws_messages::Envelope>(data.clone()) {
+                        if let Err(e) = router.route_message(&envelope) {
+                            web_sys::console::error_1(&format!("Router error: {:?}", e).into());
+                        }
+                    } else {
+                        web_sys::console::warn_1(
+                            &format!("DashboardWsManager: Failed to parse envelope for message type: {}", message_type).into(),
+                        );
+                    }
                 }
             }
         }));

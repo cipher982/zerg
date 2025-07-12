@@ -6,7 +6,8 @@ use web_sys;
 use crate::messages::Message; // UI message enum
 use crate::models::ApiThreadMessage;
 use crate::network::topic_manager::{ITopicManager, TopicHandler};
-use crate::generated::ws_messages::{ThreadMessageData, StreamChunkData, AssistantIdData};
+use crate::generated::ws_messages::{ThreadMessageData, StreamChunkData, AssistantIdData, StreamStartData, StreamEndData};
+use crate::generated::ws_handlers::{ChatHandler, ChatMessageRouter};
 use crate::state::dispatch_global_message; // Import dispatch_global_message
 
 // Conversion from generated ThreadMessageData to ApiThreadMessage
@@ -33,6 +34,46 @@ impl From<ThreadMessageData> for ApiThreadMessage {
 pub struct ChatViewWsManager {
     pub(crate) thread_subscription_handler: Option<TopicHandler>,
     current_thread_id: Option<u32>,
+    // Store the message router for generated routing
+    pub(crate) message_router: Option<ChatMessageRouter<ChatViewWsManager>>,
+}
+
+// Implement the generated ChatHandler trait
+impl ChatHandler for ChatViewWsManager {
+    fn handle_thread_message(&self, data: ThreadMessageData) -> Result<(), JsValue> {
+        let api_msg: ApiThreadMessage = data.into();
+        dispatch_global_message(Message::ReceiveNewMessage(api_msg));
+        Ok(())
+    }
+
+    fn handle_stream_start(&self, _data: StreamStartData) -> Result<(), JsValue> {
+        if let Some(thread_id) = self.current_thread_id {
+            dispatch_global_message(Message::ReceiveStreamStart(thread_id));
+        }
+        Ok(())
+    }
+
+    fn handle_stream_chunk(&self, data: StreamChunkData) -> Result<(), JsValue> {
+        if let Some(thread_id) = self.current_thread_id {
+            Self::forward_stream_chunk(thread_id, data);
+        }
+        Ok(())
+    }
+
+    fn handle_stream_end(&self, _data: StreamEndData) -> Result<(), JsValue> {
+        if let Some(thread_id) = self.current_thread_id {
+            dispatch_global_message(Message::ReceiveStreamEnd(thread_id));
+        }
+        Ok(())
+    }
+
+    fn handle_assistant_id(&self, data: AssistantIdData) -> Result<(), JsValue> {
+        dispatch_global_message(Message::ReceiveAssistantId {
+            thread_id: data.thread_id,
+            message_id: data.message_id,
+        });
+        Ok(())
+    }
 }
 
 impl ChatViewWsManager {
@@ -41,6 +82,7 @@ impl ChatViewWsManager {
         Self {
             thread_subscription_handler: None,
             current_thread_id: None,
+            message_router: None,
         }
     }
 
@@ -88,8 +130,13 @@ impl ChatViewWsManager {
         let mut topic_manager = topic_manager_rc.borrow_mut();
 
         // -----------------------------------------------------------------
-        // Strongly-typed handler using generated envelope format
+        // Use generated router for strongly-typed message handling
         // -----------------------------------------------------------------
+        let mut manager = ChatViewWsManager::new();
+        manager.current_thread_id = Some(thread_id);
+        let manager_rc = Rc::new(RefCell::new(manager));
+        let router = ChatMessageRouter::new(manager_rc.clone());
+
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
             web_sys::console::log_1(
                 &format!("🔍 [CHAT WS] Received message for thread {}: {:?}", thread_id, data).into(),
@@ -97,70 +144,20 @@ impl ChatViewWsManager {
             
             // Extract message type and data from envelope-style payload
             let message_type = data.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
-            let message_data = data.get("data").unwrap_or(&data);
             
             web_sys::console::log_1(
                 &format!("🔍 [CHAT WS] Processing message type: {}", message_type).into(),
             );
             
-            match message_type {
-                "thread_message" => {
-                    match serde_json::from_value::<ThreadMessageData>(message_data.clone()) {
-                        Ok(msg) => {
-                            let api_msg: ApiThreadMessage = msg.into();
-                            dispatch_global_message(Message::ReceiveNewMessage(api_msg));
-                        }
-                        Err(e) => {
-                            web_sys::console::error_1(
-                                &format!("Failed to parse thread_message: {}", e).into(),
-                            );
-                        }
-                    }
-                    return;
+            // Use the generated router for chat messages
+            if let Ok(envelope) = serde_json::from_value::<crate::generated::ws_messages::Envelope>(data.clone()) {
+                if let Err(e) = router.route_message(&envelope) {
+                    web_sys::console::error_1(&format!("Chat router error: {:?}", e).into());
                 }
-                "stream_start" => {
-                    dispatch_global_message(Message::ReceiveStreamStart(thread_id));
-                    return;
-                }
-                "stream_chunk" => {
-                    match serde_json::from_value::<StreamChunkData>(message_data.clone()) {
-                        Ok(chunk) => {
-                            Self::forward_stream_chunk(thread_id, chunk);
-                        }
-                        Err(e) => {
-                            web_sys::console::error_1(
-                                &format!("Failed to parse stream_chunk: {}", e).into(),
-                            );
-                        }
-                    }
-                    return;
-                }
-                "stream_end" => {
-                    dispatch_global_message(Message::ReceiveStreamEnd(thread_id));
-                    return;
-                }
-                "assistant_id" => {
-                    match serde_json::from_value::<AssistantIdData>(message_data.clone()) {
-                        Ok(data) => {
-                            dispatch_global_message(Message::ReceiveAssistantId {
-                                thread_id: data.thread_id,
-                                message_id: data.message_id,
-                            });
-                        }
-                        Err(e) => {
-                            web_sys::console::error_1(
-                                &format!("Failed to parse assistant_id: {}", e).into(),
-                            );
-                        }
-                    }
-                    return;
-                }
-                _ => {
-                    // Unhandled message type
-                    web_sys::console::warn_1(
-                        &format!("ChatViewWsManager: unhandled message type: {}", message_type).into(),
-                    );
-                }
+            } else {
+                web_sys::console::warn_1(
+                    &format!("ChatViewWsManager: Failed to parse envelope for message type: {}", message_type).into(),
+                );
             }
         }));
 
