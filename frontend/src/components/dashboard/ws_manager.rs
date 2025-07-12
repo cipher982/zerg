@@ -199,7 +199,7 @@ impl DashboardWsManager {
 
         // Create the message router using generated infrastructure
         let manager_rc = Rc::new(RefCell::new(DashboardWsManager::new()));
-        let router = DashboardMessageRouter::new(manager_rc.clone());
+        let mut router = DashboardMessageRouter::new(manager_rc.clone());
 
         // Create envelope-based handler that uses the generated router
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {

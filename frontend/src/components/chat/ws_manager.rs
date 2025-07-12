@@ -135,7 +135,7 @@ impl ChatViewWsManager {
         let mut manager = ChatViewWsManager::new();
         manager.current_thread_id = Some(thread_id);
         let manager_rc = Rc::new(RefCell::new(manager));
-        let router = ChatMessageRouter::new(manager_rc.clone());
+        let mut router = ChatMessageRouter::new(manager_rc.clone());
 
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
             web_sys::console::log_1(

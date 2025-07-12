@@ -1,167 +1,208 @@
 {
   "version": 1,
-  "generated_at": "2025-07-11T13:28:20.713520Z",
-  "envelope_schema": {
-    "type": "object",
-    "required": [
-      "v",
-      "type",
-      "topic",
-      "ts",
-      "data"
-    ],
-    "additionalProperties": false,
-    "properties": {
-      "v": {
-        "type": "integer",
-        "const": 1,
-        "description": "Protocol version"
+  "generated_at": "2025-07-12T08:51:54.229187Z",
+  "asyncapi_version": "3.0.0",
+  "info": {
+    "title": "Zerg WebSocket Protocol",
+    "version": "1.0.0",
+    "description": "Comprehensive WebSocket protocol for the Zerg Agent Platform.\nConsolidates message types, payload schemas, and routing patterns into\na single source of truth for contract-first development.\n\nFeatures:\n- Topic-based routing with parameterized channels\n- Strongly-typed message payloads\n- Bidirectional operations (send/receive)\n- Alias support for message evolution\n- Handler method mapping for code generation\n"
+  },
+  "channels": {
+    "SystemChannel": {
+      "address": "system",
+      "description": "Global control messages, errors, and system announcements",
+      "parameters": {},
+      "messages": [
+        "PingMessage",
+        "PongMessage",
+        "ErrorMessage",
+        "SubscribeMessage",
+        "UnsubscribeMessage"
+      ]
+    },
+    "ThreadChannel": {
+      "address": "thread:{thread_id}",
+      "description": "Thread messages, streaming, and lifecycle events",
+      "parameters": {
+        "thread_id": {
+          "description": "Numeric identifier of the thread",
+          "examples": [
+            "42",
+            "123"
+          ]
+        }
       },
-      "type": {
-        "type": "string",
-        "description": "Message type identifier"
+      "messages": [
+        "SendMessageRequest",
+        "ThreadMessage",
+        "ThreadEvent",
+        "StreamStart",
+        "StreamChunk",
+        "StreamEnd",
+        "AssistantId"
+      ]
+    },
+    "AgentChannel": {
+      "address": "agent:{agent_id}",
+      "description": "Agent lifecycle events and run updates",
+      "parameters": {
+        "agent_id": {
+          "description": "Numeric identifier of the agent",
+          "examples": [
+            "17",
+            "42"
+          ]
+        }
       },
-      "topic": {
-        "type": "string",
-        "description": "Topic routing string (e.g., 'agent:123', 'thread:456')"
+      "messages": [
+        "AgentEvent",
+        "RunUpdate"
+      ]
+    },
+    "UserChannel": {
+      "address": "user:{user_id}",
+      "description": "User profile updates and notifications",
+      "parameters": {
+        "user_id": {
+          "description": "Numeric identifier of the user",
+          "examples": [
+            "1",
+            "100"
+          ]
+        }
       },
-      "req_id": {
-        "type": "string",
-        "description": "Optional request correlation ID"
+      "messages": [
+        "UserUpdate"
+      ]
+    },
+    "WorkflowExecutionChannel": {
+      "address": "workflow_execution:{execution_id}",
+      "description": "Workflow execution state, node updates, and logs",
+      "parameters": {
+        "execution_id": {
+          "description": "Numeric identifier of the execution run",
+          "examples": [
+            "123",
+            "456"
+          ]
+        }
       },
-      "ts": {
-        "type": "integer",
-        "description": "Timestamp in milliseconds since epoch"
-      },
-      "data": {
-        "type": "object",
-        "description": "Message payload - structure depends on type"
-      }
+      "messages": [
+        "NodeState",
+        "ExecutionFinished",
+        "NodeLog"
+      ]
     }
   },
-  "message_types": {
+  "messages": {
     "ping": {
+      "summary": "Heartbeat ping from server",
       "payload_schema": {
-        "$ref": "#/definitions/PingData"
+        "$ref": "#/components/schemas/PingData"
       },
-      "topic_pattern": "system",
-      "direction": [
-        "client_to_server",
-        "server_to_client"
-      ],
+      "handler_method": "handle_ping",
       "aliases": []
     },
     "pong": {
+      "summary": "Heartbeat response from client",
       "payload_schema": {
-        "$ref": "#/definitions/PongData"
+        "$ref": "#/components/schemas/PongData"
       },
-      "topic_pattern": "system",
-      "direction": [
-        "client_to_server",
-        "server_to_client"
-      ],
+      "handler_method": "handle_pong",
       "aliases": []
     },
     "error": {
+      "summary": "Protocol or application error",
       "payload_schema": {
-        "$ref": "#/definitions/ErrorData"
+        "$ref": "#/components/schemas/ErrorData"
       },
-      "topic_pattern": "system",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_error",
       "aliases": []
     },
     "subscribe": {
+      "summary": "Subscribe to topic(s)",
       "payload_schema": {
-        "$ref": "#/definitions/SubscribeData"
+        "$ref": "#/components/schemas/SubscribeData"
       },
-      "topic_pattern": "system",
-      "direction": [
-        "client_to_server"
-      ],
+      "handler_method": "handle_subscribe",
       "aliases": []
     },
     "unsubscribe": {
+      "summary": "Unsubscribe from topic(s)",
       "payload_schema": {
-        "$ref": "#/definitions/UnsubscribeData"
+        "$ref": "#/components/schemas/UnsubscribeData"
       },
-      "topic_pattern": "system",
-      "direction": [
-        "client_to_server"
-      ],
+      "handler_method": "handle_unsubscribe",
       "aliases": []
     },
     "send_message": {
+      "summary": "Client request to send a message to a thread",
       "payload_schema": {
-        "$ref": "#/definitions/SendMessageData"
+        "$ref": "#/components/schemas/SendMessageData"
       },
-      "topic_pattern": "thread:{thread_id}",
-      "direction": [
-        "client_to_server"
-      ],
+      "handler_method": "handle_send_message",
       "aliases": []
     },
     "thread_message": {
+      "summary": "New message added to thread",
       "payload_schema": {
-        "$ref": "#/definitions/ThreadMessageData"
+        "$ref": "#/components/schemas/ThreadMessageData"
       },
-      "topic_pattern": "thread:{thread_id}",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_thread_message",
       "aliases": [
         "thread_message_created"
       ]
     },
-    "stream_start": {
+    "thread_event": {
+      "summary": "Thread lifecycle event",
       "payload_schema": {
-        "$ref": "#/definitions/StreamStartData"
+        "$ref": "#/components/schemas/ThreadEventData"
       },
-      "topic_pattern": "thread:{thread_id}",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_thread_event",
+      "aliases": [
+        "thread_created",
+        "thread_updated",
+        "thread_deleted"
+      ]
+    },
+    "stream_start": {
+      "summary": "Assistant response streaming started",
+      "payload_schema": {
+        "$ref": "#/components/schemas/StreamStartData"
+      },
+      "handler_method": "handle_stream_start",
       "aliases": []
     },
     "stream_chunk": {
+      "summary": "Chunk of streaming assistant response",
       "payload_schema": {
-        "$ref": "#/definitions/StreamChunkData"
+        "$ref": "#/components/schemas/StreamChunkData"
       },
-      "topic_pattern": "thread:{thread_id}",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_stream_chunk",
       "aliases": []
     },
     "stream_end": {
+      "summary": "Assistant response streaming finished",
       "payload_schema": {
-        "$ref": "#/definitions/StreamEndData"
+        "$ref": "#/components/schemas/StreamEndData"
       },
-      "topic_pattern": "thread:{thread_id}",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_stream_end",
       "aliases": []
     },
     "assistant_id": {
+      "summary": "Assistant message ID assignment",
       "payload_schema": {
-        "$ref": "#/definitions/AssistantIdData"
+        "$ref": "#/components/schemas/AssistantIdData"
       },
-      "topic_pattern": "thread:{thread_id}",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_assistant_id",
       "aliases": []
     },
     "agent_event": {
+      "summary": "Agent lifecycle or status event",
       "payload_schema": {
-        "$ref": "#/definitions/AgentEventData"
+        "$ref": "#/components/schemas/AgentEventData"
       },
-      "topic_pattern": "agent:{id}",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_agent_event",
       "aliases": [
         "agent_created",
         "agent_updated",
@@ -169,91 +210,113 @@
         "agent_state"
       ]
     },
-    "thread_event": {
-      "payload_schema": {
-        "$ref": "#/definitions/ThreadEventData"
-      },
-      "topic_pattern": "thread:{thread_id}",
-      "direction": [
-        "server_to_client"
-      ],
-      "aliases": [
-        "thread_created",
-        "thread_updated",
-        "thread_deleted"
-      ]
-    },
     "run_update": {
+      "summary": "Agent run status update",
       "payload_schema": {
-        "$ref": "#/definitions/RunUpdateData"
+        "$ref": "#/components/schemas/RunUpdateData"
       },
-      "topic_pattern": "agent:{agent_id}",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_run_update",
       "aliases": []
     },
     "user_update": {
+      "summary": "User profile update",
       "payload_schema": {
-        "$ref": "#/definitions/UserUpdateData"
+        "$ref": "#/components/schemas/UserUpdateData"
       },
-      "topic_pattern": "user:{id}",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_user_update",
       "aliases": []
     },
     "node_state": {
+      "summary": "Workflow node state change",
       "payload_schema": {
-        "$ref": "#/definitions/NodeStateData"
+        "$ref": "#/components/schemas/NodeStateData"
       },
-      "topic_pattern": "workflow_execution:{execution_id}",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_node_state",
       "aliases": []
     },
     "execution_finished": {
+      "summary": "Workflow execution completed",
       "payload_schema": {
-        "$ref": "#/definitions/ExecutionFinishedData"
+        "$ref": "#/components/schemas/ExecutionFinishedData"
       },
-      "topic_pattern": "workflow_execution:{execution_id}",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_execution_finished",
       "aliases": []
     },
     "node_log": {
+      "summary": "Workflow node log output",
       "payload_schema": {
-        "$ref": "#/definitions/NodeLogData"
+        "$ref": "#/components/schemas/NodeLogData"
       },
-      "topic_pattern": "workflow_execution:{execution_id}",
-      "direction": [
-        "server_to_client"
-      ],
+      "handler_method": "handle_node_log",
       "aliases": []
     }
   },
-  "topic_patterns": {
-    "agent": {
-      "pattern": "agent:{id}",
-      "description": "Agent lifecycle events and run updates"
+  "operations": {
+    "SystemOperations": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/SystemChannel"
+      },
+      "messages": []
     },
-    "thread": {
-      "pattern": "thread:{thread_id}",
-      "description": "Thread messages, streaming, and lifecycle events"
+    "ThreadOperations": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/ThreadChannel"
+      },
+      "messages": []
     },
-    "user": {
-      "pattern": "user:{id}",
-      "description": "User profile updates"
+    "AgentOperations": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/AgentChannel"
+      },
+      "messages": []
     },
-    "workflow_execution": {
-      "pattern": "workflow_execution:{execution_id}",
-      "description": "Workflow execution state and logs"
+    "UserOperations": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/UserChannel"
+      },
+      "messages": []
     },
-    "system": {
-      "pattern": "system",
-      "description": "Control messages, errors, and system announcements"
+    "WorkflowOperations": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/WorkflowExecutionChannel"
+      },
+      "messages": []
+    }
+  },
+  "validation_rules": [
+    "Every server-to-client message must have a handler_method",
+    "All handler_method names must be unique within a handler group",
+    "All message aliases must resolve to the same handler_method as the primary message",
+    "Handler topic patterns must match message topic_patterns"
+  ],
+  "performance_contracts": {
+    "message_size_limits": {
+      "run_update": "max_1kb",
+      "stream_chunk": "max_64kb"
+    },
+    "throughput_requirements": {
+      "dashboard_messages": "100/sec",
+      "chat_messages": "1000/sec"
+    }
+  },
+  "security_contracts": {
+    "authentication_required": [
+      "send_message",
+      "subscribe"
+    ],
+    "authorization_checks": [
+      "agent_event",
+      "run_update"
+    ],
+    "data_validation": "strict",
+    "sanitization_rules": {
+      "user_content": "html_escape",
+      "file_paths": "path_traversal_check"
     }
   }
 }
