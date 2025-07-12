@@ -70,7 +70,6 @@ impl DashboardHandler for DashboardWsManager {
     fn handle_run_update(&self, data: RunUpdateData) -> Result<(), JsValue> {
         let run_struct: crate::models::ApiAgentRun = data.into();
         let agent_id = run_struct.agent_id;
-        let status_for_toast = run_struct.status.clone();
 
         crate::state::dispatch_global_message(
             crate::messages::Message::ReceiveRunUpdate {
@@ -79,30 +78,7 @@ impl DashboardHandler for DashboardWsManager {
             },
         );
 
-        // Toast success/failure once we have a terminal status.
-        match status_for_toast.as_str() {
-            "success" => {
-                let name = crate::state::APP_STATE.with(|s| {
-                    s.borrow()
-                        .agents
-                        .get(&agent_id)
-                        .map(|a| a.name.clone())
-                        .unwrap_or_else(|| "Agent".into())
-                });
-                crate::toast::success(&format!("{} finished", name));
-            }
-            "failed" | "error" => {
-                let name = crate::state::APP_STATE.with(|s| {
-                    s.borrow()
-                        .agents
-                        .get(&agent_id)
-                        .map(|a| a.name.clone())
-                        .unwrap_or_else(|| "Agent".into())
-                });
-                crate::toast::error(&format!("{} failed", name));
-            }
-            _ => {}
-        }
+        // Note: Toast notifications are handled by the agent reducer to avoid duplication
         Ok(())
     }
 
@@ -201,36 +177,51 @@ impl DashboardWsManager {
         let manager_rc = Rc::new(RefCell::new(DashboardWsManager::new()));
         let mut router = DashboardMessageRouter::new(manager_rc.clone());
 
-        // Create envelope-based handler that uses the generated router
+        // Create envelope-based handler that uses the generated router with smart topic routing
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
-            // Handle system messages that don't go through the router
-            let message_type = data.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
-            
-            match message_type {
-                "ping" | "pong" | "error" | "unsubscribe_success" => {
-                    // System messages are handled by the WebSocket connection itself
-                    return; 
-                }
-                "thread_event" | "thread_message" | "stream_start" | "stream_chunk" | "stream_end" | "assistant_id" => {
-                    // Thread events are handled by thread-specific components
-                    return;
-                }
-                "user_update" => {
-                    // User update events are handled by profile components
-                    return;
-                }
-                _ => {
-                    // Use the generated router for dashboard messages
-                    if let Ok(envelope) = serde_json::from_value::<crate::generated::ws_messages::Envelope>(data.clone()) {
+            // Parse envelope first for proper topic-based routing
+            if let Ok(envelope) = serde_json::from_value::<crate::generated::ws_messages::Envelope>(data.clone()) {
+                // Use generated topic routing to determine handler
+                match crate::generated::ws_handlers::get_handler_for_topic(&envelope.topic) {
+                    Some("dashboard") => {
+                        // Dashboard messages: agent events, run updates, workflow execution
                         if let Err(e) = router.route_message(&envelope) {
-                            web_sys::console::error_1(&format!("Router error: {:?}", e).into());
+                            web_sys::console::error_1(&format!("Dashboard router error: {:?}", e).into());
                         }
-                    } else {
-                        web_sys::console::warn_1(
-                            &format!("DashboardWsManager: Failed to parse envelope for message type: {}", message_type).into(),
-                        );
+                    }
+                    Some("chat") => {
+                        // Thread messages handled by chat components - skip
+                        web_sys::console::log_1(&format!("Skipping chat message type: {}", envelope.message_type).into());
+                        return;
+                    }
+                    Some("system") => {
+                        // System messages (ping/pong/error) handled by WebSocket connection - skip
+                        web_sys::console::log_1(&format!("Skipping system message type: {}", envelope.message_type).into());
+                        return;
+                    }
+                    Some(other) => {
+                        // Other handler types - log and attempt routing anyway
+                        web_sys::console::warn_1(&format!("Unhandled handler type '{}' for topic: {} message type: {}", other, envelope.topic, envelope.message_type).into());
+                        
+                        // Fallback: try dashboard routing for unknown handlers
+                        if let Err(e) = router.route_message(&envelope) {
+                            web_sys::console::error_1(&format!("Fallback router error: {:?}", e).into());
+                        }
+                    }
+                    None => {
+                        // Unknown topic pattern - log and attempt routing anyway
+                        web_sys::console::warn_1(&format!("Unknown topic pattern: {} for message type: {}", envelope.topic, envelope.message_type).into());
+                        
+                        // Fallback: try dashboard routing for unknown patterns
+                        if let Err(e) = router.route_message(&envelope) {
+                            web_sys::console::error_1(&format!("Fallback router error: {:?}", e).into());
+                        }
                     }
                 }
+            } else {
+                web_sys::console::warn_1(
+                    &format!("DashboardWsManager: Failed to parse envelope from WebSocket data").into(),
+                );
             }
         }));
 

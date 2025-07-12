@@ -7,7 +7,6 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::{MessageEvent, WebSocket};
 
-use crate::schema_validation;
 
 use super::messages::builders;
 
@@ -326,7 +325,7 @@ impl WsClientV2 {
                         // ------------------------------------------------------------------
                         // Phase-2: Runtime schema validation (lightweight)
                         // ------------------------------------------------------------------
-                        if schema_validation::validate_envelope(&parsed_value) {
+                        if let Ok(_) = crate::generated::ws_messages::validate_envelope(&parsed_value) {
                             // ------------------------------------------------------------------
                             // Automatic Pong reply – server-initiated heart-beat
                             // ------------------------------------------------------------------

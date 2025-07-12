@@ -5,6 +5,7 @@ use wasm_bindgen::JsValue;
 // Ensure uuid crate is added to Cargo.toml
 
 use super::messages::builders::{create_subscribe, create_unsubscribe};
+use crate::generated::ws_handlers::get_handler_for_topic;
 use super::ws_client_v2::IWsClient; // Update import
 use crate::generated::ws_messages::Envelope;
 
@@ -216,19 +217,14 @@ impl TopicManager {
     }
 
     /// Routes an incoming message (parsed JSON) to the appropriate topic handlers.
-    /// Expects all messages to be in envelope format - no transformation needed.
+    /// Expects all messages to be in envelope format - passes envelope directly to handlers.
     pub fn route_incoming_message(&self, message: serde_json::Value) {
         // Parse as envelope - all messages must be in this format
         match serde_json::from_value::<Envelope>(message.clone()) {
             Ok(envelope) => {
-                // Direct deserialization of envelope data to typed message
-                let message_payload = serde_json::json!({
-                    "type": envelope.message_type,
-                    "data": envelope.data
-                });
-                
-                // Dispatch to topic handlers with the envelope topic and typed payload
-                self.dispatch_to_topic_handlers(&envelope.topic, message_payload);
+                // Pass the complete envelope to handlers - no format conversion
+                // Handlers now expect full envelope format for consistent contract-first architecture
+                self.dispatch_to_topic_handlers(&envelope.topic, message);
             }
             Err(e) => {
                 web_sys::console::error_1(

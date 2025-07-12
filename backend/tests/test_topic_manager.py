@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from zerg.events import EventType
+from zerg.generated.ws_messages import Envelope
 from zerg.websocket.manager import TopicConnectionManager
 
 
@@ -74,9 +75,9 @@ class TestTopicConnectionManager:
         await topic_manager.subscribe_to_topic("client1", topic)
         await topic_manager.subscribe_to_topic("client2", topic)
 
-        # Broadcast a message
-        test_message = {"type": "test", "data": "hello"}
-        await topic_manager.broadcast_to_topic(topic, test_message)
+        # Broadcast a message using envelope format
+        envelope = Envelope.create(message_type="test", topic=topic, data={"content": "hello"})
+        await topic_manager.broadcast_to_topic(topic, envelope.model_dump())
 
         # Verify both clients received **one** message each (payload now wrapped)
         client1_ws.send_json.assert_called_once()
@@ -172,9 +173,9 @@ class TestTopicConnectionManager:
         await topic_manager.subscribe_to_topic("good_client", topic)
         await topic_manager.subscribe_to_topic("bad_client", topic)
 
-        # Broadcast a message
-        test_message = {"type": "test", "data": "hello"}
-        await topic_manager.broadcast_to_topic(topic, test_message)
+        # Broadcast a message using envelope format
+        envelope = Envelope.create(message_type="test", topic=topic, data={"content": "hello"})
+        await topic_manager.broadcast_to_topic(topic, envelope.model_dump())
 
         # Verify good client got **one** message (payload now enveloped)
         good_client_ws.send_json.assert_called_once()
