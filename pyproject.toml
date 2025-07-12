@@ -23,6 +23,41 @@ quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
 
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "zerg-backend"
+dynamic = ["version"]
+description = "Zerg Agent Platform Backend"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "Zerg Team"},
+]
+dependencies = [
+    # Core dependencies will be specified elsewhere
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pytest",
+    "pytest-asyncio",
+    "pact-python",
+    "jsonschema-rs",
+    "hypothesis",
+    "hypothesis-jsonschema",
+]
+
+# Build hooks for automatic WebSocket type generation
+[tool.hatch.build.hooks.custom]
+path = "build_hooks.py"
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "build_hooks.py"
+
 [tool.pytest.ini_options]
 # Tell pytest where to find tests when run from the root
 testpaths = ["backend/tests"]
