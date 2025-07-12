@@ -612,7 +612,7 @@ class LangGraphWorkflowEngine:
             # Extract agent_id from node configuration
             agent_id = None
             if node_config.config:
-                agent_id = node_config.config.get("agent_id")
+                agent_id = getattr(node_config.config, "agent_id", None)
 
             # If not found in config, try to extract from node_type dict (AgentIdentity format)
             if agent_id is None and isinstance(node_config.node_type, dict):
