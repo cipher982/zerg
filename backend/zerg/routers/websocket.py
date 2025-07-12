@@ -21,6 +21,7 @@ from fastapi import WebSocketDisconnect
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
+from zerg.database import db_session
 from zerg.database import get_session_factory
 
 # Auth helper --------------------------------------------------------------
@@ -36,6 +37,8 @@ logger = logging.getLogger(__name__)
 
 def get_websocket_session(session_factory: Optional[sessionmaker] = None) -> Session:
     """Create a new database session for WebSocket handlers.
+
+    DEPRECATED: Use db_session() context manager instead.
 
     Args:
         session_factory: Optional custom session factory to use
@@ -68,11 +71,8 @@ async def websocket_endpoint(
     # we close with code 4401 and return early (Stage-8 hardening).
     # ------------------------------------------------------------------
 
-    db_for_auth = get_websocket_session()
-    try:
+    with db_session() as db_for_auth:
         user = validate_ws_jwt(token, db_for_auth)
-    finally:
-        db_for_auth.close()
 
     if user is None:
         # Auth failed and AUTH_DISABLED is *not* enabled.  We close the
@@ -91,9 +91,7 @@ async def websocket_endpoint(
 
         # Handle initial topic subscriptions if provided
         if initial_topics:
-            # Use our explicit session creation function
-            db = get_websocket_session()
-            try:
+            with db_session() as db:
                 topics = [t.strip() for t in initial_topics.split(",")]
                 subscribe_msg = {
                     "type": "subscribe",
@@ -101,20 +99,15 @@ async def websocket_endpoint(
                     "message_id": f"auto-subscribe-{uuid.uuid4()}",
                 }
                 await dispatch_message(client_id, subscribe_msg, db)
-            finally:
-                db.close()
 
         # Main message loop
         while True:
             try:
-                # Get a fresh DB session for each message using our function
-                db = get_websocket_session()
-                try:
+                # Get a fresh DB session for each message
+                with db_session() as db:
                     raw_data = await websocket.receive_text()
                     data = json.loads(raw_data)
                     await dispatch_message(client_id, data, db)
-                finally:
-                    db.close()
 
             except json.JSONDecodeError as e:
                 logger.warning(f"Invalid JSON from client {client_id}: {e}")

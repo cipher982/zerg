@@ -1,5 +1,7 @@
+import logging
 import os
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from typing import Dict
@@ -288,6 +290,67 @@ def get_db(session_factory: Any = None) -> Iterator[Session]:
         yield db
     finally:
         db.close()
+
+
+# ============================================================================
+# Carmack-Style Unified Session Management
+# ============================================================================
+
+
+@contextmanager
+def db_session(session_factory: Any = None):
+    """
+    Carmack-style database session context manager.
+
+    Single way to manage database sessions in services and background tasks.
+    Handles all error cases automatically - impossible to leak connections.
+
+    Key principles:
+    1. Auto-commit on success
+    2. Auto-rollback on error
+    3. Always close session
+    4. Clear error messages
+
+    Usage:
+        with db_session() as db:
+            user = crud.create_user(db, user_data)
+            # Automatic commit + close
+
+        # On error: automatic rollback + close
+
+    Args:
+        session_factory: Optional custom session factory
+
+    Yields:
+        SQLAlchemy Session object with automatic lifecycle management
+    """
+    factory = session_factory or get_session_factory()
+    session = factory()
+
+    try:
+        yield session
+        session.commit()  # Auto-commit on success
+        logging.debug("Database session committed successfully")
+
+    except Exception as e:
+        session.rollback()  # Auto-rollback on error
+        logging.error(f"Database session rolled back due to error: {e}")
+        raise  # Re-raise the original exception
+
+    finally:
+        session.close()  # Always close
+        logging.debug("Database session closed")
+
+
+# Legacy alias for backward compatibility
+def get_db_session(session_factory: Any = None):
+    """
+    Legacy alias for db_session() - DEPRECATED.
+
+    Use db_session() directly for better clarity.
+    """
+    logging.warning("get_db_session() is deprecated - use db_session() instead")
+    return db_session(session_factory)
 
 
 def initialize_database(engine: Engine = None) -> None:

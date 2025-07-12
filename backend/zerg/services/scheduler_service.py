@@ -15,6 +15,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 # Legacy AgentManager no longer required – all logic goes through TaskRunner
 from zerg.crud import crud
+from zerg.database import db_session
 from zerg.database import default_session_factory
 
 # EventBus remains for UI notifications
@@ -89,13 +90,10 @@ class SchedulerService:
 
         # If we can't determine schedule, load from DB
         if schedule is None:
-            db_session = self.session_factory()
-            try:
-                agent = crud.get_agent(db_session, agent_id)
+            with db_session(self.session_factory) as db:
+                agent = crud.get_agent(db, agent_id)
                 if agent:
                     schedule = agent.schedule
-            finally:
-                db_session.close()
 
         # Remove any existing job regardless
         self.remove_agent_job(agent_id)
@@ -133,18 +131,16 @@ class SchedulerService:
     async def load_scheduled_agents(self):
         """Load all agents that define a cron schedule and register them."""
 
-        db_session = self.session_factory()
         try:
-            # Query as plain tuples so ORM instances are never leaked outside
-            # this helper – allows us to close the session safely.
-            agent_rows: list[tuple[int, str]] = (
-                db_session.query(crud.Agent.id, crud.Agent.schedule).filter(crud.Agent.schedule.isnot(None)).all()
-            )
+            with db_session(self.session_factory) as db:
+                # Query as plain tuples so ORM instances are never leaked outside
+                # this helper – allows us to close the session safely.
+                agent_rows: list[tuple[int, str]] = (
+                    db.query(crud.Agent.id, crud.Agent.schedule).filter(crud.Agent.schedule.isnot(None)).all()
+                )
         except Exception as exc:  # noqa: BLE001
             logger.error("Error loading scheduled agents: %s", exc)
             agent_rows = []
-        finally:
-            db_session.close()
 
         # Register jobs outside the DB session – schedule_agent queries the
         # DB again if needed but mostly just registers APScheduler jobs.
@@ -183,14 +179,10 @@ class SchedulerService:
             if self.scheduler.running and job and getattr(job, "next_run_time", None):
                 next_run = job.next_run_time
 
-                db_session = self.session_factory()
-                try:
-                    agent = crud.get_agent(db_session, agent_id)
+                with db_session(self.session_factory) as db:
+                    agent = crud.get_agent(db, agent_id)
                     if agent:
                         agent.next_run_at = next_run
-                        db_session.commit()
-                finally:
-                    db_session.close()
 
         except Exception as e:
             logger.error(f"Error scheduling agent {agent_id}: {e}")
@@ -203,14 +195,10 @@ class SchedulerService:
             logger.info(f"Removed existing schedule for agent {agent_id}")
 
         # Clear next_run_at in DB as it's no longer scheduled
-        db_session = self.session_factory()
-        try:
-            agent = crud.get_agent(db_session, agent_id)
+        with db_session(self.session_factory) as db:
+            agent = crud.get_agent(db, agent_id)
             if agent:
                 agent.next_run_at = None
-                db_session.commit()
-        finally:
-            db_session.close()
 
     async def run_agent_task(self, agent_id: int):
         """
@@ -223,53 +211,50 @@ class SchedulerService:
         - Creating a new thread for this run using the execute_task method
         - Running the agent's task instructions
         """
-        db_session = self.session_factory()
         try:
-            agent = crud.get_agent(db_session, agent_id)
-            if agent is None:
-                logger.error("Agent %s not found", agent_id)
-                return
-
-            # ------------------------------------------------------------------
-            # Delegate to shared helper (handles status flips & events).
-            # Scheduler runs silently skip if agent is already running.
-            # ------------------------------------------------------------------
-            logger.info("Running scheduled task for agent %s", agent_id)
-            # Use "schedule" to match RunTrigger.schedule and CRUD trigger logic
-            try:
-                thread = await execute_agent_task(db_session, agent, thread_type="schedule")
-            except ValueError as exc:
-                if "already running" in str(exc).lower():
-                    logger.info("Skipping scheduled run for agent %s - already running", agent_id)
+            with db_session(self.session_factory) as db:
+                agent = crud.get_agent(db, agent_id)
+                if agent is None:
+                    logger.error("Agent %s not found", agent_id)
                     return
-                raise
 
-            # ------------------------------------------------------------------
-            # Update *next_run_at* after successful run so dashboards show when
-            # the task will fire next.  We do *not* touch last_run_at – helper
-            # already set it.
-            # ------------------------------------------------------------------
-            job = self.scheduler.get_job(f"agent_{agent_id}")
-            next_run_time = getattr(job, "next_run_time", None) if job else None
-            if next_run_time:
-                crud.update_agent(db_session, agent_id, next_run_at=next_run_time)
-                db_session.commit()
+                # ------------------------------------------------------------------
+                # Delegate to shared helper (handles status flips & events).
+                # Scheduler runs silently skip if agent is already running.
+                # ------------------------------------------------------------------
+                logger.info("Running scheduled task for agent %s", agent_id)
+                # Use "schedule" to match RunTrigger.schedule and CRUD trigger logic
+                try:
+                    thread = await execute_agent_task(db, agent, thread_type="schedule")
+                except ValueError as exc:
+                    if "already running" in str(exc).lower():
+                        logger.info("Skipping scheduled run for agent %s - already running", agent_id)
+                        return
+                    raise
 
-                await event_bus.publish(
-                    EventType.AGENT_UPDATED,
-                    {
-                        "id": agent_id,
-                        "next_run_at": next_run_time.isoformat(),
-                        "thread_id": thread.id,
-                    },
-                )
+                # ------------------------------------------------------------------
+                # Update *next_run_at* after successful run so dashboards show when
+                # the task will fire next.  We do *not* touch last_run_at – helper
+                # already set it.
+                # ------------------------------------------------------------------
+                job = self.scheduler.get_job(f"agent_{agent_id}")
+                next_run_time = getattr(job, "next_run_time", None) if job else None
+                if next_run_time:
+                    crud.update_agent(db, agent_id, next_run_at=next_run_time)
+
+                    await event_bus.publish(
+                        EventType.AGENT_UPDATED,
+                        {
+                            "id": agent_id,
+                            "next_run_at": next_run_time.isoformat(),
+                            "thread_id": thread.id,
+                        },
+                    )
 
         except Exception as exc:
             # execute_agent_task already flipped status to *error* and
             # broadcasted so here we just log.
             logger.exception("Scheduled task failed for agent %s: %s", agent_id, exc)
-        finally:
-            db_session.close()
 
 
 # Global instance of the scheduler service
