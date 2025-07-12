@@ -1,0 +1,525 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ws-protocol-schema",
+  "title": "WebSocket Protocol Schema",
+  "type": "object",
+  "properties": {},
+  "definitions": {
+    "Envelope": {
+      "type": "object",
+      "required": [
+        "v",
+        "type",
+        "topic",
+        "ts",
+        "data"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "type": "integer",
+          "const": 1,
+          "description": "Protocol version"
+        },
+        "type": {
+          "type": "string",
+          "description": "Message type identifier"
+        },
+        "topic": {
+          "type": "string",
+          "description": "Topic routing string (e.g., 'agent:123', 'thread:456')"
+        },
+        "req_id": {
+          "type": "string",
+          "description": "Optional request correlation ID"
+        },
+        "ts": {
+          "type": "integer",
+          "description": "Timestamp in milliseconds since epoch"
+        },
+        "data": {
+          "type": "object",
+          "description": "Message payload - structure depends on type"
+        }
+      }
+    },
+    "AgentRef": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "ThreadRef": {
+      "type": "object",
+      "required": [
+        "thread_id"
+      ],
+      "properties": {
+        "thread_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "UserRef": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "ExecutionRef": {
+      "type": "object",
+      "required": [
+        "execution_id"
+      ],
+      "properties": {
+        "execution_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "PingData": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "PongData": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "ErrorData": {
+      "type": "object",
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "type": "string",
+          "minLength": 1
+        },
+        "details": {
+          "type": "object"
+        }
+      }
+    },
+    "SubscribeData": {
+      "type": "object",
+      "required": [
+        "topics"
+      ],
+      "properties": {
+        "topics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "message_id": {
+          "type": "string"
+        }
+      }
+    },
+    "UnsubscribeData": {
+      "type": "object",
+      "required": [
+        "topics"
+      ],
+      "properties": {
+        "topics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "message_id": {
+          "type": "string"
+        }
+      }
+    },
+    "SendMessageData": {
+      "type": "object",
+      "required": [
+        "thread_id",
+        "content"
+      ],
+      "properties": {
+        "thread_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metadata": {
+          "type": "object"
+        }
+      }
+    },
+    "ThreadMessageData": {
+      "type": "object",
+      "required": [
+        "thread_id",
+        "message"
+      ],
+      "properties": {
+        "thread_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "message": {
+          "type": "object",
+          "required": [
+            "id",
+            "role",
+            "content"
+          ],
+          "properties": {
+            "id": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "user",
+                "assistant",
+                "system",
+                "tool"
+              ]
+            },
+            "content": {
+              "type": "string"
+            },
+            "metadata": {
+              "type": "object"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "ThreadEventData": {
+      "type": "object",
+      "required": [
+        "thread_id"
+      ],
+      "properties": {
+        "thread_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "agent_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "StreamStartData": {
+      "type": "object",
+      "required": [
+        "thread_id"
+      ],
+      "properties": {
+        "thread_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "StreamChunkData": {
+      "type": "object",
+      "required": [
+        "thread_id",
+        "chunk_type"
+      ],
+      "properties": {
+        "thread_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "chunk_type": {
+          "type": "string",
+          "enum": [
+            "assistant_token",
+            "assistant_message",
+            "tool_output"
+          ]
+        },
+        "content": {
+          "type": "string"
+        },
+        "tool_name": {
+          "type": "string"
+        },
+        "tool_call_id": {
+          "type": "string"
+        }
+      }
+    },
+    "StreamEndData": {
+      "type": "object",
+      "required": [
+        "thread_id"
+      ],
+      "properties": {
+        "thread_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "AssistantIdData": {
+      "type": "object",
+      "required": [
+        "thread_id",
+        "message_id"
+      ],
+      "properties": {
+        "thread_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "message_id": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "AgentEventData": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": "string"
+        },
+        "last_run_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "next_run_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_error": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "RunUpdateData": {
+      "type": "object",
+      "required": [
+        "id",
+        "agent_id",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "agent_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "thread_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "success",
+            "failed"
+          ]
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "schedule",
+            "api"
+          ]
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finished_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "UserUpdateData": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "avatar_url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "NodeStateData": {
+      "type": "object",
+      "required": [
+        "execution_id",
+        "node_id",
+        "status"
+      ],
+      "properties": {
+        "execution_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "running",
+            "success",
+            "failed"
+          ]
+        },
+        "output": {
+          "type": "object"
+        },
+        "error": {
+          "type": "string"
+        }
+      }
+    },
+    "ExecutionFinishedData": {
+      "type": "object",
+      "required": [
+        "execution_id",
+        "status"
+      ],
+      "properties": {
+        "execution_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "success",
+            "failed"
+          ]
+        },
+        "error": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "NodeLogData": {
+      "type": "object",
+      "required": [
+        "execution_id",
+        "node_id",
+        "stream",
+        "text"
+      ],
+      "properties": {
+        "execution_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "node_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stream": {
+          "type": "string",
+          "enum": [
+            "stdout",
+            "stderr"
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
