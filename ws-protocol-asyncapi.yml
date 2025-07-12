@@ -1,0 +1,678 @@
+asyncapi: 3.0.0
+
+info:
+  title: Zerg WebSocket Protocol
+  version: 1.0.0
+  description: |
+    Comprehensive WebSocket protocol for the Zerg Agent Platform.
+    Consolidates message types, payload schemas, and routing patterns into
+    a single source of truth for contract-first development.
+    
+    Features:
+    - Topic-based routing with parameterized channels
+    - Strongly-typed message payloads
+    - Bidirectional operations (send/receive)
+    - Alias support for message evolution
+    - Handler method mapping for code generation
+
+defaultContentType: application/json
+
+# ---------------------------------------------------------------------------
+# Channels - Topic-based routing patterns
+# ---------------------------------------------------------------------------
+
+channels:
+  SystemChannel:
+    address: system
+    description: Global control messages, errors, and system announcements
+    messages:
+      PingMessage:
+        $ref: '#/components/messages/PingMessage'
+      PongMessage:
+        $ref: '#/components/messages/PongMessage'
+      ErrorMessage:
+        $ref: '#/components/messages/ErrorMessage'
+      SubscribeMessage:
+        $ref: '#/components/messages/SubscribeMessage'
+      UnsubscribeMessage:
+        $ref: '#/components/messages/UnsubscribeMessage'
+
+  ThreadChannel:
+    address: thread:{thread_id}
+    description: Thread messages, streaming, and lifecycle events
+    parameters:
+      thread_id:
+        description: Numeric identifier of the thread
+        examples: ["42", "123"]
+    messages:
+      SendMessageRequest:
+        $ref: '#/components/messages/SendMessageRequest'
+      ThreadMessage:
+        $ref: '#/components/messages/ThreadMessage'
+      ThreadEvent:
+        $ref: '#/components/messages/ThreadEvent'
+      StreamStart:
+        $ref: '#/components/messages/StreamStart'
+      StreamChunk:
+        $ref: '#/components/messages/StreamChunk'
+      StreamEnd:
+        $ref: '#/components/messages/StreamEnd'
+      AssistantId:
+        $ref: '#/components/messages/AssistantId'
+
+  AgentChannel:
+    address: agent:{agent_id}
+    description: Agent lifecycle events and run updates
+    parameters:
+      agent_id:
+        description: Numeric identifier of the agent
+        examples: ["17", "42"]
+    messages:
+      AgentEvent:
+        $ref: '#/components/messages/AgentEvent'
+      RunUpdate:
+        $ref: '#/components/messages/RunUpdate'
+
+  UserChannel:
+    address: user:{user_id}
+    description: User profile updates and notifications
+    parameters:
+      user_id:
+        description: Numeric identifier of the user
+        examples: ["1", "100"]
+    messages:
+      UserUpdate:
+        $ref: '#/components/messages/UserUpdate'
+
+  WorkflowExecutionChannel:
+    address: workflow_execution:{execution_id}
+    description: Workflow execution state, node updates, and logs
+    parameters:
+      execution_id:
+        description: Numeric identifier of the execution run
+        examples: ["123", "456"]
+    messages:
+      NodeState:
+        $ref: '#/components/messages/NodeState'
+      ExecutionFinished:
+        $ref: '#/components/messages/ExecutionFinished'
+      NodeLog:
+        $ref: '#/components/messages/NodeLog'
+
+# ---------------------------------------------------------------------------
+# Operations - Send/receive semantics for each message type
+# ---------------------------------------------------------------------------
+
+operations:
+  # System operations  
+  SystemOperations:
+    action: send
+    channel:
+      $ref: '#/channels/SystemChannel'
+    summary: Handle system-level WebSocket operations
+    
+  # Thread operations
+  ThreadOperations:
+    action: send  
+    channel:
+      $ref: '#/channels/ThreadChannel'
+    summary: Handle thread-level WebSocket operations
+    
+  # Agent operations
+  AgentOperations:
+    action: send
+    channel:
+      $ref: '#/channels/AgentChannel' 
+    summary: Handle agent-level WebSocket operations
+    
+  # User operations
+  UserOperations:
+    action: send
+    channel:
+      $ref: '#/channels/UserChannel'
+    summary: Handle user-level WebSocket operations
+      
+  # Workflow execution operations
+  WorkflowOperations:
+    action: send
+    channel:
+      $ref: '#/channels/WorkflowExecutionChannel'
+    summary: Handle workflow execution WebSocket operations
+
+# ---------------------------------------------------------------------------
+# Components - Messages and schemas
+# ---------------------------------------------------------------------------
+
+components:
+  messages:
+    # System messages
+    PingMessage:
+      name: ping
+      summary: Heartbeat ping from server
+      payload:
+        $ref: '#/components/schemas/PingData'
+      x-handler-method: handle_ping
+      x-aliases: []
+
+    PongMessage:
+      name: pong
+      summary: Heartbeat response from client
+      payload:
+        $ref: '#/components/schemas/PongData'
+      x-handler-method: handle_pong
+      x-aliases: []
+
+    ErrorMessage:
+      name: error
+      summary: Protocol or application error
+      payload:
+        $ref: '#/components/schemas/ErrorData'
+      x-handler-method: handle_error
+      x-aliases: []
+
+    SubscribeMessage:
+      name: subscribe
+      summary: Subscribe to topic(s)
+      payload:
+        $ref: '#/components/schemas/SubscribeData'
+      x-handler-method: handle_subscribe
+      x-aliases: []
+
+    UnsubscribeMessage:
+      name: unsubscribe
+      summary: Unsubscribe from topic(s)
+      payload:
+        $ref: '#/components/schemas/UnsubscribeData'
+      x-handler-method: handle_unsubscribe
+      x-aliases: []
+
+    # Thread messages
+    SendMessageRequest:
+      name: send_message
+      summary: Client request to send a message to a thread
+      payload:
+        $ref: '#/components/schemas/SendMessageData'
+      x-handler-method: handle_send_message
+      x-aliases: []
+
+    ThreadMessage:
+      name: thread_message
+      summary: New message added to thread
+      payload:
+        $ref: '#/components/schemas/ThreadMessageData'
+      x-handler-method: handle_thread_message
+      x-aliases: ["thread_message_created"]
+
+    ThreadEvent:
+      name: thread_event
+      summary: Thread lifecycle event
+      payload:
+        $ref: '#/components/schemas/ThreadEventData'
+      x-handler-method: handle_thread_event
+      x-aliases: ["thread_created", "thread_updated", "thread_deleted"]
+
+    StreamStart:
+      name: stream_start
+      summary: Assistant response streaming started
+      payload:
+        $ref: '#/components/schemas/StreamStartData'
+      x-handler-method: handle_stream_start
+      x-aliases: []
+
+    StreamChunk:
+      name: stream_chunk
+      summary: Chunk of streaming assistant response
+      payload:
+        $ref: '#/components/schemas/StreamChunkData'
+      x-handler-method: handle_stream_chunk
+      x-aliases: []
+
+    StreamEnd:
+      name: stream_end
+      summary: Assistant response streaming finished
+      payload:
+        $ref: '#/components/schemas/StreamEndData'
+      x-handler-method: handle_stream_end
+      x-aliases: []
+
+    AssistantId:
+      name: assistant_id
+      summary: Assistant message ID assignment
+      payload:
+        $ref: '#/components/schemas/AssistantIdData'
+      x-handler-method: handle_assistant_id
+      x-aliases: []
+
+    # Agent messages
+    AgentEvent:
+      name: agent_event
+      summary: Agent lifecycle or status event
+      payload:
+        $ref: '#/components/schemas/AgentEventData'
+      x-handler-method: handle_agent_event
+      x-aliases: ["agent_created", "agent_updated", "agent_deleted", "agent_state"]
+
+    RunUpdate:
+      name: run_update
+      summary: Agent run status update
+      payload:
+        $ref: '#/components/schemas/RunUpdateData'
+      x-handler-method: handle_run_update
+      x-aliases: []
+
+    # User messages
+    UserUpdate:
+      name: user_update
+      summary: User profile update
+      payload:
+        $ref: '#/components/schemas/UserUpdateData'
+      x-handler-method: handle_user_update
+      x-aliases: []
+
+    # Workflow execution messages
+    NodeState:
+      name: node_state
+      summary: Workflow node state change
+      payload:
+        $ref: '#/components/schemas/NodeStateData'
+      x-handler-method: handle_node_state
+      x-aliases: []
+
+    ExecutionFinished:
+      name: execution_finished
+      summary: Workflow execution completed
+      payload:
+        $ref: '#/components/schemas/ExecutionFinishedData'
+      x-handler-method: handle_execution_finished
+      x-aliases: []
+
+    NodeLog:
+      name: node_log
+      summary: Workflow node log output
+      payload:
+        $ref: '#/components/schemas/NodeLogData'
+      x-handler-method: handle_node_log
+      x-aliases: []
+
+  schemas:
+    # Core envelope structure
+    Envelope:
+      type: object
+      required: [v, type, topic, ts, data]
+      additionalProperties: false
+      properties:
+        v:
+          type: integer
+          const: 1
+          description: Protocol version
+        type:
+          type: string
+          description: Message type identifier
+        topic:
+          type: string
+          description: Topic routing string (e.g., 'agent:123', 'thread:456')
+        req_id:
+          type: string
+          description: Optional request correlation ID
+        ts:
+          type: integer
+          description: Timestamp in milliseconds since epoch
+        data:
+          type: object
+          description: Message payload - structure depends on type
+
+    # Base reference types
+    AgentRef:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+
+    ThreadRef:
+      type: object
+      required: [thread_id]
+      properties:
+        thread_id:
+          type: integer
+          minimum: 1
+
+    UserRef:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+
+    ExecutionRef:
+      type: object
+      required: [execution_id]
+      properties:
+        execution_id:
+          type: integer
+          minimum: 1
+
+    # System message payloads
+    PingData:
+      type: object
+      properties:
+        timestamp:
+          type: integer
+          minimum: 0
+
+    PongData:
+      type: object
+      properties:
+        timestamp:
+          type: integer
+          minimum: 0
+
+    ErrorData:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          minLength: 1
+        details:
+          type: object
+
+    SubscribeData:
+      type: object
+      required: [topics]
+      properties:
+        topics:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        message_id:
+          type: string
+
+    UnsubscribeData:
+      type: object
+      required: [topics]
+      properties:
+        topics:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        message_id:
+          type: string
+
+    # Thread message payloads
+    SendMessageData:
+      type: object
+      required: [thread_id, content]
+      properties:
+        thread_id:
+          type: integer
+          minimum: 1
+        content:
+          type: string
+          minLength: 1
+        metadata:
+          type: object
+
+    ThreadMessageData:
+      type: object
+      required: [thread_id, message]
+      properties:
+        thread_id:
+          type: integer
+          minimum: 1
+        message:
+          type: object
+          required: [id, role, content]
+          properties:
+            id:
+              type: integer
+              minimum: 1
+            role:
+              type: string
+              enum: [user, assistant, system, tool]
+            content:
+              type: string
+            metadata:
+              type: object
+            created_at:
+              type: string
+              format: date-time
+
+    ThreadEventData:
+      type: object
+      required: [thread_id]
+      properties:
+        thread_id:
+          type: integer
+          minimum: 1
+        agent_id:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    StreamStartData:
+      type: object
+      required: [thread_id]
+      properties:
+        thread_id:
+          type: integer
+          minimum: 1
+
+    StreamChunkData:
+      type: object
+      required: [thread_id, chunk_type]
+      properties:
+        thread_id:
+          type: integer
+          minimum: 1
+        chunk_type:
+          type: string
+          enum: [assistant_token, assistant_message, tool_output]
+        content:
+          type: string
+        tool_name:
+          type: string
+        tool_call_id:
+          type: string
+
+    StreamEndData:
+      type: object
+      required: [thread_id]
+      properties:
+        thread_id:
+          type: integer
+          minimum: 1
+
+    AssistantIdData:
+      type: object
+      required: [thread_id, message_id]
+      properties:
+        thread_id:
+          type: integer
+          minimum: 1
+        message_id:
+          type: integer
+          minimum: 1
+
+    # Agent message payloads
+    AgentEventData:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+        last_run_at:
+          type: string
+          format: date-time
+        next_run_at:
+          type: string
+          format: date-time
+        last_error:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+
+    RunUpdateData:
+      type: object
+      required: [id, agent_id, status]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        agent_id:
+          type: integer
+          minimum: 1
+        thread_id:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [queued, running, success, failed]
+        trigger:
+          type: string
+          enum: [manual, schedule, api]
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+        duration_ms:
+          type: integer
+          minimum: 0
+        error:
+          type: string
+
+    # User message payloads
+    UserUpdateData:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+
+    # Workflow execution payloads
+    NodeStateData:
+      type: object
+      required: [execution_id, node_id, status]
+      properties:
+        execution_id:
+          type: integer
+          minimum: 1
+        node_id:
+          type: string
+          minLength: 1
+        status:
+          type: string
+          enum: [running, success, failed]
+        output:
+          type: object
+        error:
+          type: string
+
+    ExecutionFinishedData:
+      type: object
+      required: [execution_id, status]
+      properties:
+        execution_id:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum: [success, failed]
+        error:
+          type: string
+        duration_ms:
+          type: integer
+          minimum: 0
+
+    NodeLogData:
+      type: object
+      required: [execution_id, node_id, stream, text]
+      properties:
+        execution_id:
+          type: integer
+          minimum: 1
+        node_id:
+          type: string
+          minLength: 1
+        stream:
+          type: string
+          enum: [stdout, stderr]
+        text:
+          type: string
+
+# ---------------------------------------------------------------------------
+# Extensions for code generation
+# ---------------------------------------------------------------------------
+
+x-handler-groups:
+  dashboard:
+    description: Handles agent management, runs, and workflow execution events
+    handles:
+      - run_update
+      - agent_event
+      - execution_finished
+      - node_state
+      - node_log
+    topics:
+      - "agent:*"
+      - "workflow_execution:*"
+      
+  chat:
+    description: Handles thread messages and streaming events
+    handles:
+      - thread_message
+      - stream_start
+      - stream_chunk
+      - stream_end
+      - assistant_id
+    topics:
+      - "thread:*"
+
+x-validation-rules:
+  - "Every server-to-client message must have a handler_method"
+  - "All handler_method names must be unique within a handler group"
+  - "All message aliases must resolve to the same handler_method as the primary message"
+  - "Handler topic patterns must match message topic_patterns"
+
+x-performance-contracts:
+  message_size_limits:
+    run_update: "max_1kb"
+    stream_chunk: "max_64kb"
+  throughput_requirements:
+    dashboard_messages: "100/sec"
+    chat_messages: "1000/sec"
+
+x-security-contracts:
+  authentication_required: ["send_message", "subscribe"]
+  authorization_checks: ["agent_event", "run_update"]
+  data_validation: "strict"
+  sanitization_rules:
+    user_content: "html_escape"
+    file_paths: "path_traversal_check"
