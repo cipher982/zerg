@@ -11,29 +11,41 @@ use std::fs;
 use std::path::PathBuf;
 
 /// Extract all message type names from the schema, including aliases.
-/// Since we migrated to generated types, we read from the ws-protocol.yml schema file.
+/// Since we migrated to generated types, we read from the ws-protocol-asyncapi.yml schema file.
 fn get_ws_message_types() -> HashSet<String> {
     let mut message_types = HashSet::new();
 
-    // Read the ws-protocol.yml file
-    let schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../ws-protocol.yml");
+    // Read the ws-protocol-asyncapi.yml file
+    let schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../ws-protocol-asyncapi.yml");
 
-    let content = fs::read_to_string(&schema_path).expect("Failed to read ws-protocol.yml");
+    let content = fs::read_to_string(&schema_path).expect("Failed to read ws-protocol-asyncapi.yml");
 
     // Parse the YAML to find message types and their aliases
+    let mut in_components = false;
     let mut in_messages_section = false;
     
     for line in content.lines() {
         let trimmed = line.trim();
 
-        // Start of messages section
-        if trimmed == "messages:" {
+        // Start of components section
+        if trimmed == "components:" {
+            in_components = true;
+            continue;
+        }
+
+        // Start of messages section within components
+        if in_components && trimmed == "messages:" {
             in_messages_section = true;
             continue;
         }
 
-        // End of messages section (when we hit another top-level section)
-        if in_messages_section && !line.starts_with(" ") && !line.starts_with("\t") && !line.is_empty() && trimmed != "messages:" {
+        // End of messages section (when we hit another top-level section within components)
+        if in_messages_section && line.starts_with("  ") && !line.starts_with("    ") && trimmed.ends_with(':') && trimmed != "messages:" {
+            in_messages_section = false;
+        }
+
+        // End of components section
+        if in_components && !line.starts_with(" ") && !line.starts_with("\t") && !line.is_empty() && trimmed != "components:" {
             break;
         }
 
@@ -41,19 +53,15 @@ fn get_ws_message_types() -> HashSet<String> {
             continue;
         }
 
-        // Look for message type definitions (they start with two spaces and end with colon)
-        if line.starts_with("  ") && !line.starts_with("    ") && line.contains(":") && !line.contains("payload:") {
-            let message_type = trimmed.trim_end_matches(':');
-            // Skip comments and empty lines
-            if !message_type.starts_with('#') && !message_type.is_empty() {
-                message_types.insert(message_type.to_string());
-            }
+        // Look for the 'name:' field within a message definition (6 spaces indentation)
+        if line.starts_with("      name: ") {
+            let name = line.trim_start_matches("      name: ");
+            message_types.insert(name.to_string());
         }
         
-        // Look for aliases within a message definition
-        if line.starts_with("    aliases:") {
-            // Parse the aliases array
-            let aliases_part = line.trim_start_matches("    aliases:").trim();
+        // Look for aliases within a message definition  
+        if line.starts_with("      x-aliases: [") {
+            let aliases_part = line.trim_start_matches("      x-aliases: ");
             if aliases_part.starts_with('[') && aliases_part.ends_with(']') {
                 // Extract content between brackets
                 let aliases_content = &aliases_part[1..aliases_part.len()-1];
