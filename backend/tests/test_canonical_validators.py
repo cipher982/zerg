@@ -102,7 +102,7 @@ class TestWorkflowValidation:
         with pytest.raises(ValidationError) as exc_info:
             validate_workflow_json(valid_workflow_json)
 
-        assert "must be positive integer" in str(exc_info.value)
+        assert "must be non-negative integer" in str(exc_info.value)
         assert "workflow.id" in str(exc_info.value)
 
     def test_workflow_missing_name_fails(self, valid_workflow_json):

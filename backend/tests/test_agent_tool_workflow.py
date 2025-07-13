@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from zerg.crud import crud
 from zerg.database import get_session_factory
 from zerg.models.models import Workflow
-from zerg.services.langgraph_workflow_engine import LangGraphWorkflowEngine
+from zerg.services.workflow_engine import WorkflowEngine
 
 
 @pytest.fixture
@@ -72,7 +72,7 @@ def test_agent_gets_configured_with_connected_tools(workflow_with_agent_and_tool
     workflow = workflow_with_agent_and_tool["workflow"]
 
     # Create workflow engine
-    engine = LangGraphWorkflowEngine()
+    engine = WorkflowEngine()
 
     # Check what tools the agent should get configured with
     session_factory = get_session_factory()
@@ -148,7 +148,7 @@ async def test_full_workflow_execution_with_tools(workflow_with_agent_and_tool):
     workflow = workflow_with_agent_and_tool["workflow"]
 
     # Create workflow engine
-    engine = LangGraphWorkflowEngine()
+    engine = WorkflowEngine()
 
     # Execute the workflow
     try:
@@ -226,7 +226,7 @@ async def test_agent_id_extraction_regression(db_session):
     db_session.refresh(workflow)
 
     # Create workflow engine and test the agent_id extraction
-    engine = LangGraphWorkflowEngine()
+    engine = WorkflowEngine()
 
     # Parse the canvas data to get NodeConfig objects
     from zerg.services.canvas_transformer import CanvasTransformer

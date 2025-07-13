@@ -20,7 +20,6 @@ from langgraph.func import entrypoint
 from langgraph.graph.message import add_messages
 
 # Local imports (late to avoid circulars)
-from zerg.callbacks.token_stream import WsTokenCallback
 from zerg.config import get_settings
 
 # Centralised flags
@@ -48,7 +47,7 @@ def _make_llm(agent_row, tools):
 
     enable_token_stream = get_settings().llm_token_stream
 
-    # Attach the token stream callback only when the feature flag is enabled.
+    # Create LLM with basic parameters
     kwargs: dict = {
         "model": agent_row.model,
         "temperature": 0.6,
@@ -56,10 +55,10 @@ def _make_llm(agent_row, tools):
         "api_key": get_settings().openai_api_key,
     }
 
-    if enable_token_stream:
-        kwargs["callbacks"] = [WsTokenCallback()]
-
     llm = ChatOpenAI(**kwargs)
+
+    # Note: callbacks should be passed during invocation, not construction
+    # The WsTokenCallback should be handled at the invocation level
 
     return llm.bind_tools(tools)
 
