@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 def _create_linear_workflow(db: Session, crud_module, owner_id: int, num_nodes: int = 3):
     """Create a dummy linear workflow with *num_nodes* trigger nodes."""
 
-    canvas_data = {
+    canvas = {
         "nodes": [
             {
                 "node_id": f"node_{i}",
@@ -31,7 +31,7 @@ def _create_linear_workflow(db: Session, crud_module, owner_id: int, num_nodes: 
         owner_id=owner_id,
         name="Engine Test Workflow",
         description="workflow for engine unit tests",
-        canvas_data=canvas_data,
+        canvas=canvas,
     )
 
 

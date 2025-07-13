@@ -1,4 +1,5 @@
 from datetime import datetime
+from datetime import timezone
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -101,7 +102,13 @@ async def start_reserved_execution(
 
     async def run_execution():
         try:
-            await workflow_engine.execute_workflow_with_id(execution.workflow_id, execution_id)
+            # Update the execution status and start time manually
+            execution.status = "running"
+            execution.started_at = datetime.now(timezone.utc)
+            db.commit()
+
+            # Execute using the simplified engine (it will use the existing execution)
+            await workflow_engine._execute_workflow_internal(execution.workflow_id, execution, db)
         except Exception as e:
             import logging
 

@@ -26,7 +26,7 @@ def _create_workflow(client: TestClient):
     payload = {
         "name": "WF-Layout-Test",
         "description": "layout test wf",
-        "canvas_data": {},
+        "canvas": {},
     }
     resp = client.post("/api/workflows/", json=payload)
     assert resp.status_code == 200
