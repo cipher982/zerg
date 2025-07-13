@@ -46,7 +46,7 @@ class BaseNodeExecutor:
                 output = await self._execute_node_logic(db, state)
 
                 node_state.status = "completed"
-                node_state.output = str(output)
+                node_state.output = output if isinstance(output, dict) else {"result": output}
                 db.commit()
 
                 await self.publish_event(
@@ -69,6 +69,7 @@ class BaseNodeExecutor:
 
                 node_state.status = "failed"
                 node_state.error = error_msg
+                node_state.output = {"error": error_msg}
                 db.commit()
 
                 await self.publish_event(

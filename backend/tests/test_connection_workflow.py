@@ -134,8 +134,8 @@ def test_frontend_edge_format_compatibility(
     # Create a simple workflow in canonical format using existing tools
     canvas = {
         "nodes": [
-            {"id": "node_1", "type": "tool", "position": {}, "config": {"tool_name": "get_current_time"}},
-            {"id": "node_2", "type": "tool", "position": {}, "config": {"tool_name": "generate_uuid"}},
+            {"id": "node_1", "type": "tool", "position": {"x": 0, "y": 0}, "config": {"tool_name": "get_current_time"}},
+            {"id": "node_2", "type": "tool", "position": {"x": 100, "y": 0}, "config": {"tool_name": "generate_uuid"}},
         ],
         "edges": [{"from": "node_1", "to": "node_2", "config": {"label": None}}],
     }
