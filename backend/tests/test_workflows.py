@@ -26,7 +26,10 @@ def test_create_workflow_success(client: TestClient, test_user: User, db: Sessio
     payload = {
         "name": "New Workflow",
         "description": "A fresh new workflow.",
-        "canvas_data": {"nodes": [{"id": "node1", "node_type": "noop"}], "edges": []},
+        "canvas_data": {
+            "nodes": [{"id": "node1", "type": "trigger", "trigger_type": "manual", "config": {}}],
+            "edges": [],
+        },
     }
     response = client.post("/api/workflows/", headers=auth_headers, json=payload)
     assert response.status_code == 200
@@ -35,9 +38,10 @@ def test_create_workflow_success(client: TestClient, test_user: User, db: Sessio
     assert data["description"] == payload["description"]
     # After cleanup, API returns canonical format instead of frontend format
     expected_canonical = {
-        "nodes": [{"node_id": "node1", "node_type": "noop", "config": {}, "position": {}}],
+        "nodes": [
+            {"id": "node1", "type": "trigger", "trigger_type": "manual", "config": {}, "position": {"x": 0.0, "y": 0.0}}
+        ],
         "edges": [],
-        "metadata": {},
     }
     assert data["canvas_data"] == expected_canonical
     assert data["owner_id"] == test_user.id
@@ -199,7 +203,7 @@ def test_duplicate_workflow_name_fails(client: TestClient, test_user: User, db: 
 def test_create_workflow_with_large_canvas(client: TestClient, test_user: User, auth_headers: dict):
     """Test creating a workflow with a large canvas_data payload."""
     large_canvas = {
-        "nodes": [{"id": f"node_{i}", "node_type": "placeholder", "data": {}} for i in range(1000)],
+        "nodes": [{"id": f"node_{i}", "type": "trigger", "trigger_type": "manual", "config": {}} for i in range(1000)],
         "edges": [{"source": f"node_{i}", "target": f"node_{i+1}"} for i in range(999)],
     }
     payload = {

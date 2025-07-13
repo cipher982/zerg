@@ -9,7 +9,7 @@ import pytest
 
 from zerg.models.models import Workflow
 from zerg.models.models import WorkflowExecution
-from zerg.services.langgraph_workflow_engine import langgraph_workflow_engine as workflow_execution_engine
+from zerg.services.workflow_engine import workflow_engine as workflow_execution_engine
 from zerg.services.workflow_scheduler import workflow_scheduler
 
 
