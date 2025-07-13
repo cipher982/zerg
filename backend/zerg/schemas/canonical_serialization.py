@@ -68,28 +68,36 @@ class CanonicalSerializer:
     @staticmethod
     def _node_to_dict(node: CanonicalNode) -> Dict[str, Any]:
         """Convert CanonicalNode to dict format."""
-        base_dict = {"id": node.id.value, "position": {"x": node.position.x, "y": node.position.y}}
+        base_dict = {"node_id": node.id.value, "position": {"x": node.position.x, "y": node.position.y}}
 
         # Add type-specific data
         if node.is_agent:
             base_dict.update(
-                {"type": "agent", "agent_id": node.agent_data.agent_id.value, "message": node.agent_data.message}
+                {
+                    "node_type": "agent",
+                    "config": {"agent_id": node.agent_data.agent_id.value, "message": node.agent_data.message},
+                }
             )
         elif node.is_tool:
             base_dict.update(
-                {"type": "tool", "tool_name": node.tool_data.tool_name, "parameters": node.tool_data.parameters}
+                {
+                    "node_type": "tool",
+                    "config": {"tool_name": node.tool_data.tool_name, "parameters": node.tool_data.parameters},
+                }
             )
         elif node.is_trigger:
-            base_dict.update(
-                {"type": "trigger", "trigger_type": node.trigger_data.trigger_type, "config": node.trigger_data.config}
-            )
+            # Create a copy of config and add trigger_type to it for database storage
+            # This maintains compatibility with the validator that expects trigger_type in config
+            config_copy = dict(node.trigger_data.config)
+            config_copy["trigger_type"] = node.trigger_data.trigger_type
+            base_dict.update({"node_type": "trigger", "config": config_copy})
 
         return base_dict
 
     @staticmethod
     def _edge_to_dict(edge: CanonicalEdge) -> Dict[str, Any]:
         """Convert CanonicalEdge to dict format."""
-        return {"from": edge.from_node_id.value, "to": edge.to_node_id.value, "config": edge.config}
+        return {"from_node_id": edge.from_node_id.value, "to_node_id": edge.to_node_id.value, "config": edge.config}
 
 
 # ============================================================================

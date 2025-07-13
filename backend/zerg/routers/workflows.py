@@ -97,14 +97,20 @@ def create_workflow(
     progressive workflow building. Use /validate endpoint to
     check validity before execution.
     """
-    # Validate and convert to canonical format
+    # Transform frontend format to canonical format
     try:
+        from zerg.services.canvas_transformer import CanvasTransformer
+
+        # First transform frontend data to canonical format
+        canonical_canvas = CanvasTransformer.from_frontend(workflow_in.canvas_data)
+
+        # Then validate the canonical workflow
         canonical_workflow = validate_workflow_json(
             {
                 "id": 0,  # Will be set by database
                 "name": workflow_in.name,
-                "description": workflow_in.description or "",
-                **workflow_in.canvas_data,
+                "nodes": [node.model_dump() for node in canonical_canvas.nodes],
+                "edges": [edge.model_dump() for edge in canonical_canvas.edges],
             }
         )
 
@@ -112,6 +118,8 @@ def create_workflow(
         canonical_canvas_data = DatabaseWorkflowAdapter.save_workflow_to_database(canonical_workflow)
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=f"Invalid workflow data: {e.message}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing workflow data: {e}")
 
     workflow = crud.create_workflow(
         db=db,

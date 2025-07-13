@@ -40,7 +40,7 @@ from zerg.models.models import WorkflowExecution
 from zerg.schemas.canonical_serialization import deserialize_workflow_from_database
 from zerg.schemas.canonical_types import CanonicalNode
 from zerg.schemas.canonical_types import CanonicalWorkflow
-from zerg.tools.registry import get_registry
+from zerg.tools.unified_access import get_tool_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -375,7 +375,7 @@ class WorkflowEngine:
                     )
 
                     # Determine tool configuration
-                    connected_tools = self._get_connected_tool_names(node)
+                    connected_tools = self._get_connected_tool_names(node_id)
 
                     if connected_tools:
                         logger.info(f"[AgentNode] Agent connects to tools: {connected_tools}")
@@ -517,13 +517,13 @@ class WorkflowEngine:
                 )
 
                 try:
-                    # Execute tool
-                    registry = get_registry()
-                    all_tools = {t.name: t for t in registry.all_tools()}
-                    tool = all_tools.get(tool_name)
+                    # Execute tool using unified resolver
+                    resolver = get_tool_resolver()
+                    tool = resolver.get_tool(tool_name)
 
                     if not tool:
-                        raise ValueError(f"Tool '{tool_name}' not found")
+                        available_tools = resolver.get_tool_names()
+                        raise ValueError(f"Tool '{tool_name}' not found. Available tools: {available_tools}")
 
                     result = await tool.ainvoke(tool_params)
 
@@ -569,10 +569,51 @@ class WorkflowEngine:
 
             logger.info(f"[TriggerNode] Execution – node_id={node_id}, type={trigger_type}")
 
-            # Simple trigger execution
-            output = {"trigger_type": trigger_type, "status": "triggered", "type": "trigger"}
+            session_factory = get_session_factory()
+            with session_factory() as db:
+                # Create node execution state
+                node_state = NodeExecutionState(
+                    workflow_execution_id=state["execution_id"], node_id=node_id, status="running"
+                )
+                db.add(node_state)
+                db.commit()
 
-            return {"node_outputs": {node_id: output}, "completed_nodes": [node_id]}
+                await self._publish_node_event(
+                    execution_id=state["execution_id"], node_id=node_id, status="running", output=None, error=None
+                )
+
+                try:
+                    # Simple trigger execution
+                    output = {"trigger_type": trigger_type, "status": "triggered", "type": "trigger"}
+
+                    # Update node state
+                    node_state.status = "success"
+                    node_state.output = output
+                    db.commit()
+
+                    await self._publish_node_event(
+                        execution_id=state["execution_id"], node_id=node_id, status="success", output=output, error=None
+                    )
+
+                    return {"node_outputs": {node_id: output}, "completed_nodes": [node_id]}
+
+                except Exception as e:
+                    error_msg = str(e)
+                    logger.error(f"[TriggerNode] Failed: {error_msg}")
+
+                    node_state.status = "failed"
+                    node_state.error = error_msg
+                    db.commit()
+
+                    await self._publish_node_event(
+                        execution_id=state["execution_id"],
+                        node_id=node_id,
+                        status="failed",
+                        output=None,
+                        error=error_msg,
+                    )
+
+                    raise
 
         return trigger_node
 
@@ -590,17 +631,95 @@ class WorkflowEngine:
 
         return placeholder_node
 
-    def _get_connected_tool_names(self, node: CanonicalNode) -> List[str]:
-        """Get names of tools connected to this node using canonical workflow."""
-        # This would need access to the workflow context
-        # For now, return empty list as this requires workflow-level context
-        return []
+    def _get_connected_tool_names(self, node_id: str) -> List[str]:
+        """Get names of tools connected to this node."""
+        tool_names = []
+
+        if not hasattr(self, "_current_edges") or not self._current_edges:
+            return tool_names
+
+        # Find outgoing edges from this node
+        for edge in self._current_edges:
+            if hasattr(edge, "from_node_id") and str(edge.from_node_id) == str(node_id):
+                # Check if target node is a tool
+                target_id = str(edge.to_node_id)
+                if hasattr(self, "_current_nodes") and self._current_nodes:
+                    for node in self._current_nodes:
+                        if self._get_node_id(node) == target_id:
+                            # Check if this is a tool node and extract tool name
+                            tool_name = None
+                            if hasattr(node, "node_type"):
+                                # Check if node_type is a dict with Tool key
+                                if isinstance(node.node_type, dict) and "Tool" in node.node_type:
+                                    tool_config = node.node_type["Tool"]
+                                    if isinstance(tool_config, dict):
+                                        tool_name = tool_config.get("tool_name")
+                                # Also check config for tool_name
+                                elif hasattr(node, "config") and isinstance(node.config, dict):
+                                    tool_name = node.config.get("tool_name")
+                            elif hasattr(node, "type") and isinstance(node.type, dict):
+                                if "Tool" in node.type:
+                                    tool_config = node.type["Tool"]
+                                    if isinstance(tool_config, dict):
+                                        tool_name = tool_config.get("tool_name")
+
+                            if tool_name:
+                                tool_names.append(tool_name)
+
+        return tool_names
 
     def _get_connected_agent_ids(self, node: CanonicalNode) -> List[str]:
         """Get IDs of agents connected to this node using canonical workflow."""
         # This would need access to the workflow context
         # For now, return empty list as this requires workflow-level context
         return []
+
+    def _has_outgoing_tool_connections(self, node_id: str) -> bool:
+        """Check if node has outgoing connections to tool nodes."""
+        if not hasattr(self, "_current_edges") or not self._current_edges:
+            return False
+
+        # Find outgoing edges from this node
+        for edge in self._current_edges:
+            if hasattr(edge, "from_node_id") and str(edge.from_node_id) == str(node_id):
+                # Check if target node is a tool
+                target_id = str(edge.to_node_id)
+                if hasattr(self, "_current_nodes") and self._current_nodes:
+                    for node in self._current_nodes:
+                        if self._get_node_id(node) == target_id:
+                            # Check if this is a tool node
+                            if hasattr(node, "node_type"):
+                                # Check if node_type is a dict with Tool key
+                                if isinstance(node.node_type, dict) and "Tool" in node.node_type:
+                                    return True
+                                # Also check string node_type
+                                node_type = str(node.node_type).lower()
+                                if "tool" in node_type:
+                                    return True
+                            elif hasattr(node, "type") and isinstance(node.type, dict):
+                                if "Tool" in node.type:
+                                    return True
+        return False
+
+    def _get_node_id(self, node: Any) -> str:
+        """Extract node ID from various node formats (canonical, WorkflowNode, or dict)."""
+        if hasattr(node, "id"):
+            # Canonical node
+            if hasattr(node.id, "value"):
+                return node.id.value
+            else:
+                return str(node.id)
+        elif hasattr(node, "node_id"):
+            # WorkflowNode from schema
+            return str(node.node_id)
+        elif isinstance(node, dict) and "id" in node:
+            # Dict-based node
+            return str(node["id"])
+        else:
+            raise ValueError(
+                f"Cannot extract node ID from {type(node)}. "
+                f"Available attributes: {dir(node) if hasattr(node, '__dict__') else 'N/A'}"
+            )
 
     # Event publishing methods (unchanged from original)
     async def _publish_node_event(self, *, execution_id: int, node_id: str, status: str, output: Any, error: str):
