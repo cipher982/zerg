@@ -763,7 +763,7 @@ def get_canvas_layout(db: Session, user_id: Optional[int], workflow_id: Optional
 
 
 def create_workflow(
-    db: Session, *, owner_id: int, name: str, description: Optional[str] = None, canvas_data: Dict[str, Any]
+    db: Session, *, owner_id: int, name: str, description: Optional[str] = None, canvas: Dict[str, Any]
 ):
     """Create a new workflow."""
     from zerg.models.models import Workflow
@@ -785,7 +785,7 @@ def create_workflow(
         owner_id=owner_id,
         name=name,
         description=description,
-        canvas_data=canvas_data,
+        canvas=canvas,
     )
     db.add(db_workflow)
     db.commit()
@@ -861,7 +861,7 @@ def create_workflow_template(
     name: str,
     description: Optional[str] = None,
     category: str,
-    canvas_data: Dict[str, Any],
+    canvas: Dict[str, Any],
     tags: Optional[List[str]] = None,
     preview_image_url: Optional[str] = None,
     is_public: bool = True,
@@ -874,7 +874,7 @@ def create_workflow_template(
         name=name,
         description=description,
         category=category,
-        canvas_data=canvas_data,
+        canvas=canvas,
         tags=tags or [],
         preview_image_url=preview_image_url,
         is_public=is_public,
@@ -945,5 +945,5 @@ def deploy_workflow_template(
     workflow_description = description or template.description
 
     return create_workflow(
-        db=db, owner_id=owner_id, name=workflow_name, description=workflow_description, canvas_data=template.canvas_data
+        db=db, owner_id=owner_id, name=workflow_name, description=workflow_description, canvas=template.canvas
     )

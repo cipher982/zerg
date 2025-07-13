@@ -12,8 +12,8 @@ from zerg.services.workflow_engine import workflow_engine as workflow_execution_
 # ---------------------------------------------------------------------------
 
 
-def _insert_workflow(db: Session, *, name: str, canvas_data: dict):
-    wf = Workflow(owner_id=1, name=name, canvas_data=canvas_data)  # tests use deterministic *dev@local* id=1
+def _insert_workflow(db: Session, *, name: str, canvas: dict):
+    wf = Workflow(owner_id=1, name=name, canvas=canvas)  # tests use deterministic *dev@local* id=1
     db.add(wf)
     db.commit()
     db.refresh(wf)
@@ -39,7 +39,7 @@ def test_retry_succeeds_within_limit(db_session):  # `db_session` fixture from c
         ],
     }
 
-    wf = _insert_workflow(db_session, name="wf-retry-ok", canvas_data=canvas)
+    wf = _insert_workflow(db_session, name="wf-retry-ok", canvas=canvas)
 
     asyncio.run(_run_execution(wf.id))
 
@@ -64,7 +64,7 @@ def test_retry_exhausted_marks_failed(db_session):
         ],
     }
 
-    wf = _insert_workflow(db_session, name="wf-retry-fail", canvas_data=canvas)
+    wf = _insert_workflow(db_session, name="wf-retry-fail", canvas=canvas)
 
     asyncio.run(_run_execution(wf.id))
 

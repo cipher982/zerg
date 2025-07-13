@@ -14,7 +14,7 @@ from zerg.services.workflow_engine import workflow_engine as workflow_execution_
 
 
 def _insert_workflow(db, *, name: str):
-    wf = Workflow(owner_id=1, name=name, canvas_data={"nodes": []})
+    wf = Workflow(owner_id=1, name=name, canvas={"nodes": []})
     db.add(wf)
     db.commit()
     db.refresh(wf)
@@ -43,7 +43,7 @@ def test_cancel_running_execution(client: TestClient, db_session, monkeypatch):
 
     # Create workflow with one node that sleeps long so we can cancel
     wf = _insert_workflow(db_session, name="wf-long")
-    wf.canvas_data = {
+    wf.canvas = {
         "nodes": [{"id": "slow", "type": "dummy", "simulate_failures": 0}],
     }
     db_session.commit()

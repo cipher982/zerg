@@ -403,7 +403,7 @@ class Workflow(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    canvas_data = Column(MutableDict.as_mutable(JSON), nullable=False)
+    canvas = Column(MutableDict.as_mutable(JSON), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -420,7 +420,7 @@ class WorkflowTemplate(Base):
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     category = Column(String, nullable=False, index=True)
-    canvas_data = Column(MutableDict.as_mutable(JSON), nullable=False)
+    canvas = Column(MutableDict.as_mutable(JSON), nullable=False)
     tags = Column(MutableDict.as_mutable(JSON), nullable=True, default=list)  # List of strings
     preview_image_url = Column(String, nullable=True)
     is_public = Column(Boolean, default=True, nullable=False)

@@ -46,7 +46,7 @@ def test_canvas_workflow_with_manual_trigger_and_agent(
     Should execute successfully without agent_id=None errors.
     """
     # Canvas data matching the format from the bug report logs
-    canvas_data = {
+    canvas = {
         "edges": [{"from_node_id": "node_0", "id": "edge-4294967295", "label": None, "to_node_id": "node_1"}],
         "nodes": [
             {
@@ -88,7 +88,7 @@ def test_canvas_workflow_with_manual_trigger_and_agent(
         json={
             "name": "Canvas E2E Test Workflow",
             "description": "Testing manual trigger -> agent workflow",
-            "canvas_data": canvas_data,
+            "canvas": canvas,
         },
         headers=auth_headers,
     )
@@ -110,10 +110,10 @@ def test_canvas_workflow_with_manual_trigger_and_agent(
     assert execution is not None
     assert execution.status in ["running", "success", "completed"]  # Should not be "failed"
 
-    # Verify canvas data is in canonical format
+    # Verify canvas data is in WorkflowData format
     updated_workflow = crud.get_workflow(db=db, workflow_id=workflow_id)
-    assert "nodes" in updated_workflow.canvas_data
-    agent_node = next((n for n in updated_workflow.canvas_data["nodes"] if n.get("node_id") == "node_1"), None)
+    assert "nodes" in updated_workflow.canvas
+    agent_node = next((n for n in updated_workflow.canvas["nodes"] if n.get("id") == "node_1"), None)
     assert agent_node is not None
     assert "config" in agent_node
     assert agent_node["config"]["agent_id"] == test_agent.id
@@ -133,7 +133,7 @@ def test_canvas_workflow_missing_agent_validation(
 
     This prevents silent failures and provides clear error messages.
     """
-    canvas_data = {
+    canvas = {
         "edges": [{"from_node_id": "node_0", "to_node_id": "node_1"}],
         "nodes": [
             {
@@ -154,7 +154,7 @@ def test_canvas_workflow_missing_agent_validation(
         owner_id=test_user.id,
         name="Missing Agent Test",
         description="Test missing agent handling",
-        canvas_data=canvas_data,
+        canvas=canvas,
     )
 
     # Reserve and start execution
@@ -189,7 +189,7 @@ def test_canvas_workflow_null_agent_id_validation(
     This is the specific bug from the report - should fail with clear message,
     not "Agent None not found in database".
     """
-    canvas_data = {
+    canvas = {
         "edges": [{"from_node_id": "node_0", "to_node_id": "node_1"}],
         "nodes": [
             {
@@ -210,7 +210,7 @@ def test_canvas_workflow_null_agent_id_validation(
         owner_id=test_user.id,
         name="Null Agent ID Test",
         description="Test null agent_id handling",
-        canvas_data=canvas_data,
+        canvas=canvas,
     )
 
     # Reserve and start execution
@@ -233,7 +233,7 @@ def test_canvas_workflow_null_agent_id_validation(
     assert execution.status in ["running", "failed"]  # Accept either state in test environment
 
 
-def test_canvas_data_transformation_to_canonical_format(
+def test_canvas_workflow_data_validation(
     client: TestClient,
     db: Session,
     auth_headers: dict,
@@ -241,48 +241,44 @@ def test_canvas_data_transformation_to_canonical_format(
     test_agent: Agent,
 ):
     """
-    Test that PATCH /canvas-data properly transforms frontend format to canonical.
+    Test that PATCH /canvas validates WorkflowData format properly.
 
-    Verifies that agent_id moves from top-level to config.agent_id.
+    Verifies that data conforms to the new simplified WorkflowData schema.
     """
-    # Frontend format with agent_id at top level
-    frontend_canvas_data = {
+    # WorkflowData format - simplified and direct
+    workflow_canvas = {
         "nodes": [
             {
-                "node_id": "test_node",
-                "node_type": "AgentIdentity",
-                "agent_id": test_agent.id,  # This should move to config
-                "x": 100,
-                "y": 200,
-                "width": 150,
-                "height": 80,
+                "id": "test_node",
+                "type": "agent",
+                "position": {"x": 100, "y": 200},
+                "config": {"agent_id": test_agent.id, "message": "Test message"},
             }
         ],
         "edges": [],
     }
 
     # Send via PATCH endpoint
-    patch_resp = client.patch(
-        "/api/workflows/current/canvas-data", json={"canvas_data": frontend_canvas_data}, headers=auth_headers
-    )
+    patch_resp = client.patch("/api/workflows/current/canvas", json={"canvas": workflow_canvas}, headers=auth_headers)
     assert patch_resp.status_code == 200
 
-    # Verify stored data is in canonical format
+    # Verify stored data matches WorkflowData format
     workflows = crud.get_workflows(db, owner_id=test_user.id, limit=1)
     workflow = workflows[0]
 
-    canvas_data = workflow.canvas_data
-    assert "nodes" in canvas_data
-    assert len(canvas_data["nodes"]) == 1
+    canvas = workflow.canvas
+    assert "nodes" in canvas
+    assert len(canvas["nodes"]) == 1
 
-    node = canvas_data["nodes"][0]
-    # Canonical format should have agent_id in config
+    node = canvas["nodes"][0]
+    # WorkflowData format - direct structure
+    assert node["id"] == "test_node"
+    assert node["type"] == "agent"
+    assert "position" in node
+    assert node["position"]["x"] == 100
+    assert node["position"]["y"] == 200
     assert "config" in node
-    assert "agent_id" in node["config"]
     assert node["config"]["agent_id"] == test_agent.id
-
-    # Agent_id should NOT be at top level in canonical format
-    assert "agent_id" not in node or node.get("agent_id") is None
 
 
 def test_canvas_workflow_complex_multi_agent(
@@ -316,7 +312,7 @@ def test_canvas_workflow_complex_multi_agent(
         model="gpt-4",
     )
 
-    canvas_data = {
+    canvas = {
         "edges": [
             {"from_node_id": "trigger", "to_node_id": "agent1"},
             {"from_node_id": "agent1", "to_node_id": "agent2"},
@@ -345,7 +341,7 @@ def test_canvas_workflow_complex_multi_agent(
         owner_id=test_user.id,
         name="Multi-Agent Canvas Test",
         description="Testing multi-agent canvas workflow",
-        canvas_data=canvas_data,
+        canvas=canvas,
     )
 
     # Execute workflow

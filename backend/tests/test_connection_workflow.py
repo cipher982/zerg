@@ -47,26 +47,26 @@ def test_agent_connection_workflow_execution(
         model="gpt-4",
     )
 
-    # Create workflow with connected agents in canonical format
-    canvas_data = {
+    # Create workflow with connected agents using WorkflowData format
+    canvas = {
         "nodes": [
             {
-                "node_id": f"agent_node_{agent1.id}",
-                "node_type": "AgentIdentity",
+                "id": f"agent_node_{agent1.id}",
+                "type": "agent",
                 "position": {"x": 100, "y": 100},
                 "config": {"agent_id": agent1.id, "name": agent1.name},
             },
             {
-                "node_id": f"agent_node_{agent2.id}",
-                "node_type": "AgentIdentity",
+                "id": f"agent_node_{agent2.id}",
+                "type": "agent",
                 "position": {"x": 300, "y": 100},
                 "config": {"agent_id": agent2.id, "name": agent2.name},
             },
         ],
         "edges": [
             {
-                "from_node_id": f"agent_node_{agent1.id}",
-                "to_node_id": f"agent_node_{agent2.id}",
+                "from": f"agent_node_{agent1.id}",
+                "to": f"agent_node_{agent2.id}",
                 "config": {"label": None},
             }
         ],
@@ -77,7 +77,7 @@ def test_agent_connection_workflow_execution(
         owner_id=test_user.id,
         name="Connection Test Workflow",
         description="Test workflow with agent connections",
-        canvas_data=canvas_data,
+        canvas=canvas,
     )
 
     # Execute the workflow
@@ -132,12 +132,12 @@ def test_frontend_edge_format_compatibility(
     from zerg.crud import crud as crud_mod
 
     # Create a simple workflow in canonical format using existing tools
-    canvas_data = {
+    canvas = {
         "nodes": [
-            {"node_id": "node_1", "node_type": "Tool", "position": {}, "config": {"tool_name": "get_current_time"}},
-            {"node_id": "node_2", "node_type": "Tool", "position": {}, "config": {"tool_name": "generate_uuid"}},
+            {"id": "node_1", "type": "tool", "position": {}, "config": {"tool_name": "get_current_time"}},
+            {"id": "node_2", "type": "tool", "position": {}, "config": {"tool_name": "generate_uuid"}},
         ],
-        "edges": [{"from_node_id": "node_1", "to_node_id": "node_2", "config": {"label": None}}],
+        "edges": [{"from": "node_1", "to": "node_2", "config": {"label": None}}],
     }
 
     workflow = crud_mod.create_workflow(
@@ -145,13 +145,13 @@ def test_frontend_edge_format_compatibility(
         owner_id=test_user.id,
         name="Frontend Edge Format Test",
         description="Test exact frontend edge format",
-        canvas_data=canvas_data,
+        canvas=canvas,
     )
 
     # Verify workflow was created successfully
     assert workflow.id > 0
-    assert workflow.canvas_data["edges"][0]["from_node_id"] == "node_1"
-    assert workflow.canvas_data["edges"][0]["to_node_id"] == "node_2"
+    assert workflow.canvas["edges"][0]["from"] == "node_1"
+    assert workflow.canvas["edges"][0]["to"] == "node_2"
 
     # Try to execute it (may fail due to tool nodes, but should parse correctly)
     resp = client.post(f"/api/workflow-executions/{workflow.id}/start", headers=auth_headers)

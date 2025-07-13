@@ -129,6 +129,7 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
         logger.info("[AgentRunner] Set current thread ID context token")
 
         try:
+            # TODO: Token streaming needs LangChain version compatibility investigation
             logger.info(f"[AgentRunner] Calling runnable.ainvoke with {len(original_msgs)} messages")
             # Use **async** invoke with the entrypoint
             # Pass the messages list directly to the function
