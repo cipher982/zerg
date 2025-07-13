@@ -41,11 +41,15 @@ class TestChatMessageFlow:
 
     def test_basic_connection(self, ws_client):
         """Verify basic websocket connection works"""
-        # Send a ping to check connectivity
-        ws_client.send_json({"type": MessageType.PING})
-        raw_response = ws_client.receive_json()
-        response = raw_response.get("data", raw_response)
-        assert response["type"] == MessageType.PONG
+        # Send a ping to check connectivity using envelope format
+        ws_client.send_json({"type": "ping", "timestamp": 123456789, "message_id": "test-ping-1"})
+        response = ws_client.receive_json()
+        # Check envelope format
+        assert response["v"] == 1
+        assert response["type"] == "pong"
+        assert "data" in response
+        # Check pong payload
+        assert response["data"].get("timestamp") == 123456789
 
     def test_chat_message_flow(self, ws_client, test_thread):
         """Test the complete flow of sending a chat message and receiving response"""
@@ -73,16 +77,19 @@ class TestChatMessageFlow:
         # 3. Wait for response
         raw_response = ws_client.receive_json()
         logger.info(f"Received response: {raw_response}")
-        response = raw_response.get("data", raw_response)
 
         # Check for error on raw envelope layer
         if raw_response["type"] == "error":
             logger.error(f"Error sending message: {raw_response}")
             assert False, f"Error sending message: {raw_response.get('error')}"
 
-        assert response["type"] == MessageType.THREAD_MESSAGE
-        assert "message" in response
-        assert "content" in response["message"]
+        # Check envelope format
+        assert raw_response["type"] == MessageType.THREAD_MESSAGE
+        assert "data" in raw_response
+        # Check message data
+        response_data = raw_response["data"]
+        assert "message" in response_data
+        assert "content" in response_data["message"]
 
     def test_multiple_messages(self, ws_client, test_thread):
         """Test sending multiple messages in sequence"""
@@ -111,13 +118,15 @@ class TestChatMessageFlow:
 
             # Verify response for each message
             raw = ws_client.receive_json()
-            response = raw.get("data", raw)
-            logger.info(f"Received response for message {idx+1}: {response}")
+            logger.info(f"Received response for message {idx+1}: {raw}")
 
             # Check for error
-            if response["type"] == "error":
-                logger.error(f"Error response for message {idx+1}: {response}")
-                assert False, f"Error sending message {idx+1}: {response.get('error')}"
+            if raw["type"] == "error":
+                logger.error(f"Error response for message {idx+1}: {raw}")
+                assert False, f"Error sending message {idx+1}: {raw.get('error')}"
 
-            assert response["type"] == MessageType.THREAD_MESSAGE
-            assert response["message"]["content"] == content
+            # Check envelope format
+            assert raw["type"] == MessageType.THREAD_MESSAGE
+            assert "data" in raw
+            response_data = raw["data"]
+            assert response_data["message"]["content"] == content
