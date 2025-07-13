@@ -11,6 +11,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from zerg.models.enums import AgentStatus
+from zerg.schemas.workflow import WorkflowData
 
 
 # Agent schemas
@@ -296,7 +297,7 @@ class AgentRunOut(BaseModel):
 class WorkflowBase(BaseModel):
     name: str
     description: Optional[str] = None
-    canvas_data: Dict[str, Any]
+    canvas: WorkflowData
 
 
 class WorkflowCreate(WorkflowBase):
@@ -322,7 +323,7 @@ class WorkflowTemplateBase(BaseModel):
     name: str
     description: Optional[str] = None
     category: str
-    canvas_data: Dict[str, Any]
+    canvas: WorkflowData
     tags: Optional[List[str]] = []
     preview_image_url: Optional[str] = None
 

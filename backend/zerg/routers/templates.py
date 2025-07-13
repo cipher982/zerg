@@ -10,13 +10,11 @@ from zerg.crud import crud
 from zerg.database import get_db
 from zerg.dependencies.auth import get_current_user
 from zerg.models.models import User
-from zerg.schemas.canonical_serialization import DatabaseWorkflowAdapter
-from zerg.schemas.canonical_validators import ValidationError
-from zerg.schemas.canonical_validators import validate_workflow_json
 from zerg.schemas.schemas import TemplateDeployRequest
 from zerg.schemas.schemas import Workflow
 from zerg.schemas.schemas import WorkflowTemplate
 from zerg.schemas.schemas import WorkflowTemplateCreate
+from zerg.schemas.workflow import WorkflowData
 
 router = APIRouter(
     prefix="/templates",
@@ -35,21 +33,12 @@ def create_template(
     """
     Create new workflow template.
     """
-    # Validate and convert to canonical format
+    # Validate using WorkflowData schema
     try:
-        canonical_workflow = validate_workflow_json(
-            {
-                "id": 0,  # Will be set by database
-                "name": template_in.name,
-                "description": template_in.description or "",
-                **template_in.canvas_data,
-            }
-        )
-
-        # Convert to database format
-        canonical_canvas_data = DatabaseWorkflowAdapter.save_workflow_to_database(canonical_workflow)
-    except ValidationError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid template data: {e.message}")
+        workflow_data = WorkflowData(**template_in.canvas)
+        canvas = workflow_data.model_dump(by_alias=True)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid template data: {e}")
 
     template = crud.create_workflow_template(
         db=db,
@@ -57,7 +46,7 @@ def create_template(
         name=template_in.name,
         description=template_in.description,
         category=template_in.category,
-        canvas_data=canonical_canvas_data,
+        canvas=canvas,
         tags=template_in.tags,
         preview_image_url=template_in.preview_image_url,
     )

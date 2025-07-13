@@ -17,7 +17,7 @@ def create_test_workflow(db: Session, owner_id: int):
         owner_id=owner_id,
         name=TEST_WORKFLOW_NAME,
         description=TEST_WORKFLOW_DESCRIPTION,
-        canvas_data=TEST_CANVAS_DATA,
+        canvas=TEST_CANVAS_DATA,
     )
 
 
@@ -26,8 +26,10 @@ def test_create_workflow_success(client: TestClient, test_user: User, db: Sessio
     payload = {
         "name": "New Workflow",
         "description": "A fresh new workflow.",
-        "canvas_data": {
-            "nodes": [{"id": "node1", "type": "trigger", "trigger_type": "manual", "config": {}}],
+        "canvas": {
+            "nodes": [
+                {"id": "node1", "type": "trigger", "position": {"x": 0, "y": 0}, "config": {"trigger_type": "manual"}}
+            ],
             "edges": [],
         },
     }
@@ -37,13 +39,13 @@ def test_create_workflow_success(client: TestClient, test_user: User, db: Sessio
     assert data["name"] == payload["name"]
     assert data["description"] == payload["description"]
     # After cleanup, API returns canonical format instead of frontend format
-    expected_canonical = {
+    expected_response = {
         "nodes": [
-            {"id": "node1", "type": "trigger", "trigger_type": "manual", "config": {}, "position": {"x": 0.0, "y": 0.0}}
+            {"id": "node1", "type": "trigger", "config": {"trigger_type": "manual"}, "position": {"x": 0.0, "y": 0.0}}
         ],
         "edges": [],
     }
-    assert data["canvas_data"] == expected_canonical
+    assert data["canvas"] == expected_response
     assert data["owner_id"] == test_user.id
     assert "id" in data
 
@@ -56,7 +58,7 @@ def test_create_workflow_unauthenticated(unauthenticated_client: TestClient, mon
     payload = {
         "name": "Unauthorized Workflow",
         "description": "This should not be created.",
-        "canvas_data": {},
+        "canvas": {},
     }
     response = unauthenticated_client.post("/api/workflows/", json=payload)
     assert response.status_code == 401
@@ -109,7 +111,7 @@ def test_read_workflows_isolation(
 def test_rename_workflow_success(client: TestClient, test_user: User, db: Session, auth_headers: dict):
     """Test successfully renaming a workflow."""
     wf = create_test_workflow(db, test_user.id)
-    payload = {"name": "Updated Workflow Name", "description": "Updated description.", "canvas_data": {}}
+    payload = {"name": "Updated Workflow Name", "description": "Updated description.", "canvas": {}}
     response = client.patch(f"/api/workflows/{wf.id}", headers=auth_headers, json=payload)
     assert response.status_code == 200
     data = response.json()
@@ -120,7 +122,7 @@ def test_rename_workflow_success(client: TestClient, test_user: User, db: Sessio
 
 def test_rename_workflow_not_found(client: TestClient, test_user: User, auth_headers: dict):
     """Test renaming a workflow that does not exist."""
-    payload = {"name": "Doesn't Matter", "description": "Doesn't Matter", "canvas_data": {}}
+    payload = {"name": "Doesn't Matter", "description": "Doesn't Matter", "canvas": {}}
     response = client.patch("/api/workflows/99999", headers=auth_headers, json=payload)
     assert response.status_code == 404
 
@@ -130,7 +132,7 @@ def test_rename_workflow_unauthorized(
 ):
     """Test that a user cannot rename a workflow they do not own."""
     wf = create_test_workflow(db, other_user.id)
-    payload = {"name": "Unauthorized Update", "description": "This should fail.", "canvas_data": {}}
+    payload = {"name": "Unauthorized Update", "description": "This should fail.", "canvas": {}}
     response = client.patch(f"/api/workflows/{wf.id}", headers=auth_headers, json=payload)
     assert response.status_code == 404
 
@@ -176,7 +178,7 @@ def test_soft_delete_and_recreate(client: TestClient, test_user: User, db: Sessi
     payload = {
         "name": TEST_WORKFLOW_NAME,
         "description": "A new workflow with an old name.",
-        "canvas_data": {},
+        "canvas": {},
     }
     response = client.post("/api/workflows/", headers=auth_headers, json=payload)
     assert response.status_code == 200
@@ -194,22 +196,25 @@ def test_duplicate_workflow_name_fails(client: TestClient, test_user: User, db: 
     payload = {
         "name": TEST_WORKFLOW_NAME,
         "description": "This should fail.",
-        "canvas_data": {},
+        "canvas": {},
     }
     response = client.post("/api/workflows/", headers=auth_headers, json=payload)
     assert response.status_code == 409  # Conflict
 
 
 def test_create_workflow_with_large_canvas(client: TestClient, test_user: User, auth_headers: dict):
-    """Test creating a workflow with a large canvas_data payload."""
+    """Test creating a workflow with a large canvas payload."""
     large_canvas = {
-        "nodes": [{"id": f"node_{i}", "type": "trigger", "trigger_type": "manual", "config": {}} for i in range(1000)],
-        "edges": [{"source": f"node_{i}", "target": f"node_{i+1}"} for i in range(999)],
+        "nodes": [
+            {"id": f"node_{i}", "type": "trigger", "position": {"x": 0, "y": 0}, "config": {"trigger_type": "manual"}}
+            for i in range(1000)
+        ],
+        "edges": [{"from": f"node_{i}", "to": f"node_{i+1}", "config": {}} for i in range(999)],
     }
     payload = {
         "name": "Large Canvas Workflow",
         "description": "A workflow with a very large canvas.",
-        "canvas_data": large_canvas,
+        "canvas": large_canvas,
     }
     response = client.post("/api/workflows/", headers=auth_headers, json=payload)
     if response.status_code != 200:
@@ -217,7 +222,7 @@ def test_create_workflow_with_large_canvas(client: TestClient, test_user: User, 
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == payload["name"]
-    assert len(data["canvas_data"]["nodes"]) == 1000
+    assert len(data["canvas"]["nodes"]) == 1000
 
 
 def test_schema_evolution_robustness(client: TestClient, test_user: User, db: Session, auth_headers: dict):

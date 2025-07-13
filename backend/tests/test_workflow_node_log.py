@@ -8,8 +8,8 @@ from zerg.models.models import Workflow
 from zerg.services.workflow_engine import workflow_engine as workflow_execution_engine
 
 
-def _insert_workflow(db: Session, *, name: str, canvas_data: dict):
-    wf = Workflow(owner_id=1, name=name, canvas_data=canvas_data)
+def _insert_workflow(db: Session, *, name: str, canvas: dict):
+    wf = Workflow(owner_id=1, name=name, canvas=canvas)
     db.add(wf)
     db.commit()
     db.refresh(wf)
@@ -30,7 +30,7 @@ def test_node_log_emitted(db_session):
         ],
     }
 
-    wf = _insert_workflow(db_session, name="wf-node-log", canvas_data=canvas)
+    wf = _insert_workflow(db_session, name="wf-node-log", canvas=canvas)
 
     # Execute the workflow
     asyncio.run(_run_execution(wf.id))

@@ -23,7 +23,7 @@ class TestWorkflowScheduler:
         workflow = Workflow(
             name="Test Workflow",
             description="Test workflow for scheduling",
-            canvas_data={"nodes": [], "edges": []},
+            canvas={"nodes": [], "edges": []},
             owner_id=1,
             is_active=True,
         )
@@ -88,7 +88,7 @@ class TestWorkflowEngineScheduling:
         workflow = Workflow(
             name="Test Workflow",
             description="Test workflow for execution",
-            canvas_data={"nodes": [], "edges": []},
+            canvas={"nodes": [], "edges": []},
             owner_id=1,
             is_active=True,
         )
@@ -114,7 +114,7 @@ class TestWorkflowEngineScheduling:
         workflow = Workflow(
             name="Scheduled Workflow",
             description="Workflow with schedule trigger",
-            canvas_data={
+            canvas={
                 "nodes": [
                     {
                         "id": "trigger1",
