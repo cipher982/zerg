@@ -219,8 +219,8 @@ class CanonicalWorkflow:
     edges: List[CanonicalEdge]
 
     def __post_init__(self):
-        if not isinstance(self.id, int) or self.id <= 0:
-            raise ValueError(f"Workflow ID must be positive integer, got: {self.id}")
+        if not isinstance(self.id, int) or self.id < 0:
+            raise ValueError(f"Workflow ID must be non-negative integer, got: {self.id}")
         if not isinstance(self.name, str) or not self.name:
             raise ValueError(f"Workflow name must be non-empty string, got: {self.name}")
         if not isinstance(self.nodes, list):

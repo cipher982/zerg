@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from zerg.models.models import Workflow
-from zerg.services.langgraph_workflow_engine import langgraph_workflow_engine as workflow_execution_engine
+from zerg.services.workflow_engine import workflow_engine as workflow_execution_engine
 
 # ---------------------------------------------------------------------------
 # Helpers

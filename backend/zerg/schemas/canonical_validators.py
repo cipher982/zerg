@@ -80,9 +80,9 @@ class CanonicalValidator:
             raise ValidationError("Missing required field 'id'", field_path="workflow.id")
 
         workflow_id = raw_data["id"]
-        if not isinstance(workflow_id, int) or workflow_id <= 0:
+        if not isinstance(workflow_id, int) or workflow_id < 0:
             raise ValidationError(
-                f"Workflow ID must be positive integer, got {type(workflow_id).__name__}: {workflow_id}",
+                f"Workflow ID must be non-negative integer, got {type(workflow_id).__name__}: {workflow_id}",
                 field_path="workflow.id",
                 raw_data=workflow_id,
             )
