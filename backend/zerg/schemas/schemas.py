@@ -297,11 +297,15 @@ class AgentRunOut(BaseModel):
 class WorkflowBase(BaseModel):
     name: str
     description: Optional[str] = None
-    canvas: WorkflowData
 
 
 class WorkflowCreate(WorkflowBase):
-    pass
+    canvas: WorkflowData
+
+
+class WorkflowUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
 
 
 class Workflow(WorkflowBase):
@@ -310,6 +314,7 @@ class Workflow(WorkflowBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    canvas: WorkflowData
 
     class Config:
         from_attributes = True

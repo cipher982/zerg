@@ -14,7 +14,7 @@ from zerg.services.workflow_engine import workflow_engine as workflow_execution_
 
 
 def _insert_workflow(db, *, name: str):
-    wf = Workflow(owner_id=1, name=name, canvas={"nodes": []})
+    wf = Workflow(owner_id=1, name=name, canvas={"nodes": [], "edges": []})
     db.add(wf)
     db.commit()
     db.refresh(wf)

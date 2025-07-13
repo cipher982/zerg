@@ -97,7 +97,7 @@ class TestWorkflowEngineScheduling:
 
         # Execute workflow with schedule trigger
         execution_id = await workflow_execution_engine.execute_workflow(
-            workflow_id=workflow.id, trigger_type="schedule", trigger_config={"cron": "0 9 * * *"}
+            workflow_id=workflow.id, trigger_type="schedule"
         )
 
         # Verify execution was created with correct trigger type

@@ -14,16 +14,14 @@ def _create_linear_workflow(db: Session, crud_module, owner_id: int, num_nodes: 
     canvas = {
         "nodes": [
             {
-                "node_id": f"node_{i}",
-                "node_type": "Trigger",
+                "id": f"node_{i}",
+                "type": "trigger",
                 "position": {"x": i * 100, "y": 100},
-                "config": {"trigger_type": "Manual"},
+                "config": {"trigger_type": "manual"},
             }
             for i in range(num_nodes)
         ],
-        "edges": [
-            {"from_node_id": f"node_{i}", "to_node_id": f"node_{i+1}", "config": {}} for i in range(num_nodes - 1)
-        ],
+        "edges": [{"from": f"node_{i}", "to": f"node_{i+1}", "config": {}} for i in range(num_nodes - 1)],
     }
 
     return crud_module.create_workflow(
@@ -67,9 +65,9 @@ def test_linear_execution_success(
     assert status_resp.status_code == 200
     assert status_resp.json()["status"] == "success"
 
-    # Node states exist and are success
+    # Node states exist and are completed
     from zerg.models.models import NodeExecutionState
 
     node_states = db.query(NodeExecutionState).filter_by(workflow_execution_id=execution_id).all()
     assert len(node_states) == 3
-    assert all(ns.status == "success" for ns in node_states)
+    assert all(ns.status == "completed" for ns in node_states)

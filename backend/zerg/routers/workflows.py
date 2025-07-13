@@ -18,8 +18,8 @@ from zerg.models.models import User
 # Canvas layout helper models reused from graph router to avoid duplication.
 from zerg.routers.graph_layout import LayoutUpdate
 from zerg.schemas.schemas import Workflow
-from zerg.schemas.schemas import WorkflowBase
 from zerg.schemas.schemas import WorkflowCreate
+from zerg.schemas.schemas import WorkflowUpdate
 from zerg.schemas.workflow import WorkflowData
 
 router = APIRouter(
@@ -177,15 +177,17 @@ def rename_workflow(
     *,
     db: Session = Depends(get_db),
     workflow_id: int,
-    payload: WorkflowBase,
+    payload: WorkflowUpdate,
     current_user: User = Depends(get_current_user),
 ):
     wf = crud.get_workflow(db, workflow_id)
     if wf is None or wf.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="workflow not found")
 
-    wf.name = payload.name
-    wf.description = payload.description
+    if payload.name is not None:
+        wf.name = payload.name
+    if payload.description is not None:
+        wf.description = payload.description
     db.commit()
     db.refresh(wf)
     return wf
