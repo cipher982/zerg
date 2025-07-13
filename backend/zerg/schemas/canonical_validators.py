@@ -254,8 +254,16 @@ class CanonicalValidator:
                 raw_data=agent_id,
             )
 
-        # Extract message
-        message = raw_node.get("message", "")
+        # Extract message - check multiple possible locations
+        message = ""
+
+        # Check direct field
+        if "message" in raw_node:
+            message = raw_node["message"]
+        # Check in config
+        elif "config" in raw_node and isinstance(raw_node["config"], dict):
+            message = raw_node["config"].get("message", "")
+
         if not isinstance(message, str):
             raise ValidationError(
                 f"Agent message must be string, got {type(message).__name__}", field_path="message", raw_data=message

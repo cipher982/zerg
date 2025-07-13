@@ -73,6 +73,8 @@ async def websocket_endpoint(
 
     with db_session() as db_for_auth:
         user = validate_ws_jwt(token, db_for_auth)
+        # Extract user ID while still in session context to avoid DetachedInstanceError
+        user_id = getattr(user, "id", None) if user is not None else None
 
     if user is None:
         # Auth failed and AUTH_DISABLED is *not* enabled.  We close the
@@ -82,11 +84,11 @@ async def websocket_endpoint(
         await websocket.close(code=4401, reason="Unauthorized")
         return
 
-    logger.debug("WebSocket auth succeeded for user %s (client %s)", getattr(user, "id", "?"), client_id)
+    logger.debug("WebSocket auth succeeded for user %s (client %s)", user_id or "?", client_id)
 
     try:
         await websocket.accept()
-        await topic_manager.connect(client_id, websocket, getattr(user, "id", None), auto_system=True)
+        await topic_manager.connect(client_id, websocket, user_id, auto_system=True)
         logger.info(f"WebSocket connection established for client {client_id}")
 
         # Handle initial topic subscriptions if provided

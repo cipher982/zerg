@@ -41,7 +41,7 @@ from zerg.models.models import WorkflowExecution
 from zerg.schemas.workflow_schema import NodeTypeHelper
 from zerg.schemas.workflow_schema import WorkflowCanvas
 from zerg.services.canvas_transformer import CanvasTransformer
-from zerg.tools.registry import get_registry
+from zerg.tools.unified_access import get_tool_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -560,13 +560,13 @@ class LangGraphWorkflowEngine:
                 )
 
                 try:
-                    # Execute tool
-                    registry = get_registry()
-                    all_tools = {t.name: t for t in registry.all_tools()}
-                    tool = all_tools.get(tool_name)
+                    # Execute tool using unified resolver
+                    resolver = get_tool_resolver()
+                    tool = resolver.get_tool(tool_name)
 
                     if not tool:
-                        raise ValueError(f"Tool '{tool_name}' not found")
+                        available_tools = resolver.get_tool_names()
+                        raise ValueError(f"Tool '{tool_name}' not found. Available: {available_tools}")
 
                     result = await tool.ainvoke(tool_params)
 

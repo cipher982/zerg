@@ -9,11 +9,21 @@ from sqlalchemy.orm import Session
 
 
 def _create_linear_workflow(db: Session, crud_module, owner_id: int, num_nodes: int = 3):
-    """Create a dummy linear workflow with *num_nodes* noop nodes."""
+    """Create a dummy linear workflow with *num_nodes* trigger nodes."""
 
     canvas_data = {
-        "nodes": [{"id": f"node_{i}", "type": "noop", "data": {}} for i in range(num_nodes)],
-        "edges": [{"source": f"node_{i}", "target": f"node_{i+1}"} for i in range(num_nodes - 1)],
+        "nodes": [
+            {
+                "node_id": f"node_{i}",
+                "node_type": "Trigger",
+                "position": {"x": i * 100, "y": 100},
+                "config": {"trigger_type": "Manual"},
+            }
+            for i in range(num_nodes)
+        ],
+        "edges": [
+            {"from_node_id": f"node_{i}", "to_node_id": f"node_{i+1}", "config": {}} for i in range(num_nodes - 1)
+        ],
     }
 
     return crud_module.create_workflow(
