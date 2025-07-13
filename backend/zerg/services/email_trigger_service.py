@@ -131,18 +131,29 @@ class EmailTriggerService:
         3. (Future) IMAP / provider-specific checks.
         """
 
-        # Fetch *full* trigger rows so we can mutate their config JSON later
-        def _db_query() -> list["Trigger"]:
+        # Fetch trigger data with extracted config to avoid DetachedInstanceError
+        def _db_query() -> list[dict]:
             with db_session(self._session_factory) as session:
-                return session.query(Trigger).filter(Trigger.type == "email").all()
+                db_triggers = session.query(Trigger).filter(Trigger.type == "email").all()
+                # Extract all needed data while still in session context
+                return [
+                    {
+                        "id": trg.id,
+                        "config": trg.config or {},
+                        "agent_id": trg.agent_id,
+                        "type": trg.type,
+                        # Add other fields as needed
+                    }
+                    for trg in db_triggers
+                ]
 
-        triggers = await asyncio.to_thread(_db_query)
+        trigger_data = await asyncio.to_thread(_db_query)
 
-        if not triggers:
+        if not trigger_data:
             return
 
-        for trg in triggers:
-            provider_name = (trg.config or {}).get("provider", "gmail")
+        for trg_data in trigger_data:
+            provider_name = trg_data["config"].get("provider", "gmail")
 
             # ------------------------------------------------------------------
             # Delegate provider-specific handling
@@ -151,7 +162,9 @@ class EmailTriggerService:
             provider_impl = get_provider(str(provider_name))
 
             if provider_impl is None:
-                log.warning("email-trigger", event="unsupported-provider", provider=provider_name, trigger_id=trg.id)
+                log.warning(
+                    "email-trigger", event="unsupported-provider", provider=provider_name, trigger_id=trg_data["id"]
+                )
                 continue
 
             # Gmail logic now lives **entirely** in ``GmailProvider``.  The
@@ -171,15 +184,17 @@ class EmailTriggerService:
             # Finally hand over to provider implementation ----------------------------------------------------
 
             try:
-                await provider_impl.process_trigger(trg.id)
+                await provider_impl.process_trigger(trg_data["id"])
             except NotImplementedError:
-                log.info("email-trigger", event="provider-not-implemented", provider=provider_name, trigger_id=trg.id)
+                log.info(
+                    "email-trigger", event="provider-not-implemented", provider=provider_name, trigger_id=trg_data["id"]
+                )
             except Exception as exc:  # pragma: no cover – safety net
                 log.exception(
                     "email-trigger",
                     event="provider-error",
                     provider=provider_name,
-                    trigger_id=trg.id,
+                    trigger_id=trg_data["id"],
                     error=str(exc),
                 )
 

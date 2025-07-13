@@ -47,26 +47,28 @@ def test_agent_connection_workflow_execution(
         model="gpt-4",
     )
 
-    # Create workflow with connected agents (mimicking frontend AddEdge)
+    # Create workflow with connected agents in canonical format
     canvas_data = {
         "nodes": [
             {
-                "id": f"agent_node_{agent1.id}",
-                "type": "AgentIdentity",
-                "data": {"agent_id": agent1.id, "name": agent1.name},
-                "x": 100,
-                "y": 100,
+                "node_id": f"agent_node_{agent1.id}",
+                "node_type": "AgentIdentity",
+                "position": {"x": 100, "y": 100},
+                "config": {"agent_id": agent1.id, "name": agent1.name},
             },
             {
-                "id": f"agent_node_{agent2.id}",
-                "type": "AgentIdentity",
-                "data": {"agent_id": agent2.id, "name": agent2.name},
-                "x": 300,
-                "y": 100,
+                "node_id": f"agent_node_{agent2.id}",
+                "node_type": "AgentIdentity",
+                "position": {"x": 300, "y": 100},
+                "config": {"agent_id": agent2.id, "name": agent2.name},
             },
         ],
         "edges": [
-            {"id": "edge_1", "source": f"agent_node_{agent1.id}", "target": f"agent_node_{agent2.id}", "label": None}
+            {
+                "from_node_id": f"agent_node_{agent1.id}",
+                "to_node_id": f"agent_node_{agent2.id}",
+                "config": {"label": None},
+            }
         ],
     }
 
@@ -128,26 +130,14 @@ def test_frontend_edge_format_compatibility(
     """Test that the exact edge format created by frontend AddEdge message works."""
 
     from zerg.crud import crud as crud_mod
-    from zerg.tools.registry import register_tool
 
-    # Register test tools for this test
-    @register_tool(name="test_tool", description="A test tool")
-    def test_tool(input_text: str = "test") -> str:
-        """A test tool that returns test output."""
-        return f"test_tool output: {input_text}"
-
-    @register_tool(name="test_tool_2", description="Another test tool")
-    def test_tool_2(input_text: str = "test") -> str:
-        """Another test tool that returns test output."""
-        return f"test_tool_2 output: {input_text}"
-
-    # Create a simple workflow with the exact format the frontend creates
+    # Create a simple workflow in canonical format using existing tools
     canvas_data = {
         "nodes": [
-            {"id": "node_1", "type": "Tool", "data": {"tool_name": "test_tool"}},
-            {"id": "node_2", "type": "Tool", "data": {"tool_name": "test_tool_2"}},
+            {"node_id": "node_1", "node_type": "Tool", "position": {}, "config": {"tool_name": "get_current_time"}},
+            {"node_id": "node_2", "node_type": "Tool", "position": {}, "config": {"tool_name": "generate_uuid"}},
         ],
-        "edges": [{"from_node_id": "node_1", "to_node_id": "node_2", "label": None}],
+        "edges": [{"from_node_id": "node_1", "to_node_id": "node_2", "config": {"label": None}}],
     }
 
     workflow = crud_mod.create_workflow(

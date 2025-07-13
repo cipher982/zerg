@@ -188,10 +188,11 @@ class WorkflowValidator:
 
         # Validate against our tool contracts!
         if tool_name:
-            from zerg.tools.generated.tool_definitions import list_all_tools
+            from zerg.tools.unified_access import get_tool_resolver
 
-            valid_tools = list_all_tools()
-            if tool_name not in valid_tools:
+            resolver = get_tool_resolver()
+            if not resolver.has_tool(tool_name):
+                valid_tools = resolver.get_tool_names()
                 errors.append(
                     ValidationError(
                         code="INVALID_TOOL_NAME",

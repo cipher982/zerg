@@ -44,7 +44,7 @@ from zerg.models.models import Agent
 from zerg.models.models import NodeExecutionState
 from zerg.models.models import Workflow
 from zerg.models.models import WorkflowExecution
-from zerg.tools.registry import get_registry
+from zerg.tools.unified_access import get_tool_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -618,16 +618,15 @@ class WorkflowExecutionEngine:
         if not tool_name:
             raise ValueError("Tool node missing tool_name field")
 
-        # Get tool from registry - supports builtin, registered, and MCP tools
-        registry = get_registry()
+        # Get tool using unified resolver - supports builtin, registered, and MCP tools
+        resolver = get_tool_resolver()
 
-        # Use the unified registry which already includes builtin + MCP tools
-        all_tools = {t.name: t for t in registry.all_tools()}
-        tool = all_tools.get(tool_name)
+        # Use the unified resolver for efficient tool lookup
+        tool = resolver.get_tool(tool_name)
 
         if not tool:
-            available_tools = [t.name for t in registry.all_tools()]
-            raise ValueError(f"Tool '{tool_name}' not found in registry. Available: {available_tools}")
+            available_tools = resolver.get_tool_names()
+            raise ValueError(f"Tool '{tool_name}' not found. Available: {available_tools}")
 
         self._publish_node_log(
             execution_id=execution_id,
