@@ -46,7 +46,7 @@ class BaseNodeExecutor:
                 output = await self._execute_node_logic(db, state)
 
                 node_state.status = "completed"
-                node_state.output = output if isinstance(output, dict) else {"result": output}
+                node_state.output = output
                 db.commit()
 
                 await self.publish_event(
@@ -69,7 +69,7 @@ class BaseNodeExecutor:
 
                 node_state.status = "failed"
                 node_state.error = error_msg
-                node_state.output = {"error": error_msg}
+                node_state.output = {"status": "failed", "error": error_msg}
                 db.commit()
 
                 await self.publish_event(
@@ -126,10 +126,16 @@ class AgentNodeExecutor(BaseNodeExecutor):
         )
 
         # Execute via AgentRunner
-        runner = AgentRunner()
-        output = await runner.process_thread_async(thread.id, agent.allowed_tools)
+        runner = AgentRunner(agent)
+        created_messages = await runner.run_thread(db, thread)
 
-        return output
+        # Return structured workflow output
+        return {
+            "agent_id": agent_id,
+            "thread_id": thread.id,
+            "messages_created": len(created_messages),
+            "status": "completed",
+        }
 
 
 class ToolNodeExecutor(BaseNodeExecutor):
@@ -145,16 +151,16 @@ class ToolNodeExecutor(BaseNodeExecutor):
 
         # Get tool resolver and execute
         tool_resolver = get_tool_resolver()
-        tool_class = tool_resolver.get_tool_by_name(tool_name)
+        tool = tool_resolver.get_tool(tool_name)
 
-        if not tool_class:
+        if not tool:
             raise ValueError(f"Tool {tool_name} not found")
 
-        tool_instance = tool_class()
         static_params = self.node.config.get("static_params", {})
-        output = await tool_instance.execute(**static_params)
+        output = tool.run(static_params)
 
-        return output
+        # Return structured workflow output
+        return {"tool_name": tool_name, "parameters": static_params, "result": output, "status": "completed"}
 
 
 class TriggerNodeExecutor(BaseNodeExecutor):
