@@ -15,6 +15,10 @@ from zerg.database import get_session_factory
 from zerg.managers.agent_runner import AgentRunner
 from zerg.models.models import Agent
 from zerg.models.models import NodeExecutionState
+from zerg.services.expression_evaluator import ExpressionEvaluationError
+from zerg.services.expression_evaluator import ExpressionValidationError
+from zerg.services.expression_evaluator import safe_evaluator
+from zerg.services.variable_resolver import resolve_variables as enhanced_resolve_variables
 from zerg.tools.unified_access import get_tool_resolver
 
 logger = logging.getLogger(__name__)
@@ -241,8 +245,9 @@ class ConditionalNodeExecutor(BaseNodeExecutor):
     async def _execute_node_logic(self, db, state):
         logger.info(f"[ConditionalNode] Executing conditional node: {self.node_id}")
 
-        # Resolve variables in node configuration
-        resolved_config = resolve_variables(self.node.config, state.get("node_outputs", {}))
+        # Use enhanced variable resolution for better type handling
+        node_outputs = state.get("node_outputs", {})
+        resolved_config = enhanced_resolve_variables(self.node.config, node_outputs)
 
         condition = resolved_config.get("condition", "")
         condition_type = resolved_config.get("condition_type", "expression")
@@ -250,8 +255,8 @@ class ConditionalNodeExecutor(BaseNodeExecutor):
         if not condition:
             raise ValueError(f"Conditional node {self.node_id} missing condition")
 
-        # Evaluate the condition
-        condition_result = self._evaluate_condition(condition, condition_type, state.get("node_outputs", {}))
+        # Evaluate the condition using the new system
+        condition_result = self._evaluate_condition(condition, condition_type, node_outputs)
 
         logger.info(f"[ConditionalNode] Condition '{condition}' evaluated to {condition_result}")
 
@@ -263,70 +268,92 @@ class ConditionalNodeExecutor(BaseNodeExecutor):
         }
 
     def _evaluate_condition(self, condition: str, condition_type: str, node_outputs: Dict[str, Any]) -> bool:
-        """Evaluate a condition and return True/False."""
+        """Evaluate a condition using SafeExpressionEvaluator with proper type handling."""
 
         if condition_type == "expression":
-            # Simple expression evaluation
-            # Supports: ==, !=, >, <, >=, <=
-            # Examples: "${tool-1.result} > 50", "${agent-1.status} == 'completed'"
+            try:
+                # For expression conditions, we need to resolve variables first to get typed values
+                # The condition may contain ${node.field} references that need to be resolved
 
-            # Split on operators (order matters - check >= before >)
-            operators = [">=", "<=", "==", "!=", ">", "<"]
+                # Step 1: Resolve all variables in the condition to get actual values
+                resolved_condition = enhanced_resolve_variables(condition, node_outputs)
 
-            for op in operators:
-                if op in condition:
-                    left, right = condition.split(op, 1)
-                    left = left.strip()
-                    right = right.strip()
+                # Step 2: If the condition is now a pure variable (single resolved value), handle it
+                if not isinstance(resolved_condition, str):
+                    # The condition resolved to a single value, treat as truthy check
+                    result = bool(resolved_condition)
+                    logger.debug(f"Condition '{condition}' resolved to value {resolved_condition}, truthy: {result}")
+                    return result
 
-                    # Convert to appropriate types for comparison
-                    left_val = self._convert_value(left)
-                    right_val = self._convert_value(right.strip("'\""))  # Remove quotes
+                # Step 3: Extract variables from the resolved condition for SafeExpressionEvaluator
+                # We need to build a variables dict for the evaluator
+                variables = self._extract_expression_variables(resolved_condition, node_outputs)
 
-                    # Perform comparison
-                    if op == "==":
-                        return left_val == right_val
-                    elif op == "!=":
-                        return left_val != right_val
-                    elif op == ">":
-                        return float(left_val) > float(right_val)
-                    elif op == "<":
-                        return float(left_val) < float(right_val)
-                    elif op == ">=":
-                        return float(left_val) >= float(right_val)
-                    elif op == "<=":
-                        return float(left_val) <= float(right_val)
+                # Step 4: Use SafeExpressionEvaluator for secure, typed evaluation
+                result = safe_evaluator.evaluate(resolved_condition, variables)
 
-            # If no operator found, treat as truthy check
-            return bool(self._convert_value(condition))
+                # Ensure result is boolean
+                result = bool(result)
+
+                logger.debug(f"Expression '{condition}' -> '{resolved_condition}' evaluated to {result}")
+                return result
+
+            except (ExpressionEvaluationError, ExpressionValidationError) as e:
+                logger.error(f"Failed to evaluate expression condition '{condition}': {e}")
+                # For safety, return False on evaluation failure
+                return False
+            except Exception as e:
+                logger.error(f"Unexpected error evaluating condition '{condition}': {e}")
+                return False
 
         elif condition_type == "exists":
-            # Check if a node output exists
-            # Example: "tool-1.result" checks if tool-1 has a result key
-            if "." in condition:
-                node_id, key = condition.split(".", 1)
-                return (
-                    node_id in node_outputs and isinstance(node_outputs[node_id], dict) and key in node_outputs[node_id]
-                )
-            else:
-                return condition in node_outputs
+            # Check if a node output exists - enhanced with envelope format support
+            try:
+                # Use enhanced variable resolver to check existence
+                resolved_value = enhanced_resolve_variables(f"${{{condition}}}", node_outputs)
+                # If resolution succeeded and didn't return the original pattern, the path exists
+                return resolved_value != f"${{{condition}}}"
+            except Exception:
+                # Fallback to legacy existence check
+                if "." in condition:
+                    node_id, key = condition.split(".", 1)
+                    return (
+                        node_id in node_outputs
+                        and isinstance(node_outputs[node_id], dict)
+                        and key in node_outputs[node_id]
+                    )
+                else:
+                    return condition in node_outputs
 
         else:
             raise ValueError(f"Unsupported condition type: {condition_type}")
 
-    def _convert_value(self, value: str):
-        """Convert string value to appropriate type (int, float, or string)."""
-        value = str(value).strip()
+    def _extract_expression_variables(self, expression: str, node_outputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract variables from expression and resolve them to typed values."""
+        variables = {}
 
-        # Try to convert to number
+        # Get variable names from the expression evaluator
         try:
-            if "." in value:
-                return float(value)
-            else:
-                return int(value)
-        except ValueError:
-            # Return as string if not a number
-            return value
+            var_names = safe_evaluator.get_variable_names(expression)
+
+            for var_name in var_names:
+                # Try to resolve each variable to a typed value
+                try:
+                    # Look for the variable in resolved node outputs
+                    resolved_value = enhanced_resolve_variables(f"${{{var_name}}}", node_outputs)
+                    if resolved_value != f"${{{var_name}}}":
+                        # Successfully resolved - use the typed value
+                        variables[var_name] = resolved_value
+                    else:
+                        # Could not resolve - check if it's a literal value in the expression
+                        logger.warning(f"Could not resolve variable '{var_name}' in expression '{expression}'")
+                except Exception as e:
+                    logger.warning(f"Error resolving variable '{var_name}': {e}")
+
+        except Exception as e:
+            logger.warning(f"Error extracting variables from expression '{expression}': {e}")
+
+        return variables
 
 
 def create_node_executor(node, publish_event_callback) -> BaseNodeExecutor:
