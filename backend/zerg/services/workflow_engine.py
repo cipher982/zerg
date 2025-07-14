@@ -127,8 +127,52 @@ class WorkflowEngine:
         for start_node in start_nodes:
             graph.add_edge(START, start_node)
 
+        # Group edges by source node to handle conditional routing
+        edges_by_source = {}
         for edge in workflow_data.edges:
-            graph.add_edge(edge.from_, edge.to)
+            if edge.from_ not in edges_by_source:
+                edges_by_source[edge.from_] = []
+            edges_by_source[edge.from_].append(edge)
+
+        # Add edges with conditional routing support
+        for source_node_id, edges in edges_by_source.items():
+            from_node = next((n for n in workflow_data.nodes if n.id == source_node_id), None)
+
+            if from_node and from_node.type == "conditional":
+                # For conditional nodes, create a router that handles all outgoing edges
+                true_targets = [e.to for e in edges if e.config.get("branch", "true") == "true"]
+                false_targets = [e.to for e in edges if e.config.get("branch", "true") == "false"]
+
+                def make_conditional_router(true_list, false_list):
+                    def conditional_router(state):
+                        """Route based on conditional node result."""
+                        if source_node_id in state["node_outputs"]:
+                            conditional_result = state["node_outputs"][source_node_id]
+                            branch = conditional_result.get("branch", "false")
+
+                            if branch == "true" and true_list:
+                                return true_list[0]  # Take first true target
+                            elif branch == "false" and false_list:
+                                return false_list[0]  # Take first false target
+                        return END  # End workflow if no valid route
+
+                    return conditional_router
+
+                # Build the routing map
+                route_map = {}
+                if true_targets:
+                    route_map[true_targets[0]] = true_targets[0]
+                if false_targets:
+                    route_map[false_targets[0]] = false_targets[0]
+                route_map[END] = END
+
+                graph.add_conditional_edges(
+                    source_node_id, make_conditional_router(true_targets, false_targets), route_map
+                )
+            else:
+                # Regular edges - add them normally
+                for edge in edges:
+                    graph.add_edge(edge.from_, edge.to)
 
         for end_node in end_nodes:
             graph.add_edge(end_node, END)

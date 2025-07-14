@@ -158,13 +158,13 @@ pub fn execute_fetch_command(cmd: Command) {
                         match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
                             Ok(api_wf) => {
                                 let node_count = api_wf
-                                    .canvas_data
+                                    .canvas
                                     .as_object()
                                     .and_then(|obj| obj.get("nodes"))
                                     .and_then(|nodes| nodes.as_array())
                                     .map_or(0, |arr| arr.len());
                                 let edge_count = api_wf
-                                    .canvas_data
+                                    .canvas
                                     .as_object()
                                     .and_then(|obj| obj.get("edges"))
                                     .and_then(|edges| edges.as_array())

@@ -1852,7 +1852,7 @@ impl AppState {
                     owner_id: 0, // Default owner for now
                     name: "My Canvas Workflow".to_string(),
                     description: Some("Auto-created workflow".to_string()),
-                    canvas_data: serde_json::json!({
+                    canvas: serde_json::json!({
                         "nodes": vec![node],
                         "edges": Vec::<WorkflowEdge>::new()
                     }),
@@ -1885,7 +1885,7 @@ impl AppState {
             owner_id: 0, // Default owner for now
             name,
             description: Some("Canvas workflow".to_string()),
-            canvas_data: serde_json::json!({
+            canvas: serde_json::json!({
                 "nodes": Vec::<WorkflowNode>::new(),
                 "edges": Vec::<WorkflowEdge>::new()
             }),
@@ -1956,7 +1956,7 @@ impl AppState {
                     owner_id: 0, // Default owner for now
                     name: "My Canvas Workflow".to_string(),
                     description: Some("Auto-created workflow".to_string()),
-                    canvas_data: serde_json::json!({
+                    canvas: serde_json::json!({
                         "nodes": Vec::<WorkflowNode>::new(),
                         "edges": vec![edge]
                     }),

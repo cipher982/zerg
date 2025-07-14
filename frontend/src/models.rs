@@ -586,7 +586,7 @@ pub struct ApiWorkflow {
     pub name: String,
     pub description: Option<String>,
     #[serde(default)]
-    pub canvas_data: serde_json::Value,
+    pub canvas: serde_json::Value,
     #[serde(default)]
     pub is_active: bool,
     #[serde(default)]
@@ -597,14 +597,14 @@ pub struct ApiWorkflow {
 
 impl From<ApiWorkflow> for WorkflowCanvas {
     fn from(api: ApiWorkflow) -> Self {
-        serde_json::from_value(api.canvas_data).expect("backend guarantees canonical schema")
+        serde_json::from_value(api.canvas).expect("backend guarantees canonical schema")
     }
 }
 
 impl ApiWorkflow {
-    /// Get nodes from canvas_data
+    /// Get nodes from canvas
     pub fn get_nodes(&self) -> Vec<WorkflowNode> {
-        self.canvas_data
+        self.canvas
             .get("nodes")
             .and_then(|v| v.as_array())
             .map(|arr| {
@@ -617,9 +617,9 @@ impl ApiWorkflow {
             .unwrap_or_default()
     }
 
-    /// Get edges from canvas_data
+    /// Get edges from canvas
     pub fn get_edges(&self) -> Vec<WorkflowEdge> {
-        self.canvas_data
+        self.canvas
             .get("edges")
             .and_then(|v| v.as_array())
             .map(|arr| {
@@ -644,20 +644,20 @@ impl ApiWorkflow {
 
     /// Get mutable access to nodes (for internal use)
     pub fn get_nodes_mut(&mut self) -> &mut serde_json::Value {
-        if !self.canvas_data.is_object() {
-            self.canvas_data = serde_json::json!({});
+        if !self.canvas.is_object() {
+            self.canvas = serde_json::json!({});
         }
-        let canvas_obj = self.canvas_data.as_object_mut().unwrap();
+        let canvas_obj = self.canvas.as_object_mut().unwrap();
         canvas_obj.entry("nodes").or_insert(serde_json::json!([]));
         &mut canvas_obj["nodes"]
     }
 
     /// Get mutable access to edges (for internal use)
     pub fn get_edges_mut(&mut self) -> &mut serde_json::Value {
-        if !self.canvas_data.is_object() {
-            self.canvas_data = serde_json::json!({});
+        if !self.canvas.is_object() {
+            self.canvas = serde_json::json!({});
         }
-        let canvas_obj = self.canvas_data.as_object_mut().unwrap();
+        let canvas_obj = self.canvas.as_object_mut().unwrap();
         canvas_obj.entry("edges").or_insert(serde_json::json!([]));
         &mut canvas_obj["edges"]
     }
@@ -1172,7 +1172,7 @@ pub struct WorkflowTemplate {
     pub name: String,
     pub description: Option<String>,
     pub category: String,
-    pub canvas_data: serde_json::Value,
+    pub canvas: serde_json::Value,
     pub tags: Vec<String>,
     pub preview_image_url: Option<String>,
     pub is_public: bool,
