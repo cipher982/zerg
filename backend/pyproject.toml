@@ -33,6 +33,7 @@ dependencies = [
     "jsonschema>=4.23.0",
     "langgraph-checkpoint-sqlite>=2.0.10",
     "alembic>=1.16.4",
+    "simpleeval>=1.0.3",
 ]
 
 [build-system]
