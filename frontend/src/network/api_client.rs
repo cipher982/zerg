@@ -170,9 +170,9 @@ impl ApiClient {
 
     /// Create a new workflow – returns the JSON representation from backend.
     pub async fn create_workflow(name: &str) -> Result<String, JsValue> {
-        // Minimal payload; description empty and canvas_data empty object
+        // Minimal payload; description empty and canvas empty object
         let body = format!(
-            "{{\"name\": \"{}\", \"description\": \"\", \"canvas_data\": {{}}}}",
+            "{{\"name\": \"{}\", \"description\": \"\", \"canvas\": {{\"nodes\": [], \"edges\": []}}}}",
             name
         );
         let url = format!("{}/api/workflows/", Self::api_base_url());
@@ -193,7 +193,7 @@ impl ApiClient {
     ) -> Result<String, JsValue> {
         let url = format!("{}/api/workflows/{}", Self::api_base_url(), workflow_id);
         let body = format!(
-            "{{\"name\": \"{}\", \"description\": \"{}\", \"canvas_data\": {{}}}}",
+            "{{\"name\": \"{}\", \"description\": \"{}\", \"canvas\": {{\"nodes\": [], \"edges\": []}}}}",
             name, description
         );
         Self::fetch_json(&url, "PATCH", Some(&body)).await
@@ -769,7 +769,7 @@ impl ApiClient {
         name: &str,
         description: Option<&str>,
         category: &str,
-        canvas_data: &str,
+        canvas: &str,
         tags: Option<&[&str]>,
         preview_image_url: Option<&str>,
     ) -> Result<String, JsValue> {
@@ -778,7 +778,7 @@ impl ApiClient {
         let mut fields = vec![
             format!(r#""name": "{}""#, name.replace('"', r#"\""#)),
             format!(r#""category": "{}""#, category.replace('"', r#"\""#)),
-            format!(r#""canvas_data": {}"#, canvas_data),
+            format!(r#""canvas": {}"#, canvas),
         ];
 
         if let Some(desc) = description {
