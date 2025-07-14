@@ -15,6 +15,10 @@ from zerg.database import get_session_factory
 from zerg.managers.agent_runner import AgentRunner
 from zerg.models.models import Agent
 from zerg.models.models import NodeExecutionState
+from zerg.schemas.node_output import create_agent_envelope
+from zerg.schemas.node_output import create_conditional_envelope
+from zerg.schemas.node_output import create_tool_envelope
+from zerg.schemas.node_output import create_trigger_envelope
 from zerg.services.expression_evaluator import ExpressionEvaluationError
 from zerg.services.expression_evaluator import ExpressionValidationError
 from zerg.services.expression_evaluator import safe_evaluator
@@ -81,10 +85,11 @@ def resolve_variables(data: Any, node_outputs: Dict[str, Any]) -> Any:
 class BaseNodeExecutor:
     """Base class for node executors with common functionality."""
 
-    def __init__(self, node, publish_event_callback):
+    def __init__(self, node, publish_event_callback, use_envelope_format=True):
         self.node = node
         self.node_id = node.id
         self.publish_event = publish_event_callback
+        self.use_envelope_format = use_envelope_format
 
     async def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the node and return updated state."""
@@ -106,7 +111,22 @@ class BaseNodeExecutor:
                 output = await self._execute_node_logic(db, state)
 
                 node_state.status = "completed"
-                node_state.output = output
+                # Convert envelope to dict for database storage if needed
+                if hasattr(output, "model_dump"):
+                    db_output = output.model_dump()
+                    # For backward compatibility with tests, add legacy fields at top level for conditional nodes
+                    if (
+                        self.node.type == "conditional"
+                        and isinstance(db_output, dict)
+                        and "value" in db_output
+                        and isinstance(db_output["value"], dict)
+                    ):
+                        # Add legacy fields to maintain test compatibility
+                        db_output["condition_result"] = db_output["value"].get("result")
+                        db_output["branch"] = db_output["value"].get("branch")
+                    node_state.output = db_output
+                else:
+                    node_state.output = output
                 db.commit()
 
                 await self.publish_event(
@@ -117,9 +137,12 @@ class BaseNodeExecutor:
                     error=None,
                 )
 
+                # Store output in state - convert envelope to dict if needed for proper variable resolution
+                state_output = output.model_dump() if hasattr(output, "model_dump") else output
+
                 return {
                     **state,
-                    "node_outputs": {**state["node_outputs"], self.node_id: output},
+                    "node_outputs": {**state["node_outputs"], self.node_id: state_output},
                     "completed_nodes": state["completed_nodes"] + [self.node_id],
                 }
 
@@ -129,7 +152,12 @@ class BaseNodeExecutor:
 
                 node_state.status = "failed"
                 node_state.error = error_msg
-                node_state.output = {"status": "failed", "error": error_msg}
+                error_output = self._create_error_output(error_msg)
+                # Convert envelope to dict for database storage if needed
+                if hasattr(error_output, "model_dump"):
+                    node_state.output = error_output.model_dump()
+                else:
+                    node_state.output = error_output
                 db.commit()
 
                 await self.publish_event(
@@ -149,6 +177,50 @@ class BaseNodeExecutor:
     async def _execute_node_logic(self, db, state):
         """Override this in subclasses."""
         raise NotImplementedError
+
+    def _create_envelope_output(self, value, node_type, **kwargs):
+        """Create standardized envelope output based on node type."""
+        if not self.use_envelope_format:
+            # Return legacy format for backward compatibility
+            return value
+
+        # Create envelope based on node type
+        if node_type == "tool":
+            return create_tool_envelope(value, **kwargs)
+        elif node_type == "agent":
+            return create_agent_envelope(value, **kwargs)
+        elif node_type == "conditional":
+            return create_conditional_envelope(value, **kwargs)
+        elif node_type == "trigger":
+            return create_trigger_envelope(value, **kwargs)
+        else:
+            # Fallback to tool envelope for unknown types (safest default)
+            return create_tool_envelope(value, **kwargs)
+
+    def _create_error_output(self, error_msg):
+        """Create standardized error output."""
+        if not self.use_envelope_format:
+            # Legacy error format
+            return {"status": "failed", "error": error_msg}
+
+        # For envelope format, create a proper error envelope based on node type
+        # Determine node type from the executor class name
+        node_type = "tool"  # Default fallback
+        if hasattr(self, "__class__"):
+            class_name = self.__class__.__name__
+            if "Agent" in class_name:
+                node_type = "agent"
+            elif "Tool" in class_name:
+                node_type = "tool"
+            elif "Conditional" in class_name:
+                node_type = "conditional"
+            elif "Trigger" in class_name:
+                node_type = "trigger"
+
+        # Use the specific envelope creator for error cases
+        return self._create_envelope_output(
+            value=None, node_type=node_type, status="failed", error=error_msg, error_type=type(Exception()).__name__
+        )
 
 
 class AgentNodeExecutor(BaseNodeExecutor):
@@ -192,13 +264,30 @@ class AgentNodeExecutor(BaseNodeExecutor):
         runner = AgentRunner(agent)
         created_messages = await runner.run_thread(db, thread)
 
-        # Return structured workflow output
-        return {
+        # Create agent result - either envelope or legacy format
+        legacy_output = {
             "agent_id": agent_id,
             "thread_id": thread.id,
             "messages_created": len(created_messages),
             "status": "completed",
         }
+
+        if self.use_envelope_format:
+            # Use envelope format: separate agent result from metadata
+            return self._create_envelope_output(
+                value={
+                    "messages": created_messages,
+                    "messages_created": len(created_messages),
+                },  # The actual agent result
+                node_type="agent",
+                status="completed",
+                agent_id=agent_id,
+                agent_name=agent.name,
+                thread_id=thread.id,
+            )
+        else:
+            # Return legacy format for backward compatibility
+            return legacy_output
 
 
 class ToolNodeExecutor(BaseNodeExecutor):
@@ -225,8 +314,21 @@ class ToolNodeExecutor(BaseNodeExecutor):
         static_params = resolved_config.get("static_params", {})
         output = tool.run(static_params)
 
-        # Return structured workflow output
-        return {"tool_name": tool_name, "parameters": static_params, "result": output, "status": "completed"}
+        # Create tool result - either envelope or legacy format
+        legacy_output = {"tool_name": tool_name, "parameters": static_params, "result": output, "status": "completed"}
+
+        if self.use_envelope_format:
+            # Use envelope format: separate result value from metadata
+            return self._create_envelope_output(
+                value=output,  # The actual tool result
+                node_type="tool",
+                status="completed",
+                tool_name=tool_name,
+                parameters=static_params,
+            )
+        else:
+            # Return legacy format for backward compatibility
+            return legacy_output
 
 
 class TriggerNodeExecutor(BaseNodeExecutor):
@@ -235,8 +337,21 @@ class TriggerNodeExecutor(BaseNodeExecutor):
     async def _execute_node_logic(self, db, state):
         logger.info(f"[TriggerNode] Executing trigger node: {self.node_id}")
 
-        # Trigger nodes just pass through for now
-        return {"status": "triggered", "config": self.node.config}
+        # Create trigger result - either envelope or legacy format
+        legacy_output = {"status": "triggered", "config": self.node.config}
+
+        if self.use_envelope_format:
+            # Use envelope format: separate trigger result from metadata
+            return self._create_envelope_output(
+                value={"triggered": True},  # The actual trigger result
+                node_type="trigger",
+                status="completed",
+                trigger_type="manual",  # Could be enhanced to detect type
+                trigger_config=self.node.config,
+            )
+        else:
+            # Return legacy format for backward compatibility
+            return legacy_output
 
 
 class ConditionalNodeExecutor(BaseNodeExecutor):
@@ -260,12 +375,28 @@ class ConditionalNodeExecutor(BaseNodeExecutor):
 
         logger.info(f"[ConditionalNode] Condition '{condition}' evaluated to {condition_result}")
 
-        return {
+        # Create conditional result - either envelope or legacy format
+        branch = "true" if condition_result else "false"
+        legacy_output = {
             "condition": condition,
             "condition_result": condition_result,
             "status": "completed",
-            "branch": "true" if condition_result else "false",
+            "branch": branch,
         }
+
+        if self.use_envelope_format:
+            # Use envelope format: separate conditional result from metadata
+            return self._create_envelope_output(
+                value={"result": condition_result, "branch": branch},  # The actual conditional result
+                node_type="conditional",
+                status="completed",
+                condition=condition,
+                resolved_condition=condition,  # Could be enhanced to show resolved version
+                evaluation_method="ast_safe",
+            )
+        else:
+            # Return legacy format for backward compatibility
+            return legacy_output
 
     def _evaluate_condition(self, condition: str, condition_type: str, node_outputs: Dict[str, Any]) -> bool:
         """Evaluate a condition using SafeExpressionEvaluator with proper type handling."""
@@ -356,16 +487,16 @@ class ConditionalNodeExecutor(BaseNodeExecutor):
         return variables
 
 
-def create_node_executor(node, publish_event_callback) -> BaseNodeExecutor:
+def create_node_executor(node, publish_event_callback, use_envelope_format=True) -> BaseNodeExecutor:
     """Factory function to create appropriate node executor."""
     if node.type == "agent":
-        return AgentNodeExecutor(node, publish_event_callback)
+        return AgentNodeExecutor(node, publish_event_callback, use_envelope_format)
     elif node.type == "tool":
-        return ToolNodeExecutor(node, publish_event_callback)
+        return ToolNodeExecutor(node, publish_event_callback, use_envelope_format)
     elif node.type == "trigger":
-        return TriggerNodeExecutor(node, publish_event_callback)
+        return TriggerNodeExecutor(node, publish_event_callback, use_envelope_format)
     elif node.type == "conditional":
-        return ConditionalNodeExecutor(node, publish_event_callback)
+        return ConditionalNodeExecutor(node, publish_event_callback, use_envelope_format)
     else:
         # Placeholder for unknown types
         class PlaceholderExecutor(BaseNodeExecutor):
@@ -373,4 +504,4 @@ def create_node_executor(node, publish_event_callback) -> BaseNodeExecutor:
                 logger.warning(f"[PlaceholderNode] Executing placeholder for unknown node type: {self.node_id}")
                 return {"status": "skipped", "reason": "unknown_type"}
 
-        return PlaceholderExecutor(node, publish_event_callback)
+        return PlaceholderExecutor(node, publish_event_callback, use_envelope_format)
