@@ -23,16 +23,18 @@ class Position(BaseModel):
 
 
 class WorkflowNode(BaseModel):
-    """A workflow node (agent, tool, or trigger)."""
+    """A workflow node (agent, tool, trigger, or conditional)."""
 
     id: str
-    type: Literal["agent", "tool", "trigger"]
+    type: Literal["agent", "tool", "trigger", "conditional"]
     position: Position
     config: Dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkflowEdge(BaseModel):
     """A directed edge connecting two nodes."""
+
+    model_config = {"populate_by_name": True}
 
     from_: str = Field(..., alias="from")
     to: str
