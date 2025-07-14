@@ -146,14 +146,14 @@ def test_token_streaming_flow(monkeypatch, client: TestClient, sample_agent):
     # Should have at least stream_start and stream_end
     assert "stream_start" in types, f"Expected stream_start in {types}"
     assert "stream_end" in types, f"Expected stream_end in {types}"
-    
+
     # Should have run updates showing the agent actually executed
     run_updates = [msg for msg in captured if msg["type"] == "run_update"]
     assert len(run_updates) >= 2, "Should have at least queued and success run updates"
-    
+
     # Check that we have a successful agent run
     success_updates = [msg for msg in run_updates if msg["data"].get("status") == "success"]
     assert len(success_updates) >= 1, "Should have at least one successful run update"
-    
+
     # Token streaming may not be implemented yet, but basic event flow should work
     # If token streaming gets implemented later, this test can be enhanced to check for tokens
