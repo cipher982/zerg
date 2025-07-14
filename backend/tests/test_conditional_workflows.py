@@ -214,7 +214,7 @@ async def test_conditional_node_variable_resolution(db, test_user, sample_agent)
                         type="conditional",
                         position=Position(x=300, y=100),
                         config={
-                            "condition": "${tool-1.result} >= 80",  # Should resolve to 85 >= 80 = true
+                            "condition": "${tool-1.result.result} >= 80",  # Access nested result field: 85 >= 80 = true
                             "condition_type": "expression",
                         },
                     ),
@@ -224,7 +224,7 @@ async def test_conditional_node_variable_resolution(db, test_user, sample_agent)
                         position=Position(x=500, y=100),
                         config={
                             "agent_id": sample_agent.id,
-                            "message": "Processing result ${tool-1.result} with status ${tool-1.status}",
+                            "message": "Processing result ${tool-1.result.result} with status ${tool-1.result.status}",
                         },
                     ),
                 ],
