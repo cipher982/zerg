@@ -148,7 +148,23 @@ class WorkflowEngine:
                         """Route based on conditional node result."""
                         if source_node_id in state["node_outputs"]:
                             conditional_result = state["node_outputs"][source_node_id]
-                            branch = conditional_result.get("branch", "false")
+
+                            # Handle both envelope and legacy formats
+                            if isinstance(conditional_result, dict):
+                                # Check if it's envelope format (has 'value' and 'meta' keys)
+                                if "value" in conditional_result and "meta" in conditional_result:
+                                    # New envelope format: extract branch from value
+                                    result_value = conditional_result["value"]
+                                    if isinstance(result_value, dict) and "branch" in result_value:
+                                        branch = result_value["branch"]
+                                    else:
+                                        branch = "false"
+                                else:
+                                    # Legacy format: direct access
+                                    branch = conditional_result.get("branch", "false")
+                            else:
+                                # Fallback for unknown formats
+                                branch = "false"
 
                             if branch == "true" and true_list:
                                 return true_list[0]  # Take first true target
