@@ -5,6 +5,7 @@ from typing import List
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Request
 from fastapi import Response
 from fastapi import status
 from pydantic import BaseModel
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 from zerg.crud import crud
 from zerg.database import get_db
 from zerg.dependencies.auth import get_current_user
+from zerg.middleware.rate_limiter import check_workflow_creation_rate_limit
 from zerg.models.models import User
 
 # Canvas layout helper models reused from graph router to avoid duplication.
@@ -71,13 +73,17 @@ def validate_workflow(
 @router.post("/", response_model=Workflow)
 def create_workflow(
     *,
+    request: Request,
     db: Session = Depends(get_db),
     workflow_in: WorkflowCreate,
     current_user: User = Depends(get_current_user),
 ):
     """
     Create new workflow.
+    Rate limited to 100 workflows per minute per user.
     """
+    # Check rate limit first
+    check_workflow_creation_rate_limit(request, current_user.id)
     try:
         # WorkflowData validation happens automatically via pydantic
         canvas_dict = workflow_in.canvas.model_dump(by_alias=True)
