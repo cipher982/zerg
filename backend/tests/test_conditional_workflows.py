@@ -30,21 +30,21 @@ def create_conditional_workflow_data(agent_id: int) -> WorkflowData:
                 id="conditional-1",
                 type="conditional",
                 position=Position(x=300, y=100),
-                config={"condition": "${tool-1.result} > 50", "condition_type": "expression"},
+                config={"condition": "${tool-1} > 50", "condition_type": "expression"},
             ),
             # Agent node for "high" branch (true)
             WorkflowNode(
                 id="agent-high",
                 type="agent",
                 position=Position(x=500, y=50),
-                config={"agent_id": agent_id, "message": "The number ${tool-1.result} is greater than 50!"},
+                config={"agent_id": agent_id, "message": "The number ${tool-1} is greater than 50!"},
             ),
             # Agent node for "low" branch (false)
             WorkflowNode(
                 id="agent-low",
                 type="agent",
                 position=Position(x=500, y=150),
-                config={"agent_id": agent_id, "message": "The number ${tool-1.result} is 50 or less."},
+                config={"agent_id": agent_id, "message": "The number ${tool-1} is 50 or less."},
             ),
         ],
         edges=[
@@ -214,7 +214,7 @@ async def test_conditional_node_variable_resolution(db, test_user, sample_agent)
                         type="conditional",
                         position=Position(x=300, y=100),
                         config={
-                            "condition": "${tool-1.result.result} >= 80",  # Access nested result field: 85 >= 80 = true
+                            "condition": "${tool-1.result} >= 80",  # Access tool result field: 85 >= 80 = true
                             "condition_type": "expression",
                         },
                     ),
@@ -224,7 +224,7 @@ async def test_conditional_node_variable_resolution(db, test_user, sample_agent)
                         position=Position(x=500, y=100),
                         config={
                             "agent_id": sample_agent.id,
-                            "message": "Processing result ${tool-1.result.result} with status ${tool-1.result.status}",
+                            "message": "Processing result ${tool-1.result} with status ${tool-1.meta.status}",
                         },
                     ),
                 ],
@@ -261,8 +261,8 @@ async def test_conditional_node_variable_resolution(db, test_user, sample_agent)
 
             assert conditional_state is not None
             assert conditional_state.status == "completed"
-            assert conditional_state.output["condition_result"] is True
-            assert conditional_state.output["branch"] == "true"
+            assert conditional_state.output["value"]["result"] is True
+            assert conditional_state.output["value"]["branch"] == "true"
 
 
 if __name__ == "__main__":

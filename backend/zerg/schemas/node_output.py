@@ -281,10 +281,10 @@ def extract_value(data: Any) -> Any:
     """
     Extract the primary value from node output.
 
-    Handles both envelope and legacy formats.
+    Envelope format only.
 
     Args:
-        data: Node output data
+        data: Node output data (envelope format)
 
     Returns:
         Primary value from the output
@@ -292,11 +292,7 @@ def extract_value(data: Any) -> Any:
     if is_envelope_format(data):
         return data["value"]
     else:
-        # Legacy format - try to extract meaningful value
-        if isinstance(data, dict) and "result" in data:
-            return data["result"]
-        else:
-            return data
+        raise ValueError("Expected envelope format node output")
 
 
 def extract_metadata(data: Any) -> Optional[Dict[str, Any]]:

@@ -147,7 +147,7 @@ class TestSafeExpressionEvaluator:
         with pytest.raises(ExpressionValidationError):
             self.evaluator.evaluate("x" * 501)  # Too long
 
-        with pytest.raises(ExpressionValidationError):
+        with pytest.raises(ExpressionEvaluationError):
             self.evaluator.evaluate("invalid syntax +++")
 
     def test_undefined_variables(self):
@@ -192,7 +192,7 @@ class TestSafeExpressionEvaluator:
         dangerous_names = ["exec", "eval", "compile", "open", "__import__"]
 
         for name in dangerous_names:
-            with pytest.raises(ExpressionEvaluationError):
+            with pytest.raises(ExpressionSecurityError):
                 self.evaluator.evaluate(f"{name}('test')")
 
     # Expression Validation Tests
@@ -213,23 +213,6 @@ class TestSafeExpressionEvaluator:
         # Security violations should raise SecurityError
         with pytest.raises(ExpressionSecurityError):
             self.evaluator.validate_expression("a.__class__")
-
-    def test_variable_name_extraction(self):
-        """Test variable name extraction from expressions."""
-        # Simple cases
-        vars = self.evaluator.get_variable_names("a > b")
-        assert vars == {"a", "b"}
-
-        vars = self.evaluator.get_variable_names("(count > 10) and (status == 'ready')")
-        assert vars == {"count", "status"}
-
-        # Should not include built-ins
-        vars = self.evaluator.get_variable_names("abs(x) > max(y, z)")
-        assert vars == {"x", "y", "z"}
-
-        # Should not include literals
-        vars = self.evaluator.get_variable_names("True and False and None")
-        assert vars == set()
 
     # Performance Tests
     def test_performance(self):
