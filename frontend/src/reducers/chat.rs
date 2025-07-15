@@ -369,6 +369,43 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 } else {
                     web_sys::console::warn_1(&format!("ReceiveStreamChunk (tool_output): No agent found owning thread {}", thread_id).into());
                 }
+            } else if chunk_type.as_deref() == Some("assistant_message") {
+                // Non-streaming assistant message - should have message_id
+                web_sys::console::log_1(&format!("Processing assistant_message chunk with message_id: {:?}", message_id).into());
+                
+                let mid_u32 = message_id.as_ref().and_then(|s| s.parse::<u32>().ok());
+                
+                // Find which agent owns this thread
+                let mut owning_agent_id = None;
+                for (agent_id, agent_state) in &state.agent_states {
+                    if agent_state.threads.contains_key(thread_id) {
+                        owning_agent_id = Some(*agent_id);
+                        break;
+                    }
+                }
+                
+                if let Some(agent_id) = owning_agent_id {
+                    if let Some(agent_state) = state.get_agent_state_mut(agent_id) {
+                        let messages = agent_state.thread_messages.entry(*thread_id).or_default();
+                        let now = chrono::Utc::now().to_rfc3339();
+                        let assistant_message = crate::models::ApiThreadMessage {
+                            id: mid_u32,
+                            thread_id: *thread_id,
+                            role: "assistant".to_string(),
+                            content: content.clone(),
+                            timestamp: Some(now),
+                            message_type: Some("assistant_message".to_string()),
+                            tool_name: None,
+                            tool_call_id: None,
+                            tool_input: None,
+                            parent_id: None,
+                        };
+                        messages.push(assistant_message);
+                        web_sys::console::log_1(&format!("Added assistant_message for thread {}: {}", thread_id, content).into());
+                    }
+                } else {
+                    web_sys::console::warn_1(&format!("ReceiveStreamChunk (assistant_message): No agent found owning thread {}", thread_id).into());
+                }
             } else {
                 let mid_u32 = message_id.as_ref().and_then(|s| s.parse::<u32>().ok());
                 let current_mid = state.current_assistant_id(*thread_id);

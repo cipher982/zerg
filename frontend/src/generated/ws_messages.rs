@@ -1,5 +1,5 @@
 // AUTO-GENERATED FILE - DO NOT EDIT
-// Generated from ws-protocol-asyncapi.yml at 2025-07-15T10:10:24.355756Z
+// Generated from ws-protocol-asyncapi.yml at 2025-07-15T17:47:10.092852Z
 // Using AsyncAPI 3.0 + Modern Rust Code Generation
 //
 // This file contains strongly-typed WebSocket message definitions.
@@ -154,6 +154,7 @@ pub struct StreamChunkData {
     pub content: Option<String>,
     pub tool_name: Option<String>,
     pub tool_call_id: Option<String>,
+    pub message_id: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
