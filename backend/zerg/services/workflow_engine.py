@@ -149,21 +149,14 @@ class WorkflowEngine:
                         if source_node_id in state["node_outputs"]:
                             conditional_result = state["node_outputs"][source_node_id]
 
-                            # Handle both envelope and legacy formats
-                            if isinstance(conditional_result, dict):
-                                # Check if it's envelope format (has 'value' and 'meta' keys)
-                                if "value" in conditional_result and "meta" in conditional_result:
-                                    # New envelope format: extract branch from value
-                                    result_value = conditional_result["value"]
-                                    if isinstance(result_value, dict) and "branch" in result_value:
-                                        branch = result_value["branch"]
-                                    else:
-                                        branch = "false"
+                            # Envelope format only
+                            if isinstance(conditional_result, dict) and "value" in conditional_result:
+                                result_value = conditional_result["value"]
+                                if isinstance(result_value, dict) and "branch" in result_value:
+                                    branch = result_value["branch"]
                                 else:
-                                    # Legacy format: direct access
-                                    branch = conditional_result.get("branch", "false")
+                                    branch = "false"
                             else:
-                                # Fallback for unknown formats
                                 branch = "false"
 
                             if branch == "true" and true_list:

@@ -9,6 +9,9 @@ import logging
 from typing import Any
 from typing import Dict
 
+from simpleeval import AttributeDoesNotExist
+from simpleeval import FeatureNotAvailable
+from simpleeval import FunctionNotDefined
 from simpleeval import InvalidExpression
 from simpleeval import NameNotDefined
 from simpleeval import SimpleEval
@@ -136,11 +139,19 @@ class SafeExpressionEvaluator:
             logger.debug(f"Expression '{expression}' evaluated to {result} (type: {type(result).__name__})")
             return result
 
-        except InvalidExpression as e:
-            raise ExpressionValidationError(f"Invalid expression '{expression}': {e}")
-
         except NameNotDefined as e:
             raise ExpressionEvaluationError(f"Undefined variable in expression '{expression}': {e}")
+
+        except FunctionNotDefined as e:
+            # Check if this is a dangerous function that should be treated as security violation
+            dangerous_functions = {"exec", "eval", "compile", "open", "__import__"}
+            func_name = str(e).split("'")[1] if "'" in str(e) else ""
+            if func_name in dangerous_functions:
+                raise ExpressionSecurityError(
+                    f"Dangerous function '{func_name}' not allowed in expression '{expression}'"
+                )
+            else:
+                raise ExpressionEvaluationError(f"Undefined function in expression '{expression}': {e}")
 
         except ZeroDivisionError as e:
             raise ExpressionEvaluationError(f"Division by zero in expression '{expression}': {e}")
@@ -148,12 +159,13 @@ class SafeExpressionEvaluator:
         except (OverflowError, ValueError) as e:
             raise ExpressionEvaluationError(f"Mathematical error in expression '{expression}': {e}")
 
+        except (InvalidExpression, AttributeDoesNotExist, FeatureNotAvailable) as e:
+            # Security violations from simpleeval
+            raise ExpressionSecurityError(f"Security violation in expression '{expression}': {e}")
+
         except Exception as e:
-            # Catch any other security violations or unexpected errors
-            if "not allowed" in str(e).lower() or "forbidden" in str(e).lower():
-                raise ExpressionSecurityError(f"Security violation in expression '{expression}': {e}")
-            else:
-                raise ExpressionEvaluationError(f"Failed to evaluate expression '{expression}': {e}")
+            # Any other evaluation failure
+            raise ExpressionEvaluationError(f"Failed to evaluate expression '{expression}': {e}")
 
     def validate_expression(self, expression: str) -> bool:
         """
@@ -177,7 +189,7 @@ class SafeExpressionEvaluator:
 
         try:
             # Try to parse without evaluation (dry run with dummy variables)
-            dummy_vars = {"a": 1, "b": 2, "c": "test", "d": True}
+            dummy_vars = {"a": 1, "b": 2, "c": "test", "d": True, "x": 1, "y": 2, "z": 3, "status": "ready"}
             original_names = self._evaluator.names
             self._evaluator.names = {**self._evaluator.names, **dummy_vars}
 
@@ -187,8 +199,16 @@ class SafeExpressionEvaluator:
             self._evaluator.names = original_names
             return True
 
-        except InvalidExpression as e:
+        except (AttributeDoesNotExist, FeatureNotAvailable) as e:
+            # Security violations should be raised as SecurityError
+            raise ExpressionSecurityError(f"Expression contains forbidden operations: {e}")
+
+        except (InvalidExpression, SyntaxError) as e:
             raise ExpressionValidationError(f"Invalid expression syntax: {e}")
+
+        except (NameNotDefined, FunctionNotDefined):
+            # For validation, undefined variables/functions are okay - we're just checking syntax
+            return True
 
         except Exception as e:
             if "not allowed" in str(e).lower() or "forbidden" in str(e).lower():
@@ -197,35 +217,6 @@ class SafeExpressionEvaluator:
                 # For validation, we don't care about undefined variables or math errors
                 # Only syntax and security violations matter
                 return True
-
-    def get_variable_names(self, expression: str) -> set:
-        """
-        Extract variable names from an expression.
-
-        Args:
-            expression: String expression to analyze
-
-        Returns:
-            Set of variable names used in the expression
-
-        Note:
-            This is a simple regex-based extraction for basic analysis.
-            For complex expressions, actual parsing would be more accurate.
-        """
-        import re
-
-        # Simple regex to find potential variable names
-        # This won't catch all cases but handles common patterns
-        pattern = r"\b[a-zA-Z_][a-zA-Z0-9_]*\b"
-        potential_vars = set(re.findall(pattern, expression))
-
-        # Remove built-in names and operators
-        builtins = set(self._evaluator.names.keys())
-        operators = {"and", "or", "not", "in", "is", "True", "False", "None"}
-
-        variables = potential_vars - builtins - operators
-
-        return variables
 
 
 # Global instance for convenience

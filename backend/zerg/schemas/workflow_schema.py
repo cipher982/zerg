@@ -110,20 +110,7 @@ class FrontendNode(BaseModel):
         return values
 
 
-class LegacyStringNode(BaseModel):
-    """Handle legacy string node format."""
-
-    node_id: str
-    node_type: Union[str, Dict[str, Any]] = "unknown"
-    position: Dict[str, float] = Field(default_factory=dict)
-
-    @model_validator(mode="before")
-    @classmethod
-    def handle_string_format(cls, values):
-        """Convert string to proper node structure."""
-        if isinstance(values, str):
-            return {"node_id": values, "node_type": "unknown", "position": {}}
-        return values
+# Legacy string node format removed - envelope format only
 
 
 class FrontendEdge(BaseModel):
