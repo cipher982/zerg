@@ -11,8 +11,6 @@ The service follows the same start/stop interface as ``SchedulerService`` so
 from __future__ import annotations
 
 import asyncio
-import time as _time_mod
-import warnings
 from contextlib import suppress
 from datetime import datetime
 from datetime import timedelta
@@ -25,27 +23,16 @@ from sqlalchemy.orm import sessionmaker
 from zerg.database import db_session
 from zerg.database import get_session_factory
 from zerg.email.providers import get_provider
-from zerg.events.event_bus import EventType
-from zerg.events.event_bus import event_bus
 from zerg.metrics import gmail_api_error_total
 from zerg.metrics import gmail_watch_renew_total
 from zerg.models.models import Trigger
 from zerg.models.models import User
-from zerg.services import email_filtering
-from zerg.services import gmail_api
-from zerg.services.scheduler_service import scheduler_service
 
 # HTTP helpers
 # Structured logger wrapper
 from zerg.utils.log import log
 
-# Structured wrapper `log` is used directly but several legacy helper
-# blocks still reference a module-level ``logger`` variable.  Provide an
-# alias so we retain backward-compatibility without rewriting all calls.
-
-# Legacy *std logging* style adapter for compatibility with existing format
-# Legacy alias – point to *log* so existing formatted strings keep working
-logger = log  # type: ignore
+# Use structured logging directly
 
 
 class EmailTriggerService:
@@ -198,187 +185,7 @@ class EmailTriggerService:
                     error=str(exc),
                 )
 
-    # ------------------------------------------------------------------
-    # Gmail helpers
-    # ------------------------------------------------------------------
-
-    async def _handle_gmail_trigger(self, trigger_id: int):
-        """Fetch unread messages for the given Gmail trigger (MVP).
-
-        The implementation is intentionally *very* lightweight: it merely
-        obtains a short-lived *access token* from the stored refresh token and
-        logs the fact.  A real implementation would call the Gmail *history*
-        or *messages.list* endpoint and publish TRIGGER_FIRED events when
-        criteria match.
-        """
-
-        # ------------------------------------------------------------------
-        # DEPRECATED – logic moved into GmailProvider -------------------
-        # ------------------------------------------------------------------
-
-        warnings.warn(
-            "EmailTriggerService._handle_gmail_trigger() is deprecated and no longer used. "
-            "The handling logic has been migrated to zerg.email.providers.GmailProvider.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        log.debug("email-trigger", event="deprecated-gmail-helper", trigger_id=trigger_id)
-        return None  # short-circuit – legacy method retained for back-compat
-
-        # Deleted unreachable legacy imports for circular/type-check purposes.
-
-        # Re-load trigger inside a fresh session so it is attached => we can
-        # mutate ``config`` and commit at the end.
-        with db_session(self._session_factory) as session:
-            trg: Trigger | None = session.query(Trigger).filter(Trigger.id == trigger_id).first()
-            if trg is None:
-                log.warning("email-trigger", event="trigger-disappeared", trigger_id=trigger_id)
-                return
-
-            if (trg.config or {}).get("provider") != "gmail":
-                return  # Not a gmail trigger – will support others later
-
-            # ------------------------------------------------------------------
-            # Resolve *user* that owns refresh-token (MVP: first available)
-            # ------------------------------------------------------------------
-            user: User | None = session.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
-
-            if user is None:
-                logger.warning("No Gmail-connected user found – cannot poll trigger %s", trg.id)
-                return
-
-            # ------------------------------------------------------------------
-            # OAuth – refresh → access token (cached for 55 min)
-            # ------------------------------------------------------------------
-            refresh_token = user.gmail_refresh_token  # type: ignore[assignment]
-
-            # minimal in-memory cache keyed by refresh-token string
-            token_cache: dict[str, tuple[str, float]] = getattr(self, "_token_cache", {})
-            self._token_cache = token_cache  # store back on instance
-
-            now = _time_mod.time()
-            cached = token_cache.get(refresh_token)
-            access_token: str
-            if cached and cached[1] > now:
-                access_token = cached[0]
-            else:
-                try:
-                    access_token = await asyncio.to_thread(
-                        gmail_api.exchange_refresh_token,
-                        refresh_token,
-                    )
-                except Exception as exc:  # pragma: no cover – network error
-                    logger.error("Failed to exchange refresh_token: %s", exc)
-                    gmail_api_error_total.inc()
-                    return
-
-                # cache for 55 minutes
-                token_cache[refresh_token] = (access_token, now + 55 * 60)
-
-            # ------------------------------------------------------------------
-            # History diff call – get additions since last stored history_id
-            # ------------------------------------------------------------------
-            start_hid = int((trg.config or {}).get("history_id", 0))
-
-            history_records = await asyncio.to_thread(
-                gmail_api.list_history,
-                access_token,
-                start_hid,
-            )
-
-            if not history_records:
-                logger.debug("Trigger %s – no new history records", trg.id)
-                return  # nothing to do
-
-            # Flatten message IDs -----------------------------------------------
-            message_ids: list[str] = []
-            max_hid = start_hid
-            for h in history_records:
-                try:
-                    hid_int = int(h["id"])
-                    max_hid = max(max_hid, hid_int)
-                except Exception:  # noqa: BLE001 – tolerant parsing
-                    pass
-
-                for added in h.get("messagesAdded", []):
-                    msg = added.get("message", {})
-                    mid = msg.get("id")
-                    if mid:
-                        message_ids.append(str(mid))
-
-            if not message_ids:
-                logger.debug("Trigger %s – history records contained no messages", trg.id)
-                # Still advance history id to avoid re-processing same empty diff
-                if max_hid > start_hid:
-                    (trg.config or {}).update({"history_id": max_hid})
-                    try:
-                        from sqlalchemy.orm.attributes import flag_modified  # type: ignore
-
-                        flag_modified(trg, "config")
-                    except ImportError:
-                        pass
-                    session.add(trg)
-                    session.commit()
-                return
-
-            # ------------------------------------------------------------------
-            # Process each message – filter & possibly trigger agent
-            # ------------------------------------------------------------------
-            filters = (trg.config or {}).get("filters")
-
-            fired_any = False
-            for mid in message_ids:
-                meta = await asyncio.to_thread(
-                    gmail_api.get_message_metadata,
-                    access_token,
-                    mid,
-                )
-
-                if not meta:
-                    continue  # skip on error
-
-                if not email_filtering.matches(meta, filters):
-                    continue
-
-                # Fire!
-                await event_bus.publish(
-                    EventType.TRIGGER_FIRED,
-                    {
-                        "trigger_id": trg.id,
-                        "agent_id": trg.agent_id,
-                        "provider": "gmail",
-                        "message_id": mid,
-                    },
-                )
-
-                await scheduler_service.run_agent_task(trg.agent_id)  # type: ignore[arg-type]
-                fired_any = True
-
-            # ------------------------------------------------------------------
-            # Persist *new* history id (largest seen)
-            # ------------------------------------------------------------------
-            if max_hid > start_hid:
-                cfg = dict(trg.config or {})
-                cfg["history_id"] = max_hid
-                trg.config = cfg  # type: ignore[assignment]
-
-                try:
-                    from sqlalchemy.orm.attributes import flag_modified  # type: ignore
-
-                    flag_modified(trg, "config")
-                except ImportError:  # pragma: no cover
-                    pass
-
-                session.add(trg)
-                session.commit()
-
-            logger.info(
-                "Gmail trigger %s processed %s messages (fired=%s)",
-                trg.id,
-                len(message_ids),
-                fired_any,
-            )
+    # Note: Deprecated _handle_gmail_trigger method removed - functionality moved to GmailProvider
 
     # ------------------------------------------------------------------
     # Static utility ----------------------------------------------------
@@ -415,12 +222,12 @@ class EmailTriggerService:
             return  # still valid
 
         # Renew ----------------------------------------------------------
-        logger.info("Renewing Gmail watch for trigger %s", trigger.id)
+        log.info("email-trigger", event="renew-gmail-watch", trigger_id=trigger.id)
 
         try:
             new_watch = await asyncio.to_thread(self._renew_gmail_watch_stub)
         except Exception as exc:  # pragma: no cover
-            logger.error("Failed to renew Gmail watch: %s", exc)
+            log.error("email-trigger", event="renew-gmail-watch-failed", error=str(exc))
             # Metrics ---------------------------------------------------
             gmail_api_error_total.inc()
             return
@@ -480,14 +287,14 @@ class EmailTriggerService:
         """
 
         if (trigger.config or {}).get("history_id") is not None:
-            logger.debug("Trigger %s already has Gmail watch metadata – skip init", trigger.id)
+            log.debug("email-trigger", event="gmail-watch-already-exists", trigger_id=trigger.id)
             return
 
         # Pick *any* user with gmail refresh token for MVP ----------------
         user: User | None = db_session.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
 
         if user is None:
-            logger.warning("No gmail-connected user found – cannot register watch for trigger %s", trigger.id)
+            log.warning("email-trigger", event="no-gmail-user", trigger_id=trigger.id)
             return  # Cannot proceed – will try later when service runs
 
         # ------------------------------------------------------------------
@@ -498,7 +305,7 @@ class EmailTriggerService:
         try:
             watch_info = await asyncio.to_thread(self._start_gmail_watch_stub)
         except Exception as exc:  # pragma: no cover – network failure etc.
-            logger.error("Failed to start Gmail watch for trigger %s: %s", trigger.id, exc)
+            log.error("email-trigger", event="gmail-watch-start-failed", trigger_id=trigger.id, error=str(exc))
             return
 
         # Merge into trigger.config ----------------------------------------
