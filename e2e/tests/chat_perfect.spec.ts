@@ -25,9 +25,15 @@ test.describe('Perfect Chat E2E Test', () => {
     await page.waitForSelector('tr[data-agent-id]', { timeout: 15000 });
     console.log('✅ New agent appeared in dashboard');
     
-    // Get the agent ID from the first agent row
-    const agentRow = page.locator('tr[data-agent-id]').first();
-    const agentId = await agentRow.getAttribute('data-agent-id');
+    // Give the backend some time to create the default thread for the new agent
+    await page.waitForTimeout(2000);
+    
+    // Get all agent IDs and find the newly created one (highest ID)
+    const allAgentIds = await page.locator('tr[data-agent-id]').evaluateAll(rows => 
+      rows.map(row => row.getAttribute('data-agent-id'))
+    );
+    const agentIds = allAgentIds.map(id => parseInt(id || '0')).filter(id => id > 0);
+    const agentId = Math.max(...agentIds).toString();
     console.log(`📋 Agent created with ID: ${agentId}`);
     
     // Step 3: Click chat button on the new agent

@@ -485,6 +485,9 @@ components:
           type: string
         tool_call_id:
           type: string
+        message_id:
+          type: integer
+          minimum: 1
 
     StreamEndData:
       type: object

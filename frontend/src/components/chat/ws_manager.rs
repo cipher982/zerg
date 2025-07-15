@@ -109,6 +109,7 @@ impl ChatViewWsManager {
             content,
             tool_name,
             tool_call_id,
+            message_id,
         } = chunk;
 
         dispatch_global_message(Message::ReceiveStreamChunk {
@@ -117,7 +118,7 @@ impl ChatViewWsManager {
             chunk_type: Some(chunk_type),
             tool_name,
             tool_call_id,
-            message_id: None, // Not available in generated StreamChunkData
+            message_id: message_id.map(|id| id.to_string()),
         });
     }
 

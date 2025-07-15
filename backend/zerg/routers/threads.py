@@ -261,6 +261,7 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
                     chunk_type="assistant_message",
                     tool_name=None,
                     tool_call_id=None,
+                    message_id=row.id,
                 )
                 envelope = Envelope.create(
                     message_type="stream_chunk",
@@ -276,6 +277,7 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db)):
                 chunk_type="tool_output",
                 tool_name=getattr(row, "name", None),
                 tool_call_id=getattr(row, "tool_call_id", None),
+                message_id=row.id,
             )
             envelope = Envelope.create(
                 message_type="stream_chunk",
