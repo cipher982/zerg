@@ -100,6 +100,7 @@ pub mod builders {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -129,10 +130,14 @@ mod tests {
         assert_eq!(envelope.topic, "system");
         
         // Test data payload
-        let data = envelope.data;
-        assert!(data.contains_key("topics"));
-        if let Some(serde_json::Value::Array(topic_array)) = data.get("topics") {
-            assert_eq!(topic_array.len(), 2);
+        let data = &envelope.data;
+        if let serde_json::Value::Object(map) = data {
+            assert!(map.contains_key("topics"));
+            if let Some(serde_json::Value::Array(topic_array)) = map.get("topics") {
+                assert_eq!(topic_array.len(), 2);
+            }
+        } else {
+            panic!("Expected data to be an object");
         }
         
         // Test validation
@@ -159,7 +164,11 @@ mod tests {
         
         assert_eq!(parsed.message_type, "error");
         assert_eq!(parsed.topic, "system");
-        assert!(parsed.data.contains_key("error"));
+        if let serde_json::Value::Object(map) = &parsed.data {
+            assert!(map.contains_key("error"));
+        } else {
+            panic!("Expected data to be an object");
+        }
     }
 
     #[wasm_bindgen_test]
@@ -190,7 +199,7 @@ mod tests {
         assert!(envelope.req_id.is_some());
         
         // Test data payload
-        let data = envelope.data;
+        let data = &envelope.data;
         assert_eq!(data.get("thread_id").and_then(|v| v.as_u64()), Some(123));
         assert_eq!(data.get("content").and_then(|v| v.as_str()), Some("Hello world"));
         

@@ -35,6 +35,7 @@ from zerg.callbacks.token_stream import set_current_thread_id
 from zerg.crud import crud
 from zerg.models.models import Agent as AgentModel
 from zerg.models.models import Thread as ThreadModel
+from zerg.models.models import ThreadMessage as ThreadMessageModel
 from zerg.services.thread_service import ThreadService
 
 logger = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
     # Public API – asynchronous
     # ------------------------------------------------------------------
 
-    async def run_thread(self, db: Session, thread: ThreadModel) -> Sequence[AgentModel]:
+    async def run_thread(self, db: Session, thread: ThreadModel) -> Sequence[ThreadMessageModel]:
         """Process unprocessed messages and return created assistant message rows."""
 
         logger.info(f"[AgentRunner] Starting run_thread for thread {thread.id}, agent {self.agent.id}")
