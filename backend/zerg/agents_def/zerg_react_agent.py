@@ -47,6 +47,13 @@ def _make_llm(agent_row, tools):
 
     enable_token_stream = get_settings().llm_token_stream
 
+    # Handle mock model for testing
+    if agent_row.model == "gpt-mock":
+        from zerg.testing.mock_llm import MockChatLLM
+
+        llm = MockChatLLM()
+        return llm.bind_tools(tools)
+
     # Create LLM with basic parameters
     kwargs: dict = {
         "model": agent_row.model,

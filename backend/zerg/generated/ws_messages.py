@@ -1,5 +1,5 @@
 # AUTO-GENERATED FILE - DO NOT EDIT
-# Generated from ws-protocol-asyncapi.yml at 2025-07-15T10:10:23.853621Z
+# Generated from ws-protocol-asyncapi.yml at 2025-07-15T17:47:09.759575Z
 # Using AsyncAPI 3.0 + Modern Python Code Generation
 #
 # This file contains strongly-typed WebSocket message definitions.
@@ -163,6 +163,7 @@ class StreamChunkData(BaseModel):
     content: Optional[str] = None
     tool_name: Optional[str] = None
     tool_call_id: Optional[str] = None
+    message_id: Optional[int] = Field(default=None, ge=1, description="")
 
 
 class StreamEndData(BaseModel):
