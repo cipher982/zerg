@@ -36,10 +36,22 @@ async def test_envelope_format_all_node_types(db, test_user, sample_agent):
 
         # Mock AgentRunner
         async def mock_run_thread(db, thread):
-            return [
-                {"role": "assistant", "content": "Analysis complete. Grade is excellent."},
-                {"role": "assistant", "content": "Recommendation: Student performed very well."},
-            ]
+            # Create mock objects that look like ThreadMessage models
+            mock_msg1 = type("MockMessage", (), {})()
+            mock_msg1.id = 1
+            mock_msg1.role = "assistant"
+            mock_msg1.content = "Analysis complete. Grade is excellent."
+            mock_msg1.created_at = None
+            mock_msg1.thread_id = thread.id
+
+            mock_msg2 = type("MockMessage", (), {})()
+            mock_msg2.id = 2
+            mock_msg2.role = "assistant"
+            mock_msg2.content = "Recommendation: Student performed very well."
+            mock_msg2.created_at = None
+            mock_msg2.thread_id = thread.id
+
+            return [mock_msg1, mock_msg2]
 
         with patch("zerg.services.node_executors.AgentRunner") as mock_agent_runner:
             mock_runner_instance = type("MockRunner", (), {})()
@@ -180,7 +192,15 @@ async def test_envelope_format_variable_resolution_edge_cases(db, test_user, sam
 
         # Mock AgentRunner
         async def mock_run_thread(db, thread):
-            return [{"role": "assistant", "content": "Analysis processed successfully"}]
+            # Create mock objects that look like ThreadMessage models
+            mock_msg = type("MockMessage", (), {})()
+            mock_msg.id = 1
+            mock_msg.role = "assistant"
+            mock_msg.content = "Analysis processed successfully"
+            mock_msg.created_at = None
+            mock_msg.thread_id = thread.id
+
+            return [mock_msg]
 
         with patch("zerg.services.node_executors.AgentRunner") as mock_agent_runner:
             mock_runner_instance = type("MockRunner", (), {})()
@@ -286,7 +306,15 @@ async def test_envelope_format_alias_support(db, test_user, sample_agent):
 
         # Mock AgentRunner
         async def mock_run_thread(db, thread):
-            return [{"role": "assistant", "content": "Number processed"}]
+            # Create mock objects that look like ThreadMessage models
+            mock_msg = type("MockMessage", (), {})()
+            mock_msg.id = 1
+            mock_msg.role = "assistant"
+            mock_msg.content = "Number processed"
+            mock_msg.created_at = None
+            mock_msg.thread_id = thread.id
+
+            return [mock_msg]
 
         with patch("zerg.services.node_executors.AgentRunner") as mock_agent_runner:
             mock_runner_instance = type("MockRunner", (), {})()
