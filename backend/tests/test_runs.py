@@ -1,20 +1,19 @@
 """Tests for the *Run History* feature (AgentRun model, routes, CRUD helpers)."""
 
-from datetime import datetime
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from zerg.crud import crud
 from zerg.models.models import AgentRun
+from zerg.utils.time import utc_now_naive
 
 
 def _create_basic_run(db: Session, agent_id: int, thread_id: int) -> AgentRun:
     """Helper: insert an AgentRun row via the public CRUD helpers."""
 
     run_row = crud.create_run(db, agent_id=agent_id, thread_id=thread_id, trigger="manual", status="queued")
-    crud.mark_running(db, run_row.id, started_at=datetime.utcnow())
+    crud.mark_running(db, run_row.id, started_at=utc_now_naive())
     crud.mark_finished(db, run_row.id)
     return run_row
 

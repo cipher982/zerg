@@ -22,7 +22,6 @@ import hmac
 import json
 from abc import ABC
 from abc import abstractmethod
-from datetime import datetime
 from typing import Any
 from typing import Optional
 
@@ -33,6 +32,8 @@ from sqlalchemy.orm import Session
 
 from zerg.config import get_settings
 from zerg.crud import crud
+from zerg.utils.time import utc_now
+from zerg.utils.time import utc_now_naive
 
 # ---------------------------------------------------------------------------
 # Minimal HS256 JWT decoding fallback (keeps CI lightweight)
@@ -70,7 +71,7 @@ def _decode_jwt_fallback(token: str, secret: str) -> dict[str, Any]:  # pragma: 
     if isinstance(payload.get("exp"), (int, float)):
         exp_ts_raw = float(payload["exp"])
 
-    if exp_ts_raw is not None and datetime.utcnow().timestamp() > exp_ts_raw:
+    if exp_ts_raw is not None and utc_now().timestamp() > exp_ts_raw:
         raise ValueError("Token expired")
 
     return payload
@@ -114,7 +115,6 @@ class DevAuthStrategy(AuthStrategy):
         # Skip database operations in test mode with NODE_ENV=test
         if os.getenv("NODE_ENV") == "test":
             # Return a mock user for tests to avoid database issues
-            from datetime import datetime
 
             from zerg.models.models import User
 
@@ -130,8 +130,8 @@ class DevAuthStrategy(AuthStrategy):
             mock_user.prefs = {}
             mock_user.last_login = None
             mock_user.gmail_refresh_token = None
-            mock_user.created_at = datetime.utcnow()
-            mock_user.updated_at = datetime.utcnow()
+            mock_user.created_at = utc_now_naive()
+            mock_user.updated_at = utc_now_naive()
             return mock_user
 
         desired_role = "ADMIN" if self._settings.dev_admin else "USER"
@@ -211,7 +211,7 @@ class JWTAuthStrategy(AuthStrategy):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
 
         if getattr(user, "last_login", None) is None:
-            user.last_login = datetime.utcnow()  # type: ignore[attr-defined]
+            user.last_login = utc_now_naive()  # type: ignore[attr-defined]
             db.commit()
 
         return user

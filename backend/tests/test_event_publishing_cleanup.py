@@ -6,6 +6,7 @@ to simple, clean event publishing.
 """
 
 from unittest.mock import AsyncMock
+from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
@@ -34,13 +35,17 @@ class TestEventPublishingCleanup:
         """Test that fire-and-forget publishing works."""
         with patch("zerg.events.publisher.asyncio") as mock_asyncio:
             mock_loop = AsyncMock()
+            mock_task = AsyncMock()
+            mock_task.add_done_callback = Mock()  # Mock the callback method
+            mock_loop.create_task.return_value = mock_task
             mock_asyncio.get_running_loop.return_value = mock_loop
 
             # This should be simple for non-async contexts
             publish_event_fire_and_forget(EventType.EXECUTION_FINISHED, {"execution_id": 1})
 
-            # Verify it created a task
+            # Verify it created a task and added callback for cleanup
             mock_loop.create_task.assert_called_once()
+            mock_task.add_done_callback.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_publish_event_handles_errors_gracefully(self):
