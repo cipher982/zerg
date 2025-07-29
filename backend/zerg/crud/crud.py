@@ -35,7 +35,7 @@ from zerg.models.models import Trigger
 from zerg.models.models import User
 from zerg.schemas.schemas import RunStatus
 from zerg.schemas.schemas import RunTrigger
-from zerg.utils.time import utc_now
+from zerg.utils.time import utc_now_naive
 
 
 # Our minimum runtime is Python 3.12 so the PEP-604 ``T | None`` syntax is
@@ -70,7 +70,7 @@ def acquire_run_lock(db: Session, agent_id: int) -> bool:
     updated_rows = (
         db.query(Agent)
         .filter(Agent.id == agent_id, Agent.status != "running")
-        .update({"status": "running", "updated_at": utc_now()})
+        .update({"status": "running", "updated_at": utc_now_naive()})
     )
     db.commit()
     return updated_rows > 0
@@ -198,7 +198,7 @@ def update_agent(
     if last_error is not None:
         db_agent.last_error = last_error
 
-    db_agent.updated_at = utc_now()
+    db_agent.updated_at = utc_now_naive()
     db.commit()
     db.refresh(db_agent)
     return db_agent
@@ -454,7 +454,7 @@ def update_thread(
     if memory_strategy is not None:
         db_thread.memory_strategy = memory_strategy
 
-    db_thread.updated_at = utc_now()
+    db_thread.updated_at = utc_now_naive()
     db.commit()
     db.refresh(db_thread)
     return db_thread
@@ -632,7 +632,7 @@ def mark_running(db: Session, run_id: int, *, started_at: Optional[datetime] = N
     if row is None:
         return None
 
-    started_at = started_at or datetime.utcnow()
+    started_at = started_at or utc_now_naive()
     # Set to running status
     row.status = RunStatus.running
     row.started_at = started_at
@@ -654,7 +654,7 @@ def mark_finished(
     if row is None:
         return None
 
-    finished_at = finished_at or datetime.utcnow()
+    finished_at = finished_at or utc_now_naive()
     if row.started_at and duration_ms is None:
         duration_ms = int((finished_at - row.started_at).total_seconds() * 1000)
 
@@ -682,7 +682,7 @@ def mark_failed(
     if row is None:
         return None
 
-    finished_at = finished_at or datetime.utcnow()
+    finished_at = finished_at or utc_now_naive()
     if row.started_at and duration_ms is None:
         duration_ms = int((finished_at - row.started_at).total_seconds() * 1000)
 

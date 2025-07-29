@@ -15,6 +15,7 @@ from zerg.dependencies.auth import get_current_user
 from zerg.models.models import User
 from zerg.services.workflow_engine import workflow_engine
 from zerg.services.workflow_scheduler import workflow_scheduler
+from zerg.utils.time import utc_now_naive
 
 router = APIRouter(
     prefix="/workflow-executions",
@@ -209,7 +210,7 @@ def cancel_execution(
 
     execution.status = "cancelled"
     execution.cancel_reason = payload.reason
-    execution.finished_at = datetime.utcnow()
+    execution.finished_at = utc_now_naive()
     db.commit()
 
     # Emit EXECUTION_FINISHED event with cancelled status so UI updates
