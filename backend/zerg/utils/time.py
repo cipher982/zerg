@@ -16,4 +16,13 @@ def utc_now() -> datetime:  # noqa: D401 – simple utility
     return datetime.now(timezone.utc)
 
 
-__all__ = ["utc_now"]
+def utc_now_naive() -> datetime:  # noqa: D401 – simple utility
+    """Return *naive* current time in UTC for database compatibility.
+
+    SQLAlchemy DateTime columns without timezone info store naive datetimes.
+    This function provides UTC time in the format expected by the database.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+__all__ = ["utc_now", "utc_now_naive"]
