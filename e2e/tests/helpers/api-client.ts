@@ -36,11 +36,13 @@ export class ApiClient {
   private baseUrl: string;
   private headers: Record<string, string>;
 
-  constructor(workerId: string = '0', baseUrl: string = 'http://localhost:8001') {
-    this.baseUrl = baseUrl;
+  constructor(workerId: string = '0', baseUrl?: string) {
+    // Calculate port based on worker ID (worker-specific backend)
+    const port = 8000 + parseInt(workerId);
+    this.baseUrl = baseUrl || `http://localhost:${port}`;
     this.headers = {
       'Content-Type': 'application/json',
-      'X-Test-Worker': workerId,
+      // No longer need X-Test-Worker header - isolation is at infrastructure level
     };
   }
 

@@ -57,14 +57,18 @@ export async function resetDatabaseForWorker(
  */
 export async function resetDatabaseViaRequest(
   page: Page,
-  options: DatabaseResetOptions = {}
+  options: DatabaseResetOptions & { workerId?: string } = {}
 ): Promise<void> {
-  const { retries = 3 } = options;
+  const { retries = 3, workerId = '0' } = options;
   let attempts = 0;
+  
+  // Calculate port based on worker ID
+  const port = 8000 + parseInt(workerId);
+  const baseUrl = `http://localhost:${port}`;
   
   while (attempts < retries) {
     try {
-      const response = await page.request.post('http://localhost:8001/api/admin/reset-database');
+      const response = await page.request.post(`${baseUrl}/api/admin/reset-database`);
       if (response.ok()) {
         return;
       }

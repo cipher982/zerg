@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures';
+import { startBackendServer, stopBackendServer } from './backend-server';
 
 /**
  * COMPREHENSIVE DEBUG TEST
@@ -20,10 +21,23 @@ test.describe('Comprehensive Debug', () => {
     console.log('📊 Worker ID:', workerId);
     console.log('📊 NODE_ENV:', process.env.NODE_ENV);
     
+    // Start isolated backend server for this worker
+    console.log('🚀 Starting isolated backend server...');
+    const server = await startBackendServer(workerId);
+    const backendUrl = server.baseUrl;
+    console.log('📊 Backend URL:', backendUrl);
+    
+    // Cleanup function
+    const cleanup = async () => {
+      await stopBackendServer(workerId);
+    };
+    
+    try {
+    
     // Test 1: Basic connectivity
     console.log('🔍 Test 1: Basic connectivity');
     try {
-      const response = await page.request.get('http://localhost:8001/');
+      const response = await page.request.get(`${backendUrl}/`);
       console.log('📊 Basic connectivity status:', response.status());
       if (response.ok()) {
         console.log('✅ Backend is accessible');
@@ -39,7 +53,7 @@ test.describe('Comprehensive Debug', () => {
     // Test 2: Header transmission
     console.log('🔍 Test 2: Header transmission');
     try {
-      const response = await page.request.get('http://localhost:8001/', {
+      const response = await page.request.get(`${backendUrl}/`, {
         headers: {
           'X-Debug-Test': 'header-test'
         }
@@ -53,7 +67,7 @@ test.describe('Comprehensive Debug', () => {
     // Test 3: Agent endpoint - GET (should work)
     console.log('🔍 Test 3: Agent GET endpoint');
     try {
-      const response = await page.request.get('http://localhost:8001/api/agents');
+      const response = await page.request.get(`${backendUrl}/api/agents`);
       console.log('📊 Agent GET status:', response.status());
       if (response.ok()) {
         const agents = await response.json();
@@ -73,7 +87,7 @@ test.describe('Comprehensive Debug', () => {
     // Try a simpler POST endpoint first
     try {
       console.log('📊 Testing user endpoint...');
-      const userResponse = await page.request.get('http://localhost:8001/api/users/me');
+      const userResponse = await page.request.get(`${backendUrl}/api/users/me`);
       console.log('📊 User endpoint status:', userResponse.status());
       if (userResponse.ok()) {
         const user = await userResponse.json();
@@ -86,7 +100,7 @@ test.describe('Comprehensive Debug', () => {
     // Test 5: Try creating a workflow instead of agent
     console.log('🔍 Test 5: Workflow creation test');
     try {
-      const workflowResponse = await page.request.post('http://localhost:8001/api/workflows', {
+      const workflowResponse = await page.request.post(`${backendUrl}/api/workflows`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -111,7 +125,7 @@ test.describe('Comprehensive Debug', () => {
     // Test 6: Agent creation with minimal data
     console.log('🔍 Test 6: Minimal agent creation');
     try {
-      const agentResponse = await page.request.post('http://localhost:8001/api/agents', {
+      const agentResponse = await page.request.post(`${backendUrl}/api/agents`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -149,7 +163,7 @@ test.describe('Comprehensive Debug', () => {
     console.log('🔍 Test 7: Database introspection');
     try {
       // Try to access an admin endpoint that might give us database info
-      const adminResponse = await page.request.get('http://localhost:8001/api/system/health');
+      const adminResponse = await page.request.get(`${backendUrl}/api/system/health`);
       console.log('📊 System health status:', adminResponse.status());
       if (adminResponse.ok()) {
         const health = await adminResponse.text();
@@ -160,5 +174,10 @@ test.describe('Comprehensive Debug', () => {
     }
     
     console.log('✅ Comprehensive debug test complete');
+    
+    } finally {
+      // Cleanup backend server
+      await cleanup();
+    }
   });
 });
