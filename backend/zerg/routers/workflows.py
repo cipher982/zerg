@@ -239,8 +239,8 @@ def put_workflow_layout(
     if wf is None or wf.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="workflow not found")
 
-    nodes_dict = {k: v.dict() for k, v in payload.nodes.items()}
-    viewport_dict = payload.viewport.dict() if payload.viewport is not None else None
+    nodes_dict = {k: v.model_dump() for k, v in payload.nodes.items()}
+    viewport_dict = payload.viewport.model_dump() if payload.viewport is not None else None
 
     crud.upsert_canvas_layout(
         db,

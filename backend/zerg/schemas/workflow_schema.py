@@ -13,6 +13,7 @@ from typing import List
 from typing import Union
 
 from pydantic import BaseModel
+from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import model_validator
 
@@ -20,35 +21,32 @@ from pydantic import model_validator
 class WorkflowNode(BaseModel):
     """Canonical representation of a workflow node."""
 
+    model_config = ConfigDict(extra="allow")  # Allow additional fields for flexibility
+
     node_id: str = Field(..., description="Unique node identifier")
     node_type: Union[str, Dict[str, Any]] = Field(..., description="Node type configuration")
     position: Dict[str, float] = Field(default_factory=dict, description="Node position on canvas")
     config: Dict[str, Any] = Field(default_factory=dict, description="Node-specific configuration")
 
-    class Config:
-        extra = "allow"  # Allow additional fields for flexibility
-
 
 class WorkflowEdge(BaseModel):
     """Canonical representation of a workflow edge."""
+
+    model_config = ConfigDict(extra="allow")  # Allow additional fields for flexibility
 
     from_node_id: str = Field(..., description="Source node ID")
     to_node_id: str = Field(..., description="Target node ID")
     config: Dict[str, Any] = Field(default_factory=dict, description="Edge-specific configuration")
 
-    class Config:
-        extra = "allow"  # Allow additional fields for flexibility
-
 
 class WorkflowCanvas(BaseModel):
     """Canonical representation of complete workflow canvas data."""
 
+    model_config = ConfigDict(extra="allow")  # Allow additional fields for flexibility
+
     nodes: List[WorkflowNode] = Field(default_factory=list, description="List of workflow nodes")
     edges: List[WorkflowEdge] = Field(default_factory=list, description="List of workflow edges")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Canvas metadata")
-
-    class Config:
-        extra = "allow"  # Allow additional fields for flexibility
 
     def get_node_by_id(self, node_id: str) -> WorkflowNode | None:
         """Get node by ID, return None if not found."""
@@ -78,14 +76,15 @@ class WorkflowCanvas(BaseModel):
 class FrontendNode(BaseModel):
     """Frontend node format with field aliases for clean transformation."""
 
+    model_config = ConfigDict(
+        extra="allow",  # Preserve additional fields
+        populate_by_name=True,  # Allow both "id" and "node_id"
+    )
+
     # Primary fields with aliases to handle both naming conventions
     node_id: str = Field(alias="id")
     node_type: Union[str, Dict[str, Any]] = Field(alias="type")
     position: Dict[str, float] = Field(default_factory=dict)
-
-    class Config:
-        extra = "allow"  # Preserve additional fields
-        populate_by_name = True  # Allow both "id" and "node_id"
 
     @model_validator(mode="before")
     @classmethod
@@ -116,12 +115,13 @@ class FrontendNode(BaseModel):
 class FrontendEdge(BaseModel):
     """Frontend edge format with field aliases."""
 
+    model_config = ConfigDict(
+        extra="allow",  # Preserve additional fields
+        populate_by_name=True,  # Allow both naming conventions
+    )
+
     from_node_id: str = Field(alias="source")
     to_node_id: str = Field(alias="target")
-
-    class Config:
-        extra = "allow"  # Preserve additional fields
-        populate_by_name = True  # Allow both naming conventions
 
     @model_validator(mode="before")
     @classmethod
@@ -150,12 +150,11 @@ class FrontendEdge(BaseModel):
 class InputCanvas(BaseModel):
     """Flexible input canvas that handles multiple external formats."""
 
+    model_config = ConfigDict(extra="allow")
+
     nodes: List[Union[Dict[str, Any], str]] = Field(default_factory=list)
     edges: List[Dict[str, Any]] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
-
-    class Config:
-        extra = "allow"
 
 
 # ==============================================================================
