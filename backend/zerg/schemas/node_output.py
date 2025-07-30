@@ -13,6 +13,7 @@ from typing import Optional
 from typing import Union
 
 from pydantic import BaseModel
+from pydantic import ConfigDict
 from pydantic import Field
 
 
@@ -89,15 +90,12 @@ class NodeOutputEnvelope(BaseModel):
     All node executors should return data in this format.
     """
 
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat() if v else None})
+
     value: Any = Field(description="Primary result value from node execution")
     meta: Union[ToolNodeMetadata, AgentNodeMetadata, ConditionalNodeMetadata, TriggerNodeMetadata, NodeMetadata] = (
         Field(description="Execution metadata and context")
     )
-
-    class Config:
-        """Pydantic configuration."""
-
-        json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
 # Convenience functions for creating envelopes

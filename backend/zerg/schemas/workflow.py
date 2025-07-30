@@ -11,6 +11,7 @@ from typing import List
 from typing import Literal
 
 from pydantic import BaseModel
+from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import field_validator
 
@@ -60,5 +61,4 @@ class WorkflowData(BaseModel):
                 raise ValueError(f"Edge {e.from_}->{e.to} references unknown node")
         return edges
 
-    class Config:
-        extra = "forbid"  # Reject unknown fields for security
+    model_config = ConfigDict(extra="forbid")  # Reject unknown fields for security

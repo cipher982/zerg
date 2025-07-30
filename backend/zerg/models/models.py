@@ -304,11 +304,7 @@ class Trigger(Base):
         """Assign *cfg* and persist its dict representation."""
 
         # Persist as raw dict so DB schema remains unchanged
-        # Pydantic v2 uses ``model_dump``; v1 still supports ``dict``.
-        try:
-            raw = cfg.model_dump()  # type: ignore[attr-defined]
-        except AttributeError:
-            raw = cfg.dict()  # type: ignore[attr-defined]
+        raw = cfg.model_dump()  # type: ignore[attr-defined]
 
         self.config = raw  # type: ignore[assignment]
 

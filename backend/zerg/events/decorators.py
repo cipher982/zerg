@@ -36,9 +36,9 @@ def publish_event(event_type: EventType):
                         if isinstance(value, datetime):
                             value = value.isoformat()
                         event_data[column.name] = value
-                elif hasattr(result, "dict"):
+                elif hasattr(result, "model_dump"):
                     # For Pydantic models
-                    event_data = result.dict()
+                    event_data = result.model_dump()
                 elif hasattr(result, "__dict__"):
                     # For regular objects
                     event_data = result.__dict__

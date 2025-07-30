@@ -30,9 +30,10 @@ load_dotenv()
 # - Can be set at runtime with LOG_LEVEL env (e.g. LOG_LEVEL=WARNING for CI)
 # - Explicitly suppresses spammy WebSocket modules to WARNING by default
 #
+# Third-party
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-# Third-party
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -102,15 +103,49 @@ AVATARS_DIR = STATIC_DIR / "avatars"
 # Create folders on import so they are there in tests and dev.
 AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Create FastAPI APP
-app = FastAPI(redirect_slashes=True)
+# Set up logging early for lifespan handler
+logger = logging.getLogger(__name__)
 
 
-@app.on_event("shutdown")
-async def _shutdown_ws_manager():  # noqa: D401 – internal
-    from zerg.websocket.manager import topic_manager
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle application startup and shutdown lifecycle."""
+    # Startup phase
+    try:
+        # Create DB tables if they don't exist
+        initialize_database()
+        logger.info("Database tables initialized")
 
-    await topic_manager.shutdown()
+        # Start core background services
+        if not _settings.testing:
+            await scheduler_service.start()
+            await email_trigger_service.start()
+
+        logger.info("Background services initialised (scheduler + email triggers)")
+    except Exception as e:
+        logger.error(f"Error during startup: {e}")
+
+    yield  # Application is running
+
+    # Shutdown phase
+    try:
+        # Stop background services
+        if not _settings.testing:
+            await scheduler_service.stop()
+            await email_trigger_service.stop()
+
+        # Shutdown websocket manager
+        from zerg.websocket.manager import topic_manager
+
+        await topic_manager.shutdown()
+
+        logger.info("Background services stopped")
+    except Exception as e:
+        logger.error(f"Error during shutdown: {e}")
+
+
+# Create FastAPI APP with lifespan handler
+app = FastAPI(redirect_slashes=True, lifespan=lifespan)
 
 
 # Add CORS middleware with all necessary headers
@@ -220,39 +255,9 @@ try:
 except ImportError:  # pragma: no cover – should not happen
     pass
 
+# Legacy logging setup (kept to avoid breaking existing comment reference)
 # Set up logging
-logger = logging.getLogger(__name__)
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on app startup."""
-    try:
-        # Create DB tables if they don't exist
-        initialize_database()
-        logger.info("Database tables initialized")
-
-        # Start core background services ----------------------------------
-        if not _settings.testing:
-            await scheduler_service.start()
-            await email_trigger_service.start()
-
-        logger.info("Background services initialised (scheduler + email triggers)")
-    except Exception as e:
-        logger.error(f"Error during startup: {e}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Clean up services on app shutdown."""
-    try:
-        if not _settings.testing:
-            await scheduler_service.stop()
-            await email_trigger_service.stop()
-
-        logger.info("Background services stopped")
-    except Exception as e:
-        logger.error(f"Error stopping scheduler service: {e}")
+# Note: logger is now defined earlier for lifespan handler usage
 
 
 # Root endpoint
