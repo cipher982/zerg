@@ -20,7 +20,7 @@ from fastapi import Response
 from fastapi import status
 from pydantic import BaseModel
 from pydantic import Field
-from pydantic import validator
+from pydantic import field_validator
 from sqlalchemy.orm import Session
 
 from zerg.crud import crud
@@ -45,7 +45,7 @@ class LayoutUpdate(BaseModel):
     nodes: Dict[str, NodePos]
     viewport: Optional[Viewport] = None
 
-    @validator("nodes")
+    @field_validator("nodes")
     def check_node_count(cls, v):  # noqa: N805 – Pydantic naming rule
         if len(v) > 5_000:
             raise ValueError("payload too large – max 5000 nodes")
@@ -67,8 +67,8 @@ async def patch_layout(
     """Upsert the authenticated user's canvas layout."""
 
     # Convert Pydantic models → plain dicts for JSON storage.
-    nodes_dict = {k: v.dict() for k, v in payload.nodes.items()}
-    viewport_dict = payload.viewport.dict() if payload.viewport is not None else None
+    nodes_dict = {k: v.model_dump() for k, v in payload.nodes.items()}
+    viewport_dict = payload.viewport.model_dump() if payload.viewport is not None else None
 
     crud.upsert_canvas_layout(
         db,
