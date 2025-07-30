@@ -9,6 +9,7 @@ from typing import Optional
 # New *Run History* schemas
 # ---------------------------------------------------------------------------
 from pydantic import BaseModel
+from pydantic import ConfigDict
 
 from zerg.models.enums import AgentStatus
 from zerg.schemas.workflow import WorkflowData
@@ -55,14 +56,13 @@ for _m in [AgentCreate]:
 
 
 class AgentMessage(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     agent_id: int
     role: str
     content: str
     timestamp: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ------------------------------------------------------------
@@ -71,6 +71,8 @@ class AgentMessage(BaseModel):
 
 
 class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: str
     is_active: bool
@@ -87,9 +89,6 @@ class UserOut(BaseModel):
     # so the WASM frontend can enable e-mail trigger creation without an
     # extra round-trip.
     gmail_connected: bool = False
-
-    class Config:
-        from_attributes = True
 
 
 # User profile update schema (partial)
@@ -119,6 +118,8 @@ class ThreadMessageCreate(ThreadMessageBase):
 
 
 class ThreadMessageResponse(ThreadMessageBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     thread_id: int
     timestamp: datetime
@@ -127,9 +128,6 @@ class ThreadMessageResponse(ThreadMessageBase):
     # Fields for message type and tool display
     message_type: Optional[str] = None
     tool_name: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 # Thread schemas
@@ -154,17 +152,18 @@ class ThreadUpdate(BaseModel):
 
 
 class Thread(ThreadBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     agent_id: int
     created_at: datetime
     updated_at: datetime
     messages: List[ThreadMessageResponse] = []
 
-    class Config:
-        from_attributes = True
-
 
 class Agent(AgentBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     owner_id: int
     owner: Optional[UserOut] = None
@@ -176,9 +175,6 @@ class Agent(AgentBase):
     next_run_at: Optional[datetime] = None
     last_run_at: Optional[datetime] = None
     last_error: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 # ---------------------------------------------------------------------------
@@ -210,14 +206,13 @@ class MessageCreate(BaseModel):
 
 
 class MessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     agent_id: int
     role: str
     content: str
     timestamp: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ------------------------------------------------------------
@@ -239,12 +234,11 @@ class TriggerCreate(TriggerBase):
 
 
 class Trigger(TriggerBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     secret: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # ------------------------------------------------------------
@@ -273,6 +267,8 @@ class RunTrigger(str, Enum):
 
 
 class AgentRunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     agent_id: int
     thread_id: int
@@ -284,9 +280,6 @@ class AgentRunOut(BaseModel):
     total_tokens: Optional[int] = None
     total_cost_usd: Optional[float] = None
     error: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 # ------------------------------------------------------------
@@ -309,15 +302,14 @@ class WorkflowUpdate(BaseModel):
 
 
 class Workflow(WorkflowBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     owner_id: int
     is_active: bool
     created_at: datetime
     updated_at: datetime
     canvas: WorkflowData
-
-    class Config:
-        from_attributes = True
 
 
 # Template Gallery schemas
@@ -338,14 +330,13 @@ class WorkflowTemplateCreate(WorkflowTemplateBase):
 
 
 class WorkflowTemplate(WorkflowTemplateBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     created_by: int
     is_public: bool
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class TemplateDeployRequest(BaseModel):
