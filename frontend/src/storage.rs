@@ -858,7 +858,7 @@ pub fn save_canvas_data_to_api(app_state: &AppState) {
     }
 
     let payload = serde_json::json!({
-        "canvas_data": canvas_data
+        "canvas": canvas_data
     });
 
     let payload_str = payload.to_string();
