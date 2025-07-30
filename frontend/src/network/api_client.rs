@@ -544,7 +544,7 @@ impl ApiClient {
     /// Update canvas data (nodes and edges) for current workflow
     pub async fn patch_workflow_canvas_data(payload_json: &str) -> Result<String, JsValue> {
         let base = Self::api_base_url();
-        let url = format!("{}/api/workflows/current/canvas-data", base);
+        let url = format!("{}/api/workflows/current/canvas", base);
         Self::fetch_json(&url, "PATCH", Some(payload_json)).await
     }
 
