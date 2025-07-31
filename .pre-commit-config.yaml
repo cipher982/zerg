@@ -42,6 +42,27 @@ repos:
         pass_filenames: false
         files: ^asyncapi/
 
+      - id: contract-field-validation
+        name: "Contract field name validation"
+        language: system
+        entry: >-
+          bash -c "
+          echo '🔍 Checking for forbidden field name transformations...';
+          if grep -r --include='*.rs' -n '\"from\":\|\"to\":' frontend/src/; then
+            echo '❌ FORBIDDEN: Found old field names (from/to) in Rust code.';
+            echo 'Use from_node_id/to_node_id instead for contract compliance.';
+            exit 1;
+          fi;
+          if grep -r --include='*.rs' -n 'from.*edge\.' frontend/src/ | grep -v from_node_id; then
+            echo '❌ FORBIDDEN: Found potential field name transformation.';
+            echo 'Use consistent field naming (from_node_id/to_node_id) throughout.';
+            exit 1;
+          fi;
+          echo '✅ Contract field validation passed';
+          "
+        pass_filenames: false
+        files: ^frontend/
+
 # ---------------------------------------------------------------------------
 # CSS lint & formatting hooks (local – use project’s Node deps; no external mirror)
 # ---------------------------------------------------------------------------

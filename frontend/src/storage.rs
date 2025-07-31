@@ -857,13 +857,13 @@ pub fn save_canvas_data_to_api(app_state: &AppState) {
                 })
                 .collect();
 
-            // Transform edges to backend format  
-            let transformed_edges: Vec<serde_json::Value> = workflow.get_edges()
+            // Use edges with consistent field naming (no transformation needed)
+            let edges: Vec<serde_json::Value> = workflow.get_edges()
                 .iter()
                 .map(|edge| {
                     serde_json::json!({
-                        "from": edge.from_node_id,
-                        "to": edge.to_node_id,
+                        "from_node_id": edge.from_node_id,
+                        "to_node_id": edge.to_node_id,
                         "config": edge.config
                     })
                 })
@@ -871,7 +871,7 @@ pub fn save_canvas_data_to_api(app_state: &AppState) {
 
             serde_json::json!({
                 "nodes": transformed_nodes,
-                "edges": transformed_edges
+                "edges": edges
             })
         } else {
             // If no workflow exists but we have a current_workflow_id,
