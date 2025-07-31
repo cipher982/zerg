@@ -816,26 +816,76 @@ pub fn save_canvas_data_to_api(app_state: &AppState) {
         return;
     }
 
-    // Get current workflow data
+    // Transform current workflow data to backend format
     let canvas_data = if let Some(workflow_id) = app_state.current_workflow_id {
         if let Some(workflow) = app_state.workflows.get(&workflow_id) {
+            // Transform nodes to backend format
+            let transformed_nodes: Vec<serde_json::Value> = workflow.get_nodes()
+                .iter()
+                .map(|node| {
+                    // Convert NodeType to backend format - default to "trigger" for generated nodes
+                    let node_type_str = match &node.node_type {
+                        crate::generated::workflow::NodeType::Variant0(s) => {
+                            // String variant - try to map to backend types
+                            match s.to_lowercase().as_str() {
+                                "agent" | "agentidentity" => "agent",
+                                "tool" => "tool", 
+                                _ => "trigger"
+                            }
+                        },
+                        crate::generated::workflow::NodeType::Variant1(_) => "trigger", // Map objects to trigger by default
+                    };
+
+                    // Extract position from config (frontend stores x,y in config)
+                    let position = serde_json::json!({
+                        "x": node.config.x,
+                        "y": node.config.y
+                    });
+
+                    // Create backend-compatible node
+                    serde_json::json!({
+                        "id": node.node_id,
+                        "type": node_type_str,
+                        "position": position,
+                        "config": {
+                            "width": node.config.width,
+                            "height": node.config.height,
+                            "text": node.config.text,
+                            "color": node.config.color
+                        }
+                    })
+                })
+                .collect();
+
+            // Transform edges to backend format  
+            let transformed_edges: Vec<serde_json::Value> = workflow.get_edges()
+                .iter()
+                .map(|edge| {
+                    serde_json::json!({
+                        "from": edge.from_node_id,
+                        "to": edge.to_node_id,
+                        "config": edge.config
+                    })
+                })
+                .collect();
+
             serde_json::json!({
-                "nodes": workflow.get_nodes(),
-                "edges": workflow.get_edges()
+                "nodes": transformed_nodes,
+                "edges": transformed_edges
             })
         } else {
             // If no workflow exists but we have a current_workflow_id,
             // we should still send the current state
             serde_json::json!({
-                "nodes": Vec::<crate::models::WorkflowNode>::new(),
-                "edges": Vec::<crate::models::WorkflowEdge>::new()
+                "nodes": Vec::<serde_json::Value>::new(),
+                "edges": Vec::<serde_json::Value>::new()
             })
         }
     } else {
         // No current workflow, create empty structure
         serde_json::json!({
-            "nodes": Vec::<crate::models::WorkflowNode>::new(),
-            "edges": Vec::<crate::models::WorkflowEdge>::new()
+            "nodes": Vec::<serde_json::Value>::new(),
+            "edges": Vec::<serde_json::Value>::new()
         })
     };
 
@@ -857,24 +907,8 @@ pub fn save_canvas_data_to_api(app_state: &AppState) {
         return;
     }
 
-    let payload = serde_json::json!({
-        "canvas": canvas_data
-    });
+    web_sys::console::log_1(&"🚀 Sending canvas data via type-safe generated client".into());
 
-    let payload_str = payload.to_string();
-
-    web_sys::console::log_1(&format!("🚀 Sending canvas data to API: {}", payload_str).into());
-
-    spawn_local(async move {
-        match crate::network::ApiClient::patch_workflow_canvas_data(&payload_str).await {
-            Ok(_) => {
-                web_sys::console::log_1(&"✅ Canvas structure saved to workflow".into());
-            }
-            Err(e) => {
-                web_sys::console::error_1(
-                    &format!("❌ Failed to save canvas structure: {:?}", e).into(),
-                );
-            }
-        }
-    });
+    // Use type-safe generated client instead of manual API calls
+    crate::network::generated_client::save_canvas_data_typed(canvas_data);
 }

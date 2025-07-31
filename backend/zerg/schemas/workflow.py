@@ -35,10 +35,14 @@ class WorkflowNode(BaseModel):
 class WorkflowEdge(BaseModel):
     """A directed edge connecting two nodes."""
 
-    model_config = {"populate_by_name": True}
+    model_config = ConfigDict(
+        populate_by_name=True,
+        # Consistent field naming - no more aliasing confusion
+        alias_generator=lambda field_name: field_name,
+    )
 
-    from_: str = Field(..., alias="from")
-    to: str
+    from_node_id: str  # ✅ Consistent with frontend - no more "from" alias
+    to_node_id: str  # ✅ Consistent with frontend - no more confusion
     config: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -57,8 +61,8 @@ class WorkflowData(BaseModel):
 
         node_ids = {n.id for n in info.data["nodes"]}
         for e in edges:
-            if e.from_ not in node_ids or e.to not in node_ids:
-                raise ValueError(f"Edge {e.from_}->{e.to} references unknown node")
+            if e.from_node_id not in node_ids or e.to_node_id not in node_ids:
+                raise ValueError(f"Edge {e.from_node_id}->{e.to_node_id} references unknown node")
         return edges
 
     model_config = ConfigDict(extra="forbid")  # Reject unknown fields for security
