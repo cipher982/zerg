@@ -148,6 +148,55 @@ async def lifespan(app: FastAPI):
 app = FastAPI(redirect_slashes=True, lifespan=lifespan)
 
 
+# ========================================================================
+# OPENAPI SCHEMA EXPORT - Phase 1 of Contract Enforcement
+# ========================================================================
+def custom_openapi():
+    """Generate and export OpenAPI schema for contract enforcement."""
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    import json
+
+    from fastapi.openapi.utils import get_openapi
+
+    openapi_schema = get_openapi(
+        title="Zerg Agent Platform API",
+        version="1.0.0",
+        description="Complete REST API specification for the Zerg Agent Platform. "
+        "This schema is the single source of truth for frontend-backend contracts.",
+        routes=app.routes,
+    )
+
+    # Add server information
+    openapi_schema["servers"] = [
+        {"url": "http://localhost:8001", "description": "Development server"},
+        {"url": "https://api.zerg.ai", "description": "Production server"},
+    ]
+
+    # Export schema to file for CI consumption
+    try:
+        # Write to backend directory and repo root
+        backend_schema_path = Path(__file__).parent.parent / "openapi.json"
+        root_schema_path = Path(__file__).parent.parent.parent / "openapi.json"
+
+        with open(backend_schema_path, "w") as f:
+            json.dump(openapi_schema, f, indent=2)
+        with open(root_schema_path, "w") as f:
+            json.dump(openapi_schema, f, indent=2)
+
+        print(f"✅ OpenAPI schema exported to {backend_schema_path} and {root_schema_path}")
+    except Exception as e:
+        print(f"⚠️  Could not export OpenAPI schema: {e}")
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+# Set the custom OpenAPI generator
+app.openapi = custom_openapi
+
+
 # Add CORS middleware with all necessary headers
 # ------------------------------------------------------------------
 # CORS – open wildcard in dev/tests, restricted in production unless env

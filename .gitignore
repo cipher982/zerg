@@ -194,3 +194,8 @@ test-results/
 e2e/*.png
 e2e/*/*.txt
 .vscode/
+# Generated OpenAPI specifications
+openapi.json
+backend/openapi.json
+openapi-generated.json
+backend/openapitools.json

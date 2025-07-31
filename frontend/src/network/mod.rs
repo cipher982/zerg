@@ -1,6 +1,7 @@
 // Re-export network modules
 pub mod api_client;
 pub mod config;
+pub mod generated_client;
 pub mod messages;
 pub mod topic_manager;
 pub mod ui_updates;
