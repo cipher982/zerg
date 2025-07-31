@@ -117,8 +117,8 @@ class WorkflowEngine:
             graph.add_node(node.id, executor.execute)
 
         # Find start and end nodes
-        target_nodes = {edge.to for edge in workflow_data.edges}
-        source_nodes = {edge.from_ for edge in workflow_data.edges}
+        target_nodes = {edge.to_node_id for edge in workflow_data.edges}
+        source_nodes = {edge.from_node_id for edge in workflow_data.edges}
 
         start_nodes = [node.id for node in workflow_data.nodes if node.id not in target_nodes]
         end_nodes = [node.id for node in workflow_data.nodes if node.id not in source_nodes]
@@ -130,9 +130,9 @@ class WorkflowEngine:
         # Group edges by source node to handle conditional routing
         edges_by_source = {}
         for edge in workflow_data.edges:
-            if edge.from_ not in edges_by_source:
-                edges_by_source[edge.from_] = []
-            edges_by_source[edge.from_].append(edge)
+            if edge.from_node_id not in edges_by_source:
+                edges_by_source[edge.from_node_id] = []
+            edges_by_source[edge.from_node_id].append(edge)
 
         # Add edges with conditional routing support
         for source_node_id, edges in edges_by_source.items():
@@ -140,8 +140,8 @@ class WorkflowEngine:
 
             if from_node and from_node.type == "conditional":
                 # For conditional nodes, create a router that handles all outgoing edges
-                true_targets = [e.to for e in edges if e.config.get("branch", "true") == "true"]
-                false_targets = [e.to for e in edges if e.config.get("branch", "true") == "false"]
+                true_targets = [e.to_node_id for e in edges if e.config.get("branch", "true") == "true"]
+                false_targets = [e.to_node_id for e in edges if e.config.get("branch", "true") == "false"]
 
                 def make_conditional_router(true_list, false_list):
                     def conditional_router(state):
@@ -181,7 +181,7 @@ class WorkflowEngine:
             else:
                 # Regular edges - add them normally
                 for edge in edges:
-                    graph.add_edge(edge.from_, edge.to)
+                    graph.add_edge(edge.from_node_id, edge.to_node_id)
 
         for end_node in end_nodes:
             graph.add_edge(end_node, END)
