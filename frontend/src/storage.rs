@@ -819,59 +819,16 @@ pub fn save_canvas_data_to_api(app_state: &AppState) {
     // Transform current workflow data to backend format
     let canvas_data = if let Some(workflow_id) = app_state.current_workflow_id {
         if let Some(workflow) = app_state.workflows.get(&workflow_id) {
-            // Transform nodes to backend format
-            let transformed_nodes: Vec<serde_json::Value> = workflow.get_nodes()
-                .iter()
-                .map(|node| {
-                    // Convert NodeType to backend format - default to "trigger" for generated nodes
-                    let node_type_str = match &node.node_type {
-                        crate::generated::workflow::NodeType::Variant0(s) => {
-                            // String variant - try to map to backend types
-                            match s.to_lowercase().as_str() {
-                                "agent" | "agentidentity" => "agent",
-                                "tool" => "tool", 
-                                _ => "trigger"
-                            }
-                        },
-                        crate::generated::workflow::NodeType::Variant1(_) => "trigger", // Map objects to trigger by default
-                    };
-
-                    // Extract position from config (frontend stores x,y in config)
-                    let position = serde_json::json!({
-                        "x": node.config.x,
-                        "y": node.config.y
-                    });
-
-                    // Create backend-compatible node
-                    serde_json::json!({
-                        "id": node.node_id,
-                        "type": node_type_str,
-                        "position": position,
-                        "config": {
-                            "width": node.config.width,
-                            "height": node.config.height,
-                            "text": node.config.text,
-                            "color": node.config.color
-                        }
-                    })
+            // Use contract-compliant serialization directly (no manual transformation)
+            serde_json::to_value(&serde_json::json!({
+                "nodes": workflow.get_nodes(),
+                "edges": workflow.get_edges()
+            })).unwrap_or_else(|_| {
+                // Fallback to empty structure if serialization fails
+                serde_json::json!({
+                    "nodes": Vec::<serde_json::Value>::new(),
+                    "edges": Vec::<serde_json::Value>::new()
                 })
-                .collect();
-
-            // Use edges with consistent field naming (no transformation needed)
-            let edges: Vec<serde_json::Value> = workflow.get_edges()
-                .iter()
-                .map(|edge| {
-                    serde_json::json!({
-                        "from_node_id": edge.from_node_id,
-                        "to_node_id": edge.to_node_id,
-                        "config": edge.config
-                    })
-                })
-                .collect();
-
-            serde_json::json!({
-                "nodes": transformed_nodes,
-                "edges": edges
             })
         } else {
             // If no workflow exists but we have a current_workflow_id,
