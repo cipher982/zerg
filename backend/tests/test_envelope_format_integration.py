@@ -101,10 +101,14 @@ async def test_envelope_format_all_node_types(db, test_user, sample_agent):
                     ),
                 ],
                 edges=[
-                    WorkflowEdge(**{"from": "trigger-1", "to": "tool-1"}),
-                    WorkflowEdge(**{"from": "tool-1", "to": "conditional-1"}),
-                    WorkflowEdge(**{"from": "conditional-1", "to": "agent-1", "config": {"branch": "true"}}),
-                    WorkflowEdge(**{"from": "conditional-1", "to": "agent-2", "config": {"branch": "false"}}),
+                    WorkflowEdge(**{"from_node_id": "trigger-1", "to_node_id": "tool-1"}),
+                    WorkflowEdge(**{"from_node_id": "tool-1", "to_node_id": "conditional-1"}),
+                    WorkflowEdge(
+                        **{"from_node_id": "conditional-1", "to_node_id": "agent-1", "config": {"branch": "true"}}
+                    ),
+                    WorkflowEdge(
+                        **{"from_node_id": "conditional-1", "to_node_id": "agent-2", "config": {"branch": "false"}}
+                    ),
                 ],
             )
 
@@ -244,8 +248,14 @@ async def test_envelope_format_variable_resolution_edge_cases(db, test_user, sam
                     ),
                 ],
                 edges=[
-                    WorkflowEdge(**{"from": "tool-complex", "to": "conditional-nested"}),
-                    WorkflowEdge(**{"from": "conditional-nested", "to": "agent-complex", "config": {"branch": "true"}}),
+                    WorkflowEdge(**{"from_node_id": "tool-complex", "to_node_id": "conditional-nested"}),
+                    WorkflowEdge(
+                        **{
+                            "from_node_id": "conditional-nested",
+                            "to_node_id": "agent-complex",
+                            "config": {"branch": "true"},
+                        }
+                    ),
                 ],
             )
 
@@ -352,8 +362,14 @@ async def test_envelope_format_alias_support(db, test_user, sample_agent):
                     ),
                 ],
                 edges=[
-                    WorkflowEdge(**{"from": "tool-alias", "to": "conditional-alias"}),
-                    WorkflowEdge(**{"from": "conditional-alias", "to": "agent-alias", "config": {"branch": "true"}}),
+                    WorkflowEdge(**{"from_node_id": "tool-alias", "to_node_id": "conditional-alias"}),
+                    WorkflowEdge(
+                        **{
+                            "from_node_id": "conditional-alias",
+                            "to_node_id": "agent-alias",
+                            "config": {"branch": "true"},
+                        }
+                    ),
                 ],
             )
 

@@ -49,11 +49,11 @@ def create_conditional_workflow_data(agent_id: int) -> WorkflowData:
         ],
         edges=[
             # Tool -> Conditional
-            WorkflowEdge(**{"from": "tool-1", "to": "conditional-1"}),
+            WorkflowEdge(**{"from_node_id": "tool-1", "to_node_id": "conditional-1"}),
             # Conditional -> High branch (true)
-            WorkflowEdge(**{"from": "conditional-1", "to": "agent-high", "config": {"branch": "true"}}),
+            WorkflowEdge(**{"from_node_id": "conditional-1", "to_node_id": "agent-high", "config": {"branch": "true"}}),
             # Conditional -> Low branch (false)
-            WorkflowEdge(**{"from": "conditional-1", "to": "agent-low", "config": {"branch": "false"}}),
+            WorkflowEdge(**{"from_node_id": "conditional-1", "to_node_id": "agent-low", "config": {"branch": "false"}}),
         ],
     )
 
@@ -229,8 +229,10 @@ async def test_conditional_node_variable_resolution(db, test_user, sample_agent)
                     ),
                 ],
                 edges=[
-                    WorkflowEdge(**{"from": "tool-1", "to": "conditional-1"}),
-                    WorkflowEdge(**{"from": "conditional-1", "to": "agent-success", "config": {"branch": "true"}}),
+                    WorkflowEdge(**{"from_node_id": "tool-1", "to_node_id": "conditional-1"}),
+                    WorkflowEdge(
+                        **{"from_node_id": "conditional-1", "to_node_id": "agent-success", "config": {"branch": "true"}}
+                    ),
                 ],
             )
 
