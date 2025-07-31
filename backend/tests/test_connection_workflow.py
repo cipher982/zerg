@@ -65,8 +65,8 @@ def test_agent_connection_workflow_execution(
         ],
         "edges": [
             {
-                "from": f"agent_node_{agent1.id}",
-                "to": f"agent_node_{agent2.id}",
+                "from_node_id": f"agent_node_{agent1.id}",
+                "to_node_id": f"agent_node_{agent2.id}",
                 "config": {"label": None},
             }
         ],
@@ -137,7 +137,7 @@ def test_frontend_edge_format_compatibility(
             {"id": "node_1", "type": "tool", "position": {"x": 0, "y": 0}, "config": {"tool_name": "get_current_time"}},
             {"id": "node_2", "type": "tool", "position": {"x": 100, "y": 0}, "config": {"tool_name": "generate_uuid"}},
         ],
-        "edges": [{"from": "node_1", "to": "node_2", "config": {"label": None}}],
+        "edges": [{"from_node_id": "node_1", "to_node_id": "node_2", "config": {"label": None}}],
     }
 
     workflow = crud_mod.create_workflow(
@@ -150,8 +150,8 @@ def test_frontend_edge_format_compatibility(
 
     # Verify workflow was created successfully
     assert workflow.id > 0
-    assert workflow.canvas["edges"][0]["from"] == "node_1"
-    assert workflow.canvas["edges"][0]["to"] == "node_2"
+    assert workflow.canvas["edges"][0]["from_node_id"] == "node_1"
+    assert workflow.canvas["edges"][0]["to_node_id"] == "node_2"
 
     # Try to execute it (may fail due to tool nodes, but should parse correctly)
     resp = client.post(f"/api/workflow-executions/{workflow.id}/start", headers=auth_headers)

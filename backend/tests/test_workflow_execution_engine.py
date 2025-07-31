@@ -21,7 +21,9 @@ def _create_linear_workflow(db: Session, crud_module, owner_id: int, num_nodes: 
             }
             for i in range(num_nodes)
         ],
-        "edges": [{"from": f"node_{i}", "to": f"node_{i+1}", "config": {}} for i in range(num_nodes - 1)],
+        "edges": [
+            {"from_node_id": f"node_{i}", "to_node_id": f"node_{i+1}", "config": {}} for i in range(num_nodes - 1)
+        ],
     }
 
     return crud_module.create_workflow(

@@ -246,8 +246,10 @@ pub struct WorkflowNode {
     #[serde(default)]
     pub config: crate::models::NodeConfig,
     #[doc = "Unique node identifier"]
+    #[serde(rename = "id")]
     pub node_id: ::std::string::String,
     #[doc = "Node type configuration"]
+    #[serde(rename = "type")]
     pub node_type: WorkflowNodeType,
     #[doc = "Node position on canvas"]
     #[serde(
