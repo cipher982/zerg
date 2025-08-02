@@ -274,6 +274,13 @@ pub enum Message {
         node_id: String,
         status: String,
     },
+    
+    /// Update connection animation state based on node execution
+    UpdateConnectionAnimation {
+        from_node_id: String,
+        to_node_id: String,
+        is_executing: bool,
+    },
 
     /// Workflow execution finished (success or failed)
     ExecutionFinished {
