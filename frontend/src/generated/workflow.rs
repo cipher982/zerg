@@ -252,11 +252,8 @@ pub struct WorkflowNode {
     #[serde(rename = "type")]
     pub node_type: WorkflowNodeType,
     #[doc = "Node position on canvas"]
-    #[serde(
-        default,
-        skip_serializing_if = ":: std :: collections :: HashMap::is_empty"
-    )]
-    pub position: ::std::collections::HashMap<::std::string::String, f64>,
+    #[serde(default)]
+    pub position: crate::network::generated_client::PositionContract,
 }
 impl ::std::convert::From<&WorkflowNode> for WorkflowNode {
     fn from(value: &WorkflowNode) -> Self {
@@ -425,7 +422,7 @@ pub mod builder {
         node_id: ::std::result::Result<::std::string::String, ::std::string::String>,
         node_type: ::std::result::Result<super::NodeType, ::std::string::String>,
         position: ::std::result::Result<
-            ::std::collections::HashMap<::std::string::String, f64>,
+            crate::network::generated_client::PositionContract,
             ::std::string::String,
         >,
     }
@@ -474,7 +471,7 @@ pub mod builder {
         }
         pub fn position<T>(mut self, value: T) -> Self
         where
-            T: ::std::convert::TryInto<::std::collections::HashMap<::std::string::String, f64>>,
+            T: ::std::convert::TryInto<crate::network::generated_client::PositionContract>,
             T::Error: ::std::fmt::Display,
         {
             self.position = value
