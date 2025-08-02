@@ -1,7 +1,7 @@
 use crate::models::ApiAgentRun;
 use crate::models::{
     ApiAgent, ApiThread, ApiThreadMessage, ApiWorkflow, NodeType, Trigger, UiNodeState, UiStateMap,
-    WorkflowEdge, WorkflowNode, WorkflowNodeType,
+    UiEdgeStateMap, WorkflowEdge, WorkflowNode, WorkflowNodeType,
 };
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -262,6 +262,7 @@ pub struct AppState {
     // Canvas visualization data
     pub workflow_nodes: HashMap<String, WorkflowNode>,
     pub ui_state: UiStateMap,
+    pub ui_edge_state: UiEdgeStateMap,
     pub workflows: HashMap<u32, ApiWorkflow>, // Workflows collection
     pub current_workflow_id: Option<u32>,     // Currently active workflow
 
@@ -532,6 +533,7 @@ impl AppState {
             agents_on_canvas: HashSet::new(),
             workflow_nodes: HashMap::new(),
             ui_state: HashMap::new(),
+            ui_edge_state: HashMap::new(),
             workflows: HashMap::new(),
             current_workflow_id: None,
             canvas: None,

@@ -529,6 +529,35 @@ impl UiNodeState {
 
 pub type UiStateMap = std::collections::HashMap<String, UiNodeState>;
 
+/// UI state for workflow edges (connections between nodes)
+#[derive(Debug, Clone)]
+pub struct UiEdgeState {
+    pub is_executing: bool,
+    pub source_node_running: bool,
+    pub target_node_running: bool,
+}
+
+impl Default for UiEdgeState {
+    fn default() -> Self {
+        Self {
+            is_executing: false,
+            source_node_running: false,
+            target_node_running: false,
+        }
+    }
+}
+
+impl UiEdgeState {
+    /// Update execution state based on connected nodes
+    pub fn update_from_nodes(&mut self, source_running: bool, target_running: bool) {
+        self.source_node_running = source_running;
+        self.target_node_running = target_running;
+        self.is_executing = source_running || target_running;
+    }
+}
+
+pub type UiEdgeStateMap = std::collections::HashMap<String, UiEdgeState>;
+
 /// Execution status emitted via WebSocket (running/success/failed).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeExecStatus {
