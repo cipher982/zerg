@@ -40,6 +40,8 @@ help:
 # Development workflow
 # ---------------------------------------------------------------------------
 start:
+	@echo "🚀 Starting development servers with contract validation..."
+	./scripts/fast-contract-check.sh
 	$(MAKE) -j2 _backend _frontend
 
 _backend:

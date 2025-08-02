@@ -1,5 +1,6 @@
 // Generated types module
 
+pub mod api_contracts;
 pub mod tool_definitions;
 pub mod workflow;
 pub mod ws_messages;
