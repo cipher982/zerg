@@ -5,7 +5,6 @@ use wasm_bindgen::JsValue;
 // Ensure uuid crate is added to Cargo.toml
 
 use super::messages::builders::{create_subscribe, create_unsubscribe};
-use crate::generated::ws_handlers::get_handler_for_topic;
 use super::ws_client_v2::IWsClient; // Update import
 use crate::generated::ws_messages::Envelope;
 

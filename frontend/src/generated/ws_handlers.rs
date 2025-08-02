@@ -1,15 +1,11 @@
 // AUTO-GENERATED FILE - DO NOT EDIT
-// Generated from ws-protocol-asyncapi.yml at 2025-08-02T07:49:09.813706Z
+// Generated from ws-protocol-asyncapi.yml at 2025-08-02T09:26:46.941320Z
 //
 // Handler traits and message routing with modern patterns
 
 use std::{cell::RefCell, rc::Rc};
-use serde_json::Value;
 use wasm_bindgen::JsValue;
 use crate::generated::ws_messages::*;
-
-#[cfg(feature = "schema_validation")]
-use schemars::JsonSchema;
 
 // Handler trait definitions with compile-time validation
 
@@ -36,27 +32,18 @@ pub trait ChatHandler {
 /// Enhanced message router for dashboard
 pub struct DashboardMessageRouter<T: DashboardHandler> {
     handler: Rc<RefCell<T>>,
-    #[cfg(feature = "metrics")]
-    metrics: std::collections::HashMap<String, u64>,
 }
 
 impl<T: DashboardHandler> DashboardMessageRouter<T> {
     pub fn new(handler: Rc<RefCell<T>>) -> Self {
         Self {
             handler,
-            #[cfg(feature = "metrics")]
-            metrics: std::collections::HashMap::new(),
         }
     }
     
-    /// Route message with enhanced error handling and metrics
+    /// Route message with enhanced error handling
     pub fn route_message(&mut self, envelope: &Envelope) -> Result<(), JsValue> {
         let message_type = &envelope.message_type;
-        
-        #[cfg(feature = "metrics")]
-        {
-            *self.metrics.entry(message_type.clone()).or_insert(0) += 1;
-        }
         
         // Validate envelope first
         envelope.validate()
@@ -70,10 +57,6 @@ impl<T: DashboardHandler> DashboardMessageRouter<T> {
                     Ok(data) => self.handler.borrow().handle_run_update(data),
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to parse run_update: {}", e).into());
-                        #[cfg(feature = "metrics")]
-                        {
-                            *self.metrics.entry("parse_errors".to_string()).or_insert(0) += 1;
-                        }
                         Err(JsValue::from_str(&format!("Parse error: {}", e)))
                     }
                 }
@@ -83,10 +66,6 @@ impl<T: DashboardHandler> DashboardMessageRouter<T> {
                     Ok(data) => self.handler.borrow().handle_agent_event(data),
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to parse agent_event: {}", e).into());
-                        #[cfg(feature = "metrics")]
-                        {
-                            *self.metrics.entry("parse_errors".to_string()).or_insert(0) += 1;
-                        }
                         Err(JsValue::from_str(&format!("Parse error: {}", e)))
                     }
                 }
@@ -132,10 +111,6 @@ impl<T: DashboardHandler> DashboardMessageRouter<T> {
                     Ok(data) => self.handler.borrow().handle_execution_finished(data),
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to parse execution_finished: {}", e).into());
-                        #[cfg(feature = "metrics")]
-                        {
-                            *self.metrics.entry("parse_errors".to_string()).or_insert(0) += 1;
-                        }
                         Err(JsValue::from_str(&format!("Parse error: {}", e)))
                     }
                 }
@@ -145,10 +120,6 @@ impl<T: DashboardHandler> DashboardMessageRouter<T> {
                     Ok(data) => self.handler.borrow().handle_node_state(data),
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to parse node_state: {}", e).into());
-                        #[cfg(feature = "metrics")]
-                        {
-                            *self.metrics.entry("parse_errors".to_string()).or_insert(0) += 1;
-                        }
                         Err(JsValue::from_str(&format!("Parse error: {}", e)))
                     }
                 }
@@ -158,55 +129,33 @@ impl<T: DashboardHandler> DashboardMessageRouter<T> {
                     Ok(data) => self.handler.borrow().handle_node_log(data),
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to parse node_log: {}", e).into());
-                        #[cfg(feature = "metrics")]
-                        {
-                            *self.metrics.entry("parse_errors".to_string()).or_insert(0) += 1;
-                        }
                         Err(JsValue::from_str(&format!("Parse error: {}", e)))
                     }
                 }
             }
             _ => {
                 web_sys::console::warn_1(&format!("DashboardMessageRouter: Unknown message type: {}", message_type).into());
-                #[cfg(feature = "metrics")]
-                {
-                    *self.metrics.entry("unknown_messages".to_string()).or_insert(0) += 1;
-                }
                 Ok(())
             }
         }
-    }
-    
-    #[cfg(feature = "metrics")]
-    pub fn get_metrics(&self) -> &std::collections::HashMap<String, u64> {
-        &self.metrics
     }
 }
 
 /// Enhanced message router for chat
 pub struct ChatMessageRouter<T: ChatHandler> {
     handler: Rc<RefCell<T>>,
-    #[cfg(feature = "metrics")]
-    metrics: std::collections::HashMap<String, u64>,
 }
 
 impl<T: ChatHandler> ChatMessageRouter<T> {
     pub fn new(handler: Rc<RefCell<T>>) -> Self {
         Self {
             handler,
-            #[cfg(feature = "metrics")]
-            metrics: std::collections::HashMap::new(),
         }
     }
     
-    /// Route message with enhanced error handling and metrics
+    /// Route message with enhanced error handling
     pub fn route_message(&mut self, envelope: &Envelope) -> Result<(), JsValue> {
         let message_type = &envelope.message_type;
-        
-        #[cfg(feature = "metrics")]
-        {
-            *self.metrics.entry(message_type.clone()).or_insert(0) += 1;
-        }
         
         // Validate envelope first
         envelope.validate()
@@ -220,10 +169,6 @@ impl<T: ChatHandler> ChatMessageRouter<T> {
                     Ok(data) => self.handler.borrow().handle_thread_message(data),
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to parse thread_message: {}", e).into());
-                        #[cfg(feature = "metrics")]
-                        {
-                            *self.metrics.entry("parse_errors".to_string()).or_insert(0) += 1;
-                        }
                         Err(JsValue::from_str(&format!("Parse error: {}", e)))
                     }
                 }
@@ -242,10 +187,6 @@ impl<T: ChatHandler> ChatMessageRouter<T> {
                     Ok(data) => self.handler.borrow().handle_stream_start(data),
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to parse stream_start: {}", e).into());
-                        #[cfg(feature = "metrics")]
-                        {
-                            *self.metrics.entry("parse_errors".to_string()).or_insert(0) += 1;
-                        }
                         Err(JsValue::from_str(&format!("Parse error: {}", e)))
                     }
                 }
@@ -255,10 +196,6 @@ impl<T: ChatHandler> ChatMessageRouter<T> {
                     Ok(data) => self.handler.borrow().handle_stream_chunk(data),
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to parse stream_chunk: {}", e).into());
-                        #[cfg(feature = "metrics")]
-                        {
-                            *self.metrics.entry("parse_errors".to_string()).or_insert(0) += 1;
-                        }
                         Err(JsValue::from_str(&format!("Parse error: {}", e)))
                     }
                 }
@@ -268,10 +205,6 @@ impl<T: ChatHandler> ChatMessageRouter<T> {
                     Ok(data) => self.handler.borrow().handle_stream_end(data),
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to parse stream_end: {}", e).into());
-                        #[cfg(feature = "metrics")]
-                        {
-                            *self.metrics.entry("parse_errors".to_string()).or_insert(0) += 1;
-                        }
                         Err(JsValue::from_str(&format!("Parse error: {}", e)))
                     }
                 }
@@ -281,52 +214,20 @@ impl<T: ChatHandler> ChatMessageRouter<T> {
                     Ok(data) => self.handler.borrow().handle_assistant_id(data),
                     Err(e) => {
                         web_sys::console::error_1(&format!("Failed to parse assistant_id: {}", e).into());
-                        #[cfg(feature = "metrics")]
-                        {
-                            *self.metrics.entry("parse_errors".to_string()).or_insert(0) += 1;
-                        }
                         Err(JsValue::from_str(&format!("Parse error: {}", e)))
                     }
                 }
             }
             _ => {
                 web_sys::console::warn_1(&format!("ChatMessageRouter: Unknown message type: {}", message_type).into());
-                #[cfg(feature = "metrics")]
-                {
-                    *self.metrics.entry("unknown_messages".to_string()).or_insert(0) += 1;
-                }
                 Ok(())
             }
         }
     }
-    
-    #[cfg(feature = "metrics")]
-    pub fn get_metrics(&self) -> &std::collections::HashMap<String, u64> {
-        &self.metrics
-    }
-}
-
-// Compile-time validation helpers
-
-#[cfg(feature = "compile_time_validation")]
-pub mod compile_time_validation {
-    use super::*;
-    
-    /// Ensure all message types have corresponding handlers
-    /// This function will fail to compile if any message type lacks a handler
-    pub fn validate_handler_completeness() {
-        // The compiler ensures all enum variants are handled in match statements
-        // This provides compile-time safety for message routing
-    }
-    
-    /// Generate compile-time schema validation
-    #[cfg(feature = "schema_validation")]
-    pub fn validate_schemas() {
-        // Compile-time schema generation ensures types match schemas
-    }
 }
 
 // Helper functions for runtime usage
+
 pub fn validate_message_format(envelope: &Envelope) -> Result<(), String> {
     envelope.validate()
 }

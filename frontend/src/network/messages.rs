@@ -1,7 +1,6 @@
 // Contract-first: All message types generated from AsyncAPI schema
 // No legacy format support - envelope-only architecture
 
-use uuid::Uuid;
 
 // Re-export all generated types
 pub use crate::generated::ws_messages::{
@@ -14,7 +13,7 @@ pub use crate::generated::ws_messages::{
 pub mod builders {
     use super::*;
     use crate::generated::ws_messages::Envelope;
-    use serde_json::{json, Value};
+    
     use uuid::Uuid;
 
     /// Helper: generate a random UUID for the `message_id` field.
