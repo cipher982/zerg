@@ -6,8 +6,6 @@ Clean, focused workflow execution using WorkflowData schema.
 """
 
 import logging
-from datetime import datetime
-from datetime import timezone
 from typing import Any
 from typing import Dict
 from typing import List
@@ -25,6 +23,7 @@ from zerg.models.models import Workflow
 from zerg.models.models import WorkflowExecution
 from zerg.schemas.workflow import WorkflowData
 from zerg.services.node_executors import create_node_executor
+from zerg.utils.time import utc_now_naive
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +50,7 @@ class WorkflowEngine:
             execution = WorkflowExecution(
                 workflow_id=workflow_id,
                 status="running",
-                started_at=datetime.now(timezone.utc),
+                started_at=utc_now_naive(),
                 triggered_by=trigger_type,
             )
             db.add(execution)
@@ -64,7 +63,7 @@ class WorkflowEngine:
                 # Mark as failed
                 execution.status = "failed"
                 execution.error = str(e)
-                execution.finished_at = datetime.now(timezone.utc)
+                execution.finished_at = utc_now_naive()
                 db.commit()
 
                 await self._publish_execution_finished(
@@ -90,7 +89,7 @@ class WorkflowEngine:
         if not workflow_data.nodes:
             logger.info(f"[WorkflowEngine] Empty workflow {workflow_id} - completing immediately")
             execution.status = "success"
-            execution.finished_at = datetime.now(timezone.utc)
+            execution.finished_at = utc_now_naive()
             db.commit()
             await publish_event(
                 EventType.EXECUTION_FINISHED,
@@ -215,7 +214,7 @@ class WorkflowEngine:
 
         # Mark as successful
         execution.status = "success"
-        execution.finished_at = datetime.now(timezone.utc)
+        execution.finished_at = utc_now_naive()
         db.commit()
 
         await self._publish_execution_finished(

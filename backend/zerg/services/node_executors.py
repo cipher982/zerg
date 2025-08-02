@@ -180,7 +180,7 @@ class AgentNodeExecutor(BaseNodeExecutor):
                     "id": msg.id,
                     "role": msg.role,
                     "content": msg.content,
-                    "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                    "created_at": msg.timestamp.isoformat() if msg.timestamp else None,
                     "thread_id": msg.thread_id,
                 }
             )
