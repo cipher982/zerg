@@ -441,7 +441,7 @@ impl WorkflowNode {
             node_id,
             node_type: crate::generated::workflow::NodeType::Variant0("GenericNode".to_string()),
             config: NodeConfig::default(),
-            position: std::collections::HashMap::new(),
+            position: crate::network::generated_client::PositionContract::default(),
         };
         node.set_semantic_type(node_type);
         node
