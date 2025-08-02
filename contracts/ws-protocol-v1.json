@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2025-07-31T14:49:58.243377Z",
+  "generated_at": "2025-08-02T07:49:10.273954Z",
   "asyncapi_version": "3.0.0",
   "info": {
     "title": "Zerg WebSocket Protocol",
