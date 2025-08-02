@@ -27,16 +27,6 @@ help:
 	@echo "  make test-frontend Run frontend WASM tests only (~30 sec)"
 	@echo "  make test-e2e      Run e2e integration tests only (~2 min)"
 	@echo ""
-	@echo "Details:"
-	@echo "  Backend tests:     $(shell find backend/tests -name 'test_*.py' | wc -l | tr -d ' ') Python unit tests with pytest"
-	@echo "  Frontend tests:    Rust WASM tests with wasm-bindgen-test"
-	@echo "  E2E tests:         Playwright browser tests (Chrome/Firefox required)"
-	@echo ""
-	@echo "Common workflows:"
-	@echo "  make validate-contracts  # Check API contracts match (fast)"
-	@echo "  make test-backend        # Quick feedback during backend development"
-	@echo "  make test                # Full confidence before committing"
-	@echo ""
 
 # ---------------------------------------------------------------------------
 # Development workflow
