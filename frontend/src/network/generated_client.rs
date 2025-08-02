@@ -42,30 +42,8 @@ pub struct WorkflowDataContract {
 pub struct TypeSafeApiClient;
 
 impl TypeSafeApiClient {
-    /// Maps frontend semantic types to backend contract types
-    fn map_node_type(frontend_type: &str) -> &str {
-        match frontend_type {
-            "AgentIdentity" => "agent",
-            "Tool" => "tool", 
-            "Trigger" => "trigger",
-            // All others map to conditional
-            "UserInput" | "ResponseOutput" | "GenericNode" | _ => "conditional",
-        }
-    }
-    
     /// Validates canvas data against contract before API call
     pub async fn update_workflow_canvas_data(canvas_data: serde_json::Value) -> Result<(), String> {
-        // First convert semantic types to backend contract types
-        let mut canvas_data = canvas_data.clone();
-        if let Some(nodes) = canvas_data.get_mut("nodes").and_then(|n| n.as_array_mut()) {
-            for node in nodes {
-                if let Some(node_type) = node.get("type").and_then(|t| t.as_str()) {
-                    let mapped_type = Self::map_node_type(node_type);
-                    node["type"] = serde_json::Value::String(mapped_type.to_string());
-                }
-            }
-        }
-        
         // Validate structure matches contract
         let workflow_data: WorkflowDataContract = serde_json::from_value(canvas_data.clone())
             .map_err(|e| format!("Canvas data doesn't match contract: {}", e))?;
