@@ -6,7 +6,7 @@
 B_PORT ?= 8001
 F_PORT ?= 8002
 
-.PHONY: help start stop test test-backend test-frontend test-e2e generate
+.PHONY: help start stop test test-backend test-frontend test-e2e generate validate-contracts
 
 # ---------------------------------------------------------------------------
 # Help – `make` or `make help`
@@ -19,6 +19,7 @@ help:
 	@echo "  make start         Start backend (port $(B_PORT)) and frontend (port $(F_PORT)) servers"
 	@echo "  make stop          Stop all development servers"
 	@echo "  make generate      Regenerate code from AsyncAPI schemas"
+	@echo "  make validate-contracts  Run contract validation checks (catches API mismatches)"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test          Run ALL tests (backend + frontend + e2e)"
@@ -32,8 +33,9 @@ help:
 	@echo "  E2E tests:         Playwright browser tests (Chrome/Firefox required)"
 	@echo ""
 	@echo "Common workflows:"
-	@echo "  make test-backend  # Quick feedback during backend development"
-	@echo "  make test          # Full confidence before committing"
+	@echo "  make validate-contracts  # Check API contracts match (fast)"
+	@echo "  make test-backend        # Quick feedback during backend development"
+	@echo "  make test                # Full confidence before committing"
 	@echo ""
 
 # ---------------------------------------------------------------------------
@@ -90,3 +92,10 @@ generate:
 	python3 scripts/validate_tool_contracts.py
 	./scripts/validate-asyncapi.sh
 	@echo "✅ Code generation complete"
+
+# ---------------------------------------------------------------------------
+# Contract validation (catches API mismatches at build time)
+# ---------------------------------------------------------------------------
+validate-contracts:
+	@echo "🔍 Running API contract validation..."
+	./scripts/fast-contract-check.sh
