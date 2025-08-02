@@ -91,7 +91,7 @@ repos:
       - id: asyncapi-validate
         name: AsyncAPI spec validation
         language: system
-        entry: scripts/asyncapi-validate.sh
+        entry: scripts/validate-asyncapi.sh
         pass_filenames: false
 
 # ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ repos:
       - id: tool-contract-validation
         name: Tool contract validation
         language: system
-        entry: python3 scripts/validate_tool_contracts_only.py
+        entry: python3 scripts/validate_tool_contracts.py
         pass_filenames: false
         files: ^(asyncapi/tools\.yml|backend/zerg/tools/builtin/.*\.py|frontend/src/components/node_palette\.rs)$
 
