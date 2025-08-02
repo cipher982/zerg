@@ -86,44 +86,11 @@ class ModernProtocolGenerator:
         print(f"✅ Python types: {output_path}")
         
     async def _generate_rust_types_modelina(self):
-        """Generate Rust types using Modelina for AsyncAPI 3.0."""
-        print("🦀 Generating Rust types with Modelina...")
+        """Generate Rust types using custom generation."""
+        print("🦀 Generating Rust types...")
         
-        output_dir = self.output_dir / "frontend" / "src" / "generated"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Use Modelina CLI for modern generation
-        try:
-            cmd = [
-                "npx", "@asyncapi/modelina", 
-                "generate", "rust",
-                str(self.schema_path),
-                "-o", str(output_dir),
-                "--rust-derive-traits", "Debug,Clone,Serialize,Deserialize",
-                "--rust-use-serde"
-            ]
-            
-            result = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
-            stdout, stderr = await result.communicate()
-            
-            if result.returncode != 0:
-                print(f"⚠️  Modelina generation failed, falling back to custom: {stderr.decode()}")
-                await self._generate_rust_types_fallback()
-            else:
-                print("✅ Rust types generated with Modelina")
-                
-        except FileNotFoundError:
-            print("⚠️  Modelina not found, falling back to custom generation")
-            await self._generate_rust_types_fallback()
-            
-    async def _generate_rust_types_fallback(self):
-        """Fallback Rust generation if Modelina fails."""
         output_path = self.output_dir / "frontend" / "src" / "generated" / "ws_messages.rs"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         
         code = self._generate_rust_header()
         code += self._generate_rust_envelope()
@@ -134,7 +101,8 @@ class ModernProtocolGenerator:
         with open(output_path, 'w') as f:
             f.write(code)
             
-        print(f"✅ Rust types (fallback): {output_path}")
+        print(f"✅ Rust types: {output_path}")
+            
         
     async def _generate_json_schema(self):
         """Generate JSON Schema for IDE integration."""
@@ -252,13 +220,7 @@ from typing import Any, Dict, List, Optional, Union, Literal, Protocol
 from pydantic import BaseModel, Field, ValidationError
 from pydantic.json_schema import GenerateJsonSchema
 
-# Runtime validation using jsonschema-rs for performance
-try:
-    import jsonschema_rs
-    FAST_VALIDATION = True
-except ImportError:
-    FAST_VALIDATION = False
-    import jsonschema as jsonschema_fallback
+import jsonschema
 
 
 '''
@@ -473,22 +435,12 @@ def create_typed_emitter(raw_emitter) -> TypedEmitter:
         return '''# Fast validation functions
 
 def validate_envelope_fast(data: Dict[str, Any]) -> None:
-    """Fast envelope validation using jsonschema-rs if available."""
-    if FAST_VALIDATION:
-        # Use Rust-based validation for performance
-        validator = jsonschema_rs.validator_for(ENVELOPE_SCHEMA)
-        try:
-            validator.validate(data)
-        except jsonschema_rs.ValidationError as e:
-            from pydantic import ValidationError as PydanticValidationError
-            raise PydanticValidationError(f"Envelope validation failed: {e}")
-    else:
-        # Fallback to standard validation
-        try:
-            jsonschema_fallback.validate(data, ENVELOPE_SCHEMA)
-        except jsonschema_fallback.ValidationError as e:
-            from pydantic import ValidationError as PydanticValidationError
-            raise PydanticValidationError(f"Envelope validation failed: {e}")
+    """Envelope validation using jsonschema."""
+    try:
+        jsonschema.validate(data, ENVELOPE_SCHEMA)
+    except jsonschema.ValidationError as e:
+        from pydantic import ValidationError as PydanticValidationError
+        raise PydanticValidationError(f"Envelope validation failed: {e}")
 
 def validate_payload_for_message_type(message_type: MessageType, payload: BaseModel) -> None:
     """Validate payload matches expected type for message."""
@@ -523,18 +475,12 @@ ENVELOPE_SCHEMA = {
 
 use serde::{{Deserialize, Serialize}};
 use serde_json::Value;
-use std::collections::HashMap;
-
-// Compile-time schema validation
-#[cfg(feature = "schema_validation")]
-use schemars::{{JsonSchema, schema_for}};
 
 """
 
     def _generate_rust_envelope(self) -> str:
         """Generate Rust envelope with modern features."""
         return """#[derive(Debug, Deserialize, Serialize, Clone)]
-#[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
 pub struct Envelope {
     pub v: u8,
     #[serde(rename = "type")]
@@ -599,7 +545,6 @@ impl Envelope {
         """Convert AsyncAPI schema to Rust struct."""
         lines = [
             "#[derive(Debug, Deserialize, Serialize, Clone)]",
-            "#[cfg_attr(feature = \"schema_validation\", derive(JsonSchema))]",
             f"pub struct {name} {{"
         ]
         
@@ -679,7 +624,6 @@ impl Envelope {
     def _generate_rust_message_enum(self) -> str:
         """Generate Rust message enum with modern features."""
         code = """#[derive(Debug, Deserialize, Serialize, Clone)]
-#[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
 #[serde(tag = "type")]
 pub enum WsMessage {
 """
@@ -724,8 +668,8 @@ impl WsMessage {
         return code
         
     def _generate_rust_validation(self) -> str:
-        """Generate Rust validation with compile-time checks."""
-        return '''// Runtime and compile-time validation
+        """Generate Rust validation functions."""
+        return '''// Runtime validation
 
 pub fn validate_envelope(data: &Value) -> Result<Envelope, String> {
     serde_json::from_value(data.clone())
@@ -734,19 +678,6 @@ pub fn validate_envelope(data: &Value) -> Result<Envelope, String> {
             envelope.validate()?;
             Ok(envelope)
         })
-}
-
-#[cfg(feature = "schema_validation")]
-pub fn generate_schema_for_message<T: JsonSchema>() -> serde_json::Value {
-    serde_json::to_value(schema_for!(T)).unwrap()
-}
-
-// Compile-time validation that all message types have handlers
-#[cfg(feature = "compile_time_validation")]
-pub fn validate_handler_completeness() {
-    // This function exists to catch missing handlers at compile time
-    // Each message type should have a corresponding handler method
-    // The compiler will catch missing cases in match statements
 }
 
 '''
@@ -759,12 +690,8 @@ pub fn validate_handler_completeness() {
 // Handler traits and message routing with modern patterns
 
 use std::{{cell::RefCell, rc::Rc}};
-use serde_json::Value;
 use wasm_bindgen::JsValue;
 use crate::generated::ws_messages::*;
-
-#[cfg(feature = "schema_validation")]
-use schemars::JsonSchema;
 
 """
 
@@ -809,27 +736,18 @@ use schemars::JsonSchema;
             code += f"""/// Enhanced message router for {handler_name}
 pub struct {router_name}<T: {trait_name}> {{
     handler: Rc<RefCell<T>>,
-    #[cfg(feature = "metrics")]
-    metrics: std::collections::HashMap<String, u64>,
 }}
 
 impl<T: {trait_name}> {router_name}<T> {{
     pub fn new(handler: Rc<RefCell<T>>) -> Self {{
         Self {{
             handler,
-            #[cfg(feature = "metrics")]
-            metrics: std::collections::HashMap::new(),
         }}
     }}
     
-    /// Route message with enhanced error handling and metrics
+    /// Route message with enhanced error handling
     pub fn route_message(&mut self, envelope: &Envelope) -> Result<(), JsValue> {{
         let message_type = &envelope.message_type;
-        
-        #[cfg(feature = "metrics")]
-        {{
-            *self.metrics.entry(message_type.clone()).or_insert(0) += 1;
-        }}
         
         // Validate envelope first
         envelope.validate()
@@ -856,10 +774,6 @@ impl<T: {trait_name}> {router_name}<T> {{
                     Ok(data) => self.handler.borrow().{method_name}(data),
                     Err(e) => {{
                         web_sys::console::error_1(&format!("Failed to parse {msg_type}: {{}}", e).into());
-                        #[cfg(feature = "metrics")]
-                        {{
-                            *self.metrics.entry("parse_errors".to_string()).or_insert(0) += 1;
-                        }}
                         Err(JsValue::from_str(&format!("Parse error: {{}}", e)))
                     }}
                 }}
@@ -882,18 +796,9 @@ impl<T: {trait_name}> {router_name}<T> {{
             
             code += f'''            _ => {{
                 web_sys::console::warn_1(&format!("{router_name}: Unknown message type: {{}}", message_type).into());
-                #[cfg(feature = "metrics")]
-                {{
-                    *self.metrics.entry("unknown_messages".to_string()).or_insert(0) += 1;
-                }}
                 Ok(())
             }}
         }}
-    }}
-    
-    #[cfg(feature = "metrics")]
-    pub fn get_metrics(&self) -> &std::collections::HashMap<String, u64> {{
-        &self.metrics
     }}
 }}
 
@@ -902,28 +807,9 @@ impl<T: {trait_name}> {router_name}<T> {{
         return code
         
     def _generate_compile_time_validation(self) -> str:
-        """Generate compile-time validation helpers."""
-        return '''// Compile-time validation helpers
+        """Generate helper functions for runtime usage."""
+        return '''// Helper functions for runtime usage
 
-#[cfg(feature = "compile_time_validation")]
-pub mod compile_time_validation {
-    use super::*;
-    
-    /// Ensure all message types have corresponding handlers
-    /// This function will fail to compile if any message type lacks a handler
-    pub fn validate_handler_completeness() {
-        // The compiler ensures all enum variants are handled in match statements
-        // This provides compile-time safety for message routing
-    }
-    
-    /// Generate compile-time schema validation
-    #[cfg(feature = "schema_validation")]
-    pub fn validate_schemas() {
-        // Compile-time schema generation ensures types match schemas
-    }
-}
-
-// Helper functions for runtime usage
 pub fn validate_message_format(envelope: &Envelope) -> Result<(), String> {
     envelope.validate()
 }
