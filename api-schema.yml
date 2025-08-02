@@ -1,0 +1,420 @@
+openapi: 3.0.3
+
+info:
+  title: Zerg Agent Platform API
+  version: 1.0.0
+  description: |
+    Complete REST API schema for the Zerg Agent Platform.
+    Single source of truth for all HTTP endpoints.
+
+servers:
+  - url: http://localhost:8001
+    description: Development server
+
+# ==============================================================================
+# SHARED SCHEMAS - These should match your database models exactly
+# ==============================================================================
+
+components:
+  schemas:
+    # -------------------------------------------------------------------------
+    # Core Domain Models (these are your actual data structures)
+    # -------------------------------------------------------------------------
+    
+    WorkflowNode:
+      type: object
+      required: [id, type, position]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          description: Unique node identifier
+        type:
+          type: string
+          description: Node type (matches backend NodeType enum)
+        position:
+          $ref: '#/components/schemas/Position'
+        config:
+          type: object
+          description: Node configuration (flexible JSON)
+          additionalProperties: true
+
+    Position:
+      type: object
+      required: [x, y]
+      additionalProperties: false
+      properties:
+        x:
+          type: number
+          format: double
+        y:
+          type: number
+          format: double
+
+    WorkflowEdge:
+      type: object
+      required: [from_node_id, to_node_id]
+      additionalProperties: false
+      properties:
+        from_node_id:
+          type: string
+        to_node_id:
+          type: string
+        config:
+          type: object
+          additionalProperties: true
+
+    WorkflowCanvas:
+      type: object
+      required: [nodes, edges]
+      additionalProperties: false
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowEdge'
+
+    Workflow:
+      type: object
+      required: [id, name, created_at]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          nullable: true
+        canvas_data:
+          $ref: '#/components/schemas/WorkflowCanvas'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Agent:
+      type: object
+      required: [id, name, system_instructions]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        name:
+          type: string
+          minLength: 1
+        system_instructions:
+          type: string
+        task_instructions:
+          type: string
+        model:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Thread:
+      type: object
+      required: [id, title, agent_id]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+        agent_id:
+          type: integer
+          minimum: 1
+        created_at:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      required: [id, role, content]
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        role:
+          type: string
+          enum: [user, assistant, system, tool]
+        content:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+
+    # -------------------------------------------------------------------------
+    # Request/Response Wrappers
+    # -------------------------------------------------------------------------
+
+    CreateWorkflowRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+
+    UpdateCanvasRequest:
+      allOf:
+        - $ref: '#/components/schemas/WorkflowCanvas'
+
+    CreateAgentRequest:
+      type: object
+      required: [name, system_instructions]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        system_instructions:
+          type: string
+          minLength: 1
+        task_instructions:
+          type: string
+        model:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+# ==============================================================================
+# API ENDPOINTS - Cover ALL your REST endpoints
+# ==============================================================================
+
+paths:
+  # -------------------------------------------------------------------------
+  # Workflow Operations
+  # -------------------------------------------------------------------------
+  
+  /api/workflows:
+    get:
+      summary: List all workflows
+      responses:
+        '200':
+          description: List of workflows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Workflow'
+    
+    post:
+      summary: Create new workflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowRequest'
+      responses:
+        '201':
+          description: Workflow created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workflow'
+
+  /api/workflows/current:
+    get:
+      summary: Get current workflow
+      responses:
+        '200':
+          description: Current workflow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workflow'
+
+  /api/workflows/current/canvas:
+    patch:
+      summary: Update workflow canvas data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCanvasRequest'
+      responses:
+        '200':
+          description: Canvas updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workflow'
+        '400':
+          description: Invalid canvas data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # -------------------------------------------------------------------------
+  # Agent Operations
+  # -------------------------------------------------------------------------
+  
+  /api/agents:
+    get:
+      summary: List agents
+      parameters:
+        - name: scope
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Agent'
+    
+    post:
+      summary: Create agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+      responses:
+        '201':
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+
+  /api/agents/{agent_id}:
+    parameters:
+      - name: agent_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+
+    get:
+      summary: Get agent by ID
+      responses:
+        '200':
+          description: Agent details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+
+    put:
+      summary: Update agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAgentRequest'
+      responses:
+        '200':
+          description: Agent updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+
+    delete:
+      summary: Delete agent
+      responses:
+        '204':
+          description: Agent deleted
+
+  # -------------------------------------------------------------------------
+  # Thread Operations
+  # -------------------------------------------------------------------------
+  
+  /api/threads:
+    get:
+      summary: List threads
+      parameters:
+        - name: agent_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of threads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Thread'
+
+  /api/threads/{thread_id}/messages:
+    parameters:
+      - name: thread_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+
+    get:
+      summary: Get thread messages
+      responses:
+        '200':
+          description: Thread messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+
+    post:
+      summary: Create thread message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+      responses:
+        '201':
+          description: Message created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
