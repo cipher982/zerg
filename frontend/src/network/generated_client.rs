@@ -26,6 +26,12 @@ pub struct PositionContract {
     pub y: f64,
 }
 
+impl Default for PositionContract {
+    fn default() -> Self {
+        Self { x: 0.0, y: 0.0 }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WorkflowDataContract {
     pub edges: Vec<WorkflowEdgeContract>,
