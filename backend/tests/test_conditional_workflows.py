@@ -73,7 +73,21 @@ async def test_conditional_workflow_high_branch(db, test_user, sample_agent):
 
         # Mock AgentRunner to avoid actual LLM calls
         async def mock_run_thread(db, thread):
-            return [{"role": "assistant", "content": "High branch executed"}]
+            from datetime import datetime
+            from datetime import timezone
+
+            from zerg.models.models import ThreadMessage
+
+            # Create a proper ThreadMessage object mock with timestamp field
+            mock_msg = ThreadMessage(
+                id=999,
+                thread_id=thread.id,
+                role="assistant",
+                content="High branch executed",
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+                processed=True,
+            )
+            return [mock_msg]
 
         with patch("zerg.services.node_executors.AgentRunner") as mock_agent_runner:
             mock_runner_instance = type("MockRunner", (), {})()
@@ -133,7 +147,21 @@ async def test_conditional_workflow_low_branch(db, test_user, sample_agent):
 
         # Mock AgentRunner to avoid actual LLM calls
         async def mock_run_thread(db, thread):
-            return [{"role": "assistant", "content": "Low branch executed"}]
+            from datetime import datetime
+            from datetime import timezone
+
+            from zerg.models.models import ThreadMessage
+
+            # Create a proper ThreadMessage object mock with timestamp field
+            mock_msg = ThreadMessage(
+                id=998,
+                thread_id=thread.id,
+                role="assistant",
+                content="Low branch executed",
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
+                processed=True,
+            )
+            return [mock_msg]
 
         with patch("zerg.services.node_executors.AgentRunner") as mock_agent_runner:
             mock_runner_instance = type("MockRunner", (), {})()
