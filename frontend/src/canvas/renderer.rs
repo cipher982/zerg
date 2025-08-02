@@ -84,7 +84,7 @@ fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
     for (_, node) in &state.workflow_nodes {
         if let Some(parent_id) = &node.config.parent_id {
             if let Some(parent) = state.workflow_nodes.get(parent_id) {
-                draw_connection_line(context, parent, node, &state.connection_animation_offset);
+                draw_connection_line(context, parent, node, &state.connection_animation_offset, state);
             }
         }
     }
@@ -102,6 +102,7 @@ fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
                         from_node,
                         to_node,
                         &state.connection_animation_offset,
+                        state,
                     );
                 }
             }
@@ -194,6 +195,7 @@ fn draw_connection_line(
     from_node: &crate::models::WorkflowNode,
     to_node: &crate::models::WorkflowNode,
     animation_offset: &f64,
+    state: &AppState,
 ) {
     context.begin_path();
 
@@ -220,27 +222,30 @@ fn draw_connection_line(
     context.move_to(start_x, start_y);
     context.bezier_curve_to(control_x1, control_y1, control_x2, control_y2, end_x, end_y);
 
-    // Enhanced glow effect for connections (placeholder for future node status integration)
-    let glow_active = false; // TODO: Integrate with node execution status
+    // Check pre-computed animation state for this connection
+    let edge_key = format!("{}:{}", from_node.node_id, to_node.node_id);
+    let glow_active = state.ui_edge_state.get(&edge_key)
+        .map(|edge_state| edge_state.is_executing)
+        .unwrap_or(false);
 
     // Backup original context state
     context.save();
 
     if glow_active {
-        // Use a bright accent colour when nodes are running
-        context.set_stroke_style_str("#1fb6ff"); // --primary-accent
+        // Use a bright green accent colour when nodes are running (as specified)
+        context.set_stroke_style_str("#22c55e"); // Green color as requested
         context.set_line_width(3.0);
 
         // Soft outer glow
-        context.set_shadow_color("rgba(31, 182, 255, 0.8)");
+        context.set_shadow_color("rgba(34, 197, 94, 0.8)");
         context.set_shadow_blur(8.0);
 
-        // Animated dashed line conveys progress along the edge
+        // Animated dashed line conveys progress along the edge - faster flow as requested
         let dash_arr = js_sys::Array::new();
         dash_arr.push(&10_f64.into());
         dash_arr.push(&6_f64.into());
         let _ = context.set_line_dash(&dash_arr);
-        context.set_line_dash_offset(-*animation_offset); // Negative for forward flow
+        context.set_line_dash_offset(-*animation_offset * 2.0); // Faster flow for execution
     } else {
         // Default connection style with subtle animation
         context.set_stroke_style_str("#95a5a6");
