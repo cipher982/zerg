@@ -455,6 +455,29 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         }
                     }
                 }
+                
+                // Update connection animations for all edges involving this node
+                let is_running = exec_status == NodeExecStatus::Running;
+                
+                // Find edges where this node is the source or target
+                if let Some(current_workflow_id) = state.current_workflow_id {
+                    if let Some(workflow) = state.workflows.get(&current_workflow_id) {
+                        for edge in &workflow.get_edges() {
+                            if edge.from_node_id == *node_id || edge.to_node_id == *node_id {
+                                cmds.push(Command::SendMessage(
+                                    crate::messages::Message::UpdateConnectionAnimation {
+                                        from_node_id: edge.from_node_id.clone(),
+                                        to_node_id: edge.to_node_id.clone(),
+                                        is_executing: is_running,
+                                    }
+                                ));
+                            }
+                        }
+                    }
+                }
+                
+                // Connection animation logic is handled outside the mutable borrow scope
+                
                 state.state_modified = true;
 
                 // Refresh results panel for node status updates via command
@@ -462,8 +485,93 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
                 })));
             }
+            
+            // Handle connection animation updates outside the mutable borrow scope
+            // Determine if the node is running based on status
+            let is_running = matches!(status.as_str(), "running" | "processing");
+            
+            // Find workflow edges involving this node
+            if let Some(current_workflow_id) = state.current_workflow_id {
+                if let Some(workflow) = state.workflows.get(&current_workflow_id) {
+                    for edge in &workflow.get_edges() {
+                        if edge.from_node_id == *node_id || edge.to_node_id == *node_id {
+                            cmds.push(Command::SendMessage(
+                                crate::messages::Message::UpdateConnectionAnimation {
+                                    from_node_id: edge.from_node_id.clone(),
+                                    to_node_id: edge.to_node_id.clone(),
+                                    is_executing: is_running,
+                                }
+                            ));
+                        }
+                    }
+                }
+            }
+            
+            // Handle legacy parent-child connections
+            // Find all child nodes of this node
+            let child_connections: Vec<_> = state.workflow_nodes
+                .iter()
+                .filter_map(|(_, other_node)| {
+                    if other_node.config.parent_id == Some(node_id.clone()) {
+                        Some((node_id.clone(), other_node.node_id.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            // Add messages for child connections
+            for (from_id, to_id) in child_connections {
+                cmds.push(Command::SendMessage(
+                    crate::messages::Message::UpdateConnectionAnimation {
+                        from_node_id: from_id,
+                        to_node_id: to_id,
+                        is_executing: is_running,
+                    }
+                ));
+            }
+            
+            // Add message for parent connection if this node has a parent
+            if let Some(node) = state.workflow_nodes.get(node_id) {
+                if let Some(parent_id) = &node.config.parent_id {
+                    cmds.push(Command::SendMessage(
+                        crate::messages::Message::UpdateConnectionAnimation {
+                            from_node_id: parent_id.clone(),
+                            to_node_id: node_id.clone(),
+                            is_executing: is_running,
+                        }
+                    ));
+                }
+            }
+            
             true
         }
+        
+        Message::UpdateConnectionAnimation { from_node_id, to_node_id, is_executing } => {
+            // Create a unique edge key for this connection
+            let edge_key = format!("{}:{}", from_node_id, to_node_id);
+            
+            // Update or create the edge state
+            let edge_state = state.ui_edge_state.entry(edge_key).or_default();
+            edge_state.is_executing = *is_executing;
+            
+            // Also update based on the individual node states if available
+            let source_running = state.ui_state.get(from_node_id)
+                .and_then(|ui_state| ui_state.exec_status)
+                .map(|status| status == crate::models::NodeExecStatus::Running)
+                .unwrap_or(false);
+                
+            let target_running = state.ui_state.get(to_node_id)
+                .and_then(|ui_state| ui_state.exec_status)
+                .map(|status| status == crate::models::NodeExecStatus::Running)
+                .unwrap_or(false);
+            
+            edge_state.update_from_nodes(source_running, target_running);
+            
+            state.state_modified = true;
+            true
+        }
+        
         Message::AnimationTick => {
             // Check if there are active animations or continuous background animations that need rendering
             let has_background_particles = state.particle_system.is_some();
