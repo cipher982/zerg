@@ -183,6 +183,7 @@ backend/data
 app.db
 e2e/node_modules
 e2e/test-results
+e2e/playwright-report/
 .clinerules
 *.pw_tmp*
 *.db
@@ -191,8 +192,12 @@ backend/zerg/ws_schema/
 frontend/generated/
 node_modules/
 test-results/
+playwright-report/
 e2e/*.png
 e2e/*/*.txt
+e2e/canvas-*.js
+e2e/debug-*.html
+e2e/test-config.js
 .vscode/
 # Generated OpenAPI specifications
 openapi.json
