@@ -210,4 +210,4 @@ frontend/pkg/
 frontend/www/agent_platform_frontend*
 frontend/www/bootstrap.js
 frontend/www/config.js
-frontend/www/index.html  # Generated from template
+frontend/www/index.html
