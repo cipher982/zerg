@@ -10,11 +10,12 @@ while covering all current needs.
 
 from __future__ import annotations
 
-import functools
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from dotenv import load_dotenv
 
 # ``_REPO_ROOT`` points to the top-level repository directory (one level
 # **above** the "backend" package).  We use ``parents[3]`` because this file is
@@ -90,28 +91,10 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
     testing = _truthy(os.getenv("TESTING"))
 
     # ------------------------------------------------------------------
-    # Look for a *.env* file and merge **once** – favour the first match.
-    #
-    # Historically the project stored its development template at
-    # ``backend/.env`` but the refactor that introduced this bespoke settings
-    # helper assumed a repository-root location (``.env``).  Local setups that
-    # rely on the old path therefore lost *all* environment variables which –
-    # amongst other things – meant ``OPENAI_API_KEY`` was no longer set and
-    # the LLM calls started to fail.
-    #
-    # To remain backwards-compatible we now probe multiple candidates in
-    # order of precedence and stop at the **first** existing file:
-    # 1. ``<repo-root>/.env`` (new convention)
-    # 2. ``<repo-root>/backend/.env`` (legacy)
-    # 3. ``$PWD/.env``          (edge-cases like ad-hoc scripts)
-    #
-    # The merge strategy mirrors *python-dotenv* – the file is **not**
-    # authoritative; existing environment variables always win so CI/CD
-    # pipelines can safely inject secrets via the process environment.
+    # Load environment files using python-dotenv (proper parsing)
     # ------------------------------------------------------------------
 
     # Load environment file based on NODE_ENV
-    # Priority: .env.test (when NODE_ENV=test) -> .env (default)
     node_env = os.getenv("NODE_ENV", "development")
 
     if node_env == "test":
@@ -122,20 +105,7 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
         env_path = _REPO_ROOT / ".env"
 
     if env_path.exists():
-        print(f"Loading environment from: {env_path}")  # Debug info
-        for line in env_path.read_text().splitlines():
-            if not line or line.strip().startswith("#") or "=" not in line:
-                continue  # skip blanks & comments
-
-            key, val = line.split("=", 1)
-
-            # Remove any inline comment that is **outside** quoted strings.
-            # We do a simple split on " #" which is adequate for our current
-            # .env conventions (values are either unquoted or wrapped in
-            # single/double quotes without embedded spaces).
-
-            _val_clean = val.split(" #", 1)[0].strip()
-            os.environ.setdefault(key.strip(), _val_clean)
+        load_dotenv(env_path, override=False)  # Respect existing env vars for security
 
     return Settings(
         testing=testing,
@@ -183,9 +153,8 @@ def _validate_required(settings: Settings) -> None:  # noqa: D401 – helper
         )
 
 
-@functools.lru_cache(maxsize=1)
 def get_settings() -> Settings:  # noqa: D401 – public accessor
-    """Return **singleton** :class:`Settings` instance (cached)."""
+    """Return :class:`Settings` instance loaded from environment."""
 
     settings = _load_settings()
     _validate_required(settings)
