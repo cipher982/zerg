@@ -65,13 +65,16 @@ async function main() {
 main();
 EOF
 
-# Generate dynamic CSP and update HTML for current ports
-echo "[build-debug] updating CSP for ports ${BACKEND_PORT}/${FRONTEND_PORT} …"
-sed -i.bak "s|connect-src 'self' http://localhost:[0-9]* ws://localhost:[0-9]*|connect-src 'self' http://localhost:${BACKEND_PORT} ws://localhost:${BACKEND_PORT}|" www/index.html
-# Add cache busting timestamp to force browser reload
+# Generate index.html from template with dynamic values
+echo "[build-debug] generating index.html from template for ports ${BACKEND_PORT}/${FRONTEND_PORT} …"
 TIMESTAMP=$(date +%s)
-sed -i.bak "s|<title>AI Agent Platform</title>|<title>AI Agent Platform</title><meta name=\"cache-bust\" content=\"${TIMESTAMP}\">|" www/index.html
-rm -f www/index.html.bak
+CACHE_BUST_TAG="<meta name=\"cache-bust\" content=\"${TIMESTAMP}\">"
+
+# Generate index.html from template
+sed \
+  -e "s|{{BACKEND_PORT}}|${BACKEND_PORT}|g" \
+  -e "s|{{CACHE_BUST}}|${CACHE_BUST_TAG}|g" \
+  www/index.html.template > www/index.html
 
 # Stub config.js so the HTML include does not 404 in dev.
 echo "[build-debug] ensuring config.js …"
