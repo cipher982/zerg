@@ -27,7 +27,9 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-API_BASE_URL="${API_BASE_URL:-http://localhost:8001}"
+# Configure ports from .env with fallback defaults
+BACKEND_PORT="${BACKEND_PORT:-8001}"
+API_BASE_URL="${API_BASE_URL:-http://localhost:${BACKEND_PORT}}"
 
 # --------------------------------------------------
 # Build – dev profile, debuginfo, target web
@@ -64,12 +66,12 @@ mkdir -p www
 # bootstrap.js – mirrors build-debug.sh minus live server
 # --------------------------------------------------
 echo "[build-only] ✍️  writing bootstrap.js …" >&2
-cat <<'JS' > www/bootstrap.js
+cat <<JS > www/bootstrap.js
 import init, { init_api_config_js } from './agent_platform_frontend.js';
 
 async function main() {
   await init();
-  const url = window.API_BASE_URL || 'http://localhost:8001';
+  const url = window.API_BASE_URL || 'http://localhost:${BACKEND_PORT}';
   init_api_config_js(url);
 }
 
@@ -77,7 +79,14 @@ main();
 JS
 
 # --------------------------------------------------
-# config.js – tiny placeholder so <script src="config.js"> doesn’t 404
+# Update CSP for dynamic backend port
+# --------------------------------------------------
+echo "[build-only] 🔐 updating CSP for backend port ${BACKEND_PORT} …" >&2
+sed -i.bak "s|connect-src 'self' http://localhost:[0-9]* ws://localhost:[0-9]*|connect-src 'self' http://localhost:${BACKEND_PORT} ws://localhost:${BACKEND_PORT}|" www/index.html
+rm -f www/index.html.bak
+
+# --------------------------------------------------
+# config.js – tiny placeholder so <script src="config.js"> doesn't 404
 # --------------------------------------------------
 echo "[build-only] ✍️  writing config.js …" >&2
 cat <<'EOF' > www/config.js
