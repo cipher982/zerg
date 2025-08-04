@@ -105,7 +105,7 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
         env_path = _REPO_ROOT / ".env"
 
     if env_path.exists():
-        load_dotenv(env_path, override=False)  # Respect existing env vars for security
+        load_dotenv(env_path, override=True)  # Project .env overrides system environment
 
     return Settings(
         testing=testing,
