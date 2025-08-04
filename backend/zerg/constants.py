@@ -12,7 +12,7 @@ from typing import Optional
 
 from zerg.config import get_settings
 
-# Singleton settings instance – safe due to lru_cache internal memoisation
+# Settings instance loaded at module import
 _settings = get_settings()
 
 # Base API prefix (all HTTP routes are served under /api/*)
@@ -115,13 +115,12 @@ def _refresh_feature_flags() -> None:  # pragma: no cover – test helper
     """Reload ``Settings`` from the *current* environment and refresh flags.
 
     Tests that temporarily monkeypatch ``os.environ`` can call this function
-    so the globally cached Settings instance picks up the changed variables.
+    so the module-level settings instance picks up the changed variables.
     """
 
     from zerg.config import get_settings as _get_settings  # local import
 
-    # Reset the lru_cache and fetch a fresh instance
-    _get_settings.cache_clear()  # type: ignore[attr-defined]
+    # Fetch a fresh settings instance
     global _settings  # noqa: PLW0603 – module global
     _settings = _get_settings()
 

@@ -168,8 +168,7 @@ async def handle_ping(client_id: str, envelope: Envelope, _: Session) -> None:
         )
 
         # Recompute envelope flag on **every** ping so tests that mutate the
-        # environment mid-process pick up the change without clearing
-        # ``functools.lru_cache`` used by :pyfunc:`get_settings`.
+        # environment mid-process pick up the change from :pyfunc:`get_settings`.
         # Always wrap in the unified Envelope format.
 
         # Wrap in protocol-level envelope so the frontend can rely on the
