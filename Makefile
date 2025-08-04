@@ -1,8 +1,14 @@
 # Zerg Agent Platform
 
 # ---------------------------------------------------------------------------
-# Ports can be overridden, e.g. `make B_PORT=9001 start`
+# Load environment variables from .env (ports are now configured there)
 # ---------------------------------------------------------------------------
+include .env
+export $(shell sed 's/=.*//' .env)
+
+# Fallback defaults if .env is missing values
+B_PORT ?= $(BACKEND_PORT)
+F_PORT ?= $(FRONTEND_PORT)
 B_PORT ?= 8001
 F_PORT ?= 8002
 
@@ -32,7 +38,8 @@ help:
 # Development workflow
 # ---------------------------------------------------------------------------
 start:
-	@echo "🚀 Starting development servers with contract validation..."
+	@echo "🚀 Starting development servers with port conflict detection..."
+	./scripts/check-ports.sh
 	./scripts/fast-contract-check.sh
 	$(MAKE) -j2 _backend _frontend
 

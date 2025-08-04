@@ -11,9 +11,7 @@ use wasm_bindgen_futures::spawn_local;
 // Additional helpers and legacy extension traits – these will gradually be
 // trimmed once the new storage pipeline stabilises.
 
-// Add API URL configuration
-#[allow(dead_code)]
-const API_BASE_URL: &str = "http://localhost:8001/api";
+// API URL configuration - removed hardcoded constant, use dynamic API client instead
 
 // ---------------------------------------------------------------------------
 // Debounced *layout save* helper – we track a *sequence number* that is
