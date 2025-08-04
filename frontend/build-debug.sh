@@ -25,8 +25,10 @@ if [[ -z "${TMPDIR:-}" || ! -w "${TMPDIR}" ]]; then
   mkdir -p "$TMPDIR"
 fi
 
-# Default API_BASE_URL if not provided via .env
-API_BASE_URL="${API_BASE_URL:-http://localhost:8001}"
+# Configure ports from .env with fallback defaults  
+BACKEND_PORT="${BACKEND_PORT:-8001}"
+FRONTEND_PORT="${FRONTEND_PORT:-8002}"
+API_BASE_URL="${API_BASE_URL:-http://localhost:${BACKEND_PORT}}"
 
 # -------------------------------------------------------------
 # RUSTFLAGS — preserve existing debuginfo flag *and* opt-in to
@@ -51,16 +53,25 @@ cp pkg/agent_platform_frontend_bg.wasm.d.ts www/
 # Generate bootstrap.js expected by index.html
 # -------------------------------------------------------------
 echo "[build-debug] writing bootstrap.js …"
-cat > www/bootstrap.js <<'EOF'
+cat > www/bootstrap.js <<EOF
 import init, { init_api_config_js } from './agent_platform_frontend.js';
 
 async function main() {
   await init();            // loads wasm & runs #[wasm_bindgen(start)]
-  init_api_config_js('http://localhost:8001');
+  const url = window.API_BASE_URL || 'http://localhost:${BACKEND_PORT}';
+  init_api_config_js(url);
 }
 
 main();
 EOF
+
+# Generate dynamic CSP and update HTML for current ports
+echo "[build-debug] updating CSP for ports ${BACKEND_PORT}/${FRONTEND_PORT} …"
+sed -i.bak "s|connect-src 'self' http://localhost:[0-9]* ws://localhost:[0-9]*|connect-src 'self' http://localhost:${BACKEND_PORT} ws://localhost:${BACKEND_PORT}|" www/index.html
+# Add cache busting timestamp to force browser reload
+TIMESTAMP=$(date +%s)
+sed -i.bak "s|<title>AI Agent Platform</title>|<title>AI Agent Platform</title><meta name=\"cache-bust\" content=\"${TIMESTAMP}\">|" www/index.html
+rm -f www/index.html.bak
 
 # Stub config.js so the HTML include does not 404 in dev.
 echo "[build-debug] ensuring config.js …"
@@ -71,5 +82,28 @@ window.__APP_CONFIG__.BUILD = 'debug';
 EOF
 fi
 
-echo "[build-debug] starting dev server on http://localhost:8002 …"
-cd www && python3 -m http.server 8002
+echo "[build-debug] starting dev server on http://localhost:${FRONTEND_PORT} …"
+cd www
+
+# Create a simple HTTP server with cache control headers
+cat > server.py << 'EOF'
+import http.server
+import socketserver
+import sys
+
+class CacheControlHandler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        # Disable caching for HTML files to ensure CSP updates are loaded
+        if self.path.endswith('.html') or self.path == '/':
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
+        super().end_headers()
+
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+with socketserver.TCPServer(("", PORT), CacheControlHandler) as httpd:
+    print(f"Serving at http://localhost:{PORT}")
+    httpd.serve_forever()
+EOF
+
+python3 server.py ${FRONTEND_PORT}
