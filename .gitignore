@@ -204,3 +204,10 @@ openapi.json
 backend/openapi.json
 openapi-generated.json
 backend/openapitools.json
+
+# Frontend build artifacts
+frontend/pkg/
+frontend/www/agent_platform_frontend*
+frontend/www/bootstrap.js
+frontend/www/config.js
+frontend/www/index.html  # Generated from template
