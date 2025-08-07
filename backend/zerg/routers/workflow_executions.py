@@ -52,8 +52,8 @@ async def reserve_workflow_execution(
     if not workflow or workflow.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    # Create execution record with "reserved" status
-    execution = crud.create_workflow_execution(db, workflow_id=workflow_id, status="reserved", triggered_by="manual")
+    # Create execution record with "waiting" phase (reserved for execution)
+    execution = crud.create_workflow_execution(db, workflow_id=workflow_id, phase="waiting", triggered_by="manual")
 
     return {"execution_id": execution.id, "status": "reserved"}
 
