@@ -12,12 +12,14 @@ from typing import Dict
 from zerg.crud import crud
 from zerg.database import get_session_factory
 from zerg.managers.agent_runner import AgentRunner
+from zerg.models.enums import FailureKind
 from zerg.models.models import Agent
 from zerg.models.models import NodeExecutionState
 from zerg.schemas.node_output import create_agent_envelope
 from zerg.schemas.node_output import create_conditional_envelope
 from zerg.schemas.node_output import create_tool_envelope
 from zerg.schemas.node_output import create_trigger_envelope
+from zerg.services.execution_state import ExecutionStateMachine
 from zerg.services.expression_evaluator import safe_evaluator
 from zerg.services.variable_resolver import resolve_variables
 from zerg.tools.unified_access import get_tool_resolver
@@ -38,21 +40,24 @@ class BaseNodeExecutor:
         session_factory = get_session_factory()
 
         with session_factory() as db:
-            # Create execution state
-            node_state = NodeExecutionState(
-                workflow_execution_id=state["execution_id"], node_id=self.node_id, status="running"
-            )
+            # Create execution state in WAITING phase
+            node_state = NodeExecutionState(workflow_execution_id=state["execution_id"], node_id=self.node_id)
             db.add(node_state)
             db.commit()
 
+            # Mark as running using state machine
+            ExecutionStateMachine.mark_running(node_state)
+            db.commit()
+
             await self.publish_event(
-                execution_id=state["execution_id"], node_id=self.node_id, status="running", output=None, error=None
+                execution_id=state["execution_id"], node_id=self.node_id, node_state=node_state, output=None
             )
 
             try:
                 output = await self._execute_node_logic(db, state)
 
-                node_state.status = "completed"
+                # Mark as successful using state machine
+                ExecutionStateMachine.mark_success(node_state)
                 # Store envelope output directly
                 node_state.output = output.model_dump()
                 db.commit()
@@ -60,9 +65,8 @@ class BaseNodeExecutor:
                 await self.publish_event(
                     execution_id=state["execution_id"],
                     node_id=self.node_id,
-                    status="completed",
+                    node_state=node_state,
                     output=str(output),
-                    error=None,
                 )
 
                 # Store envelope output in state
@@ -76,8 +80,8 @@ class BaseNodeExecutor:
                 error_msg = str(e)
                 logger.error(f"[{self.__class__.__name__}] Error in node {self.node_id}: {error_msg}")
 
-                node_state.status = "failed"
-                node_state.error = error_msg
+                # Mark as failed using state machine
+                ExecutionStateMachine.mark_failure(node_state, error_message=error_msg, failure_kind=FailureKind.SYSTEM)
                 error_output = self._create_error_output(error_msg)
                 node_state.output = error_output.model_dump()
                 db.commit()
@@ -85,9 +89,8 @@ class BaseNodeExecutor:
                 await self.publish_event(
                     execution_id=state["execution_id"],
                     node_id=self.node_id,
-                    status="failed",
+                    node_state=node_state,
                     output=None,
-                    error=error_msg,
                 )
 
                 return {

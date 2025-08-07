@@ -19,9 +19,11 @@ from langgraph.graph import StateGraph
 from zerg.database import get_session_factory
 from zerg.events import EventType
 from zerg.events.publisher import publish_event
+from zerg.models.enums import FailureKind
 from zerg.models.models import Workflow
 from zerg.models.models import WorkflowExecution
 from zerg.schemas.workflow import WorkflowData
+from zerg.services.execution_state import ExecutionStateMachine
 from zerg.services.node_executors import create_node_executor
 from zerg.utils.time import utc_now_naive
 
@@ -46,10 +48,9 @@ class WorkflowEngine:
 
         session_factory = get_session_factory()
         with session_factory() as db:
-            # Create execution record
+            # Create execution record in WAITING state
             execution = WorkflowExecution(
                 workflow_id=workflow_id,
-                status="running",
                 started_at=utc_now_naive(),
                 triggered_by=trigger_type,
             )
@@ -57,17 +58,21 @@ class WorkflowEngine:
             db.commit()
 
             try:
+                # Mark as running using state machine
+                ExecutionStateMachine.mark_running(execution)
+                db.commit()
+
                 await self._execute_workflow_internal(workflow_id, execution, db)
                 return execution.id
             except Exception as e:
-                # Mark as failed
-                execution.status = "failed"
-                execution.error = str(e)
-                execution.finished_at = utc_now_naive()
-                db.commit()
+                # Mark as failed using state machine only if not already finished
+                if ExecutionStateMachine.can_finish(execution):
+                    ExecutionStateMachine.mark_failure(execution, error_message=str(e), failure_kind=FailureKind.SYSTEM)
+                    execution.finished_at = utc_now_naive()
+                    db.commit()
 
                 await self._publish_execution_finished(
-                    execution_id=execution.id, status="failed", error=str(e), duration_ms=self._duration_ms(execution)
+                    execution_id=execution.id, execution=execution, duration_ms=self._duration_ms(execution)
                 )
                 logger.exception(f"[WorkflowEngine] Execution failed – execution_id={execution.id}")
                 raise
@@ -88,7 +93,7 @@ class WorkflowEngine:
         # Handle empty workflows
         if not workflow_data.nodes:
             logger.info(f"[WorkflowEngine] Empty workflow {workflow_id} - completing immediately")
-            execution.status = "success"
+            ExecutionStateMachine.mark_success(execution)
             execution.finished_at = utc_now_naive()
             db.commit()
             await publish_event(
@@ -96,7 +101,7 @@ class WorkflowEngine:
                 {
                     "execution_id": execution.id,
                     "workflow_id": workflow_id,
-                    "status": "success",
+                    "status": ExecutionStateMachine.get_display_label(execution),
                     "event_type": EventType.EXECUTION_FINISHED,
                 },
             )
@@ -212,26 +217,30 @@ class WorkflowEngine:
                             error=state_update.get("error"),
                         )
 
-        # Mark as successful
-        execution.status = "success"
+        # Mark as successful using state machine
+        ExecutionStateMachine.mark_success(execution)
         execution.finished_at = utc_now_naive()
         db.commit()
 
         await self._publish_execution_finished(
-            execution_id=execution.id, status="success", error=None, duration_ms=self._duration_ms(execution)
+            execution_id=execution.id, execution=execution, duration_ms=self._duration_ms(execution)
         )
         logger.info(f"[WorkflowEngine] Execution completed – execution_id={execution.id}")
 
     # Event publishing methods
-    async def _publish_node_event(self, *, execution_id: int, node_id: str, status: str, output: Any, error: str):
+    async def _publish_node_event(self, *, execution_id: int, node_id: str, node_state, output: Any):
+        # Clean Phase/Result architecture - no legacy fields
         await publish_event(
             EventType.NODE_STATE_CHANGED,
             {
                 "execution_id": execution_id,
                 "node_id": node_id,
-                "status": status,
+                "phase": node_state.phase,
+                "result": node_state.result,
+                "attempt_no": node_state.attempt_no,
+                "failure_kind": node_state.failure_kind,
+                "error_message": node_state.error_message,
                 "output": output,
-                "error": error,
                 "event_type": EventType.NODE_STATE_CHANGED,
             },
         )
@@ -250,13 +259,16 @@ class WorkflowEngine:
             },
         )
 
-    async def _publish_execution_finished(self, *, execution_id: int, status: str, error: str, duration_ms: int):
+    async def _publish_execution_finished(self, *, execution_id: int, execution: WorkflowExecution, duration_ms: int):
+        # Clean Phase/Result architecture - no legacy fields
         await publish_event(
             EventType.EXECUTION_FINISHED,
             {
                 "execution_id": execution_id,
-                "status": status,
-                "error": error,
+                "result": execution.result,
+                "attempt_no": execution.attempt_no,
+                "failure_kind": execution.failure_kind,
+                "error_message": execution.error_message,
                 "duration_ms": duration_ms,
                 "event_type": EventType.EXECUTION_FINISHED,
             },
