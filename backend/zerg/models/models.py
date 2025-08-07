@@ -2,6 +2,7 @@ from sqlalchemy import JSON
 
 # SQLAlchemy core imports
 from sqlalchemy import Boolean
+from sqlalchemy import CheckConstraint
 from sqlalchemy import Column
 from sqlalchemy import DateTime
 from sqlalchemy import Enum as SAEnum
@@ -19,6 +20,9 @@ from sqlalchemy.sql import func
 # Local helpers / enums
 from zerg.database import Base
 from zerg.models.enums import AgentStatus
+from zerg.models.enums import FailureKind
+from zerg.models.enums import Phase
+from zerg.models.enums import Result
 from zerg.models.enums import RunStatus
 from zerg.models.enums import RunTrigger
 from zerg.models.enums import ThreadType
@@ -430,13 +434,29 @@ class WorkflowTemplate(Base):
 class WorkflowExecution(Base):
     __tablename__ = "workflow_executions"
 
+    # Add constraint for Phase/Result consistency
+    __table_args__ = (CheckConstraint("(phase='finished') = (result IS NOT NULL)", name="phase_result_consistency_wf"),)
+
     id = Column(Integer, primary_key=True, index=True)
     workflow_id = Column(Integer, ForeignKey("workflows.id"), nullable=False, index=True)
-    status = Column(String, nullable=False, default="queued")  # queued, running, success, failed
+
+    # Phase/Result architecture
+    phase = Column(
+        String,
+        nullable=False,
+        default=Phase.WAITING.value,
+        server_default=Phase.WAITING.value,
+    )
+    result = Column(String, nullable=True, server_default=None)
+    attempt_no = Column(Integer, nullable=False, default=1, server_default="1")
+    failure_kind = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    heartbeat_ts = Column(DateTime, nullable=True)
+
+    # Existing fields
     triggered_by = Column(String, nullable=True, default="manual")  # manual, schedule, webhook, email, etc.
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
-    error = Column(Text, nullable=True)
     log = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -449,12 +469,30 @@ class WorkflowExecution(Base):
 class NodeExecutionState(Base):
     __tablename__ = "node_execution_states"
 
+    # Add constraint for Phase/Result consistency
+    __table_args__ = (
+        CheckConstraint("(phase='finished') = (result IS NOT NULL)", name="phase_result_consistency_node"),
+    )
+
     id = Column(Integer, primary_key=True, index=True)
     workflow_execution_id = Column(Integer, ForeignKey("workflow_executions.id"), nullable=False, index=True)
     node_id = Column(String, nullable=False)
-    status = Column(String, nullable=False, default="idle")  # idle, queued, running, success, failed
+
+    # Phase/Result architecture
+    phase = Column(
+        String,
+        nullable=False,
+        default=Phase.WAITING.value,
+        server_default=Phase.WAITING.value,
+    )
+    result = Column(String, nullable=True, server_default=None)
+    attempt_no = Column(Integer, nullable=False, default=1, server_default="1")
+    failure_kind = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    heartbeat_ts = Column(DateTime, nullable=True)
+
+    # Existing fields
     output = Column(MutableDict.as_mutable(JSON), nullable=True)
-    error = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
