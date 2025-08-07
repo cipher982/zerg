@@ -53,10 +53,10 @@ impl NodePalette {
         let search_container = document.create_element("div")?;
         search_container.set_inner_html(&format!(
             "
-            <input 
-                type='text' 
-                placeholder='Search nodes...' 
-                value='{}' 
+            <input
+                type='text'
+                placeholder='Search nodes...'
+                value='{}'
                 class='palette-search-input'
                 id='palette-search'
             />

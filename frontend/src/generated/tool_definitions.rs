@@ -9,7 +9,6 @@ pub enum ToolName {
     GetCurrentTime,
     DatetimeDiff,
     GenerateUuid,
-
 }
 
 impl ToolName {
@@ -22,7 +21,7 @@ impl ToolName {
             Self::GenerateUuid => "generate_uuid",
         }
     }
-    
+
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "http_request" => Some(Self::HttpRequest),
@@ -41,7 +40,6 @@ pub enum ServerName {
     Math,
     Datetime,
     Uuid,
-
 }
 
 impl ServerName {
@@ -53,7 +51,7 @@ impl ServerName {
             Self::Uuid => "uuid",
         }
     }
-    
+
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "http" => Some(Self::Http),
@@ -80,12 +78,16 @@ impl ToolName {
 
 /// Validation functions for runtime checks
 pub mod validation {
-    
+    use super::*;
+
     /// Validate that a tool name string matches a known tool
     pub fn validate_tool_name(name: &str) -> bool {
-        matches!(name, "http_request" | "math_eval" | "get_current_time" | "datetime_diff" | "generate_uuid")
+        matches!(
+            name,
+            "http_request" | "math_eval" | "get_current_time" | "datetime_diff" | "generate_uuid"
+        )
     }
-    
+
     /// Validate that a server name string matches a known server
     pub fn validate_server_name(name: &str) -> bool {
         matches!(name, "http" | "math" | "datetime" | "uuid")
@@ -95,10 +97,11 @@ pub mod validation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_tool_name_roundtrip() {
-        for tool in [            ToolName::HttpRequest,
+        for tool in [
+            ToolName::HttpRequest,
             ToolName::MathEval,
             ToolName::GetCurrentTime,
             ToolName::DatetimeDiff,
@@ -108,17 +111,23 @@ mod tests {
             assert_eq!(ToolName::from_str(s), Some(tool));
         }
     }
-    
+
     #[test]
     fn test_server_name_roundtrip() {
-        for server in [ServerName::Http, ServerName::Math, ServerName::Datetime, ServerName::Uuid] {
+        for server in [
+            ServerName::Http,
+            ServerName::Math,
+            ServerName::Datetime,
+            ServerName::Uuid,
+        ] {
             let s = server.as_str();
             assert_eq!(ServerName::from_str(s), Some(server));
         }
     }
-    
+
     #[test]
-    fn test_tool_server_mapping() {        assert_eq!(ToolName::HttpRequest.server_name(), ServerName::Http);
+    fn test_tool_server_mapping() {
+        assert_eq!(ToolName::HttpRequest.server_name(), ServerName::Http);
         assert_eq!(ToolName::MathEval.server_name(), ServerName::Math);
         assert_eq!(ToolName::GetCurrentTime.server_name(), ServerName::Datetime);
         assert_eq!(ToolName::DatetimeDiff.server_name(), ServerName::Datetime);

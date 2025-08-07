@@ -830,16 +830,25 @@ def get_workflow_executions(db: Session, workflow_id: int, skip: int = 0, limit:
     return db.query(WorkflowExecution).filter_by(workflow_id=workflow_id).offset(skip).limit(limit).all()
 
 
-def create_workflow_execution(db: Session, *, workflow_id: int, status: str = "running", triggered_by: str = "manual"):
+def create_workflow_execution(
+    db: Session, *, workflow_id: int, phase: str = "running", triggered_by: str = "manual", result: str = None
+):
     """Create a new workflow execution record."""
     from datetime import datetime
     from datetime import timezone
 
     from zerg.models.models import WorkflowExecution
 
+    # Validate phase/result consistency
+    if phase == "finished" and result is None:
+        raise ValueError("result parameter is required when phase='finished'")
+    if phase != "finished" and result is not None:
+        raise ValueError("result parameter should only be provided when phase='finished'")
+
     execution = WorkflowExecution(
         workflow_id=workflow_id,
-        status=status,
+        phase=phase,
+        result=result,
         started_at=datetime.now(timezone.utc),
         triggered_by=triggered_by,
     )

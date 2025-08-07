@@ -84,7 +84,13 @@ fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
     for (_, node) in &state.workflow_nodes {
         if let Some(parent_id) = &node.config.parent_id {
             if let Some(parent) = state.workflow_nodes.get(parent_id) {
-                draw_connection_line(context, parent, node, &state.connection_animation_offset, state);
+                draw_connection_line(
+                    context,
+                    parent,
+                    node,
+                    &state.connection_animation_offset,
+                    state,
+                );
             }
         }
     }
@@ -224,7 +230,9 @@ fn draw_connection_line(
 
     // Check pre-computed animation state for this connection
     let edge_key = format!("{}:{}", from_node.node_id, to_node.node_id);
-    let glow_active = state.ui_edge_state.get(&edge_key)
+    let glow_active = state
+        .ui_edge_state
+        .get(&edge_key)
         .map(|edge_state| edge_state.is_executing)
         .unwrap_or(false);
 
@@ -484,7 +492,7 @@ pub fn draw_node(
             // Accent bar (top) - color based on execution status
             let accent_color = match ui_state.exec_status {
                 Some(NodeExecStatus::Running) => "#fbbf24", // amber-400
-                Some(NodeExecStatus::Success) => "#22c55e", // green-500
+                Some(NodeExecStatus::Completed) => "#22c55e", // green-500
                 Some(NodeExecStatus::Failed) => "#ef4444",  // red-500
                 _ => "#38bdf8",                             // sky-400 (default)
             };
@@ -541,7 +549,7 @@ pub fn draw_node(
 
             let status_color = match ui_state.exec_status {
                 Some(NodeExecStatus::Running) => "#fbbf24", // amber-400
-                Some(NodeExecStatus::Success) => "#22c55e", // green-500
+                Some(NodeExecStatus::Completed) => "#22c55e", // green-500
                 Some(NodeExecStatus::Failed) => "#ef4444",  // red-500
                 _ => "#94a3b8",                             // slate-400 (idle)
             };
@@ -595,7 +603,7 @@ pub fn draw_node(
             // Accent bar (top) - color based on execution status
             let accent_color = match ui_state.exec_status {
                 Some(NodeExecStatus::Running) => "#fbbf24", // amber-400
-                Some(NodeExecStatus::Success) => "#22c55e", // green-500
+                Some(NodeExecStatus::Completed) => "#22c55e", // green-500
                 Some(NodeExecStatus::Failed) => "#ef4444",  // red-500
                 _ => "#10b981",                             // emerald-500 (default green)
             };
@@ -652,7 +660,7 @@ pub fn draw_node(
 
             let status_color = match ui_state.exec_status {
                 Some(NodeExecStatus::Running) => "#fbbf24", // amber-400
-                Some(NodeExecStatus::Success) => "#22c55e", // green-500
+                Some(NodeExecStatus::Completed) => "#22c55e", // green-500
                 Some(NodeExecStatus::Failed) => "#ef4444",  // red-500
                 _ => "#10b981",                             // emerald-500 (default green)
             };

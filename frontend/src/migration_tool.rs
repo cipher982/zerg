@@ -20,7 +20,7 @@ impl VisitMut for SchemaMigrationVisitor {
         }
         syn::visit_mut::visit_type_mut(self, ty);
     }
-    
+
     fn visit_expr_mut(&mut self, expr: &mut Expr) {
         // Transform field access patterns
         if let Expr::Field(field_expr) = expr {
@@ -38,12 +38,12 @@ impl VisitMut for SchemaMigrationVisitor {
 pub fn migrate_file(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let content = fs::read_to_string(file_path)?;
     let mut ast = parse_file(&content)?;
-    
+
     let mut visitor = SchemaMigrationVisitor;
     visitor.visit_file_mut(&mut ast);
-    
+
     let new_content = quote::quote!(#ast).to_string();
     fs::write(file_path, new_content)?;
-    
+
     Ok(())
 }

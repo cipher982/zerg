@@ -85,10 +85,10 @@ impl ToolConfigModal {
                 if mapping_type == "node_output" { "" } else { "hidden" },
                 input_key,
                 node_ref,
-                if *is_required { 
-                    "This parameter is required for the tool to function properly." 
-                } else { 
-                    "This parameter is optional." 
+                if *is_required {
+                    "This parameter is required for the tool to function properly."
+                } else {
+                    "This parameter is optional."
                 }
             ));
         }

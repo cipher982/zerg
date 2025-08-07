@@ -1,9 +1,7 @@
-
 // AUTO-GENERATED - DO NOT EDIT
 // Generated from api-schema.yml
 
-use serde::{Serialize, Deserialize};
-
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WorkflowNode {

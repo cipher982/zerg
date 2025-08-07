@@ -148,4 +148,5 @@ class TestWorkflowEngineScheduling:
         # Verify execution completed
         execution = db_session.query(WorkflowExecution).filter_by(id=execution_id).first()
         assert execution is not None
-        assert execution.status == "success"
+        assert execution.phase == "finished"
+        assert execution.result == "success"

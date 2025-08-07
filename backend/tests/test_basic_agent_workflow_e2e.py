@@ -96,10 +96,11 @@ async def test_basic_agent_workflow_execution_e2e(db, test_user, sample_agent):
 
         execution = db.query(WorkflowExecution).filter_by(id=execution_id).first()
         assert execution is not None
-        assert execution.status == "success"
+        assert execution.phase == "finished"
+        assert execution.result == "success"
         assert execution.started_at is not None
         assert execution.finished_at is not None
-        assert execution.error is None
+        assert execution.error_message is None
 
         # Check that duration calculation works (this was the failing part)
         assert execution.finished_at >= execution.started_at
@@ -116,8 +117,9 @@ async def test_basic_agent_workflow_execution_e2e(db, test_user, sample_agent):
 
         # All nodes should have succeeded
         for state in node_states:
-            assert state.status == "completed"
-            assert state.error is None
+            assert state.phase == "finished"
+            assert state.result == "success"
+            assert state.error_message is None
 
         # Agent node should have output with messages
         agent_state = next(s for s in node_states if s.node_id == "agent-1")

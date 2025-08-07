@@ -46,9 +46,10 @@ def test_envelope_backpressure_disconnect(monkeypatch, test_client: TestClient):
 async def test_no_hang_on_slow_client(test_client: TestClient):
     """Test that a slow client does not block other clients (no hang)."""
     # Connect two clients
-    with test_client.websocket_connect("/api/ws") as _slow_client, test_client.websocket_connect(
-        "/api/ws"
-    ) as fast_client:
+    with (
+        test_client.websocket_connect("/api/ws") as _slow_client,
+        test_client.websocket_connect("/api/ws") as fast_client,
+    ):
         # Simulate slow client by not reading from _slow_client
         for i in range(3):
             envelope = Envelope.create(message_type="test", topic="system", data={"i": i})

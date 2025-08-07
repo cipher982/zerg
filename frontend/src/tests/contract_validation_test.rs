@@ -12,14 +12,14 @@ use crate::generated::workflow::*;
 use crate::network::generated_client::*;
 use crate::models::*;
 
-/// CRITICAL BUILD-TIME TEST: This test ensures ALL data serialization 
+/// CRITICAL BUILD-TIME TEST: This test ensures ALL data serialization
 /// matches API contracts. If this test fails, the contracts are broken
 /// and runtime failures WILL occur.
 #[wasm_bindgen_test]
     fn test_comprehensive_workflow_node_contract_validation() {
         // Create a real WorkflowNode as the frontend creates it
         let node = WorkflowNode::new_with_semantic_type("test_node".to_string(), NodeSemanticType::GenericNode);
-        
+
         // Serialize it as JSON (this is what gets sent to backend)
         let serialized = serde_json::to_value(&node)
             .expect("WorkflowNode should serialize without errors");
@@ -31,7 +31,7 @@ use crate::models::*;
         // Validate all required fields are present and correctly typed
         assert!(!validated.id.is_empty(), "Node ID must not be empty");
         assert!(!validated.node_type.is_empty(), "Node type must not be empty");
-        
+
         // Verify position field is always present and has correct structure
         // This catches the "missing field position" error
         assert!(validated.position.x >= 0.0, "Position X must be valid");
@@ -44,11 +44,11 @@ use crate::models::*;
 fn test_comprehensive_workflow_canvas_contract_validation() {
         // Create a real WorkflowCanvas with nodes and edges
         let mut canvas = WorkflowCanvas::default();
-        
+
         // Add a real node
         let node = WorkflowNode::new_with_semantic_type("node1".to_string(), NodeSemanticType::GenericNode);
         canvas.nodes.push(node);
-        
+
         // Add a real edge
         let edge = WorkflowEdge {
             from_node_id: "trigger".to_string(),
@@ -74,7 +74,7 @@ fn test_comprehensive_workflow_canvas_contract_validation() {
         // Validate the structure
         assert_eq!(validated.nodes.len(), 1, "Node count must match");
         assert_eq!(validated.edges.len(), 1, "Edge count must match");
-        
+
         // Validate edge field naming consistency
         assert_eq!(validated.edges[0].from_node_id, "trigger", "Edge from_node_id must use consistent naming");
         assert_eq!(validated.edges[0].to_node_id, "node1", "Edge to_node_id must use consistent naming");
@@ -87,12 +87,12 @@ fn test_comprehensive_workflow_canvas_contract_validation() {
 fn test_field_name_consistency() {
         let node = WorkflowNode::new_with_semantic_type("test".to_string(), NodeSemanticType::GenericNode);
         let serialized = serde_json::to_value(&node).unwrap();
-        
+
         // The serialized node MUST have these exact field names to match backend expectations
         assert!(serialized.get("id").is_some(), "Node must serialize with 'id' field (not 'node_id')");
-        assert!(serialized.get("type").is_some(), "Node must serialize with 'type' field (not 'node_type')");  
+        assert!(serialized.get("type").is_some(), "Node must serialize with 'type' field (not 'node_type')");
         assert!(serialized.get("position").is_some(), "Node must serialize with 'position' field");
-        
+
         // Verify position has correct structure
         let position = serialized.get("position").unwrap();
         assert!(position.get("x").is_some(), "Position must have 'x' field");
@@ -106,17 +106,17 @@ fn test_field_name_consistency() {
 fn test_type_consistency() {
         let node = WorkflowNode::new_with_semantic_type("test".to_string(), NodeSemanticType::GenericNode);
         let serialized = serde_json::to_value(&node).unwrap();
-        
+
         // Verify the types match exactly what the contract expects
         let id = serialized.get("id").unwrap();
         assert!(id.is_string(), "ID must be string type");
-        
+
         let node_type = serialized.get("type").unwrap();
         assert!(node_type.is_string(), "Type must be string type");
-        
+
         let position = serialized.get("position").unwrap();
         assert!(position.is_object(), "Position must be object type");
-        
+
         let x = position.get("x").unwrap();
         let y = position.get("y").unwrap();
         assert!(x.is_f64(), "Position X must be f64");

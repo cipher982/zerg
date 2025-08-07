@@ -1,5 +1,5 @@
 // AUTO-GENERATED FILE - DO NOT EDIT
-// Generated from ws-protocol-asyncapi.yml at 2025-08-02T15:24:08.842122Z
+// Generated from ws-protocol-asyncapi.yml at 2025-08-07T08:29:10.799811Z
 //
 // Handler traits and message routing with modern patterns
 

@@ -855,7 +855,7 @@ pub fn load_agents() {
                                                     crate::state::APP_STATE.with(|state| {
                                                         let mut state = state.borrow_mut();
                                                         state.agents.clear();
-                                                        
+
                                                         // Add each agent to the HashMap
                                                         for agent in agents {
                                                             if let Some(id) = agent.id {
@@ -878,11 +878,11 @@ pub fn load_agents() {
                                                             }
                                                         }
                                                     }
-                                                        
+
                                                         // DO NOT automatically create canvas nodes for agents
                                                         // Agents should only appear on canvas when explicitly dragged from shelf
                                                         // create_nodes_for_agents(&mut state); // DISABLED - causes auto-canvas bug
-                                                        
+
                                                         state.data_loaded = true;
                                                         state.api_load_attempted = true;
                                                         state.is_loading = false;

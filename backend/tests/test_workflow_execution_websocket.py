@@ -12,10 +12,10 @@ def test_workflow_execution_subscription_snapshot(db: Session):
 
     # Create a finished workflow execution
     workflow = crud.create_workflow(db, owner_id=1, name="Test Workflow", description="Test", canvas={})
-    execution = crud.create_workflow_execution(db, workflow_id=workflow.id, status="success", triggered_by="manual")
-    # Update it to have finished timestamps
-    execution.status = "success"
-    execution.error = None
+    execution = crud.create_workflow_execution(
+        db, workflow_id=workflow.id, phase="finished", result="success", triggered_by="manual"
+    )
+    execution.error_message = None
     db.commit()
 
     with TestClient(app) as client:

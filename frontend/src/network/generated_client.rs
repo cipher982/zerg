@@ -1,11 +1,11 @@
+use serde::{Deserialize, Serialize};
 use wasm_bindgen_futures::spawn_local;
-use serde::{Serialize, Deserialize};
 
 /// Contract-enforced models matching backend Pydantic schemas exactly
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WorkflowEdgeContract {
-    pub from_node_id: String,  // ✅ Enforces consistent naming from Phase 1
-    pub to_node_id: String,    // ✅ Enforces consistent naming from Phase 1
+    pub from_node_id: String, // ✅ Enforces consistent naming from Phase 1
+    pub to_node_id: String,   // ✅ Enforces consistent naming from Phase 1
     #[serde(default)]
     pub config: serde_json::Value,
 }
@@ -46,13 +46,13 @@ impl TypeSafeApiClient {
     fn map_node_type(frontend_type: &str) -> &str {
         match frontend_type {
             "AgentIdentity" => "agent",
-            "Tool" => "tool", 
+            "Tool" => "tool",
             "Trigger" => "trigger",
             // All others map to conditional
             "UserInput" | "ResponseOutput" | "GenericNode" | _ => "conditional",
         }
     }
-    
+
     /// Validates canvas data against contract before API call
     pub async fn update_workflow_canvas_data(canvas_data: serde_json::Value) -> Result<(), String> {
         // First convert semantic types to backend contract types
@@ -65,7 +65,7 @@ impl TypeSafeApiClient {
                 }
             }
         }
-        
+
         // Validate structure matches contract
         let workflow_data: WorkflowDataContract = serde_json::from_value(canvas_data.clone())
             .map_err(|e| format!("Canvas data doesn't match contract: {}", e))?;
@@ -83,7 +83,8 @@ impl TypeSafeApiClient {
         });
         let payload_str = payload.to_string();
 
-        crate::network::ApiClient::patch_workflow_canvas_data(&payload_str).await
+        crate::network::ApiClient::patch_workflow_canvas_data(&payload_str)
+            .await
             .map(|_| ())
             .map_err(|e| format!("API call failed: {:?}", e))
     }
@@ -99,9 +100,7 @@ pub fn save_canvas_data_typed(canvas_data: serde_json::Value) {
                 web_sys::console::log_1(&"✅ Canvas data saved via type-safe client".into());
             }
             Err(e) => {
-                web_sys::console::error_1(
-                    &format!("❌ Type-safe API call failed: {}", e).into(),
-                );
+                web_sys::console::error_1(&format!("❌ Type-safe API call failed: {}", e).into());
             }
         }
     });
