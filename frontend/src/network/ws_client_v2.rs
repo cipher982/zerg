@@ -7,7 +7,6 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::{MessageEvent, WebSocket};
 
-
 use super::messages::builders;
 
 /// Trait defining the WebSocket client interface
@@ -325,7 +324,9 @@ impl WsClientV2 {
                         // ------------------------------------------------------------------
                         // Phase-2: Runtime schema validation (lightweight)
                         // ------------------------------------------------------------------
-                        if let Ok(_) = crate::generated::ws_messages::validate_envelope(&parsed_value) {
+                        if let Ok(_) =
+                            crate::generated::ws_messages::validate_envelope(&parsed_value)
+                        {
                             // ------------------------------------------------------------------
                             // Automatic Pong reply – server-initiated heart-beat
                             // ------------------------------------------------------------------
@@ -703,7 +704,8 @@ pub fn send_thread_message(text: &str, message_id: String) {
                 if ws.ready_state() == 1 {
                     // OPEN
                     // Get current thread ID from agent state
-                    let thread_id = state.current_agent()
+                    let thread_id = state
+                        .current_agent()
                         .and_then(|agent| agent.current_thread_id)
                         .unwrap_or(1);
 

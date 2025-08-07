@@ -227,7 +227,7 @@ impl TopicManager {
             }
             Err(e) => {
                 web_sys::console::error_1(
-                    &format!("Invalid envelope format: {}. Raw message: {:?}", e, message).into()
+                    &format!("Invalid envelope format: {}. Raw message: {:?}", e, message).into(),
                 );
             }
         }

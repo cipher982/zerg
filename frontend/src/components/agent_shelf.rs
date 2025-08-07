@@ -54,7 +54,7 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
     // Borrow state to iterate agents.
     APP_STATE.with(|state| {
         let state = state.borrow();
-        
+
         // If agents haven't been loaded yet, show a loading state
         if !state.agents_loaded {
             let loading_msg = document.create_element("div").unwrap();
@@ -63,7 +63,7 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
             shelf_el.append_child(&loading_msg).unwrap();
             return;
         }
-        
+
         // If no agents, show appropriate message
         if state.agents.is_empty() {
             let empty_msg = document.create_element("div").unwrap();
@@ -75,7 +75,7 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
         // Sort agents by name to ensure consistent ordering (HashMap iteration is non-deterministic)
         let mut sorted_agents: Vec<_> = state.agents.values().collect();
         sorted_agents.sort_by(|a, b| a.name.cmp(&b.name));
-        
+
         for agent in sorted_agents {
             if let Some(agent_id) = agent.id {
                 // Create a simple pill element.
@@ -83,40 +83,40 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
                 pill.set_class_name("agent-pill");
                 pill.set_inner_text(&agent.name);
                 pill.set_attribute("data-agent-id", &agent_id.to_string()).unwrap();
-                
+
                 // Check if agent is already on canvas
                 let is_on_canvas = state.agents_on_canvas.contains(&agent_id);
-                
+
                 if is_on_canvas {
                     pill.class_list().add_1("disabled").unwrap();
                 } else {
                     // Only make draggable if not already on canvas
                     pill.set_attribute("draggable", "true").unwrap();
-                    
+
                     // Clone data for the closures
                     let agent_id_for_drag = agent_id.to_string();
                     let agent_name_for_drag = agent.name.clone();
-                    
+
                     let dragstart_closure = Closure::<dyn FnMut(_)>::new(move |event: DragEvent| {
                         let dt = event.data_transfer().unwrap();
-                        
+
                         // Set the drag data - include both id and name
                         let data = format!("{{\"agent_id\":{},\"name\":\"{}\"}}", agent_id_for_drag, agent_name_for_drag);
                         dt.set_data("text/plain", &data).unwrap();
-                        
+
                         // Set visual drag effect
                         dt.set_effect_allowed("copy");
-                        
+
                         // Create a clean drag image instead of showing the full element
                         if let Some(target) = event.current_target() {
                             if let Some(element) = target.dyn_ref::<HtmlElement>() {
                                 // Add dragging class for visual feedback
                                 element.class_list().add_1("dragging").unwrap();
-                                
+
                                 // Create a simple drag image - just a small rounded rectangle
                                 if let Ok(document) = web_sys::window().unwrap().document().ok_or("No document") {
                                     let drag_image = document.create_element("div").unwrap();
-                                    drag_image.set_attribute("style", 
+                                    drag_image.set_attribute("style",
                                         "position: absolute; top: -1000px; left: -1000px; \
                                          width: 80px; height: 30px; \
                                          background: #3b82f6; color: white; \
@@ -126,13 +126,13 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
                                          box-shadow: 0 2px 8px rgba(0,0,0,0.2);"
                                     ).unwrap();
                                     drag_image.set_inner_html("Agent");
-                                    
+
                                     if let Some(body) = document.body() {
                                         body.append_child(&drag_image).unwrap();
-                                        
+
                                         // Set the custom drag image
                                         dt.set_drag_image(&drag_image, 40, 15);
-                                        
+
                                         // Clean up the temporary element after a short delay
                                         let cleanup_drag_image = drag_image.clone();
                                         let cleanup_closure = Closure::once(Box::new(move || {
@@ -140,10 +140,10 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
                                                 let _ = parent.remove_child(&cleanup_drag_image);
                                             }
                                         }));
-                                        
+
                                         web_sys::window().unwrap()
                                             .set_timeout_with_callback_and_timeout_and_arguments_0(
-                                                cleanup_closure.as_ref().unchecked_ref(), 
+                                                cleanup_closure.as_ref().unchecked_ref(),
                                                 100
                                             ).unwrap();
                                         cleanup_closure.forget();
@@ -151,11 +151,11 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
                                 }
                             }
                         }
-                        
+
                     });
                     pill.add_event_listener_with_callback("dragstart", dragstart_closure.as_ref().unchecked_ref()).unwrap();
                     dragstart_closure.forget();
-                    
+
                     // Add dragend event to clean up
                     let dragend_closure = Closure::<dyn FnMut(_)>::new(move |event: DragEvent| {
                         // Get the target element

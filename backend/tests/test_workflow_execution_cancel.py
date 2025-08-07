@@ -101,4 +101,5 @@ def test_cancel_running_execution(client: TestClient, db_session, monkeypatch):
 
     db_session.expire_all()
     execution = db_session.query(WorkflowExecution).get(exec_row_id)
-    assert execution.status == "cancelled"
+    assert execution.phase == "finished"
+    assert execution.result == "cancelled"

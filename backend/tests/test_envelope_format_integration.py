@@ -130,7 +130,8 @@ async def test_envelope_format_all_node_types(db, test_user, sample_agent):
             from zerg.models.models import WorkflowExecution
 
             execution = db.query(WorkflowExecution).filter_by(id=execution_id).first()
-            assert execution.status == "success"
+            assert execution.phase == "finished"
+            assert execution.result == "success"
 
             # Check all node execution states and verify envelope format
             from zerg.models.models import NodeExecutionState
@@ -144,7 +145,8 @@ async def test_envelope_format_all_node_types(db, test_user, sample_agent):
             for node_id in expected_nodes:
                 assert node_id in executed_nodes, f"Node {node_id} should have executed"
                 state = executed_nodes[node_id]
-                assert state.status == "completed", f"Node {node_id} should be completed"
+                assert state.phase == "finished", f"Node {node_id} should be finished"
+                assert state.result == "success", f"Node {node_id} should be successful"
                 assert is_envelope_format(state.output), f"Node {node_id} should have envelope format"
                 assert "value" in state.output, f"Node {node_id} should have 'value' field"
                 assert "meta" in state.output, f"Node {node_id} should have 'meta' field"
@@ -277,7 +279,8 @@ async def test_envelope_format_variable_resolution_edge_cases(db, test_user, sam
             from zerg.models.models import WorkflowExecution
 
             execution = db.query(WorkflowExecution).filter_by(id=execution_id).first()
-            assert execution.status == "success"
+            assert execution.phase == "finished"
+            assert execution.result == "success"
 
             # Verify conditional evaluation worked with nested access
             from zerg.models.models import NodeExecutionState
@@ -288,7 +291,8 @@ async def test_envelope_format_variable_resolution_edge_cases(db, test_user, sam
                 .first()
             )
 
-            assert conditional_state.status == "completed"
+            assert conditional_state.phase == "finished"
+            assert conditional_state.result == "success"
             assert conditional_state.output["value"]["result"]  # 0.95 > 0.9
             assert conditional_state.output["value"]["branch"] == "true"
 
@@ -299,7 +303,8 @@ async def test_envelope_format_variable_resolution_edge_cases(db, test_user, sam
                 .first()
             )
             assert agent_state is not None
-            assert agent_state.status == "completed"
+            assert agent_state.phase == "finished"
+            assert agent_state.result == "success"
 
 
 @pytest.mark.asyncio
@@ -391,7 +396,8 @@ async def test_envelope_format_alias_support(db, test_user, sample_agent):
             from zerg.models.models import WorkflowExecution
 
             execution = db.query(WorkflowExecution).filter_by(id=execution_id).first()
-            assert execution.status == "success"
+            assert execution.phase == "finished"
+            assert execution.result == "success"
 
             # Verify conditional worked with alias
             from zerg.models.models import NodeExecutionState
@@ -402,7 +408,8 @@ async def test_envelope_format_alias_support(db, test_user, sample_agent):
                 .first()
             )
 
-            assert conditional_state.status == "completed"
+            assert conditional_state.phase == "finished"
+            assert conditional_state.result == "success"
             assert conditional_state.output["value"]["result"]  # 42 == 42
 
             # Verify agent was executed
@@ -412,7 +419,8 @@ async def test_envelope_format_alias_support(db, test_user, sample_agent):
                 .first()
             )
             assert agent_state is not None
-            assert agent_state.status == "completed"
+            assert agent_state.phase == "finished"
+            assert agent_state.result == "success"
 
 
 if __name__ == "__main__":

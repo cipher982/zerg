@@ -380,10 +380,10 @@ async def _subscribe_workflow_execution(client_id: str, execution_id: int, messa
             "Checking execution %s - found: %s, status: %s",
             execution_id,
             execution is not None,
-            execution.status if execution else "None",
+            f"{execution.phase}/{execution.result}" if execution else "None",
         )
 
-        if execution is not None and execution.status in {"success", "failed", "cancelled"}:
+        if execution is not None and execution.phase == "finished":
             # Prepare payload mirroring the live EXECUTION_FINISHED event so
             # the frontend can reuse the same handler logic.
             duration_ms: Optional[int]
@@ -395,8 +395,9 @@ async def _subscribe_workflow_execution(client_id: str, execution_id: int, messa
 
             payload = {
                 "execution_id": execution.id,
-                "status": execution.status,
-                "error": execution.error,
+                "phase": execution.phase,
+                "result": execution.result,
+                "error_message": execution.error_message,
                 "duration_ms": duration_ms,
             }
 

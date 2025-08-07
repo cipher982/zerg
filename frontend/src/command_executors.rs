@@ -13,9 +13,9 @@ pub fn execute_fetch_command(cmd: Command) {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_threads(Some(agent_id)).await {
                     Ok(response) => match serde_json::from_str::<Vec<ApiThread>>(&response) {
-                        Ok(threads) => dispatch_global_message(Message::AgentThreadsLoaded { 
-                            agent_id, 
-                            threads 
+                        Ok(threads) => dispatch_global_message(Message::AgentThreadsLoaded {
+                            agent_id,
+                            threads,
                         }),
                         Err(e) => web_sys::console::error_1(
                             &format!("Failed to parse threads: {:?}", e).into(),
@@ -72,7 +72,9 @@ pub fn execute_fetch_command(cmd: Command) {
 
             // Trigger UI refresh to show loading state
             if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
-                web_sys::console::error_1(&format!("Failed to refresh UI for loading state: {:?}", e).into());
+                web_sys::console::error_1(
+                    &format!("Failed to refresh UI for loading state: {:?}", e).into(),
+                );
             }
 
             // Determine current dashboard scope before starting the async
@@ -651,7 +653,7 @@ pub fn execute_thread_command(cmd: Command) {
                 )
                 .into(),
             );
-            
+
             let _client_id_str = client_id.map(|id| id.to_string()).unwrap_or_default();
 
             // Minimal required flow: (1) create message, (2) trigger processing

@@ -22,7 +22,7 @@ def _create_linear_workflow(db: Session, crud_module, owner_id: int, num_nodes: 
             for i in range(num_nodes)
         ],
         "edges": [
-            {"from_node_id": f"node_{i}", "to_node_id": f"node_{i+1}", "config": {}} for i in range(num_nodes - 1)
+            {"from_node_id": f"node_{i}", "to_node_id": f"node_{i + 1}", "config": {}} for i in range(num_nodes - 1)
         ],
     }
 
@@ -65,11 +65,13 @@ def test_linear_execution_success(
     # ------------------------------------------------------------------
     status_resp = client.get(f"/api/workflow-executions/{execution_id}/status", headers=auth_headers)
     assert status_resp.status_code == 200
-    assert status_resp.json()["status"] == "success"
+    status_data = status_resp.json()
+    assert status_data["phase"] == "finished"
+    assert status_data["result"] == "success"
 
     # Node states exist and are completed
     from zerg.models.models import NodeExecutionState
 
     node_states = db.query(NodeExecutionState).filter_by(workflow_execution_id=execution_id).all()
     assert len(node_states) == 3
-    assert all(ns.status == "completed" for ns in node_states)
+    assert all(ns.phase == "finished" and ns.result == "success" for ns in node_states)

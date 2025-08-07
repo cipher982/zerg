@@ -18,12 +18,13 @@ fn get_ws_message_types() -> HashSet<String> {
     // Read the ws-protocol-asyncapi.yml file
     let schema_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../ws-protocol-asyncapi.yml");
 
-    let content = fs::read_to_string(&schema_path).expect("Failed to read ws-protocol-asyncapi.yml");
+    let content =
+        fs::read_to_string(&schema_path).expect("Failed to read ws-protocol-asyncapi.yml");
 
     // Parse the YAML to find message types and their aliases
     let mut in_components = false;
     let mut in_messages_section = false;
-    
+
     for line in content.lines() {
         let trimmed = line.trim();
 
@@ -40,12 +41,22 @@ fn get_ws_message_types() -> HashSet<String> {
         }
 
         // End of messages section (when we hit another top-level section within components)
-        if in_messages_section && line.starts_with("  ") && !line.starts_with("    ") && trimmed.ends_with(':') && trimmed != "messages:" {
+        if in_messages_section
+            && line.starts_with("  ")
+            && !line.starts_with("    ")
+            && trimmed.ends_with(':')
+            && trimmed != "messages:"
+        {
             in_messages_section = false;
         }
 
         // End of components section
-        if in_components && !line.starts_with(" ") && !line.starts_with("\t") && !line.is_empty() && trimmed != "components:" {
+        if in_components
+            && !line.starts_with(" ")
+            && !line.starts_with("\t")
+            && !line.is_empty()
+            && trimmed != "components:"
+        {
             break;
         }
 
@@ -58,13 +69,13 @@ fn get_ws_message_types() -> HashSet<String> {
             let name = line.trim_start_matches("      name: ");
             message_types.insert(name.to_string());
         }
-        
-        // Look for aliases within a message definition  
+
+        // Look for aliases within a message definition
         if line.starts_with("      x-aliases: [") {
             let aliases_part = line.trim_start_matches("      x-aliases: ");
             if aliases_part.starts_with('[') && aliases_part.ends_with(']') {
                 // Extract content between brackets
-                let aliases_content = &aliases_part[1..aliases_part.len()-1];
+                let aliases_content = &aliases_part[1..aliases_part.len() - 1];
                 // Split by comma and clean up each alias
                 for alias in aliases_content.split(',') {
                     let clean_alias = alias.trim().trim_matches('"').trim_matches('\'');
@@ -78,7 +89,6 @@ fn get_ws_message_types() -> HashSet<String> {
 
     message_types
 }
-
 
 /// Extract all message types that have Pact contracts defined.
 fn get_pact_contract_types() -> HashSet<String> {

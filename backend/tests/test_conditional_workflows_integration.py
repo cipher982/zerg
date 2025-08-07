@@ -116,7 +116,8 @@ async def test_conditional_workflow_high_branch_integration(db, test_user, sampl
 
             execution = db.query(WorkflowExecution).filter_by(id=execution_id).first()
             assert execution is not None
-            assert execution.status == "success"
+            assert execution.phase == "finished"
+            assert execution.result == "success"
 
             # REAL datetime operations were tested
             assert execution.started_at is not None
@@ -138,8 +139,9 @@ async def test_conditional_workflow_high_branch_integration(db, test_user, sampl
 
             # All executed nodes should be completed
             for state in node_states:
-                assert state.status == "completed"
-                assert state.error is None
+                assert state.phase == "finished"
+                assert state.result == "success"
+                assert state.error_message is None
 
             # REAL agent execution with REAL ThreadMessage creation and serialization
             agent_state = next(s for s in node_states if s.node_id == "agent-high")
@@ -269,8 +271,9 @@ async def test_agent_workflow_error_handling_integration(db, test_user, sample_a
         from zerg.models.models import WorkflowExecution
 
         execution = db.query(WorkflowExecution).filter_by(id=execution_id).first()
-        assert execution.status == "failed"
-        assert execution.error is not None
+        assert execution.phase == "finished"
+        assert execution.result == "failure"
+        assert execution.error_message is not None
 
         print("✅ Error handling integration test passed")
 

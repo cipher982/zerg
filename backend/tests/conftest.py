@@ -256,9 +256,10 @@ def disable_langsmith_tracing():
     This is more robust than setting environment variables.
     """
     # First try patching internal classes that control tracing
-    with patch("langsmith.client.Client") as mock_client, patch(
-        "langsmith._internal._background_thread.tracing_control_thread_func"
-    ) as mock_thread:
+    with (
+        patch("langsmith.client.Client") as mock_client,
+        patch("langsmith._internal._background_thread.tracing_control_thread_func") as mock_thread,
+    ):
         # Disable tracing in the client
         mock_client_instance = MagicMock()
         mock_client_instance.sync_trace.return_value = MagicMock()

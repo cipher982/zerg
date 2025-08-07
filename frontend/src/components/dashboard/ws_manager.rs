@@ -1,10 +1,12 @@
+use crate::generated::ws_handlers::{DashboardHandler, DashboardMessageRouter};
+use crate::generated::ws_messages::{
+    AgentEventData, ExecutionFinishedData, NodeLogData, NodeStateData, RunUpdateData,
+};
+use crate::network::topic_manager::{ITopicManager, TopicHandler}; // Import Trait
+use crate::state::APP_STATE;
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::JsValue;
-use crate::network::topic_manager::{ITopicManager, TopicHandler}; // Import Trait
-use crate::generated::ws_messages::{AgentEventData, RunUpdateData, ExecutionFinishedData, NodeStateData, NodeLogData};
-use crate::generated::ws_handlers::{DashboardHandler, DashboardMessageRouter};
-use crate::state::APP_STATE;
 
 // Conversion from generated RunUpdateData to ApiAgentRun
 impl From<RunUpdateData> for crate::models::ApiAgentRun {
@@ -18,8 +20,8 @@ impl From<RunUpdateData> for crate::models::ApiAgentRun {
             started_at: data.started_at,
             finished_at: data.finished_at,
             duration_ms: data.duration_ms.map(|d| d as u64), // Convert u32 to u64
-            total_tokens: None, // Not provided in generated schema
-            total_cost_usd: None, // Not provided in generated schema
+            total_tokens: None,                              // Not provided in generated schema
+            total_cost_usd: None,                            // Not provided in generated schema
             error: data.error,
         }
     }
@@ -29,7 +31,7 @@ impl From<RunUpdateData> for crate::models::ApiAgentRun {
 /// The websocket messages are *slim* – many optional fields from the REST
 /// schema are missing.  We fill sensible defaults so that the struct can be
 /// used right away by the dashboard without forcing an extra REST reload.
-// Helper: apply agent_event delta to AppState in-place  
+// Helper: apply agent_event delta to AppState in-place
 fn apply_agent_event(evt: AgentEventData) {
     crate::state::APP_STATE.with(|state_ref| {
         let mut state = state_ref.borrow_mut();
@@ -71,12 +73,10 @@ impl DashboardHandler for DashboardWsManager {
         let run_struct: crate::models::ApiAgentRun = data.into();
         let agent_id = run_struct.agent_id;
 
-        crate::state::dispatch_global_message(
-            crate::messages::Message::ReceiveRunUpdate {
-                agent_id,
-                run: run_struct,
-            },
-        );
+        crate::state::dispatch_global_message(crate::messages::Message::ReceiveRunUpdate {
+            agent_id,
+            run: run_struct,
+        });
 
         // Note: Toast notifications are handled by the agent reducer to avoid duplication
         Ok(())
@@ -88,35 +88,31 @@ impl DashboardHandler for DashboardWsManager {
     }
 
     fn handle_execution_finished(&self, data: ExecutionFinishedData) -> Result<(), JsValue> {
-        crate::state::dispatch_global_message(
-            crate::messages::Message::ExecutionFinished {
-                execution_id: data.execution_id,
-                status: data.status.clone(),
-                error: data.error.clone(),
-            },
-        );
+        crate::state::dispatch_global_message(crate::messages::Message::ExecutionFinished {
+            execution_id: data.execution_id,
+            phase: "finished".to_string(),
+            result: data.result.clone(),
+            error: data.error_message.clone(),
+        });
         Ok(())
     }
 
     fn handle_node_state(&self, data: NodeStateData) -> Result<(), JsValue> {
-        crate::state::dispatch_global_message(
-            crate::messages::Message::UpdateNodeStatus {
-                node_id: data.node_id.clone(),
-                status: data.status.clone(),
-            },
-        );
+        crate::state::dispatch_global_message(crate::messages::Message::UpdateNodeStatus {
+            node_id: data.node_id.clone(),
+            phase: data.phase.clone(),
+            result: data.result.clone(),
+        });
         Ok(())
     }
 
     fn handle_node_log(&self, data: NodeLogData) -> Result<(), JsValue> {
-        crate::state::dispatch_global_message(
-            crate::messages::Message::AppendExecutionLog {
-                execution_id: data.execution_id,
-                node_id: data.node_id.clone(),
-                stream: data.stream.clone(),
-                text: data.text.clone(),
-            },
-        );
+        crate::state::dispatch_global_message(crate::messages::Message::AppendExecutionLog {
+            execution_id: data.execution_id,
+            node_id: data.node_id.clone(),
+            stream: data.stream.clone(),
+            text: data.text.clone(),
+        });
         Ok(())
     }
 }
@@ -170,7 +166,9 @@ impl DashboardWsManager {
         }
 
         // Create new handler only if we don't have one
-        web_sys::console::log_1(&"DashboardWsManager: Creating new handler with generated routing".into());
+        web_sys::console::log_1(
+            &"DashboardWsManager: Creating new handler with generated routing".into(),
+        );
         let mut topic_manager = topic_manager_rc.borrow_mut();
 
         // Create the message router using generated infrastructure
@@ -180,47 +178,74 @@ impl DashboardWsManager {
         // Create envelope-based handler that uses the generated router with smart topic routing
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
             // Parse envelope first for proper topic-based routing
-            if let Ok(envelope) = serde_json::from_value::<crate::generated::ws_messages::Envelope>(data.clone()) {
+            if let Ok(envelope) =
+                serde_json::from_value::<crate::generated::ws_messages::Envelope>(data.clone())
+            {
                 // Use generated topic routing to determine handler
                 match crate::generated::ws_handlers::get_handler_for_topic(&envelope.topic) {
                     Some("dashboard") => {
                         // Dashboard messages: agent events, run updates, workflow execution
                         if let Err(e) = router.route_message(&envelope) {
-                            web_sys::console::error_1(&format!("Dashboard router error: {:?}", e).into());
+                            web_sys::console::error_1(
+                                &format!("Dashboard router error: {:?}", e).into(),
+                            );
                         }
                     }
                     Some("chat") => {
                         // Thread messages handled by chat components - skip
-                        web_sys::console::log_1(&format!("Skipping chat message type: {}", envelope.message_type).into());
+                        web_sys::console::log_1(
+                            &format!("Skipping chat message type: {}", envelope.message_type)
+                                .into(),
+                        );
                         return;
                     }
                     Some("system") => {
                         // System messages (ping/pong/error) handled by WebSocket connection - skip
-                        web_sys::console::log_1(&format!("Skipping system message type: {}", envelope.message_type).into());
+                        web_sys::console::log_1(
+                            &format!("Skipping system message type: {}", envelope.message_type)
+                                .into(),
+                        );
                         return;
                     }
                     Some(other) => {
                         // Other handler types - log and attempt routing anyway
-                        web_sys::console::warn_1(&format!("Unhandled handler type '{}' for topic: {} message type: {}", other, envelope.topic, envelope.message_type).into());
-                        
+                        web_sys::console::warn_1(
+                            &format!(
+                                "Unhandled handler type '{}' for topic: {} message type: {}",
+                                other, envelope.topic, envelope.message_type
+                            )
+                            .into(),
+                        );
+
                         // Fallback: try dashboard routing for unknown handlers
                         if let Err(e) = router.route_message(&envelope) {
-                            web_sys::console::error_1(&format!("Fallback router error: {:?}", e).into());
+                            web_sys::console::error_1(
+                                &format!("Fallback router error: {:?}", e).into(),
+                            );
                         }
                     }
                     None => {
                         // Unknown topic pattern - log and attempt routing anyway
-                        web_sys::console::warn_1(&format!("Unknown topic pattern: {} for message type: {}", envelope.topic, envelope.message_type).into());
-                        
+                        web_sys::console::warn_1(
+                            &format!(
+                                "Unknown topic pattern: {} for message type: {}",
+                                envelope.topic, envelope.message_type
+                            )
+                            .into(),
+                        );
+
                         // Fallback: try dashboard routing for unknown patterns
                         if let Err(e) = router.route_message(&envelope) {
-                            web_sys::console::error_1(&format!("Fallback router error: {:?}", e).into());
+                            web_sys::console::error_1(
+                                &format!("Fallback router error: {:?}", e).into(),
+                            );
                         }
                     }
                 }
             } else {
                 web_sys::console::warn_1(
-                    &format!("DashboardWsManager: Failed to parse envelope from WebSocket data").into(),
+                    &format!("DashboardWsManager: Failed to parse envelope from WebSocket data")
+                        .into(),
                 );
             }
         }));

@@ -117,7 +117,8 @@ async def test_conditional_workflow_high_branch(db, test_user, sample_agent):
 
             execution = db.query(WorkflowExecution).filter_by(id=execution_id).first()
             assert execution is not None
-            assert execution.status == "success"
+            assert execution.phase == "finished"
+            assert execution.result == "success"
 
             # Check node execution states
             from zerg.models.models import NodeExecutionState
@@ -191,7 +192,8 @@ async def test_conditional_workflow_low_branch(db, test_user, sample_agent):
 
             execution = db.query(WorkflowExecution).filter_by(id=execution_id).first()
             assert execution is not None
-            assert execution.status == "success"
+            assert execution.phase == "finished"
+            assert execution.result == "success"
 
             # Check node execution states
             from zerg.models.models import NodeExecutionState
@@ -290,7 +292,8 @@ async def test_conditional_node_variable_resolution(db, test_user, sample_agent)
             )
 
             assert conditional_state is not None
-            assert conditional_state.status == "completed"
+            assert conditional_state.phase == "finished"
+            assert conditional_state.result == "success"
             assert conditional_state.output["value"]["result"] is True
             assert conditional_state.output["value"]["branch"] == "true"
 

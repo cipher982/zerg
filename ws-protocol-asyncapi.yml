@@ -582,7 +582,7 @@ components:
     # Workflow execution payloads
     NodeStateData:
       type: object
-      required: [execution_id, node_id, status]
+      required: [execution_id, node_id, phase]
       properties:
         execution_id:
           type: integer
@@ -590,29 +590,56 @@ components:
         node_id:
           type: string
           minLength: 1
-        status:
+        # New Phase/Result architecture
+        phase:
           type: string
-          enum: [running, success, failed]
+          enum: [waiting, running, finished]
+          description: "Current execution phase - what is happening NOW"
+        result:
+          type: string
+          enum: [success, failure, cancelled]
+          description: "Execution result - how did it END (only when phase=finished)"
+        attempt_no:
+          type: integer
+          minimum: 1
+          description: "Attempt number for retry tracking"
+        failure_kind:
+          type: string
+          enum: [user, system, timeout, external, unknown]
+          description: "Classification of failure type (only when result=failure)"
+        error_message:
+          type: string
+          description: "Detailed error message for failures"
         output:
           type: object
-        error:
-          type: string
 
     ExecutionFinishedData:
       type: object
-      required: [execution_id, status]
+      required: [execution_id, result]
       properties:
         execution_id:
           type: integer
           minimum: 1
-        status:
+        # New Phase/Result architecture (phase is always "finished" for this message)
+        result:
           type: string
-          enum: [success, failed]
-        error:
+          enum: [success, failure, cancelled]
+          description: "How the execution ended"
+        attempt_no:
+          type: integer
+          minimum: 1
+          description: "Final attempt number"
+        failure_kind:
           type: string
+          enum: [user, system, timeout, external, unknown]
+          description: "Classification of failure type (only when result=failure)"
+        error_message:
+          type: string
+          description: "Detailed error message for failures"
         duration_ms:
           type: integer
           minimum: 0
+          description: "Total execution time in milliseconds"
 
     NodeLogData:
       type: object

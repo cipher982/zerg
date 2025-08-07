@@ -15,7 +15,7 @@ impl From<crate::generated::ws_messages::UserUpdateData> for crate::models::Curr
             email: data.email.unwrap_or_default(),
             display_name: data.display_name,
             avatar_url: data.avatar_url,
-            prefs: None, // Not provided in WebSocket update
+            prefs: None,            // Not provided in WebSocket update
             gmail_connected: false, // Not provided in WebSocket update
         }
     }
@@ -280,14 +280,18 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                         let handler: crate::network::topic_manager::TopicHandler =
                             Rc::new(RefCell::new(move |payload: serde_json::Value| {
                                 // Extract message type and data from envelope-style payload
-                                let message_type = payload.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+                                let message_type = payload
+                                    .get("type")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("unknown");
                                 let message_data = payload.get("data").unwrap_or(&payload);
-                                
+
                                 if message_type == "user_update" {
                                     if let Ok(user_data) = serde_json::from_value::<
                                         crate::generated::ws_messages::UserUpdateData,
-                                    >(message_data.clone())
-                                    {
+                                    >(
+                                        message_data.clone()
+                                    ) {
                                         let profile: crate::models::CurrentUser = user_data.into();
                                         crate::state::dispatch_global_message(
                                             Message::CurrentUserLoaded(profile),
@@ -418,7 +422,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     // Store the received history messages in the agent's thread_messages
                     // Clone messages here before the insert
                     let messages_clone_for_dispatch = messages.clone();
-                    agent_state.thread_messages.insert(active_thread_id, messages);
+                    agent_state
+                        .thread_messages
+                        .insert(active_thread_id, messages);
 
                     // Dispatch a message to update the UI instead of calling render directly
                     // This keeps the update flow consistent
@@ -562,33 +568,34 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 let handler: crate::network::topic_manager::TopicHandler =
                     Rc::new(RefCell::new(move |payload: serde_json::Value| {
                         // Extract message type and data from envelope-style payload
-                        let message_type = payload.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+                        let message_type = payload
+                            .get("type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown");
                         let message_data = payload.get("data").unwrap_or(&payload);
-                        
+
                         if message_type == "node_state" {
                             if let Ok(data) = serde_json::from_value::<
                                 crate::generated::ws_messages::NodeStateData,
                             >(message_data.clone())
                             {
-                                crate::state::dispatch_global_message(
-                                    Message::UpdateNodeStatus {
-                                        node_id: data.node_id.clone(),
-                                        status: data.status.clone(),
-                                    },
-                                );
+                                crate::state::dispatch_global_message(Message::UpdateNodeStatus {
+                                    node_id: data.node_id.clone(),
+                                    phase: data.phase.clone(),
+                                    result: data.result.clone(),
+                                });
                             }
                         } else if message_type == "execution_finished" {
                             if let Ok(data) = serde_json::from_value::<
                                 crate::generated::ws_messages::ExecutionFinishedData,
                             >(message_data.clone())
                             {
-                                crate::state::dispatch_global_message(
-                                    Message::ExecutionFinished {
-                                        execution_id: data.execution_id,
-                                        status: data.status.clone(),
-                                        error: data.error.clone(),
-                                    },
-                                );
+                                crate::state::dispatch_global_message(Message::ExecutionFinished {
+                                    execution_id: data.execution_id,
+                                    phase: "finished".to_string(),
+                                    result: data.result.clone(),
+                                    error: data.error_message.clone(),
+                                });
                             }
                         } else if message_type == "node_log" {
                             if let Ok(data) = serde_json::from_value::<
@@ -832,17 +839,18 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         // -------------------------------------------------------------------
         Message::ExecutionFinished {
             execution_id,
-            status,
+            phase: _,
+            result,
             error,
         } => {
             // Show toast notification for completion
-            let status_msg = if status == "success" {
+            let status_msg = if result == "success" {
                 "Workflow completed successfully"
             } else {
                 "Workflow execution failed"
             };
 
-            if status == "success" {
+            if result == "success" {
                 crate::toast::success(status_msg);
             } else {
                 crate::toast::error(status_msg);
@@ -855,7 +863,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             if let Some(exec) = &mut state.current_execution {
                 if exec.execution_id == 0 || exec.execution_id == execution_id {
                     exec.execution_id = execution_id;
-                    exec.status = if status == "success" {
+                    exec.status = if result == "success" {
                         crate::state::ExecPhase::Success
                     } else {
                         crate::state::ExecPhase::Failed
