@@ -15,35 +15,35 @@ pub fn init_models_websocket() -> Result<(), JsValue> {
         let state = state_ref.borrow();
         (state.ws_client.clone(), state.topic_manager.clone())
     });
-    
+
     // Create a handler for model data
     let models_handler: TopicHandler = Rc::new(RefCell::new(move |data| {
         // Parse models from the WebSocket message data
         web_sys::console::log_1(&format!("Received models: {:?}", data).into());
-        
+
         if let Some(models_array) = data.as_array() {
             // Try to parse into ModelConfig objects
             let parsed_models: Vec<ModelConfig> = models_array
                 .iter()
                 .filter_map(|v| serde_json::from_value(v.clone()).ok())
                 .collect();
-            
+
             // Convert to format used by frontend
             let model_tuples = parsed_models
                 .iter()
                 .map(|m| (m.id.clone(), m.display_name.clone()))
                 .collect();
-            
+
             // Update app state with model data
             state::APP_STATE.with(|state| {
                 let mut state = state.borrow_mut();
                 state.available_models = model_tuples;
-                
+
                 // If no model is selected yet, select the first one
                 if state.selected_model.is_empty() && !state.available_models.is_empty() {
                     state.selected_model = state.available_models[0].0.clone();
                 }
-                
+
                 // Update UI if needed
                 crate::state::AppState::refresh_ui_after_state_change().unwrap_or_else(|e| {
                     web_sys::console::error_1(&format!("Error refreshing UI: {:?}", e).into());
@@ -51,16 +51,16 @@ pub fn init_models_websocket() -> Result<(), JsValue> {
             });
         }
     }));
-    
+
     // Subscribe to the models topic
     {
         let mut topic_manager = topic_manager_rc.borrow_mut();
         topic_manager.subscribe(MODELS_TOPIC.to_string(), models_handler)?;
     }
-    
+
     // Send a request for models data
     request_models()?;
-    
+
     Ok(())
 }
 
@@ -70,19 +70,19 @@ pub fn request_models() -> Result<(), JsValue> {
         let state = state.borrow();
         state.ws_client.clone()
     });
-    
+
     // Create models request message
     let msg = builders::create_models_request();
-    
+
     // Serialize and send
     let msg_json = serde_json::to_string(&msg)
         .map_err(|e| JsValue::from_str(&format!("Error serializing models request: {}", e)))?;
-    
+
     // Send the message
     let ws_client = ws_client_rc.borrow();
     ws_client.send_serialized_message(&msg_json)?;
-    
+
     web_sys::console::log_1(&"Sent models request via WebSocket".into());
-    
+
     Ok(())
-} 
+}

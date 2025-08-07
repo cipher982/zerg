@@ -15,7 +15,8 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     crate::models::NodeType::Tool { .. }
                 ) {
                     // Store the tool config in the node's config field
-                    node.config.tool_config = Some(serde_json::to_value(config).unwrap_or_default());
+                    node.config.tool_config =
+                        Some(serde_json::to_value(config).unwrap_or_default());
                     state.state_modified = true;
                     state.mark_dirty();
                 }
@@ -32,7 +33,8 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     if let serde_json::Value::Object(param_map) = params {
                         // Store the trigger params in the node's config field
                         for (key, value) in param_map {
-                            node.config.dynamic_props
+                            node.config
+                                .dynamic_props
                                 .insert(format!("trigger_{}", key), value.clone());
                         }
                     }
@@ -179,9 +181,11 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 }
             } else {
                 // Normal click behavior - open agent config
-                if let Some(agent_id) = state.workflow_nodes.get(node_id).and_then(|n| {
-                    n.config.agent_id
-                }) {
+                if let Some(agent_id) = state
+                    .workflow_nodes
+                    .get(node_id)
+                    .and_then(|n| n.config.agent_id)
+                {
                     cmds.push(Command::SendMessage(Message::EditAgent(agent_id)));
                 }
             }
@@ -352,15 +356,32 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             }
             true
         }
-        Message::UpdateNodeStatus { node_id, status } => {
+        Message::UpdateNodeStatus { node_id, phase, result } => {
             if let Some(node) = state.workflow_nodes.get_mut(node_id) {
-                use crate::models::NodeExecStatus;
+                use crate::models::{NodeExecStatus, Phase, ExecutionResult};
 
-                let (color, exec_status) = match status.as_str() {
-                    "running" | "processing" => ("#fcd34d", NodeExecStatus::Running), // amber-300
-                    "success" | "complete" => ("#86efac", NodeExecStatus::Success),   // green-300
-                    "failed" | "error" => ("#fca5a5", NodeExecStatus::Failed),        // red-300
-                    _ => ("#e0e7ff", NodeExecStatus::Idle),                           // indigo-100
+                // Convert phase/result to NodeExecStatus using the From implementation
+                let phase_enum = match phase.as_str() {
+                    "waiting" => Phase::Waiting,
+                    "running" => Phase::Running,
+                    "finished" => Phase::Finished,
+                    _ => Phase::Waiting,
+                };
+
+                let result_enum = result.as_ref().and_then(|r| match r.as_str() {
+                    "success" => Some(ExecutionResult::Success),
+                    "failure" => Some(ExecutionResult::Failure),
+                    "cancelled" => Some(ExecutionResult::Cancelled),
+                    _ => None,
+                });
+
+                let exec_status: NodeExecStatus = (phase_enum, result_enum).into();
+
+                let color = match exec_status {
+                    NodeExecStatus::Waiting => "#e0e7ff",      // indigo-100
+                    NodeExecStatus::Running => "#fcd34d",      // amber-300
+                    NodeExecStatus::Completed => "#86efac",    // green-300
+                    NodeExecStatus::Failed => "#fca5a5",       // red-300
                 };
 
                 node.config.color = color.to_string();
@@ -370,7 +391,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
 
                 // Start transition animations for success/error states
                 match exec_status {
-                    NodeExecStatus::Success => {
+                    NodeExecStatus::Completed => {
                         let now = js_sys::Date::now();
                         if let Some(ui_node_state) = state.ui_state.get_mut(node_id) {
                             ui_node_state.transition_animation =
@@ -401,17 +422,23 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     if let Some(agent) = state.agents.get_mut(&agent_id) {
                         // Only update agent status for legitimate workflow execution status changes
                         // that come from the backend workflow engine, not UI-only updates
-                        let should_update_agent_status = match status.as_str() {
-                            "running" | "success" | "failed" => true, // Valid workflow execution statuses
-                            _ => false, // Skip UI-only statuses like "processing", "complete", etc.
+                        let should_update_agent_status = match phase.as_str() {
+                            "running" => true, // Node is running
+                            "finished" => true, // Node finished (check result for success/failure)
+                            _ => false, // Skip waiting or other states
                         };
 
                         if should_update_agent_status {
-                            // Map node execution status to valid agent status
-                            let agent_status = match status.as_str() {
+                            // Map node execution phase/result to valid agent status
+                            let agent_status = match phase.as_str() {
                                 "running" => "running",
-                                "success" => "idle", // Node completed, agent goes back to idle
-                                "failed" => "error",
+                                "finished" => {
+                                    // Check the result to determine agent status
+                                    match result.as_ref().map(|r| r.as_str()).unwrap_or("failure") {
+                                        "success" => "idle", // Node completed successfully, agent goes back to idle
+                                        _ => "error", // Failed or cancelled
+                                    }
+                                },
                                 _ => return true, // Should not reach here due to filter above
                             };
 
@@ -455,10 +482,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         }
                     }
                 }
-                
+
                 // Update connection animations for all edges involving this node
                 let is_running = exec_status == NodeExecStatus::Running;
-                
+
                 // Find edges where this node is the source or target
                 if let Some(current_workflow_id) = state.current_workflow_id {
                     if let Some(workflow) = state.workflows.get(&current_workflow_id) {
@@ -469,15 +496,15 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                                         from_node_id: edge.from_node_id.clone(),
                                         to_node_id: edge.to_node_id.clone(),
                                         is_executing: is_running,
-                                    }
+                                    },
                                 ));
                             }
                         }
                     }
                 }
-                
+
                 // Connection animation logic is handled outside the mutable borrow scope
-                
+
                 state.state_modified = true;
 
                 // Refresh results panel for node status updates via command
@@ -485,11 +512,11 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     // Removed: let _ = crate::components::execution_results_panel::refresh_results_panel();
                 })));
             }
-            
+
             // Handle connection animation updates outside the mutable borrow scope
-            // Determine if the node is running based on status
-            let is_running = matches!(status.as_str(), "running" | "processing");
-            
+            // Determine if the node is running based on phase
+            let is_running = phase.as_str() == "running";
+
             // Find workflow edges involving this node
             if let Some(current_workflow_id) = state.current_workflow_id {
                 if let Some(workflow) = state.workflows.get(&current_workflow_id) {
@@ -500,16 +527,17 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                                     from_node_id: edge.from_node_id.clone(),
                                     to_node_id: edge.to_node_id.clone(),
                                     is_executing: is_running,
-                                }
+                                },
                             ));
                         }
                     }
                 }
             }
-            
+
             // Handle legacy parent-child connections
             // Find all child nodes of this node
-            let child_connections: Vec<_> = state.workflow_nodes
+            let child_connections: Vec<_> = state
+                .workflow_nodes
                 .iter()
                 .filter_map(|(_, other_node)| {
                     if other_node.config.parent_id == Some(node_id.clone()) {
@@ -519,7 +547,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     }
                 })
                 .collect();
-            
+
             // Add messages for child connections
             for (from_id, to_id) in child_connections {
                 cmds.push(Command::SendMessage(
@@ -527,10 +555,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         from_node_id: from_id,
                         to_node_id: to_id,
                         is_executing: is_running,
-                    }
+                    },
                 ));
             }
-            
+
             // Add message for parent connection if this node has a parent
             if let Some(node) = state.workflow_nodes.get(node_id) {
                 if let Some(parent_id) = &node.config.parent_id {
@@ -539,39 +567,47 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                             from_node_id: parent_id.clone(),
                             to_node_id: node_id.clone(),
                             is_executing: is_running,
-                        }
+                        },
                     ));
                 }
             }
-            
+
             true
         }
-        
-        Message::UpdateConnectionAnimation { from_node_id, to_node_id, is_executing } => {
+
+        Message::UpdateConnectionAnimation {
+            from_node_id,
+            to_node_id,
+            is_executing,
+        } => {
             // Create a unique edge key for this connection
             let edge_key = format!("{}:{}", from_node_id, to_node_id);
-            
+
             // Update or create the edge state
             let edge_state = state.ui_edge_state.entry(edge_key).or_default();
             edge_state.is_executing = *is_executing;
-            
+
             // Also update based on the individual node states if available
-            let source_running = state.ui_state.get(from_node_id)
+            let source_running = state
+                .ui_state
+                .get(from_node_id)
                 .and_then(|ui_state| ui_state.exec_status)
                 .map(|status| status == crate::models::NodeExecStatus::Running)
                 .unwrap_or(false);
-                
-            let target_running = state.ui_state.get(to_node_id)
+
+            let target_running = state
+                .ui_state
+                .get(to_node_id)
                 .and_then(|ui_state| ui_state.exec_status)
                 .map(|status| status == crate::models::NodeExecStatus::Running)
                 .unwrap_or(false);
-            
+
             edge_state.update_from_nodes(source_running, target_running);
-            
+
             state.state_modified = true;
             true
         }
-        
+
         Message::AnimationTick => {
             // Check if there are active animations or continuous background animations that need rendering
             let has_background_particles = state.particle_system.is_some();

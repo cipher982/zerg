@@ -1,5 +1,5 @@
 # AUTO-GENERATED FILE - DO NOT EDIT
-# Generated from ws-protocol-asyncapi.yml at 2025-08-02T15:24:08.840834Z
+# Generated from ws-protocol-asyncapi.yml at 2025-08-07T08:29:10.798599Z
 # Using AsyncAPI 3.0 + Modern Python Code Generation
 #
 # This file contains strongly-typed WebSocket message definitions.
@@ -211,18 +211,31 @@ class NodeStateData(BaseModel):
 
     execution_id: int = Field(ge=1, description="")
     node_id: str = Field(min_length=1, description="")
-    status: Literal["running", "success", "failed"]
+    phase: Literal["waiting", "running", "finished"] = Field(
+        description="Current execution phase - what is happening NOW"
+    )
+    result: Optional[Literal["success", "failure", "cancelled"]] = Field(
+        default=None, description="Execution result - how did it END (only when phase=finished)"
+    )
+    attempt_no: Optional[int] = Field(default=None, ge=1, description="Attempt number for retry tracking")
+    failure_kind: Optional[Literal["user", "system", "timeout", "external", "unknown"]] = Field(
+        default=None, description="Classification of failure type (only when result=failure)"
+    )
+    error_message: Optional[str] = Field(default=None, description="Detailed error message for failures")
     output: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
 
 
 class ExecutionFinishedData(BaseModel):
     """Payload for ExecutionFinishedData messages"""
 
     execution_id: int = Field(ge=1, description="")
-    status: Literal["success", "failed"]
-    error: Optional[str] = None
-    duration_ms: Optional[int] = Field(default=None, ge=0, description="")
+    result: Literal["success", "failure", "cancelled"] = Field(description="How the execution ended")
+    attempt_no: Optional[int] = Field(default=None, ge=1, description="Final attempt number")
+    failure_kind: Optional[Literal["user", "system", "timeout", "external", "unknown"]] = Field(
+        default=None, description="Classification of failure type (only when result=failure)"
+    )
+    error_message: Optional[str] = Field(default=None, description="Detailed error message for failures")
+    duration_ms: Optional[int] = Field(default=None, ge=0, description="Total execution time in milliseconds")
 
 
 class NodeLogData(BaseModel):

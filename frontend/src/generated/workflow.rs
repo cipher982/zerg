@@ -3,7 +3,6 @@
 #![allow(clippy::match_single_binding)]
 #![allow(clippy::clone_on_copy)]
 
-
 // Type alias for compatibility
 type WorkflowNodeType = NodeType;
 
@@ -415,10 +414,7 @@ pub mod builder {
     }
     #[derive(Clone, Debug)]
     pub struct WorkflowNode {
-        config: ::std::result::Result<
-            crate::models::NodeConfig,
-            ::std::string::String,
-        >,
+        config: ::std::result::Result<crate::models::NodeConfig, ::std::string::String>,
         node_id: ::std::result::Result<::std::string::String, ::std::string::String>,
         node_type: ::std::result::Result<super::NodeType, ::std::string::String>,
         position: ::std::result::Result<
@@ -439,9 +435,7 @@ pub mod builder {
     impl WorkflowNode {
         pub fn config<T>(mut self, value: T) -> Self
         where
-            T: ::std::convert::TryInto<
-                crate::models::NodeConfig,
-            >,
+            T: ::std::convert::TryInto<crate::models::NodeConfig>,
             T::Error: ::std::fmt::Display,
         {
             self.config = value

@@ -3,11 +3,13 @@ use std::rc::Rc;
 use wasm_bindgen::JsValue;
 use web_sys;
 
+use crate::generated::ws_handlers::{ChatHandler, ChatMessageRouter};
+use crate::generated::ws_messages::{
+    AssistantIdData, StreamChunkData, StreamEndData, StreamStartData, ThreadMessageData,
+};
 use crate::messages::Message; // UI message enum
 use crate::models::ApiThreadMessage;
 use crate::network::topic_manager::{ITopicManager, TopicHandler};
-use crate::generated::ws_messages::{ThreadMessageData, StreamChunkData, AssistantIdData, StreamStartData, StreamEndData};
-use crate::generated::ws_handlers::{ChatHandler, ChatMessageRouter};
 use crate::state::dispatch_global_message; // Import dispatch_global_message
 
 // Conversion from generated ThreadMessageData to ApiThreadMessage
@@ -18,14 +20,40 @@ impl From<ThreadMessageData> for ApiThreadMessage {
         ApiThreadMessage {
             id: message.get("id").and_then(|v| v.as_u64()).map(|v| v as u32),
             thread_id: data.thread_id,
-            role: message.get("role").and_then(|v| v.as_str()).unwrap_or("unknown").to_string(),
-            content: message.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-            timestamp: message.get("timestamp").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            message_type: message.get("message_type").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            tool_name: message.get("tool_name").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            tool_call_id: message.get("tool_call_id").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            tool_input: message.get("tool_input").and_then(|v| v.as_str()).map(|s| s.to_string()),
-            parent_id: message.get("parent_id").and_then(|v| v.as_u64()).map(|v| v as u32),
+            role: message
+                .get("role")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string(),
+            content: message
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            timestamp: message
+                .get("timestamp")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            message_type: message
+                .get("message_type")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            tool_name: message
+                .get("tool_name")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            tool_call_id: message
+                .get("tool_call_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            tool_input: message
+                .get("tool_input")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            parent_id: message
+                .get("parent_id")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32),
         }
     }
 }
@@ -140,24 +168,37 @@ impl ChatViewWsManager {
 
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
             web_sys::console::log_1(
-                &format!("🔍 [CHAT WS] Received message for thread {}: {:?}", thread_id, data).into(),
+                &format!(
+                    "🔍 [CHAT WS] Received message for thread {}: {:?}",
+                    thread_id, data
+                )
+                .into(),
             );
-            
+
             // Extract message type from envelope format
-            let message_type = data.get("message_type").and_then(|v| v.as_str()).unwrap_or("unknown");
-            
+            let message_type = data
+                .get("message_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+
             web_sys::console::log_1(
                 &format!("🔍 [CHAT WS] Processing message type: {}", message_type).into(),
             );
-            
+
             // Use the generated router for chat messages
-            if let Ok(envelope) = serde_json::from_value::<crate::generated::ws_messages::Envelope>(data.clone()) {
+            if let Ok(envelope) =
+                serde_json::from_value::<crate::generated::ws_messages::Envelope>(data.clone())
+            {
                 if let Err(e) = router.route_message(&envelope) {
                     web_sys::console::error_1(&format!("Chat router error: {:?}", e).into());
                 }
             } else {
                 web_sys::console::warn_1(
-                    &format!("ChatViewWsManager: Failed to parse envelope for message type: {}", message_type).into(),
+                    &format!(
+                        "ChatViewWsManager: Failed to parse envelope for message type: {}",
+                        message_type
+                    )
+                    .into(),
                 );
             }
         }));

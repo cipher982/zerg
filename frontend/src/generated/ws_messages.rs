@@ -1,5 +1,5 @@
 // AUTO-GENERATED FILE - DO NOT EDIT
-// Generated from ws-protocol-asyncapi.yml at 2025-08-02T15:24:08.841343Z
+// Generated from ws-protocol-asyncapi.yml at 2025-08-07T08:29:10.799132Z
 // Using AsyncAPI 3.0 + Modern Rust Code Generation
 //
 // This file contains strongly-typed WebSocket message definitions.
@@ -184,16 +184,21 @@ pub struct UserUpdateData {
 pub struct NodeStateData {
     pub execution_id: u32,
     pub node_id: String,
-    pub status: String,
+    pub phase: String,
+    pub result: Option<String>,
+    pub attempt_no: Option<u32>,
+    pub failure_kind: Option<String>,
+    pub error_message: Option<String>,
     pub output: Option<Value>,
-    pub error: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ExecutionFinishedData {
     pub execution_id: u32,
-    pub status: String,
-    pub error: Option<String>,
+    pub result: String,
+    pub attempt_no: Option<u32>,
+    pub failure_kind: Option<String>,
+    pub error_message: Option<String>,
     pub duration_ms: Option<u32>,
 }
 

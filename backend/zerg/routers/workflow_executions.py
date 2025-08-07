@@ -91,11 +91,14 @@ async def start_reserved_execution(
     if not execution or execution.workflow.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Execution not found")
 
-    if execution.status != "reserved":
-        raise HTTPException(status_code=400, detail="Execution is not in reserved state")
+    if execution.phase != "waiting":
+        raise HTTPException(status_code=400, detail="Execution is not in waiting state")
 
-    # Update status to running
-    execution.status = "running"
+    # Update phase to running using ExecutionStateMachine
+    from zerg.services.execution_state import ExecutionStateMachine
+
+    ExecutionStateMachine.mark_running(execution)
+    execution.started_at = datetime.now(timezone.utc)
     db.commit()
 
     # Start execution asynchronously using ensure_future for proper task management
@@ -103,10 +106,8 @@ async def start_reserved_execution(
 
     async def run_execution():
         try:
-            # Update the execution status and start time manually
-            execution.status = "running"
-            execution.started_at = datetime.now(timezone.utc)
-            db.commit()
+            # Execution state is already handled above
+            pass
 
             # Execute using the simplified engine (it will use the existing execution)
             await workflow_engine._execute_workflow_internal(execution.workflow_id, execution, db)
@@ -133,7 +134,7 @@ def get_execution_status(
     execution = crud.get_workflow_execution(db, execution_id)
     if not execution or execution.workflow.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Execution not found")
-    return {"status": execution.status}
+    return {"phase": execution.phase, "result": execution.result}
 
 
 @router.get("/{execution_id}/logs")
@@ -205,11 +206,12 @@ def cancel_execution(
     if execution is None or execution.workflow.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Execution not found")
 
-    if execution.status in {"success", "failed", "cancelled"}:
+    if execution.phase == "finished":
         raise HTTPException(status_code=409, detail="Execution already finished")
 
-    execution.status = "cancelled"
-    execution.cancel_reason = payload.reason
+    from zerg.services.execution_state import ExecutionStateMachine
+
+    ExecutionStateMachine.mark_cancelled(execution, reason=payload.reason)
     execution.finished_at = utc_now_naive()
     db.commit()
 

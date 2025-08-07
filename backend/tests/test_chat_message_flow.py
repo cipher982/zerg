@@ -111,19 +111,19 @@ class TestChatMessageFlow:
                 "type": MessageType.SEND_MESSAGE,
                 "thread_id": test_thread.id,
                 "content": content,
-                "message_id": f"test-msg-{idx+1}",
+                "message_id": f"test-msg-{idx + 1}",
             }
-            logger.info(f"Sending message {idx+1}: {message}")
+            logger.info(f"Sending message {idx + 1}: {message}")
             ws_client.send_json(message)
 
             # Verify response for each message
             raw = ws_client.receive_json()
-            logger.info(f"Received response for message {idx+1}: {raw}")
+            logger.info(f"Received response for message {idx + 1}: {raw}")
 
             # Check for error
             if raw["type"] == "error":
-                logger.error(f"Error response for message {idx+1}: {raw}")
-                assert False, f"Error sending message {idx+1}: {raw.get('error')}"
+                logger.error(f"Error response for message {idx + 1}: {raw}")
+                assert False, f"Error sending message {idx + 1}: {raw.get('error')}"
 
             # Check envelope format
             assert raw["type"] == MessageType.THREAD_MESSAGE

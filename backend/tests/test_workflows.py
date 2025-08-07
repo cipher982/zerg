@@ -209,7 +209,7 @@ def test_create_workflow_with_large_canvas(client: TestClient, test_user: User, 
             {"id": f"node_{i}", "type": "trigger", "position": {"x": 0, "y": 0}, "config": {"trigger_type": "manual"}}
             for i in range(1000)
         ],
-        "edges": [{"from_node_id": f"node_{i}", "to_node_id": f"node_{i+1}", "config": {}} for i in range(999)],
+        "edges": [{"from_node_id": f"node_{i}", "to_node_id": f"node_{i + 1}", "config": {}} for i in range(999)],
     }
     payload = {
         "name": "Large Canvas Workflow",

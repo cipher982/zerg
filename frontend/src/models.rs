@@ -190,13 +190,13 @@ pub struct NodeConfig {
     pub width: f64,
     #[serde(default = "default_height")]
     pub height: f64,
-    
+
     // Display properties
     #[serde(default = "default_color")]
     pub color: String,
     #[serde(default = "default_text")]
     pub text: String,
-    
+
     // Node-specific properties
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<u32>,
@@ -208,17 +208,25 @@ pub struct NodeConfig {
     pub server_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_config: Option<serde_json::Value>,
-    
+
     // Dynamic properties for extensibility (trigger params, etc.)
     #[serde(flatten)]
     pub dynamic_props: std::collections::HashMap<String, serde_json::Value>,
 }
 
 // Default value functions for serde
-fn default_width() -> f64 { 200.0 }
-fn default_height() -> f64 { 80.0 }
-fn default_color() -> String { "#3b82f6".to_string() }
-fn default_text() -> String { "Node".to_string() }
+fn default_width() -> f64 {
+    200.0
+}
+fn default_height() -> f64 {
+    80.0
+}
+fn default_color() -> String {
+    "#3b82f6".to_string()
+}
+fn default_text() -> String {
+    "Node".to_string()
+}
 
 impl Default for NodeConfig {
     fn default() -> Self {
@@ -248,7 +256,7 @@ impl NodeConfig {
             ..Default::default()
         }
     }
-    
+
     /// Create NodeConfig for an agent
     pub fn agent(x: f64, y: f64, agent_id: u32, text: String) -> Self {
         Self {
@@ -260,7 +268,7 @@ impl NodeConfig {
             ..Default::default()
         }
     }
-    
+
     /// Create NodeConfig for a trigger
     pub fn trigger(x: f64, y: f64, text: String) -> Self {
         Self {
@@ -272,7 +280,6 @@ impl NodeConfig {
         }
     }
 }
-
 
 // Helper methods for WorkflowNode property access
 impl WorkflowNode {
@@ -382,8 +389,16 @@ impl WorkflowNode {
                     "AgentIdentity" => NodeType::AgentIdentity,
                     "GenericNode" => NodeType::GenericNode,
                     "Tool" => NodeType::Tool {
-                        tool_name: self.config.tool_name.clone().unwrap_or_else(|| "unknown".to_string()),
-                        server_name: self.config.server_name.clone().unwrap_or_else(|| "unknown".to_string()),
+                        tool_name: self
+                            .config
+                            .tool_name
+                            .clone()
+                            .unwrap_or_else(|| "unknown".to_string()),
+                        server_name: self
+                            .config
+                            .server_name
+                            .clone()
+                            .unwrap_or_else(|| "unknown".to_string()),
                         config: crate::models::ToolConfig {
                             static_params: std::collections::HashMap::new(),
                             input_mappings: std::collections::HashMap::new(),
@@ -558,13 +573,53 @@ impl UiEdgeState {
 
 pub type UiEdgeStateMap = std::collections::HashMap<String, UiEdgeState>;
 
-/// Execution status emitted via WebSocket (running/success/failed).
+/// Phase/Result execution state architecture
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Phase {
+    Waiting,
+    Running,
+    Finished,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExecutionResult {
+    Success,
+    Failure,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FailureKind {
+    User,
+    System,
+    Timeout,
+    External,
+    Unknown,
+}
+
+/// Node execution status for UI display
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeExecStatus {
-    Idle,
+    Waiting,
     Running,
-    Success,
+    Completed,
     Failed,
+}
+
+impl From<(Phase, Option<ExecutionResult>)> for NodeExecStatus {
+    fn from((phase, result): (Phase, Option<ExecutionResult>)) -> Self {
+        match phase {
+            Phase::Waiting => NodeExecStatus::Waiting,
+            Phase::Running => NodeExecStatus::Running,
+            Phase::Finished => match result {
+                Some(ExecutionResult::Success) => NodeExecStatus::Completed,
+                Some(ExecutionResult::Failure) | Some(ExecutionResult::Cancelled) => {
+                    NodeExecStatus::Failed
+                }
+                None => NodeExecStatus::Failed, // Invalid state - shouldn't happen
+            },
+        }
+    }
 }
 
 /// Transition animation state for visual effects on status changes
@@ -638,9 +693,7 @@ impl ApiWorkflow {
             .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
-                    .filter_map(|v| {
-                        serde_json::from_value(v.clone()).ok()
-                    })
+                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
                     .collect()
             })
             .unwrap_or_default()
@@ -655,7 +708,7 @@ impl ApiWorkflow {
                 arr.iter()
                     .filter_map(|v| {
                         let mut edge: WorkflowEdge = serde_json::from_value(v.clone()).ok()?;
-                        
+
                         // Fix double-nested config structure from backend
                         if let Some(config_obj) = edge.config.get("config") {
                             if let Some(inner_config) = config_obj.as_object() {
@@ -663,7 +716,7 @@ impl ApiWorkflow {
                                 edge.config = inner_config.clone();
                             }
                         }
-                        
+
                         Some(edge)
                     })
                     .collect()

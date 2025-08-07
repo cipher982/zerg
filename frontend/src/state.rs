@@ -1,7 +1,7 @@
 use crate::models::ApiAgentRun;
 use crate::models::{
-    ApiAgent, ApiThread, ApiThreadMessage, ApiWorkflow, NodeType, Trigger, UiNodeState, UiStateMap,
-    UiEdgeStateMap, WorkflowEdge, WorkflowNode, WorkflowNodeType,
+    ApiAgent, ApiThread, ApiThreadMessage, ApiWorkflow, NodeType, Trigger, UiEdgeStateMap,
+    UiNodeState, UiStateMap, WorkflowEdge, WorkflowNode, WorkflowNodeType,
 };
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -217,8 +217,18 @@ impl AgentState {
     pub fn get_threads_sorted(&self) -> Vec<&ApiThread> {
         let mut threads: Vec<&ApiThread> = self.threads.values().collect();
         threads.sort_by(|a, b| {
-            let a_time = a.updated_at.as_ref().or(a.created_at.as_ref()).map(|s| s.as_str()).unwrap_or("");
-            let b_time = b.updated_at.as_ref().or(b.created_at.as_ref()).map(|s| s.as_str()).unwrap_or("");
+            let a_time = a
+                .updated_at
+                .as_ref()
+                .or(a.created_at.as_ref())
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            let b_time = b
+                .updated_at
+                .as_ref()
+                .or(b.created_at.as_ref())
+                .map(|s| s.as_str())
+                .unwrap_or("");
             b_time.cmp(a_time) // Newest first
         });
         threads
@@ -232,7 +242,10 @@ impl AgentState {
     /// Get messages for the current thread
     pub fn current_thread_messages(&self) -> Vec<&ApiThreadMessage> {
         if let Some(thread_id) = self.current_thread_id {
-            self.thread_messages.get(&thread_id).map(|msgs| msgs.iter().collect()).unwrap_or_default()
+            self.thread_messages
+                .get(&thread_id)
+                .map(|msgs| msgs.iter().collect())
+                .unwrap_or_default()
         } else {
             Vec::new()
         }
@@ -361,7 +374,7 @@ pub struct AppState {
     pub current_agent_id: Option<u32>,
     /// Loading state for chat interface
     pub is_chat_loading: bool,
-    
+
     // New field for handling streaming responses
     /// Tracks the **current assistant message** id for every thread that is
     /// actively streaming.  `None` means we have not yet received the
@@ -647,12 +660,12 @@ impl AppState {
             creating_workflow: false,
             deleting_workflow: None,
             updating_workflow: None,
-            
+
             // Agent-Centric State
             agent_states: HashMap::new(),
             current_agent_id: None,
             is_chat_loading: false,
-            
+
             active_streams: HashMap::new(),
             ws_client: ws_client_rc,
             topic_manager: topic_manager_rc,
@@ -818,7 +831,11 @@ impl AppState {
     pub fn current_assistant_id(&self, thread_id: u32) -> Option<u32> {
         // First check agent-scoped state
         if let Some(agent_state) = self.current_agent() {
-            if let Some(assistant_id) = agent_state.active_streams.get(&thread_id).and_then(|opt| *opt) {
+            if let Some(assistant_id) = agent_state
+                .active_streams
+                .get(&thread_id)
+                .and_then(|opt| *opt)
+            {
                 return Some(assistant_id);
             }
         }
@@ -832,12 +849,14 @@ impl AppState {
 
     /// Get the currently active agent state
     pub fn current_agent(&self) -> Option<&AgentState> {
-        self.current_agent_id.and_then(|id| self.agent_states.get(&id))
+        self.current_agent_id
+            .and_then(|id| self.agent_states.get(&id))
     }
 
     /// Get the currently active agent state (mutable)
     pub fn current_agent_mut(&mut self) -> Option<&mut AgentState> {
-        self.current_agent_id.and_then(|id| self.agent_states.get_mut(&id))
+        self.current_agent_id
+            .and_then(|id| self.agent_states.get_mut(&id))
     }
 
     /// Get agent state by id
@@ -859,7 +878,8 @@ impl AppState {
 
     /// Get the current thread for the current agent
     pub fn current_agent_current_thread(&self) -> Option<&ApiThread> {
-        self.current_agent().and_then(|agent| agent.current_thread())
+        self.current_agent()
+            .and_then(|agent| agent.current_thread())
     }
 
     /// Get messages for the current thread of the current agent

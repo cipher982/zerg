@@ -98,7 +98,9 @@ def test_agent_connection_workflow_execution(
     print(f"Workflow execution status: {status_data}")
 
     # The execution should have processed the connection
-    assert status_data["status"] in ["success", "failed", "running"]
+    assert status_data["phase"] in ["running", "finished"]
+    if status_data["phase"] == "finished":
+        assert status_data["result"] in ["success", "failure"]
 
     # Check that node states were created for both connected agents
     from zerg.models.models import NodeExecutionState

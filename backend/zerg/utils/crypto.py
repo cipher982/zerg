@@ -15,9 +15,7 @@ try:
     from cryptography.fernet import Fernet  # type: ignore
 except ModuleNotFoundError as exc:  # pragma: no cover – mandatory dep missing
     raise SystemExit(
-        "cryptography package is required.  Install it via\n"
-        "  uv pip install cryptography\n"
-        "before running the backend."
+        "cryptography package is required.  Install it via\n  uv pip install cryptography\nbefore running the backend."
     ) from exc
 
 

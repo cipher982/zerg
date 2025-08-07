@@ -3,9 +3,7 @@
 
 use crate::components::modal;
 use crate::messages::Message;
-use crate::models::{
-    NodeType, TriggerType, WorkflowNode,
-};
+use crate::models::{NodeType, TriggerType, WorkflowNode};
 use crate::state::dispatch_global_message;
 use wasm_bindgen::prelude::*;
 use web_sys::Document;

@@ -443,26 +443,26 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                         crate::state::APP_STATE.with(|state_ref| {
                             let mut state = state_ref.borrow_mut();
                             state.agents.clear();
-                            
+
                             // Add each agent to the HashMap
                             for agent in &agents {
                                 if let Some(id) = agent.id {
                                     state.agents.insert(id, agent.clone());
                                 }
                             }
-                            
+
                             // IMPORTANT: We no longer automatically create nodes for agents
                             // This is a key part of separating agent domain logic from node UI logic
-                            
+
                             // Update loading state flags after the API call completes
                             state.is_loading = false;
                             state.data_loaded = true;
-                            
+
                             // If there are no nodes but we have agents, show a message to user
                             if state.workflow_nodes.is_empty() && !state.agents.is_empty() {
                                 // Show message that agents are loaded but not displayed
                                 web_sys::console::log_1(&"Agents loaded but no nodes exist. Use 'Generate Canvas' to visualize agents.".into());
-                                
+
                                 // In a real app, you might want to display a UI message or button
                                 // that lets users generate nodes for their agents
                             }
@@ -821,7 +821,8 @@ pub fn save_canvas_data_to_api(app_state: &AppState) {
             serde_json::to_value(&serde_json::json!({
                 "nodes": workflow.get_nodes(),
                 "edges": workflow.get_edges()
-            })).unwrap_or_else(|_| {
+            }))
+            .unwrap_or_else(|_| {
                 // Fallback to empty structure if serialization fails
                 serde_json::json!({
                     "nodes": Vec::<serde_json::Value>::new(),

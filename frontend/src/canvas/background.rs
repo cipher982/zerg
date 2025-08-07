@@ -47,10 +47,8 @@ impl Particle {
     pub fn draw(&self, context: &CanvasRenderingContext2d) {
         context.begin_path();
         let _ = context.arc(self.x, self.y, self.radius, 0.0, 2.0 * std::f64::consts::PI);
-        let fill_style = wasm_bindgen::JsValue::from_str(&format!(
-            "rgba(100, 255, 218, {})",
-            self.alpha
-        ));
+        let fill_style =
+            wasm_bindgen::JsValue::from_str(&format!("rgba(100, 255, 218, {})", self.alpha));
         #[allow(deprecated)]
         context.set_fill_style(&fill_style);
         context.fill();

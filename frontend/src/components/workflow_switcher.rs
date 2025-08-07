@@ -545,7 +545,7 @@ pub fn update_run_button(document: &Document) -> Result<(), JsValue> {
                     state.ui_state.get(*id).map_or(false, |ui| {
                         matches!(
                             ui.exec_status,
-                            Some(NodeExecStatus::Success) | Some(NodeExecStatus::Failed)
+                            Some(NodeExecStatus::Completed) | Some(NodeExecStatus::Failed)
                         )
                     })
                 })
@@ -677,8 +677,8 @@ fn show_schedule_modal(workflow_id: u32) {
     let input_html = r#"
         <div class="form-group">
             <label for="cron-expression">Cron Expression:</label>
-            <input type="text" id="cron-expression" class="input w-full" 
-                   placeholder="0 9 * * 1-5" 
+            <input type="text" id="cron-expression" class="input w-full"
+                   placeholder="0 9 * * 1-5"
                    title="Examples: '0 9 * * 1-5' (weekdays at 9 AM), '0 0 * * 0' (Sundays at midnight)">
             <div class="help-text">
                 <p>Examples:</p>

@@ -1,5 +1,5 @@
 //! Fast contract validation binary that runs during `make start`
-//! 
+//!
 //! This validates that frontend data structures serialize to exactly
 //! what the backend API contracts expect, catching runtime errors at build time.
 
@@ -33,7 +33,7 @@ fn main() {
         println!("❌ Raw API contract validation failed");
         process::exit(1);
     }
-    
+
     println!("✅ All contract validation checks passed");
 }
 
@@ -41,7 +41,7 @@ fn main() {
 /// This should FAIL if the frontend sends unmapped semantic types
 fn test_raw_api_contract_validation() -> bool {
     println!("  🌐 Testing raw API contract validation...");
-    
+
     // Create a node with frontend semantic type (the actual problem)
     let node_with_semantic_type = serde_json::json!({
         "id": "test-node",
@@ -49,35 +49,35 @@ fn test_raw_api_contract_validation() -> bool {
         "position": {"x": 100.0, "y": 200.0},
         "config": null
     });
-    
+
     // Try to validate this directly against backend schema
     // This should fail because backend expects "agent", not "AgentIdentity"
     let backend_schema_test = validate_against_backend_schema(&node_with_semantic_type);
-    
+
     if backend_schema_test {
         println!("    ❌ Backend incorrectly accepted semantic type 'AgentIdentity'");
         println!("    💡 This means contract validation is not strict enough");
         return false;
     }
-    
+
     // Now test with a properly mapped type
     let node_with_backend_type = serde_json::json!({
-        "id": "test-node", 
+        "id": "test-node",
         "type": "agent",  // This is what backend expects
         "position": {"x": 100.0, "y": 200.0},
         "config": null
     });
-    
+
     if !validate_against_backend_schema(&node_with_backend_type) {
         println!("    ❌ Backend rejected valid type 'agent'");
         return false;
     }
-    
+
     println!("    ✅ Raw API contract validation passed");
     true
 }
 
-/// Simulate backend schema validation 
+/// Simulate backend schema validation
 /// Returns true if the node type is acceptable to the backend
 fn validate_against_backend_schema(node: &serde_json::Value) -> bool {
     // Simulate backend's Literal["agent", "tool", "trigger", "conditional"] validation
@@ -93,7 +93,7 @@ fn test_workflow_node_contracts() -> bool {
     // Test all actual node types that the frontend creates
     let frontend_types = vec![
         ("AgentIdentity", "Tests agent identity nodes"),
-        ("UserInput", "Tests user input nodes"), 
+        ("UserInput", "Tests user input nodes"),
         ("ResponseOutput", "Tests response output nodes"),
         ("GenericNode", "Tests generic nodes"),
         ("Tool", "Tests tool nodes"),
@@ -102,7 +102,7 @@ fn test_workflow_node_contracts() -> bool {
 
     for (node_type, description) in frontend_types {
         println!("    🔸 {}: {}", node_type, description);
-        
+
         if !test_single_node_type(node_type) {
             return false;
         }
@@ -113,10 +113,7 @@ fn test_workflow_node_contracts() -> bool {
 }
 
 fn test_single_node_type(node_type: &str) -> bool {
-    let position = Position {
-        x: 100.0,
-        y: 200.0
-    };
+    let position = Position { x: 100.0, y: 200.0 };
 
     let node = WorkflowNode {
         id: format!("test-{}-node", node_type.to_lowercase()),
@@ -136,7 +133,7 @@ fn test_single_node_type(node_type: &str) -> bool {
 
     // Verify required fields exist and have correct types
     match serialized.get("id") {
-        Some(serde_json::Value::String(_)) => {},
+        Some(serde_json::Value::String(_)) => {}
         _ => {
             println!("      ❌ {} node missing or invalid 'id' field", node_type);
             return false;
@@ -146,13 +143,18 @@ fn test_single_node_type(node_type: &str) -> bool {
     match serialized.get("type") {
         Some(serde_json::Value::String(type_val)) => {
             if type_val != node_type {
-                println!("      ❌ {} node type mismatch: expected '{}', got '{}'", 
-                    node_type, node_type, type_val);
+                println!(
+                    "      ❌ {} node type mismatch: expected '{}', got '{}'",
+                    node_type, node_type, type_val
+                );
                 return false;
             }
-        },
+        }
         _ => {
-            println!("      ❌ {} node missing or invalid 'type' field", node_type);
+            println!(
+                "      ❌ {} node missing or invalid 'type' field",
+                node_type
+            );
             return false;
         }
     }
@@ -161,12 +163,18 @@ fn test_single_node_type(node_type: &str) -> bool {
         Some(serde_json::Value::Object(pos_obj)) => {
             // Verify position has x and y coordinates
             if !pos_obj.contains_key("x") || !pos_obj.contains_key("y") {
-                println!("      ❌ {} node position missing x or y coordinates", node_type);
+                println!(
+                    "      ❌ {} node position missing x or y coordinates",
+                    node_type
+                );
                 return false;
             }
-        },
+        }
         _ => {
-            println!("      ❌ {} node missing or invalid 'position' field", node_type);
+            println!(
+                "      ❌ {} node missing or invalid 'position' field",
+                node_type
+            );
             return false;
         }
     }
@@ -237,7 +245,7 @@ fn test_canvas_contracts() -> bool {
 
     // Verify canvas structure
     match serialized.get("nodes") {
-        Some(serde_json::Value::Array(_)) => {},
+        Some(serde_json::Value::Array(_)) => {}
         _ => {
             println!("    ❌ Missing or invalid 'nodes' field");
             return false;
@@ -245,7 +253,7 @@ fn test_canvas_contracts() -> bool {
     }
 
     match serialized.get("edges") {
-        Some(serde_json::Value::Array(_)) => {},
+        Some(serde_json::Value::Array(_)) => {}
         _ => {
             println!("    ❌ Missing or invalid 'edges' field");
             return false;
@@ -270,27 +278,48 @@ fn test_backend_type_mapping() -> bool {
 
     // These are the actual mappings from generated_client.rs
     let frontend_to_backend_mappings = vec![
-        ("AgentIdentity", "agent", "Maps agent identity nodes to backend"),
-        ("Tool", "tool", "Maps tool nodes to backend"), 
+        (
+            "AgentIdentity",
+            "agent",
+            "Maps agent identity nodes to backend",
+        ),
+        ("Tool", "tool", "Maps tool nodes to backend"),
         ("Trigger", "trigger", "Maps trigger nodes to backend"),
-        ("UserInput", "conditional", "Maps user input nodes to conditional"),
-        ("ResponseOutput", "conditional", "Maps response output nodes to conditional"),
-        ("GenericNode", "conditional", "Maps generic nodes to conditional"),
+        (
+            "UserInput",
+            "conditional",
+            "Maps user input nodes to conditional",
+        ),
+        (
+            "ResponseOutput",
+            "conditional",
+            "Maps response output nodes to conditional",
+        ),
+        (
+            "GenericNode",
+            "conditional",
+            "Maps generic nodes to conditional",
+        ),
     ];
 
     for (frontend_type, expected_backend_type, description) in frontend_to_backend_mappings {
         println!("    🔸 {}: {}", frontend_type, description);
-        
+
         // Simulate the mapping logic from generated_client.rs
         let mapped_type = map_frontend_to_backend_type(frontend_type);
-        
+
         if mapped_type != expected_backend_type {
-            println!("      ❌ Type mapping failed: {} -> expected '{}', got '{}'", 
-                frontend_type, expected_backend_type, mapped_type);
+            println!(
+                "      ❌ Type mapping failed: {} -> expected '{}', got '{}'",
+                frontend_type, expected_backend_type, mapped_type
+            );
             return false;
         }
-        
-        println!("      ✅ {} -> {} mapping validated", frontend_type, mapped_type);
+
+        println!(
+            "      ✅ {} -> {} mapping validated",
+            frontend_type, mapped_type
+        );
     }
 
     println!("    ✅ Backend type mapping validation passed");
@@ -301,7 +330,7 @@ fn test_backend_type_mapping() -> bool {
 fn map_frontend_to_backend_type(frontend_type: &str) -> &str {
     match frontend_type {
         "AgentIdentity" => "agent",
-        "Tool" => "tool", 
+        "Tool" => "tool",
         "Trigger" => "trigger",
         // All others map to conditional
         "UserInput" | "ResponseOutput" | "GenericNode" | _ => "conditional",
