@@ -54,7 +54,9 @@ class TopicConnectionManager:
         # sufficient given the low contention and keeps the implementation
         # straightforward.  The critical sections are small so the potential
         # throughput impact is negligible compared to network I/O.
-        self._lock: asyncio.Lock = asyncio.Lock()
+        # Use lazy initialization to avoid loop binding issues in tests
+        self._lock: asyncio.Lock | None = None
+        self._lock_loop_id: int | None = None
 
         # Background task that proactively cleans up dead sockets so topics
         # don't accumulate zombie client IDs when a browser tab crashes but
@@ -63,6 +65,24 @@ class TopicConnectionManager:
 
         # Register for relevant events
         self._setup_event_handlers()
+
+    def _get_lock(self) -> asyncio.Lock:
+        """Get lock for current event loop, creating new one if needed."""
+        try:
+            current_loop = asyncio.get_running_loop()
+            current_loop_id = id(current_loop)
+
+            # If we don't have a lock or it's from a different loop, create a new one
+            if self._lock is None or self._lock_loop_id != current_loop_id:
+                self._lock = asyncio.Lock()
+                self._lock_loop_id = current_loop_id
+
+            return self._lock
+        except RuntimeError:
+            # No running loop - create a basic lock (shouldn't happen in practice)
+            if self._lock is None:
+                self._lock = asyncio.Lock()
+            return self._lock
 
     def _setup_event_handlers(self) -> None:
         """Set up handlers for events we want to broadcast."""
@@ -106,7 +126,7 @@ class TopicConnectionManager:
         """
         # Mutate shared maps inside the lock to avoid races with concurrent
         # disconnect or broadcast calls.
-        async with self._lock:
+        async with self._get_lock():
             self.active_connections[client_id] = websocket
             self.client_topics[client_id] = set()
             self.client_users[client_id] = user_id
@@ -189,7 +209,7 @@ class TopicConnectionManager:
         Args:
             client_id: The client ID to remove
         """
-        async with self._lock:
+        async with self._get_lock():
             if client_id in self.active_connections:
                 # Clean user mapping
                 self.client_users.pop(client_id, None)
@@ -239,7 +259,7 @@ class TopicConnectionManager:
             client_id: The client ID to subscribe
             topic: The topic to subscribe to (e.g., "agent:123", "thread:45")
         """
-        async with self._lock:
+        async with self._get_lock():
             if topic not in self.topic_subscriptions:
                 self.topic_subscriptions[topic] = set()
 
@@ -254,7 +274,7 @@ class TopicConnectionManager:
             client_id: The client ID to unsubscribe
             topic: The topic to unsubscribe from
         """
-        async with self._lock:
+        async with self._get_lock():
             if topic in self.topic_subscriptions:
                 self.topic_subscriptions[topic].discard(client_id)
                 if not self.topic_subscriptions[topic]:
@@ -317,7 +337,7 @@ class TopicConnectionManager:
                 ping_message = ping_envelope.model_dump()
 
                 # Get client queues snapshot
-                async with self._lock:
+                async with self._get_lock():
                     client_queues = dict(self.client_queues)
 
                 # ------------------------------------------------------------------
@@ -341,7 +361,7 @@ class TopicConnectionManager:
                 # 2) Drop connections that have not replied with *pong*
                 # ------------------------------------------------------------------
                 now = time.time()
-                async with self._lock:
+                async with self._get_lock():
                     stale = [cid for cid, ts in self._last_pong.items() if now - ts > 60]
 
                 for cid in stale:
@@ -374,7 +394,7 @@ class TopicConnectionManager:
                 pass
 
         # Cancel all writer tasks and close websockets
-        async with self._lock:
+        async with self._get_lock():
             for task in self.writer_tasks.values():
                 if not task.done():
                     task.cancel()
@@ -395,7 +415,7 @@ class TopicConnectionManager:
         # If there are no active subscribers we silently skip to avoid log
         # spam – this situation is perfectly normal when scheduled agents or
         # background jobs emit updates while no browser is connected.
-        async with self._lock:
+        async with self._get_lock():
             if topic not in self.topic_subscriptions:
                 logger.debug("broadcast_to_topic: no subscribers for topic %s", topic)
                 return

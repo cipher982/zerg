@@ -14,17 +14,17 @@ Key principles:
 
 import asyncio
 import logging
+import weakref
 from typing import Any
 from typing import Dict
-from typing import Set
 
 from . import EventType
 from . import event_bus
 
 logger = logging.getLogger(__name__)
 
-# Track fire-and-forget tasks to prevent resource leaks
-_active_tasks: Set[asyncio.Task] = set()
+# Track fire-and-forget tasks to prevent resource leaks using WeakSet
+_active_tasks: weakref.WeakSet = weakref.WeakSet()
 
 
 async def publish_event(event_type: EventType, data: Dict[str, Any]) -> None:
@@ -66,24 +66,32 @@ def publish_event_fire_and_forget(event_type: EventType, data: Dict[str, Any]) -
         loop = asyncio.get_running_loop()
         task = loop.create_task(_publish_event_safe(event_type, data))
 
-        # Track the task to prevent resource leaks
-        _active_tasks.add(task)
+        # Only add to tracking and set callback if we have a proper Task object
+        if hasattr(task, "add_done_callback"):
+            # Track the task to prevent resource leaks (WeakSet handles cleanup automatically)
+            _active_tasks.add(task)
+            task.add_done_callback(_cleanup_task)
+        else:
+            # Refuse coroutine objects that slipped through - they'll never finish
+            logger.error(f"create_task returned non-Task object for {event_type}: {type(task)!r}")
+            return
 
-        # Clean up when task completes
-        task.add_done_callback(_cleanup_task)
     except RuntimeError:
         # No running loop - this is a programming error
         logger.error(f"Cannot publish fire-and-forget event {event_type} - no running event loop")
+    except Exception as e:
+        # Handle any other potential issues with task creation
+        logger.error(f"Unexpected error creating fire-and-forget task for {event_type}: {e}")
 
 
-def _cleanup_task(task: asyncio.Task) -> None:
-    """Remove completed task from active tracking set."""
-    _active_tasks.discard(task)
-
-    # Log any task exceptions to help with debugging
-    if task.done() and not task.cancelled():
+def _cleanup_task(task) -> None:
+    """Log any task exceptions (WeakSet handles removal automatically)."""
+    # WeakSet automatically removes the task when it's garbage collected
+    # We only need to log any exceptions for debugging
+    if hasattr(task, "done") and task.done() and not getattr(task, "cancelled", lambda: False)():
         try:
-            task.result()  # This will raise if the task had an exception
+            if hasattr(task, "result"):
+                task.result()  # This will raise if the task had an exception
         except Exception as e:
             logger.error(f"Fire-and-forget event publishing task failed: {e}")
 
