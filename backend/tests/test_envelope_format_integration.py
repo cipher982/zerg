@@ -41,14 +41,14 @@ async def test_envelope_format_all_node_types(db, test_user, sample_agent):
             mock_msg1.id = 1
             mock_msg1.role = "assistant"
             mock_msg1.content = "Analysis complete. Grade is excellent."
-            mock_msg1.created_at = None
+            mock_msg1.timestamp = None
             mock_msg1.thread_id = thread.id
 
             mock_msg2 = type("MockMessage", (), {})()
             mock_msg2.id = 2
             mock_msg2.role = "assistant"
             mock_msg2.content = "Recommendation: Student performed very well."
-            mock_msg2.created_at = None
+            mock_msg2.timestamp = None
             mock_msg2.thread_id = thread.id
 
             return [mock_msg1, mock_msg2]
@@ -150,7 +150,8 @@ async def test_envelope_format_all_node_types(db, test_user, sample_agent):
                 assert is_envelope_format(state.output), f"Node {node_id} should have envelope format"
                 assert "value" in state.output, f"Node {node_id} should have 'value' field"
                 assert "meta" in state.output, f"Node {node_id} should have 'meta' field"
-                assert state.output["meta"]["status"] == "completed", f"Node {node_id} meta should show completed"
+                assert state.output["meta"]["phase"] == "finished", f"Node {node_id} meta should show finished"
+                assert state.output["meta"]["result"] == "success", f"Node {node_id} meta should show success"
 
             # Verify specific envelope content
             trigger_state = executed_nodes["trigger-1"]
@@ -203,7 +204,7 @@ async def test_envelope_format_variable_resolution_edge_cases(db, test_user, sam
             mock_msg.id = 1
             mock_msg.role = "assistant"
             mock_msg.content = "Analysis processed successfully"
-            mock_msg.created_at = None
+            mock_msg.timestamp = None
             mock_msg.thread_id = thread.id
 
             return [mock_msg]
@@ -326,7 +327,7 @@ async def test_envelope_format_alias_support(db, test_user, sample_agent):
             mock_msg.id = 1
             mock_msg.role = "assistant"
             mock_msg.content = "Number processed"
-            mock_msg.created_at = None
+            mock_msg.timestamp = None
             mock_msg.thread_id = thread.id
 
             return [mock_msg]

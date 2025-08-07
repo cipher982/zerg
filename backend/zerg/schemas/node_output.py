@@ -22,13 +22,16 @@ class NodeMetadata(BaseModel):
 
     # Required fields for all nodes
     node_type: Literal["tool", "agent", "trigger", "conditional"] = Field(description="Type of node that was executed")
-    status: Literal["completed", "failed", "running"] = Field(description="Execution status")
+    phase: Literal["waiting", "running", "finished"] = Field(description="Current execution phase")
+    result: Optional[Literal["success", "failure", "cancelled"]] = Field(
+        None, description="Execution outcome (when phase=finished)"
+    )
     execution_time_ms: Optional[int] = Field(None, description="Execution time in milliseconds")
     started_at: Optional[datetime] = Field(None, description="When execution started")
     finished_at: Optional[datetime] = Field(None, description="When execution finished")
 
     # Optional standard fields
-    error: Optional[str] = Field(None, description="Error message if status=failed")
+    error_message: Optional[str] = Field(None, description="Error message if result=failure")
     error_type: Optional[str] = Field(None, description="Type of error (e.g., ValidationError, TimeoutError)")
     retry_count: Optional[int] = Field(0, description="Number of retry attempts")
     memory_usage_mb: Optional[float] = Field(None, description="Memory usage in megabytes")
@@ -104,11 +107,12 @@ class NodeOutputEnvelope(BaseModel):
 def create_tool_envelope(
     value: Any,
     *,
-    status: Literal["completed", "failed", "running"] = "completed",
+    phase: Literal["waiting", "running", "finished"] = "finished",
+    result: Optional[Literal["success", "failure", "cancelled"]] = "success",
     tool_name: Optional[str] = None,
     parameters: Optional[Dict[str, Any]] = None,
     execution_time_ms: Optional[int] = None,
-    error: Optional[str] = None,
+    error_message: Optional[str] = None,
     **kwargs,
 ) -> NodeOutputEnvelope:
     """
@@ -116,22 +120,24 @@ def create_tool_envelope(
 
     Args:
         value: Primary result from tool execution
-        status: Execution status
+        phase: Current execution phase
+        result: Execution outcome (when phase=finished)
         tool_name: Name of the tool
         parameters: Parameters passed to tool
         execution_time_ms: Execution time in milliseconds
-        error: Error message if failed
+        error_message: Error message if result=failure
         **kwargs: Additional metadata fields
 
     Returns:
         NodeOutputEnvelope with tool metadata
     """
     metadata = ToolNodeMetadata(
-        status=status,
+        phase=phase,
+        result=result,
         tool_name=tool_name,
         parameters=parameters,
         execution_time_ms=execution_time_ms,
-        error=error,
+        error_message=error_message,
         **kwargs,
     )
 
@@ -141,12 +147,13 @@ def create_tool_envelope(
 def create_agent_envelope(
     value: Any,
     *,
-    status: Literal["completed", "failed", "running"] = "completed",
+    phase: Literal["waiting", "running", "finished"] = "finished",
+    result: Optional[Literal["success", "failure", "cancelled"]] = "success",
     agent_id: Optional[int] = None,
     agent_name: Optional[str] = None,
     thread_id: Optional[int] = None,
     execution_time_ms: Optional[int] = None,
-    error: Optional[str] = None,
+    error_message: Optional[str] = None,
     **kwargs,
 ) -> NodeOutputEnvelope:
     """
@@ -154,24 +161,26 @@ def create_agent_envelope(
 
     Args:
         value: Primary result from agent execution
-        status: Execution status
+        phase: Current execution phase
+        result: Execution outcome (when phase=finished)
         agent_id: ID of the agent
         agent_name: Name of the agent
         thread_id: Thread ID for conversation
         execution_time_ms: Execution time in milliseconds
-        error: Error message if failed
+        error_message: Error message if result=failure
         **kwargs: Additional metadata fields
 
     Returns:
         NodeOutputEnvelope with agent metadata
     """
     metadata = AgentNodeMetadata(
-        status=status,
+        phase=phase,
+        result=result,
         agent_id=agent_id,
         agent_name=agent_name,
         thread_id=thread_id,
         execution_time_ms=execution_time_ms,
-        error=error,
+        error_message=error_message,
         **kwargs,
     )
 
@@ -181,11 +190,12 @@ def create_agent_envelope(
 def create_conditional_envelope(
     value: Any,
     *,
-    status: Literal["completed", "failed", "running"] = "completed",
+    phase: Literal["waiting", "running", "finished"] = "finished",
+    result: Optional[Literal["success", "failure", "cancelled"]] = "success",
     condition: Optional[str] = None,
     resolved_condition: Optional[str] = None,
     execution_time_ms: Optional[int] = None,
-    error: Optional[str] = None,
+    error_message: Optional[str] = None,
     **kwargs,
 ) -> NodeOutputEnvelope:
     """
@@ -193,22 +203,24 @@ def create_conditional_envelope(
 
     Args:
         value: Primary result from conditional evaluation
-        status: Execution status
+        phase: Current execution phase
+        result: Execution outcome (when phase=finished)
         condition: Original condition expression
         resolved_condition: Condition after variable resolution
         execution_time_ms: Execution time in milliseconds
-        error: Error message if failed
+        error_message: Error message if result=failure
         **kwargs: Additional metadata fields
 
     Returns:
         NodeOutputEnvelope with conditional metadata
     """
     metadata = ConditionalNodeMetadata(
-        status=status,
+        phase=phase,
+        result=result,
         condition=condition,
         resolved_condition=resolved_condition,
         execution_time_ms=execution_time_ms,
-        error=error,
+        error_message=error_message,
         **kwargs,
     )
 
@@ -218,11 +230,12 @@ def create_conditional_envelope(
 def create_trigger_envelope(
     value: Any,
     *,
-    status: Literal["completed", "failed", "running"] = "completed",
+    phase: Literal["waiting", "running", "finished"] = "finished",
+    result: Optional[Literal["success", "failure", "cancelled"]] = "success",
     trigger_type: Optional[str] = None,
     trigger_config: Optional[Dict[str, Any]] = None,
     execution_time_ms: Optional[int] = None,
-    error: Optional[str] = None,
+    error_message: Optional[str] = None,
     **kwargs,
 ) -> NodeOutputEnvelope:
     """
@@ -230,22 +243,24 @@ def create_trigger_envelope(
 
     Args:
         value: Primary result from trigger execution
-        status: Execution status
+        phase: Current execution phase
+        result: Execution outcome (when phase=finished)
         trigger_type: Type of trigger
         trigger_config: Trigger configuration
         execution_time_ms: Execution time in milliseconds
-        error: Error message if failed
+        error_message: Error message if result=failure
         **kwargs: Additional metadata fields
 
     Returns:
         NodeOutputEnvelope with trigger metadata
     """
     metadata = TriggerNodeMetadata(
-        status=status,
+        phase=phase,
+        result=result,
         trigger_type=trigger_type,
         trigger_config=trigger_config,
         execution_time_ms=execution_time_ms,
-        error=error,
+        error_message=error_message,
         **kwargs,
     )
 
@@ -257,22 +272,37 @@ def create_trigger_envelope(
 
 def is_envelope_format(data: Any) -> bool:
     """
-    Check if data is in the new envelope format.
+    Check if data is in the new envelope format and validates phase/result constraints.
 
     Args:
         data: Data to check
 
     Returns:
-        True if data is a valid envelope format
+        True if data is a valid envelope format with correct phase/result constraints
     """
-    return (
+    if not (
         isinstance(data, dict)
         and "value" in data
         and "meta" in data
         and isinstance(data["meta"], dict)
         and "node_type" in data["meta"]
-        and "status" in data["meta"]
-    )
+        and "phase" in data["meta"]
+    ):
+        return False
+
+    meta = data["meta"]
+    phase = meta["phase"]
+    result = meta.get("result")
+
+    # Enforce database constraint: phase='finished' requires result IS NOT NULL
+    if phase == "finished" and result is None:
+        return False
+
+    # Enforce inverse constraint: result should only be present when phase='finished'
+    if phase != "finished" and result is not None:
+        return False
+
+    return True
 
 
 def extract_value(data: Any) -> Any:

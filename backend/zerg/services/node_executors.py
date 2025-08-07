@@ -30,10 +30,11 @@ logger = logging.getLogger(__name__)
 class BaseNodeExecutor:
     """Base class for node executors. Envelope format only."""
 
-    def __init__(self, node, publish_event_callback):
+    def __init__(self, node, publish_event_callback, node_type: str):
         self.node = node
         self.node_id = node.id
         self.publish_event = publish_event_callback
+        self.node_type = node_type
 
     async def execute(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the node and return updated state."""
@@ -117,20 +118,10 @@ class BaseNodeExecutor:
             return create_tool_envelope(value, **kwargs)
 
     def _create_error_output(self, error_msg):
-        """Create error envelope based on node type."""
-        node_type = "tool"
-        if hasattr(self, "__class__"):
-            class_name = self.__class__.__name__
-            if "Agent" in class_name:
-                node_type = "agent"
-            elif "Tool" in class_name:
-                node_type = "tool"
-            elif "Conditional" in class_name:
-                node_type = "conditional"
-            elif "Trigger" in class_name:
-                node_type = "trigger"
-
-        return self._create_envelope_output(value=None, node_type=node_type, status="failed", error=error_msg)
+        """Create error envelope using stored node type."""
+        return self._create_envelope_output(
+            value=None, node_type=self.node_type, phase="finished", result="failure", error_message=error_msg
+        )
 
 
 class AgentNodeExecutor(BaseNodeExecutor):
@@ -195,7 +186,8 @@ class AgentNodeExecutor(BaseNodeExecutor):
                 "messages_created": len(created_messages),
             },
             node_type="agent",
-            status="completed",
+            phase="finished",
+            result="success",
             agent_id=agent_id,
             agent_name=agent.name,
             thread_id=thread.id,
@@ -231,7 +223,8 @@ class ToolNodeExecutor(BaseNodeExecutor):
         return self._create_envelope_output(
             value=output,
             node_type="tool",
-            status="completed",
+            phase="finished",
+            result="success",
             tool_name=tool_name,
             parameters=static_params,
         )
@@ -247,7 +240,8 @@ class TriggerNodeExecutor(BaseNodeExecutor):
         return self._create_envelope_output(
             value={"triggered": True},
             node_type="trigger",
-            status="completed",
+            phase="finished",
+            result="success",
             trigger_type="manual",
             trigger_config=self.node.config,
         )
@@ -279,7 +273,8 @@ class ConditionalNodeExecutor(BaseNodeExecutor):
         return self._create_envelope_output(
             value={"result": condition_result, "branch": branch},
             node_type="conditional",
-            status="completed",
+            phase="finished",
+            result="success",
             condition=condition,
             evaluation_method="ast_safe",
         )
@@ -318,20 +313,20 @@ class ConditionalNodeExecutor(BaseNodeExecutor):
 def create_node_executor(node, publish_event_callback) -> BaseNodeExecutor:
     """Factory function to create node executor. Envelope format only."""
     if node.type == "agent":
-        return AgentNodeExecutor(node, publish_event_callback)
+        return AgentNodeExecutor(node, publish_event_callback, "agent")
     elif node.type == "tool":
-        return ToolNodeExecutor(node, publish_event_callback)
+        return ToolNodeExecutor(node, publish_event_callback, "tool")
     elif node.type == "trigger":
-        return TriggerNodeExecutor(node, publish_event_callback)
+        return TriggerNodeExecutor(node, publish_event_callback, "trigger")
     elif node.type == "conditional":
-        return ConditionalNodeExecutor(node, publish_event_callback)
+        return ConditionalNodeExecutor(node, publish_event_callback, "conditional")
     else:
         # Placeholder for unknown types
         class PlaceholderExecutor(BaseNodeExecutor):
             async def _execute_node_logic(self, db, state):
                 logger.warning(f"[PlaceholderNode] Unknown node type: {self.node_id}")
                 return self._create_envelope_output(
-                    value={"skipped": True}, node_type="placeholder", status="completed"
+                    value={"skipped": True}, node_type="placeholder", phase="finished", result="success"
                 )
 
-        return PlaceholderExecutor(node, publish_event_callback)
+        return PlaceholderExecutor(node, publish_event_callback, "placeholder")
