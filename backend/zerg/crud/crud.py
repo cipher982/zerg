@@ -830,6 +830,13 @@ def get_workflow_executions(db: Session, workflow_id: int, skip: int = 0, limit:
     return db.query(WorkflowExecution).filter_by(workflow_id=workflow_id).offset(skip).limit(limit).all()
 
 
+def get_waiting_execution_for_workflow(db: Session, workflow_id: int):
+    """Get the first waiting execution for a workflow, if any exists."""
+    from zerg.models.models import WorkflowExecution
+
+    return db.query(WorkflowExecution).filter_by(workflow_id=workflow_id, phase="waiting").first()
+
+
 def create_workflow_execution(
     db: Session, *, workflow_id: int, phase: str = "running", triggered_by: str = "manual", result: str = None
 ):

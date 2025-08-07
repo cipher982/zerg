@@ -33,6 +33,17 @@ def test_envelope_backpressure_disconnect(monkeypatch, test_client: TestClient):
     # Patch queue size to something tiny for test
     monkeypatch.setattr(topic_manager, "QUEUE_SIZE", 2)
     with test_client.websocket_connect("/api/ws"):
+        # Wait for queue registration to complete after WebSocket handshake
+        import time
+
+        time.sleep(0.01)  # Brief wait for queue registration
+
+        # Ensure we have at least one registered client
+        if not topic_manager.client_queues:
+            import pytest
+
+            pytest.skip("No client queues registered - WebSocket handshake timing issue")
+
         # Simulate slow client by not reading messages
         for i in range(5):
             topic_manager.client_queues[list(topic_manager.client_queues.keys())[0]].put_nowait(

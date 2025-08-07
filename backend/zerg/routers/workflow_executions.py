@@ -38,7 +38,7 @@ class ScheduleWorkflowPayload(BaseModel):
     trigger_config: dict = Field(default_factory=dict)
 
 
-@router.post("/{workflow_id}/reserve")
+@router.post("/by-workflow/{workflow_id}/reserve")
 async def reserve_workflow_execution(
     workflow_id: int,
     db: Session = Depends(get_db),
@@ -55,10 +55,10 @@ async def reserve_workflow_execution(
     # Create execution record with "waiting" phase (reserved for execution)
     execution = crud.create_workflow_execution(db, workflow_id=workflow_id, phase="waiting", triggered_by="manual")
 
-    return {"execution_id": execution.id, "status": "reserved"}
+    return {"execution_id": execution.id, "phase": "waiting", "result": None}
 
 
-@router.post("/{workflow_id}/start")
+@router.post("/by-workflow/{workflow_id}/start")
 async def start_workflow_execution(
     workflow_id: int,
     db: Session = Depends(get_db),
@@ -66,16 +66,16 @@ async def start_workflow_execution(
 ):
     """
     Start a new execution of a workflow using LangGraph engine.
-    Uses the original synchronous approach.
+    Non-blocking: returns immediately with phase=running.
     """
     workflow = crud.get_workflow(db, workflow_id)
     if not workflow or workflow.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    # Execute workflow with LangGraph engine (original approach)
+    # Execute workflow with LangGraph engine (non-blocking)
     execution_id = await workflow_engine.execute_workflow(workflow_id)
 
-    return {"execution_id": execution_id, "status": "running"}
+    return {"execution_id": execution_id, "phase": "running", "result": None}
 
 
 @router.post("/executions/{execution_id}/start")
@@ -101,16 +101,22 @@ async def start_reserved_execution(
     execution.started_at = datetime.now(timezone.utc)
     db.commit()
 
-    # Start execution asynchronously using ensure_future for proper task management
+    # Start execution asynchronously with proper session management
     import asyncio
+
+    from zerg.database import get_session_factory
 
     async def run_execution():
         try:
-            # Execution state is already handled above
-            pass
-
-            # Execute using the simplified engine (it will use the existing execution)
-            await workflow_engine._execute_workflow_internal(execution.workflow_id, execution, db)
+            # Create a new session for background execution
+            session_factory = get_session_factory()
+            with session_factory() as background_db:
+                # Re-fetch execution from new session
+                background_execution = crud.get_workflow_execution(background_db, execution_id)
+                if background_execution:
+                    await workflow_engine._execute_workflow_internal(
+                        background_execution.workflow_id, background_execution, background_db
+                    )
         except Exception as e:
             import logging
 
@@ -119,7 +125,38 @@ async def start_reserved_execution(
 
     asyncio.ensure_future(run_execution())
 
-    return {"execution_id": execution_id, "status": "running"}
+    return {"execution_id": execution_id, "phase": "running", "result": None}
+
+
+# Backward compatibility - DEPRECATED (place after specific routes to avoid conflicts)
+@router.post("/{workflow_id}/start")
+async def start_workflow_execution_deprecated(
+    workflow_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    DEPRECATED: Use /by-workflow/{workflow_id}/start instead.
+    Start a new execution of a workflow.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Using deprecated route POST /{workflow_id}/start - use /by-workflow/{workflow_id}/start")
+
+    workflow = crud.get_workflow(db, workflow_id)
+    if not workflow or workflow.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    # Check for existing waiting execution first
+    waiting = crud.get_waiting_execution_for_workflow(db, workflow_id)
+    if waiting:
+        logger.warning("Reuse reserved execution %s for legacy /start", waiting.id)
+        # Return actual execution state instead of hard-coded values
+        return {"execution_id": waiting.id, "phase": waiting.phase, "result": waiting.result}
+
+    # Fall back to creating new execution
+    return await start_workflow_execution(workflow_id, db, current_user)
 
 
 @router.get("/{execution_id}/status")
