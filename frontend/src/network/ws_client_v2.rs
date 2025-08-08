@@ -280,7 +280,8 @@ impl WsClientV2 {
 
             // Cancel watchdog interval (if set) to avoid leaks when the
             // socket was closed intentionally or due to network issues.
-            if let Some(id) = *client_clone_for_reconnect.activity_interval.borrow() {
+            let interval_id = *client_clone_for_reconnect.activity_interval.borrow();
+            if let Some(id) = interval_id {
                 let _ = web_sys::window().unwrap().clear_interval_with_handle(id);
                 *client_clone_for_reconnect.activity_interval.borrow_mut() = None;
             }
