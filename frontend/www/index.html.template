@@ -41,12 +41,12 @@
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/toast.css">
     <link rel="stylesheet" href="css/status.css">
-    <link rel="stylesheet" href="css/execution_results.css">
     <link rel="stylesheet" href="css/modal.css">
     <link rel="stylesheet" href="css/tool_config_modal.css">
     <link rel="stylesheet" href="css/mcp.css">
     <!-- Shared component styles -->
     <link rel="stylesheet" href="css/components/disclosure.css">
+    <link rel="stylesheet" href="css/components/execution-results.css">
     <!-- Particle / starfield background -->
     <link rel="stylesheet" href="css/particle.css">
     <link rel="stylesheet" href="chat.css">
