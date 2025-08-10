@@ -43,6 +43,29 @@ jobs:
         echo "🔍 Validating AsyncAPI 3.0 schema..."
         asyncapi validate ws-protocol-asyncapi.yml
         
+    - name: Validate OpenAPI Schema
+      run: |
+        echo "🔍 Validating OpenAPI 3.0 schema..."
+        python3 -c "
+import yaml
+import jsonschema
+try:
+    with open('api-schema.yml', 'r') as f:
+        schema = yaml.safe_load(f)
+    print('✅ OpenAPI schema is valid YAML')
+    
+    # Basic OpenAPI validation
+    required_fields = ['openapi', 'info', 'paths']
+    for field in required_fields:
+        if field not in schema:
+            raise ValueError(f'Missing required field: {field}')
+    
+    print('✅ OpenAPI schema structure is valid')
+except Exception as e:
+    print(f'❌ OpenAPI schema validation failed: {e}')
+    exit(1)
+"
+        
     - name: Generate WebSocket Types  
       run: |
         echo "🚀 Generating WebSocket types..."
