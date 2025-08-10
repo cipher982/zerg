@@ -45,6 +45,8 @@
     <link rel="stylesheet" href="css/tool_config_modal.css">
     <link rel="stylesheet" href="css/mcp.css">
     <!-- Shared component styles -->
+    <link rel="stylesheet" href="css/components/buttons.css">
+    <link rel="stylesheet" href="css/components/modals.css">
     <link rel="stylesheet" href="css/components/disclosure.css">
     <link rel="stylesheet" href="css/components/execution-results.css">
     <!-- Particle / starfield background -->
