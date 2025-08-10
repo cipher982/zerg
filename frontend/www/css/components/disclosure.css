@@ -53,11 +53,6 @@
   overflow: hidden;
 }
 
-/* Nested disclosure */
-.disclosure--nested {
-  margin-left: 0.5rem;
-  border-left-width: 1px;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .disclosure__content { 
