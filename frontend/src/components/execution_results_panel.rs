@@ -3,28 +3,34 @@ use crate::state::AppState;
 use crate::models::NodeExecStatus;
 
 pub fn create_results_panel(document: &Document) -> Result<(), wasm_bindgen::JsValue> {
-    // Create the results panel container
-    let panel = document.create_element("div")?;
+    // Create the results panel using native disclosure pattern
+    let panel = document.create_element("details")?;
     panel.set_id("execution-results-panel");
-    panel.set_class_name("execution-results-panel collapsed");
+    panel.set_class_name("execution-results-panel disclosure");
 
-    // Create the header with toggle button
-    let header = document.create_element("div")?;
-    header.set_class_name("results-panel-header");
+    // Create the summary header (replaces custom toggle button)
+    let summary = document.create_element("summary")?;
+    summary.set_class_name("results-panel-header disclosure__summary");
 
-    let toggle_btn = document.create_element("button")?;
-    toggle_btn.set_class_name("results-panel-toggle");
-    toggle_btn.set_attribute("aria-label", "Toggle execution results")?;
-    toggle_btn.set_inner_html("📋 Results");
+    let header_content = document.create_element("div")?;
+    header_content.set_class_name("results-panel-header-content");
+
+    let title = document.create_element("span")?;
+    title.set_class_name("results-panel-title");
+    title.set_inner_html("📋 Results");
 
     let status_text = document.create_element("span")?;
     status_text.set_class_name("results-panel-status");
     status_text.set_inner_html("Ready");
 
-    header.append_child(&toggle_btn)?;
-    header.append_child(&status_text)?;
+    header_content.append_child(&title)?;
+    header_content.append_child(&status_text)?;
+    summary.append_child(&header_content)?;
 
     // Create the collapsible content area
+    let content_wrapper = document.create_element("div")?;
+    content_wrapper.set_class_name("disclosure__content");
+
     let content = document.create_element("div")?;
     content.set_class_name("results-panel-content");
     content.set_id("results-panel-content");
@@ -35,42 +41,20 @@ pub fn create_results_panel(document: &Document) -> Result<(), wasm_bindgen::JsV
     results_list.set_inner_html("<div class='no-results'>No execution results yet</div>");
 
     content.append_child(&results_list)?;
+    content_wrapper.append_child(&content)?;
 
     // Assemble the panel
-    panel.append_child(&header)?;
-    panel.append_child(&content)?;
+    panel.append_child(&summary)?;
+    panel.append_child(&content_wrapper)?;
 
     // Add to canvas container
     if let Some(canvas_container) = document.get_element_by_id("canvas-container") {
         canvas_container.append_child(&panel)?;
     }
 
-    // Set up toggle functionality
-    setup_toggle_listener(&toggle_btn)?;
-
     Ok(())
 }
 
-fn setup_toggle_listener(toggle_btn: &web_sys::Element) -> Result<(), wasm_bindgen::JsValue> {
-    use wasm_bindgen::closure::Closure;
-    use wasm_bindgen::JsCast;
-
-    let toggle_callback = Closure::wrap(Box::new(move || {
-        if let Some(window) = web_sys::window() {
-            if let Some(document) = window.document() {
-                if let Some(panel) = document.get_element_by_id("execution-results-panel") {
-                    let class_list = panel.class_list();
-                    let _ = class_list.toggle("collapsed");
-                }
-            }
-        }
-    }) as Box<dyn FnMut()>);
-
-    toggle_btn.add_event_listener_with_callback("click", toggle_callback.as_ref().unchecked_ref())?;
-    toggle_callback.forget();
-
-    Ok(())
-}
 
 pub fn update_results_panel(document: &Document, state: &AppState) -> Result<(), wasm_bindgen::JsValue> {
     let results_list = match document.get_element_by_id("results-list") {
