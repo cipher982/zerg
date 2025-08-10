@@ -695,42 +695,15 @@ fn render_tool_message(
     ));
     inner.append_child(&row_args)?;
 
+    // Always show full output - user already chose to expand tool details
     let full_output = tool_msg.content.clone();
-    let truncated = full_output.chars().count() > 200;
-    
-    if truncated {
-        // Use nested disclosure for long outputs
-        let output_disclosure = document.create_element("details")?;
-        output_disclosure.set_class_name("disclosure disclosure--nested");
-        
-        let output_summary = document.create_element("summary")?;
-        output_summary.set_class_name("disclosure__summary");
-        output_summary.set_inner_html("📄 Output (click to expand)");
-        
-        let output_content_wrapper = document.create_element("div")?;
-        output_content_wrapper.set_class_name("disclosure__content");
-        
-        let output_content = document.create_element("div")?;
-        output_content.set_class_name("tool-detail-row output-row");
-        output_content.set_inner_html(&format!(
-            "<pre>{}</pre>",
-            full_output.replace("\n", "<br>")
-        ));
-        
-        output_content_wrapper.append_child(&output_content)?;
-        output_disclosure.append_child(&output_summary)?;
-        output_disclosure.append_child(&output_content_wrapper)?;
-        inner.append_child(&output_disclosure)?;
-    } else {
-        // Short output - display directly
-        let row_out = document.create_element("div")?;
-        row_out.set_class_name("tool-detail-row output-row");
-        row_out.set_inner_html(&format!(
-            "<strong>Output:</strong> <pre>{}</pre>",
-            full_output.replace("\n", "<br>")
-        ));
-        inner.append_child(&row_out)?;
-    }
+    let row_out = document.create_element("div")?;
+    row_out.set_class_name("tool-detail-row output-row");
+    row_out.set_inner_html(&format!(
+        "<strong>Output:</strong> <pre>{}</pre>",
+        full_output.replace("\n", "<br>")
+    ));
+    inner.append_child(&row_out)?;
 
     content_wrap.append_child(&inner)?;
     details_el.append_child(&content_wrap)?;
