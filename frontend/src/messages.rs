@@ -471,10 +471,6 @@ pub enum Message {
         thread_id: u32,
         message_id: u32,
     },
-    /// Toggle collapse/expand of a tool call indicator
-    ToggleToolExpansion {
-        tool_call_id: String,
-    },
     /// Toggle show full vs truncated tool output for a tool call
     ToggleToolShowMore {
         tool_call_id: String,
