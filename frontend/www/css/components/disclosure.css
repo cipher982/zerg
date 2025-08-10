@@ -1,0 +1,37 @@
+/* Shared Disclosure component based on native <details>/<summary> */
+:root {
+  --disc-bg: rgba(200,200,200,0.05);
+  --disc-bg-open: rgba(200,200,200,0.08);
+  --disc-border: #888;
+}
+
+.disclosure {
+  border-left: 2px solid var(--disc-border);
+  background: var(--disc-bg);
+  border-radius: 6px;
+  margin: 4px 0 12px 12px;
+}
+
+.disclosure__summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 6px 8px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.disclosure__summary::-webkit-details-marker { display: none; }
+.disclosure[open] .disclosure__summary { background: var(--disc-bg-open); }
+.disclosure__summary:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* Auto-height animation without JS */
+.disclosure__content { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .2s ease; }
+.disclosure[open] .disclosure__content { grid-template-rows: 1fr; }
+.disclosure__content > * { overflow: hidden; padding: 8px; font-family: monospace; font-size: 0.85em; }
+
+@media (prefers-reduced-motion: reduce) {
+  .disclosure__content { transition: none; }
+}
+
+
