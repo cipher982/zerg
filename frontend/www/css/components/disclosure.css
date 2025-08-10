@@ -127,6 +127,7 @@
 }
 
 /* Nested disclosure support */
+.disclosure--nested,
 .disclosure .disclosure {
   margin-inline-start: 0.5rem;
   margin-block: 0.25rem;

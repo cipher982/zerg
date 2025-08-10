@@ -471,10 +471,6 @@ pub enum Message {
         thread_id: u32,
         message_id: u32,
     },
-    /// Toggle show full vs truncated tool output for a tool call
-    ToggleToolShowMore {
-        tool_call_id: String,
-    },
     // Using UpdateConversation for thread history
     // --- END NEW WebSocket Received Messages ---
 

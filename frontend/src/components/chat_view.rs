@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use crate::dom_utils;
 use crate::messages::Message;
 use crate::models::{ApiThread, ApiThreadMessage};
-use crate::state::{dispatch_global_message, APP_STATE};
+use crate::state::dispatch_global_message;
 
 // Main function to setup the chat view
 pub fn setup_chat_view(document: &Document) -> Result<(), JsValue> {
@@ -660,14 +660,7 @@ fn render_tool_message(
     tool_msg: &ApiThreadMessage,
 ) -> Result<(), JsValue> {
     let tool_call_id = tool_msg.tool_call_id.clone().unwrap_or_default();
-    let show_full = APP_STATE.with(|s| {
-        let state = s.borrow();
-        state
-            .tool_ui_states
-            .get(&tool_call_id)
-            .map(|ts| ts.show_full)
-            .unwrap_or(false)
-    });
+    // No longer need JavaScript state - using native disclosure
 
     let details_el = document.create_element("details")?;
     details_el.set_class_name("disclosure");
@@ -703,34 +696,39 @@ fn render_tool_message(
 
     let full_output = tool_msg.content.clone();
     let truncated = full_output.chars().count() > 200;
-    let output_text = if truncated && !show_full {
-        full_output.chars().take(200).collect::<String>() + "..."
-    } else {
-        full_output.clone()
-    };
-    let row_out = document.create_element("div")?;
-    row_out.set_class_name("tool-detail-row output-row");
-    row_out.set_inner_html(&format!(
-        "<strong>Output:</strong> <pre>{}</pre>",
-        output_text.replace("\n", "<br>")
-    ));
-    inner.append_child(&row_out)?;
-
+    
     if truncated {
-        let more = if show_full { "Show Less" } else { "Show More" };
-        let toggle = document.create_element("span")?;
-        toggle.set_class_name("show-more");
-        toggle.set_text_content(Some(more));
-        let tcid2 = tool_call_id.clone();
-        let click_more = Closure::wrap(Box::new(move |_e: web_sys::Event| {
-            dispatch_global_message(Message::ToggleToolShowMore {
-                tool_call_id: tcid2.clone(),
-            });
-        }) as Box<dyn FnMut(_)>);
-        toggle
-            .add_event_listener_with_callback("click", click_more.as_ref().unchecked_ref())?;
-        click_more.forget();
-        inner.append_child(&toggle)?;
+        // Use nested disclosure for long outputs
+        let output_disclosure = document.create_element("details")?;
+        output_disclosure.set_class_name("disclosure disclosure--nested");
+        
+        let output_summary = document.create_element("summary")?;
+        output_summary.set_class_name("disclosure__summary");
+        output_summary.set_inner_html("📄 Output (click to expand)");
+        
+        let output_content_wrapper = document.create_element("div")?;
+        output_content_wrapper.set_class_name("disclosure__content");
+        
+        let output_content = document.create_element("div")?;
+        output_content.set_class_name("tool-detail-row output-row");
+        output_content.set_inner_html(&format!(
+            "<pre>{}</pre>",
+            full_output.replace("\n", "<br>")
+        ));
+        
+        output_content_wrapper.append_child(&output_content)?;
+        output_disclosure.append_child(&output_summary)?;
+        output_disclosure.append_child(&output_content_wrapper)?;
+        inner.append_child(&output_disclosure)?;
+    } else {
+        // Short output - display directly
+        let row_out = document.create_element("div")?;
+        row_out.set_class_name("tool-detail-row output-row");
+        row_out.set_inner_html(&format!(
+            "<strong>Output:</strong> <pre>{}</pre>",
+            full_output.replace("\n", "<br>")
+        ));
+        inner.append_child(&row_out)?;
     }
 
     content_wrap.append_child(&inner)?;
