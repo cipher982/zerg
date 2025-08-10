@@ -115,12 +115,6 @@ pub struct AgentDebugPane {
     pub active_tab: DebugTab,
 }
 
-/// UI state for tool call output display
-#[derive(Debug, Clone)]
-pub struct ToolUiState {
-    /// Whether the full tool output is shown (vs truncated)
-    pub show_full: bool,
-}
 
 // ---------------------------------------------------------------------------
 // MCP Integration State Structures
@@ -413,8 +407,6 @@ pub struct AppState {
 
     // Agent Debug modal (None when hidden)
     pub agent_debug_pane: Option<AgentDebugPane>,
-    // UI state for collapsible tool call indicators
-    pub tool_ui_states: HashMap<String, ToolUiState>,
 
     // -------------------------------------------------------------------
     // Runtime configuration flags fetched from `/api/system/info`
@@ -681,8 +673,6 @@ impl AppState {
             triggers: HashMap::new(),
 
             agent_debug_pane: None,
-            // Initialize UI state for tool call indicators
-            tool_ui_states: HashMap::new(),
 
             run_history_expanded: HashSet::new(),
 

@@ -765,29 +765,6 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             }
             true
         }
-        crate::messages::Message::ToggleToolShowMore { tool_call_id } => {
-            let entry = state.tool_ui_states.entry(tool_call_id.clone()).or_insert(
-                crate::state::ToolUiState {
-                    show_full: false,
-                },
-            );
-            entry.show_full = !entry.show_full;
-
-            // Use current agent's current thread
-            if let Some(agent_state) = state.current_agent() {
-                if let Some(thread_id) = agent_state.current_thread_id {
-                    if let Some(messages) = agent_state.thread_messages.get(&thread_id) {
-                        let messages_clone = messages.clone();
-                        cmds.push(Command::UpdateUI(Box::new(move || {
-                            crate::state::dispatch_global_message(
-                                crate::messages::Message::UpdateConversation(messages_clone),
-                            );
-                        })));
-                    }
-                }
-            }
-            true
-        }
         crate::messages::Message::UpdateLoadingState(is_loading) => {
             state.is_chat_loading = *is_loading;
             if let Some(document) = web_sys::window()
