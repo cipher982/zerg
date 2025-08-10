@@ -43,12 +43,16 @@ impl ApiClient {
             if params:
                 params = ', ' + params
                 
+            # Build parameter string for format macro
+            param_placeholders = ', '.join(['{' + '}' for _ in path_params])
+            param_args = ', ' + ', '.join(path_params) if path_params else ''
+            
             rust_code += f"""
     /// {spec.get('summary', 'API call')}
     pub async fn {func_name}({params}) -> Result<String, JsValue> {{
         let url = format!(
-            "{{}}{}",
-            Self::api_base_url(){','.join([f', {p}' for p in path_params])}
+            "{{}}{path}",
+            Self::api_base_url(){param_args}
         );
         Self::fetch_json(&url, "{method.upper()}", None).await
     }}
