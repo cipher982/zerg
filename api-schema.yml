@@ -210,6 +210,91 @@ components:
 
 paths:
   # -------------------------------------------------------------------------
+  # Workflow Execution Operations  
+  # -------------------------------------------------------------------------
+  
+  /api/workflow-executions/by-workflow/{workflow_id}/reserve:
+    post:
+      summary: Reserve execution ID for workflow
+      description: Reserve an execution ID without starting execution (for WebSocket subscription)
+      parameters:
+        - name: workflow_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Execution reserved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  execution_id:
+                    type: integer
+                  phase:
+                    type: string
+                    enum: [waiting]
+                  result:
+                    type: string
+                    nullable: true
+        '404':
+          description: Workflow not found
+
+  /api/workflow-executions/by-workflow/{workflow_id}/start:
+    post:
+      summary: Start new workflow execution
+      parameters:
+        - name: workflow_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Execution started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  execution_id:
+                    type: integer
+                  phase:
+                    type: string
+                    enum: [running]
+                  result:
+                    type: string
+                    nullable: true
+
+  /api/workflow-executions/executions/{execution_id}/start:
+    post:
+      summary: Start reserved execution
+      parameters:
+        - name: execution_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Reserved execution started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  execution_id:
+                    type: integer
+                  phase:
+                    type: string
+                    enum: [running]
+                  result:
+                    type: string
+                    nullable: true
+
+  # -------------------------------------------------------------------------
   # Workflow Operations
   # -------------------------------------------------------------------------
   
