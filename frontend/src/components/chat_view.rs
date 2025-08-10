@@ -665,6 +665,7 @@ fn render_tool_message(
     let details_el = document.create_element("details")?;
     details_el.set_class_name("disclosure");
     details_el.set_attribute("data-tool-call-id", &tool_call_id).ok();
+    // Programmatic control: details_el.set_open(true/false) for JS interaction
 
     let tool_name = tool_msg.tool_name.as_deref().unwrap_or("tool");
     let summary = document.create_element("summary")?;
@@ -736,6 +737,20 @@ fn render_tool_message(
 
     messages_container.append_child(&details_el)?;
 
+    Ok(())
+}
+
+/// Utility function for programmatic disclosure control
+/// Usage: set_disclosure_state(document, "tool-call-123", true) to open
+pub fn set_disclosure_state(document: &Document, tool_call_id: &str, open: bool) -> Result<(), JsValue> {
+    if let Some(details) = document.query_selector(&format!("[data-tool-call-id='{}']", tool_call_id))? {
+        // Use setAttribute for broader compatibility 
+        if open {
+            details.set_attribute("open", "")?;
+        } else {
+            details.remove_attribute("open")?;
+        }
+    }
     Ok(())
 }
 
