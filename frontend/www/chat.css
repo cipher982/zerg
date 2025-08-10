@@ -11,44 +11,30 @@
 }
 
 /* Collapsible tool call indicator */
-.tool-indicator {
-    font-size: 0.85em;
-    color: var(--text-secondary);
-    padding: 4px 8px;
-    margin: 4px 0;
-    cursor: pointer;
-    border-radius: 4px;
-    background: rgba(200,200,200,0.1);
-    display: inline-block;
-    transition: background 0.1s;
-}
-.tool-indicator:hover {
-    background: rgba(200,200,200,0.2);
-}
-.tool-indicator .arrow {
-    margin-left: 4px;
-    transition: transform 0.2s;
-}
-.tool-indicator.expanded .arrow {
-    transform: rotate(90deg);
-}
+/* Legacy styles kept for compatibility; replaced by .disclosure */
 
-/* Details panel for expanded tool call */
-.tool-details {
-    background: rgba(200,200,200,0.05);
+/* New shared Disclosure component using native <details>/<summary> */
+.disclosure {
     border-left: 2px solid #888;
-    padding: 8px;
+    background: rgba(200,200,200,0.05);
+    border-radius: 6px;
     margin: 4px 0 12px 12px;
-    font-family: monospace;
-    font-size: 0.85em;
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.2s ease-out;
 }
-/* When indicator is expanded, reveal details */
-.tool-indicator.expanded + .tool-details {
-    max-height: 400px;
+.disclosure__summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 6px 8px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
+.disclosure__summary::-webkit-details-marker { display: none; }
+.disclosure[open] .disclosure__summary { background: rgba(200,200,200,0.08); }
+.disclosure__summary:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.disclosure__content { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .2s ease; }
+.disclosure[open] .disclosure__content { grid-template-rows: 1fr; }
+.disclosure__content > * { overflow: hidden; padding: 8px; font-family: monospace; font-size: 0.85em; }
 .tool-detail-row {
     margin-bottom: 4px;
 }
