@@ -45,6 +45,8 @@
     <link rel="stylesheet" href="css/modal.css">
     <link rel="stylesheet" href="css/tool_config_modal.css">
     <link rel="stylesheet" href="css/mcp.css">
+    <!-- Shared component styles -->
+    <link rel="stylesheet" href="css/components/disclosure.css">
     <!-- Particle / starfield background -->
     <link rel="stylesheet" href="css/particle.css">
     <link rel="stylesheet" href="chat.css">
