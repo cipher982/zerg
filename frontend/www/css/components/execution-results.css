@@ -1,9 +1,9 @@
 /* ====================================================================
-   Execution Results Panel - Modern 2025 Implementation
+   Execution Results Panel - Modern CSS Implementation
    Uses native <details>/<summary> with container queries & modern CSS
    ==================================================================== */
 
-/* Panel Container with Container Queries (2025) */
+/* Panel Container with Container Queries */
 .execution-results-panel {
     position: fixed;
     top: 0;
