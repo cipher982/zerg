@@ -115,11 +115,9 @@ pub struct AgentDebugPane {
     pub active_tab: DebugTab,
 }
 
-/// UI state for each tool call indicator (collapsed/expanded and show-full settings)
+/// UI state for tool call output display
 #[derive(Debug, Clone)]
 pub struct ToolUiState {
-    /// Whether the tool details panel is expanded
-    pub expanded: bool,
     /// Whether the full tool output is shown (vs truncated)
     pub show_full: bool,
 }
