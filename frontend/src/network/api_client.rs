@@ -214,7 +214,7 @@ impl ApiClient {
     /// `{ "execution_id": <u32>, "status": "running" }`.
     pub async fn start_workflow_execution(workflow_id: u32) -> Result<String, JsValue> {
         let url = format!(
-            "{}/api/workflow-executions/{}/start",
+            "{}/api/workflow-executions/by-workflow/{}/start",
             Self::api_base_url(),
             workflow_id
         );
@@ -226,7 +226,7 @@ impl ApiClient {
     /// This allows the frontend to subscribe to WebSocket messages before execution starts.
     pub async fn reserve_workflow_execution(workflow_id: u32) -> Result<String, JsValue> {
         let url = format!(
-            "{}/api/workflow-executions/{}/reserve",
+            "{}/api/workflow-executions/by-workflow/{}/reserve",
             Self::api_base_url(),
             workflow_id
         );
