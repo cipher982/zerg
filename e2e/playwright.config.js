@@ -72,22 +72,15 @@ const config = {
       reuseExistingServer: true,
       timeout: 180_000,
     },
-    // Start isolated backend servers for each worker
-    {
-      command: `node spawn-test-backend.js 0`,
-      port: BACKEND_PORT,
+    // Start backend servers for all possible workers (up to 4)
+    ...Array.from({ length: 4 }, (_, i) => ({
+      command: `BACKEND_PORT=${BACKEND_PORT} node spawn-test-backend.js ${i}`,
+      url: `http://localhost:${BACKEND_PORT + i}/api/agents`,
       cwd: __dirname,
       reuseExistingServer: false,
       timeout: 60_000,
-    },
-    {
-      command: `node spawn-test-backend.js 1`,
-      port: BACKEND_PORT + 1,
-      cwd: __dirname,
-      reuseExistingServer: false,
-      timeout: 60_000,
-    },
-  ],
+    })),
+  ].flat(),
 };
 
 module.exports = config;

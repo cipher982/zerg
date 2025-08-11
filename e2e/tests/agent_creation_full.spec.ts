@@ -46,11 +46,15 @@ test.describe('Agent Creation Full Workflow', () => {
         name: `Test Agent Worker ${workerId}`,
         system_instructions: 'You are a test agent for E2E testing',
         task_instructions: 'Perform test tasks as requested',
-        model: 'gpt-4.1-2025-04-14',
+        model: 'gpt-4o',
       }
     });
     
     console.log('📊 Agent creation status:', createResponse.status());
+    if (createResponse.status() !== 201) {
+      const errorBody = await createResponse.text();
+      console.log('📊 Agent creation error:', errorBody);
+    }
     expect(createResponse.status()).toBe(201);
     
     const createdAgent = await createResponse.json();
