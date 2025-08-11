@@ -98,8 +98,8 @@ async def test_full_workflow_http_execution(db, test_user, sample_agent, auth_he
             assert "execution_id" in reserve_data
             assert isinstance(execution_id, int)
 
-            # 4. POST /api/workflow-executions/{execution_id}/start
-            response = client.post(f"/api/workflow-executions/{execution_id}/start", headers=auth_headers)
+            # 4. POST /api/workflow-executions/executions/{execution_id}/start
+            response = client.post(f"/api/workflow-executions/executions/{execution_id}/start", headers=auth_headers)
             assert response.status_code == 200
             start_data = response.json()
 
@@ -107,9 +107,15 @@ async def test_full_workflow_http_execution(db, test_user, sample_agent, auth_he
             assert "execution_id" in start_data
             assert start_data["execution_id"] == execution_id
 
-            # 5. Verify database state uses phase/result (not legacy status)
-            execution = db.query(WorkflowExecution).filter_by(id=execution_id).first()
-            assert execution is not None
+            # 5. Wait for async execution to complete and verify database state
+            from tests.helpers.workflow_helpers import wait_for_workflow_completion
+
+            execution = await wait_for_workflow_completion(
+                db,
+                execution_id,
+                timeout=5.0,  # Reasonable timeout for tests
+                expected_phase="finished",
+            )
             assert execution.phase == "finished"
             assert execution.result == "success"
 
@@ -235,11 +241,13 @@ async def test_workflow_execution_error_handling(db, test_user, auth_headers):
     assert response.status_code == 200
     execution_id = response.json()["execution_id"]
 
-    response = client.post(f"/api/workflow-executions/{execution_id}/start", headers=auth_headers)
+    response = client.post(f"/api/workflow-executions/executions/{execution_id}/start", headers=auth_headers)
     assert response.status_code == 200
 
-    # Verify error state uses phase/result
-    execution = db.query(WorkflowExecution).filter_by(id=execution_id).first()
+    # Wait for async execution to complete
+    from tests.helpers.workflow_helpers import wait_for_workflow_completion
+
+    execution = await wait_for_workflow_completion(db, execution_id, timeout=5.0, expected_phase="finished")
     assert execution.phase == "finished"
     assert execution.result == "failure"  # Should be failure, not legacy "failed"
 

@@ -34,9 +34,9 @@ class TestEventPublishingCleanup:
     def test_publish_event_fire_and_forget_pattern(self):
         """Test that fire-and-forget publishing works."""
         with patch("zerg.events.publisher.asyncio") as mock_asyncio:
-            mock_loop = AsyncMock()
-            mock_task = AsyncMock()
-            mock_task.add_done_callback = Mock()  # Mock the callback method
+            mock_loop = Mock()
+            mock_task = Mock()
+            mock_task.add_done_callback = Mock()  # Ensure mock has the method
             mock_loop.create_task.return_value = mock_task
             mock_asyncio.get_running_loop.return_value = mock_loop
 

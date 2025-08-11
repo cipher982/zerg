@@ -246,6 +246,7 @@
     flex: 1;
     overflow-y: auto;
     padding: 20px;
+    padding-bottom: 20px; /* Normal padding */
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -379,10 +380,10 @@
     padding: 15px;
     border-top: 1px solid var(--border-color);
     background-color: var(--bg-darker);
-    position: sticky;
-    bottom: 30px;
+    position: relative;
     z-index: 5;
     gap: 10px;
+    margin-bottom: 30px; /* Account for the fixed status bar at bottom */
 }
 
 .chat-input {
