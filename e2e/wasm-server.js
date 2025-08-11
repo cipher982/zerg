@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-const PORT = 8002;
+const PORT = process.env.FRONTEND_PORT ? parseInt(process.env.FRONTEND_PORT) : 8002;
 const FRONTEND_DIR = path.join(__dirname, '..', 'frontend', 'www');
 
 // MIME types with proper WASM support

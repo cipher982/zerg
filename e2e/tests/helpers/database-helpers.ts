@@ -1,5 +1,30 @@
 import { Page } from '@playwright/test';
 import { createApiClient } from './api-client';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Load dynamic backend port from .env
+function getBackendPort(): number {
+  // Check environment variable first
+  if (process.env.BACKEND_PORT) {
+    return parseInt(process.env.BACKEND_PORT);
+  }
+  
+  // Load from .env file
+  const envPath = path.resolve(__dirname, '../../../.env');
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const lines = envContent.split('\n');
+    for (const line of lines) {
+      const [key, value] = line.split('=');
+      if (key === 'BACKEND_PORT') {
+        return parseInt(value) || 8001;
+      }
+    }
+  }
+  
+  return 8001; // Default fallback
+}
 
 /**
  * Database management helpers for E2E tests
@@ -63,7 +88,8 @@ export async function resetDatabaseViaRequest(
   let attempts = 0;
   
   // Calculate port based on worker ID
-  const port = 8000 + parseInt(workerId);
+  const basePort = getBackendPort();
+  const port = basePort + parseInt(workerId);
   const baseUrl = `http://localhost:${port}`;
   
   while (attempts < retries) {
