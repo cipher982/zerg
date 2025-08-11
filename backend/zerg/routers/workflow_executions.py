@@ -101,37 +101,8 @@ async def start_reserved_execution(
     execution.started_at = datetime.now(timezone.utc)
     db.commit()
 
-    # Start execution asynchronously with proper session management
-    import asyncio
-
-    from zerg.database import get_session_factory
-
-    async def run_execution():
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.info(f"[Background] Starting execution for {execution_id}")
-        try:
-            # Create a new session for background execution
-            session_factory = get_session_factory()
-            with session_factory() as background_db:
-                # Re-fetch execution from new session
-                background_execution = crud.get_workflow_execution(background_db, execution_id)
-                if background_execution:
-                    logger.info("[Background] Found execution, running workflow")
-                    await workflow_engine._execute_workflow_internal(
-                        background_execution.workflow_id, background_execution, background_db
-                    )
-                    logger.info("[Background] Workflow completed")
-                else:
-                    logger.error(f"[Background] Execution {execution_id} not found")
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.error(f"Background execution failed for execution {execution_id}: {e}")
-
-    asyncio.ensure_future(run_execution())
+    # Start execution using the proper task tracking
+    workflow_engine.start_workflow_in_background(execution.workflow_id, execution_id)
 
     return {"execution_id": execution_id, "phase": "running", "result": None}
 
@@ -180,6 +151,42 @@ def get_execution_status(
     if not execution or execution.workflow.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Execution not found")
     return {"phase": execution.phase, "result": execution.result}
+
+
+@router.post("/{execution_id}/await")
+async def await_execution_completion(
+    execution_id: int,
+    timeout: float = 30.0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Wait for a workflow execution to complete (synchronous).
+
+    This endpoint blocks until the workflow completes or times out.
+    Useful for testing and simple synchronous workflows.
+
+    Args:
+        execution_id: ID of the execution to wait for
+        timeout: Maximum time to wait in seconds (default 30)
+
+    Returns:
+        Execution status when complete
+    """
+    execution = crud.get_workflow_execution(db, execution_id)
+    if not execution or execution.workflow.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    # Wait for completion using the workflow engine
+    completed = await workflow_engine.wait_for_completion(execution_id, timeout=timeout)
+
+    if not completed:
+        raise HTTPException(status_code=408, detail="Execution timed out")
+
+    # Refresh execution from database
+    db.refresh(execution)
+
+    return {"execution_id": execution_id, "phase": execution.phase, "result": execution.result, "completed": True}
 
 
 @router.get("/{execution_id}/logs")
