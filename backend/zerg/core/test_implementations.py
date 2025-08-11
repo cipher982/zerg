@@ -58,6 +58,11 @@ class IsolatedSQLiteDatabase(Database):
             bind=self.engine,
         )
 
+        # Create a scoped session for better session management
+        from sqlalchemy.orm import scoped_session
+
+        self.scoped_session = scoped_session(self.session_factory)
+
         # Initialize database schema
         self._initialize_schema()
 
@@ -82,7 +87,12 @@ class IsolatedSQLiteDatabase(Database):
     def get_agents(self, owner_id: Optional[int] = None, skip: int = 0, limit: int = 100) -> List[Agent]:
         """Get list of agents, optionally filtered by owner."""
         with db_session(self.session_factory) as db:
-            return crud.get_agents(db, owner_id=owner_id, skip=skip, limit=limit)
+            agents = crud.get_agents(db, owner_id=owner_id, skip=skip, limit=limit)
+            # Force load relationships before session closes
+            for agent in agents:
+                _ = agent.owner
+                _ = agent.messages
+            return agents
 
     def get_agent(self, agent_id: int) -> Optional[Agent]:
         """Get single agent by ID."""

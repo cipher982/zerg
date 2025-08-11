@@ -49,14 +49,6 @@ export const test = base.extend<TestFixtures>({
     await use(`http://localhost:${port}`);
   },
   
-  context: async ({ browser }, use, testInfo) => {
-    const workerId = String(testInfo.workerIndex);
-
-    const context = await browser.newContext({
-      extraHTTPHeaders: {
-        'X-Test-Worker': workerId,
-      },
-
   request: async ({ playwright, backendUrl }, use, testInfo) => {
     const workerId = String(testInfo.workerIndex);
     const request = await playwright.request.newContext({
@@ -68,6 +60,14 @@ export const test = base.extend<TestFixtures>({
     await use(request);
     await request.dispose();
   },
+  
+  context: async ({ browser }, use, testInfo) => {
+    const workerId = String(testInfo.workerIndex);
+
+    const context = await browser.newContext({
+      extraHTTPHeaders: {
+        'X-Test-Worker': workerId,
+      },
     });
 
     // -------------------------------------------------------------------
