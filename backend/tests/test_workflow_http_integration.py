@@ -107,17 +107,19 @@ async def test_full_workflow_http_execution(db, test_user, sample_agent, auth_he
             assert "execution_id" in start_data
             assert start_data["execution_id"] == execution_id
 
-            # 5. Wait for async execution to complete and verify database state
-            from tests.helpers.workflow_helpers import wait_for_workflow_completion
+            # Give the background task a moment to start
+            import asyncio
 
-            execution = await wait_for_workflow_completion(
-                db,
-                execution_id,
-                timeout=5.0,  # Reasonable timeout for tests
-                expected_phase="finished",
-            )
-            assert execution.phase == "finished"
-            assert execution.result == "success"
+            await asyncio.sleep(0.1)
+
+            # 5. Use /await endpoint to wait for completion
+            response = client.post(f"/api/workflow-executions/{execution_id}/await?timeout=10.0", headers=auth_headers)
+            assert response.status_code == 200
+            await_data = response.json()
+
+            assert await_data["completed"] is True
+            assert await_data["phase"] == "finished"
+            assert await_data["result"] == "success"
 
             # Verify all nodes executed with phase/result
             node_states = db.query(NodeExecutionState).filter_by(workflow_execution_id=execution_id).all()
@@ -244,12 +246,14 @@ async def test_workflow_execution_error_handling(db, test_user, auth_headers):
     response = client.post(f"/api/workflow-executions/executions/{execution_id}/start", headers=auth_headers)
     assert response.status_code == 200
 
-    # Wait for async execution to complete
-    from tests.helpers.workflow_helpers import wait_for_workflow_completion
+    # Wait for async execution to complete using /await endpoint
+    response = client.post(f"/api/workflow-executions/{execution_id}/await?timeout=5.0", headers=auth_headers)
+    assert response.status_code == 200
+    await_data = response.json()
 
-    execution = await wait_for_workflow_completion(db, execution_id, timeout=5.0, expected_phase="finished")
-    assert execution.phase == "finished"
-    assert execution.result == "failure"  # Should be failure, not legacy "failed"
+    assert await_data["completed"] is True
+    assert await_data["phase"] == "finished"
+    assert await_data["result"] == "failure"  # Should be failure, not legacy "failed"
 
     # Verify failed node also uses phase/result
     failed_node = (
