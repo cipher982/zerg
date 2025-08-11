@@ -113,13 +113,18 @@ def make_sessionmaker(engine: Engine) -> sessionmaker:
     # attributes after other background DB activity).
     # ``expire_on_commit=True`` forces SQLAlchemy to *reload* objects from the
     # database the next time they are accessed after a commit.  This prevents
-    # stale identity-map rows from surviving across the test-suite’s
+    # stale identity-map rows from surviving across the test-suite's
     # reset-database calls where we truncate all tables without restarting the
     # backend process.
+
+    # For E2E tests, we need expire_on_commit=False to prevent DetachedInstanceError
+    # when objects are returned from API endpoints
+    is_e2e_test = os.getenv("ENVIRONMENT", "").startswith("test:e2e")
+
     return sessionmaker(
         autocommit=False,
         autoflush=False,
-        expire_on_commit=True,
+        expire_on_commit=not is_e2e_test,  # False for E2E tests, True otherwise
         bind=engine,
     )
 

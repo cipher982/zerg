@@ -46,11 +46,11 @@ const basePort = getBackendPort();
 const port = basePort + parseInt(workerId);
 console.log(`[spawn-backend] Starting isolated backend for worker ${workerId} on port ${port} (base: ${basePort})`);
 
-// Spawn the test backend
+// Spawn the test backend with E2E configuration
 const backend = spawn('uv', ['run', 'python', '-m', 'uvicorn', 'test_main:app', `--port=${port}`, '--log-level=warning'], {
     env: {
         ...process.env,
-        ENVIRONMENT: 'test',
+        ENVIRONMENT: 'test:e2e',  // Use E2E test config for real models
         TEST_WORKER_ID: workerId,
         NODE_ENV: 'test',
     },

@@ -7,11 +7,10 @@ and development environments while maintaining clean separation.
 from __future__ import annotations
 
 import os
-from abc import ABC
-from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 
+from zerg.core.base_config import AppConfig
 from zerg.core.implementations import ProductionAuthProvider
 from zerg.core.implementations import ProductionEventBus
 from zerg.core.implementations import ProductionModelRegistry
@@ -20,35 +19,13 @@ from zerg.core.interfaces import AuthProvider
 from zerg.core.interfaces import Database
 from zerg.core.interfaces import EventBus
 from zerg.core.interfaces import ModelRegistry
+from zerg.core.test_configs import E2ETestConfig
+from zerg.core.test_configs import IntegrationTestConfig
+from zerg.core.test_configs import UnitTestConfig
 from zerg.core.test_implementations import InMemoryEventBus
 from zerg.core.test_implementations import IsolatedSQLiteDatabase
 from zerg.core.test_implementations import MockModelRegistry
 from zerg.core.test_implementations import TestAuthProvider
-
-
-@dataclass
-class AppConfig(ABC):
-    """Abstract base configuration for the application."""
-
-    @abstractmethod
-    def create_database(self) -> Database:
-        """Create database instance."""
-        pass
-
-    @abstractmethod
-    def create_auth_provider(self) -> AuthProvider:
-        """Create authentication provider."""
-        pass
-
-    @abstractmethod
-    def create_model_registry(self) -> ModelRegistry:
-        """Create model registry."""
-        pass
-
-    @abstractmethod
-    def create_event_bus(self) -> EventBus:
-        """Create event bus."""
-        pass
 
 
 @dataclass
@@ -89,7 +66,14 @@ class ProductionConfig(AppConfig):
 
 @dataclass
 class TestConfig(AppConfig):
-    """Test configuration using isolated, controlled infrastructure."""
+    """Legacy test configuration - DEPRECATED.
+
+    This class is kept for backward compatibility but should not be used
+    for new tests. Use the specific test configurations instead:
+    - UnitTestConfig for unit tests
+    - IntegrationTestConfig for integration tests
+    - E2ETestConfig for end-to-end tests
+    """
 
     worker_id: str
     db_path: Optional[str] = None
@@ -98,7 +82,8 @@ class TestConfig(AppConfig):
     @classmethod
     def for_worker(cls, worker_id: str) -> TestConfig:
         """Create test configuration for specific worker."""
-        return cls(worker_id=worker_id)
+        # For backward compatibility, use UnitTestConfig
+        return UnitTestConfig.for_worker(worker_id)
 
     def create_database(self) -> Database:
         """Create isolated test database."""
@@ -147,12 +132,33 @@ class DevelopmentConfig(AppConfig):
 
 
 def load_config() -> AppConfig:
-    """Load configuration based on environment."""
+    """Load configuration based on environment.
+
+    Environment variables:
+    - ENVIRONMENT: production, development, test, test:unit, test:integration, test:e2e
+    - TEST_WORKER_ID: Worker ID for parallel test execution
+    - TEST_TYPE: Override for test type (unit, integration, e2e)
+    """
     environment = os.getenv("ENVIRONMENT", "production")
 
-    if environment == "test":
+    # Handle test environments with optional subtype
+    if environment.startswith("test"):
         worker_id = os.getenv("TEST_WORKER_ID", "0")
-        return TestConfig.for_worker(worker_id)
+
+        # Check for explicit test type
+        if ":" in environment:
+            test_type = environment.split(":")[1]
+        else:
+            # Fall back to TEST_TYPE env var or default to unit
+            test_type = os.getenv("TEST_TYPE", "unit")
+
+        if test_type == "e2e":
+            return E2ETestConfig.for_worker(worker_id)
+        elif test_type == "integration":
+            return IntegrationTestConfig.for_worker(worker_id)
+        else:
+            # Default to unit test config for backward compatibility
+            return UnitTestConfig.for_worker(worker_id)
     elif environment == "development":
         return DevelopmentConfig()
     else:
