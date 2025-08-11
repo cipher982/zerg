@@ -7,6 +7,31 @@
 
 import { spawn, ChildProcess } from 'child_process';
 import { join } from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Load dynamic backend port from .env
+function getBackendPort(): number {
+  // Check environment variable first
+  if (process.env.BACKEND_PORT) {
+    return parseInt(process.env.BACKEND_PORT);
+  }
+  
+  // Load from .env file
+  const envPath = path.resolve(__dirname, '../../../.env');
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const lines = envContent.split('\n');
+    for (const line of lines) {
+      const [key, value] = line.split('=');
+      if (key === 'BACKEND_PORT') {
+        return parseInt(value) || 8001;
+      }
+    }
+  }
+  
+  return 8001; // Default fallback
+}
 
 interface BackendServer {
   port: number;
@@ -22,7 +47,8 @@ export async function startBackendServer(workerId: string): Promise<BackendServe
     return existingServer;
   }
 
-  const port = 8000 + parseInt(workerId);
+  const basePort = getBackendPort();
+  const port = basePort + parseInt(workerId);
   const baseUrl = `http://localhost:${port}`;
   
   console.log(`[backend-server] Starting backend for worker ${workerId} on port ${port}`);
