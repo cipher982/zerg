@@ -9,6 +9,7 @@ import logging
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import TypedDict
 from typing import Union
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -30,7 +31,7 @@ from zerg.utils.time import utc_now_naive
 logger = logging.getLogger(__name__)
 
 
-class WorkflowState(dict):
+class WorkflowState(TypedDict):
     """State passed between nodes in the workflow."""
 
     execution_id: int
@@ -195,12 +196,12 @@ class WorkflowEngine:
 
     async def _execute_graph(self, graph, execution: WorkflowExecution, db, workflow_id: int):
         """Execute the compiled graph."""
-        initial_state = WorkflowState(
-            execution_id=execution.id,
-            node_outputs={},
-            completed_nodes=[],
-            error=None,
-        )
+        initial_state = {
+            "execution_id": execution.id,
+            "node_outputs": {},
+            "completed_nodes": [],
+            "error": None,
+        }
 
         config = {"configurable": {"thread_id": f"workflow_{execution.id}"}}
         logger.info(f"[WorkflowEngine] Starting streaming execution – workflow_id={workflow_id}")

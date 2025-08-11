@@ -14,7 +14,6 @@ Key principles:
 
 import asyncio
 import logging
-import weakref
 from typing import Any
 from typing import Dict
 
@@ -23,8 +22,8 @@ from . import event_bus
 
 logger = logging.getLogger(__name__)
 
-# Track fire-and-forget tasks to prevent resource leaks using WeakSet
-_active_tasks: weakref.WeakSet = weakref.WeakSet()
+# Track fire-and-forget tasks to prevent resource leaks
+_active_tasks: set = set()
 
 
 async def publish_event(event_type: EventType, data: Dict[str, Any]) -> None:
@@ -68,7 +67,7 @@ def publish_event_fire_and_forget(event_type: EventType, data: Dict[str, Any]) -
 
         # Only add to tracking and set callback if we have a proper Task object
         if hasattr(task, "add_done_callback"):
-            # Track the task to prevent resource leaks (WeakSet handles cleanup automatically)
+            # Track the task to prevent resource leaks
             _active_tasks.add(task)
             task.add_done_callback(_cleanup_task)
         else:
@@ -85,9 +84,11 @@ def publish_event_fire_and_forget(event_type: EventType, data: Dict[str, Any]) -
 
 
 def _cleanup_task(task) -> None:
-    """Log any task exceptions (WeakSet handles removal automatically)."""
-    # WeakSet automatically removes the task when it's garbage collected
-    # We only need to log any exceptions for debugging
+    """Remove task from tracking and log any exceptions."""
+    # Explicitly remove from tracking set
+    _active_tasks.discard(task)
+
+    # Log any exceptions for debugging
     if hasattr(task, "done") and task.done() and not getattr(task, "cancelled", lambda: False)():
         try:
             if hasattr(task, "result"):

@@ -107,6 +107,10 @@ async def start_reserved_execution(
     from zerg.database import get_session_factory
 
     async def run_execution():
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(f"[Background] Starting execution for {execution_id}")
         try:
             # Create a new session for background execution
             session_factory = get_session_factory()
@@ -114,9 +118,13 @@ async def start_reserved_execution(
                 # Re-fetch execution from new session
                 background_execution = crud.get_workflow_execution(background_db, execution_id)
                 if background_execution:
+                    logger.info("[Background] Found execution, running workflow")
                     await workflow_engine._execute_workflow_internal(
                         background_execution.workflow_id, background_execution, background_db
                     )
+                    logger.info("[Background] Workflow completed")
+                else:
+                    logger.error(f"[Background] Execution {execution_id} not found")
         except Exception as e:
             import logging
 
