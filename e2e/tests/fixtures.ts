@@ -1,4 +1,6 @@
 import { test as base, expect, BrowserContext } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ---------------------------------------------------------------------------
 // Shared Playwright *test* object that injects the `X-Test-Worker` header *and*
@@ -10,12 +12,43 @@ import { test as base, expect, BrowserContext } from '@playwright/test';
 // No other code changes are required.
 // ---------------------------------------------------------------------------
 
+// Load dynamic backend port from .env
+function getBackendPort(): number {
+  // Check environment variable first
+  if (process.env.BACKEND_PORT) {
+    return parseInt(process.env.BACKEND_PORT);
+  }
+  
+  // Load from .env file
+  const envPath = path.resolve(__dirname, '../../.env');
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const lines = envContent.split('\n');
+    for (const line of lines) {
+      const [key, value] = line.split('=');
+      if (key === 'BACKEND_PORT') {
+        return parseInt(value) || 8001;
+      }
+    }
+  }
+  
+  return 8001; // Default fallback
+}
+
 type TestFixtures = {
   context: BrowserContext;
   request: import('@playwright/test').APIRequestContext;
+  backendUrl: string;
 };
 
 export const test = base.extend<TestFixtures>({
+  backendUrl: async ({}, use, testInfo) => {
+    const workerId = testInfo.workerIndex;
+    const basePort = getBackendPort();
+    const port = basePort + workerId;
+    await use(`http://localhost:${port}`);
+  },
+  
   context: async ({ browser }, use, testInfo) => {
     const workerId = String(testInfo.workerIndex);
 
@@ -24,10 +57,10 @@ export const test = base.extend<TestFixtures>({
         'X-Test-Worker': workerId,
       },
 
-  request: async ({ playwright, baseURL }, use, testInfo) => {
+  request: async ({ playwright, backendUrl }, use, testInfo) => {
     const workerId = String(testInfo.workerIndex);
     const request = await playwright.request.newContext({
-      baseURL, // inherits from config
+      baseURL: backendUrl, // Use dynamic backend URL
       extraHTTPHeaders: {
         'X-Test-Worker': workerId,
       },

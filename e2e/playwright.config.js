@@ -1,8 +1,30 @@
+// Load dynamic ports from environment or .env file
+const fs = require('fs');
+const path = require('path');
+
+// Load .env file from repo root
+const envPath = path.resolve(__dirname, '../.env');
+let BACKEND_PORT = 8001;
+let FRONTEND_PORT = 8002;
+
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  envContent.split('\n').forEach(line => {
+    const [key, value] = line.split('=');
+    if (key === 'BACKEND_PORT') BACKEND_PORT = parseInt(value) || 8001;
+    if (key === 'FRONTEND_PORT') FRONTEND_PORT = parseInt(value) || 8002;
+  });
+}
+
+// Allow env vars to override
+BACKEND_PORT = process.env.BACKEND_PORT ? parseInt(process.env.BACKEND_PORT) : BACKEND_PORT;
+FRONTEND_PORT = process.env.FRONTEND_PORT ? parseInt(process.env.FRONTEND_PORT) : FRONTEND_PORT;
+
 const config = {
   testDir: './tests',
 
   use: {
-    baseURL: 'http://localhost:8002',
+    baseURL: `http://localhost:${FRONTEND_PORT}`,
     headless: true,
     viewport: { width: 1280, height: 800 },
     
@@ -42,13 +64,30 @@ const config = {
     }
   ],
 
-  webServer: {
-    // Only start the frontend - backends will be started per-worker by tests
-    command: 'cd ../frontend && ./build-only.sh && cd ../e2e && node wasm-server.js',
-    port: 8002,
-    reuseExistingServer: true,
-    timeout: 180_000,
-  },
+  webServer: [
+    {
+      // Start the frontend server
+      command: `cd ../frontend && ./build-only.sh && cd ../e2e && FRONTEND_PORT=${FRONTEND_PORT} node wasm-server.js`,
+      port: FRONTEND_PORT,
+      reuseExistingServer: true,
+      timeout: 180_000,
+    },
+    // Start isolated backend servers for each worker
+    {
+      command: `node spawn-test-backend.js 0`,
+      port: BACKEND_PORT,
+      cwd: __dirname,
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      command: `node spawn-test-backend.js 1`,
+      port: BACKEND_PORT + 1,
+      cwd: __dirname,
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+  ],
 };
 
 module.exports = config;
