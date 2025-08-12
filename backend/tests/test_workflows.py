@@ -244,6 +244,9 @@ def test_schema_evolution_robustness(client: TestClient, test_user: User, db: Se
     db.execute(text(f"UPDATE {Workflow.__tablename__} SET description = NULL WHERE id = {wf.id}"))
     db.commit()
 
+    # Force refresh from database to avoid stale cached objects
+    db.expire_all()
+
     # 3. Fetch the workflows and ensure it doesn't crash
     response = client.get("/api/workflows/", headers=auth_headers)
     assert response.status_code == 200
