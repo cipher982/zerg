@@ -38,8 +38,7 @@ help:
 # Development workflow
 # ---------------------------------------------------------------------------
 start:
-	@echo "🚀 Starting development servers with port conflict detection..."
-	./scripts/check-ports.sh
+	@echo "🚀 Starting development servers on ports $(B_PORT) and $(F_PORT)..."
 	./scripts/fast-contract-check.sh
 	$(MAKE) -j2 _backend _frontend
 
