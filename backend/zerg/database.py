@@ -22,6 +22,19 @@ _WORKER_ENGINES: Dict[str, Engine] = {}
 _WORKER_SESSIONMAKERS: Dict[str, sessionmaker] = {}
 _WORKER_LOCK = threading.Lock()
 
+
+def clear_worker_caches():
+    """Clear cached worker engines and sessionmakers.
+
+    This is needed for E2E tests to ensure session factories are created
+    with the correct configuration after environment variables are set.
+    """
+    global _WORKER_ENGINES, _WORKER_SESSIONMAKERS
+    with _WORKER_LOCK:
+        _WORKER_ENGINES.clear()
+        _WORKER_SESSIONMAKERS.clear()
+
+
 # ---------------------------------------------------------------------------
 # Playwright worker-based DB isolation (E2E tests)
 # ---------------------------------------------------------------------------
@@ -117,14 +130,35 @@ def make_sessionmaker(engine: Engine) -> sessionmaker:
     # reset-database calls where we truncate all tables without restarting the
     # backend process.
 
+    # Determine expire_on_commit based on environment
     # For E2E tests, we need expire_on_commit=False to prevent DetachedInstanceError
     # when objects are returned from API endpoints
-    is_e2e_test = os.getenv("ENVIRONMENT", "").startswith("test:e2e")
+    environment = os.getenv("ENVIRONMENT", "")
+
+    # Check multiple indicators for E2E testing context
+    is_e2e = (
+        environment.startswith("test:e2e")
+        or os.getenv("TEST_TYPE") == "e2e"
+        or
+        # The test_main.py module is only used for E2E tests
+        "test_main" in str(engine.url)
+    )
+
+    # Use expire_on_commit=False for E2E tests to keep objects accessible
+    # after session closes, but True for unit tests to prevent stale data
+    if is_e2e:
+        expire_on_commit = False
+    elif environment == "test" or environment.startswith("test:"):
+        # Other test types need expire_on_commit=True for proper isolation
+        expire_on_commit = True
+    else:
+        # Production/development default to False for better performance
+        expire_on_commit = False
 
     return sessionmaker(
         autocommit=False,
         autoflush=False,
-        expire_on_commit=not is_e2e_test,  # False for E2E tests, True otherwise
+        expire_on_commit=expire_on_commit,
         bind=engine,
     )
 
