@@ -90,12 +90,13 @@ def get_agents(
     """
 
     # Eager-load relationships that the Pydantic ``Agent`` response model
-    # serialises (``owner`` and ``messages``) so that FastAPI’s response
+    # serialises (``owner`` and ``messages``) so that FastAPI's response
     # rendering still works *after* the request-scoped SQLAlchemy Session is
     # closed.  Without this the lazy relationship access attempts to perform a
     # new query on a detached instance which raises ``DetachedInstanceError``
     # and bubbles up as a ``ResponseValidationError``.
 
+    # Always use selectinload to avoid detached instance errors
     query = db.query(Agent).options(
         selectinload(Agent.owner),
         selectinload(Agent.messages),
@@ -153,6 +154,12 @@ def create_agent(
     db.add(db_agent)
     db.commit()
     db.refresh(db_agent)
+
+    # Force load relationships to avoid detached instance errors
+    # This ensures they're available even after session closes
+    _ = db_agent.owner  # Load owner relationship
+    _ = db_agent.messages  # Load messages relationship (should be empty for new agent)
+
     return db_agent
 
 

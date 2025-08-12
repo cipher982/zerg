@@ -105,7 +105,11 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
         env_path = _REPO_ROOT / ".env"
 
     if env_path.exists():
+        # Don't override ENVIRONMENT if it's already set (for E2E tests)
+        current_env = os.getenv("ENVIRONMENT")
         load_dotenv(env_path, override=True)  # Project .env overrides system environment
+        if current_env:
+            os.environ["ENVIRONMENT"] = current_env  # Restore ENVIRONMENT if it was set
 
     return Settings(
         testing=testing,
