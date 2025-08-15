@@ -43,16 +43,10 @@ if (!workerId) {
     process.exit(1);
 }
 
-const { BACKEND_PORT, FRONTEND_PORT } = getPortsFromEnv();
-const i = parseInt(workerId);
+const { BACKEND_PORT } = getPortsFromEnv();
+const port = BACKEND_PORT + parseInt(workerId);
 
-// Use same conflict resolution logic as playwright.config.js
-let port = BACKEND_PORT + i;
-if (port === FRONTEND_PORT) {
-    port = BACKEND_PORT + 4 + i; // Jump ahead to avoid conflict
-}
-
-console.log(`[spawn-backend] Starting isolated backend for worker ${workerId} on port ${port} (avoiding frontend port ${FRONTEND_PORT})`);
+console.log(`[spawn-backend] Starting isolated backend for worker ${workerId} on port ${port}`);
 
 // Spawn the test backend with E2E configuration
 const backend = spawn('uv', ['run', 'python', '-m', 'uvicorn', 'test_main:app', `--port=${port}`, '--log-level=warning'], {
