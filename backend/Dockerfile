@@ -26,6 +26,7 @@ FROM python:3.12-slim-bookworm
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     curl \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
@@ -34,6 +35,9 @@ RUN useradd --create-home --shell /bin/bash zerg
 # Set work directory and copy application with venv
 WORKDIR /app
 COPY --from=builder --chown=zerg:zerg /app /app
+
+# Create required directories with proper permissions
+RUN mkdir -p /app/static/avatars && chown -R zerg:zerg /app/static
 
 # Switch to non-root user
 USER zerg
