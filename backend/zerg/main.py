@@ -96,7 +96,15 @@ for _noisy_mod in ("zerg.routers.websocket", "zerg.websocket.manager"):
 # runtime if the path is missing, which would break unit-tests that import the
 # app without running the server process.
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent  # repo root
+# In Docker, we're at /app, so static should be /app/static
+# In local dev, we're at repo/backend/zerg, so static should be repo/static
+if Path("/app").exists() and Path(__file__).resolve().parent.parent == Path("/app"):
+    # Docker environment: /app/zerg/main.py -> /app/static
+    BASE_DIR = Path("/app")
+else:
+    # Local environment: repo/backend/zerg/main.py -> repo/static
+    BASE_DIR = Path(__file__).resolve().parent.parent.parent  # repo root
+
 STATIC_DIR = BASE_DIR / "static"
 AVATARS_DIR = STATIC_DIR / "avatars"
 
