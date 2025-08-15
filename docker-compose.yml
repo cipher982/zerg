@@ -50,8 +50,8 @@ services:
   # Frontend - Build WASM and serve with nginx
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     restart: unless-stopped
     depends_on:
       - backend

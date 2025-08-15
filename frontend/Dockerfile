@@ -1,5 +1,5 @@
 # Frontend Dockerfile - Build WASM from source
-FROM rust:1.70-slim as builder
+FROM rust:1.89-slim as builder
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -14,15 +14,15 @@ RUN cargo install wasm-pack
 WORKDIR /app
 
 # Copy source code
-COPY . .
+COPY frontend/ .
 
 # Set environment for build (production values)
 ENV API_BASE_URL=http://backend:8000
 ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 
 # Build WASM (following build-only.sh process)
-RUN mkdir -p .tmp_build
-RUN TMPDIR=".tmp_build" wasm-pack build --dev --target web --out-dir pkg
+RUN mkdir -p /tmp/wasm_build
+RUN TMPDIR="/tmp/wasm_build" wasm-pack build --dev --target web --out-dir pkg
 
 # Copy WASM artifacts to existing www directory (following build-only.sh)
 RUN cp pkg/agent_platform_frontend.js www/ && \
@@ -47,7 +47,7 @@ FROM nginx:alpine
 COPY --from=builder /app/www /usr/share/nginx/html
 
 # Copy nginx config from project root
-COPY ../nginx.conf /etc/nginx/nginx.conf
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # Expose port 80
 EXPOSE 80
