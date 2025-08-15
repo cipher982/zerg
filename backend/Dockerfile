@@ -9,12 +9,14 @@ WORKDIR /app
 
 # Install dependencies first (better caching)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=backend/uv.lock,target=uv.lock \
+    --mount=type=bind,source=backend/pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=README.md,target=../README.md \
     uv sync --frozen --no-install-project --no-dev
 
 # Copy application code and install project
-COPY . /app
+COPY backend/ /app
+COPY README.md ../README.md
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
