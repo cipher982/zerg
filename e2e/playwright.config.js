@@ -65,13 +65,21 @@ const config = {
       timeout: 180_000,
     },
     // Start backend servers for all possible workers (up to 4)
-    ...Array.from({ length: 4 }, (_, i) => ({
-      command: `BACKEND_PORT=${BACKEND_PORT} node spawn-test-backend.js ${i}`,
-      port: BACKEND_PORT + i,
-      cwd: __dirname,
-      reuseExistingServer: false, // Each worker needs isolated backend
-      timeout: 60_000,
-    })),
+    // Skip FRONTEND_PORT to avoid conflicts
+    ...Array.from({ length: 4 }, (_, i) => {
+      let backendPort = BACKEND_PORT + i;
+      // Skip frontend port if it conflicts
+      if (backendPort === FRONTEND_PORT) {
+        backendPort = BACKEND_PORT + 4 + i; // Jump ahead to avoid conflict
+      }
+      return {
+        command: `BACKEND_PORT=${backendPort} node spawn-test-backend.js ${i}`,
+        port: backendPort,
+        cwd: __dirname,
+        reuseExistingServer: false, // Each worker needs isolated backend
+        timeout: 60_000,
+      };
+    }),
   ].flat(),
 };
 
