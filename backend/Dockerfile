@@ -1,28 +1,27 @@
 # Multi-stage build for Zerg AI Agent Platform Backend
-FROM python:3.12-slim as builder
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
-# Install system dependencies needed for Python packages
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install uv for fast Python package management
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# uv environment variables for optimization
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
 # Set work directory
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
+# Install dependencies first (better caching)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project --no-dev
 
-# Install dependencies with uv (much faster than pip)
-RUN uv sync --frozen --no-dev
+# Copy application code and install project
+COPY . /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
 # Production stage
-FROM python:3.12-slim as production
+FROM python:3.12-slim-bookworm
 
-# Install only runtime dependencies
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
@@ -30,17 +29,9 @@ RUN apt-get update && apt-get install -y \
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash zerg
 
-# Set work directory
+# Set work directory and copy application with venv
 WORKDIR /app
-
-# Copy virtual environment from builder
-COPY --from=builder /app/.venv /app/.venv
-
-# Copy application code
-COPY . .
-
-# Change ownership to non-root user
-RUN chown -R zerg:zerg /app
+COPY --from=builder --chown=zerg:zerg /app /app
 
 # Switch to non-root user
 USER zerg
@@ -52,7 +43,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/ || exit 1
 
-# Default port (can be overridden)
+# Default port
 EXPOSE 8000
 
 # Start the application
