@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database - isolated for this project
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-zerg}
+      POSTGRES_USER: ${POSTGRES_USER:-zerg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zerg} -d ${POSTGRES_DB:-zerg}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # No port exposure - internal communication only
+    networks:
+      - zerg-internal
+
+  # Backend API Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Production overrides
+      ENVIRONMENT: production
+      
+      # Database connection (internal network)
+      DATABASE_URL: postgresql://${POSTGRES_USER:-zerg}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zerg}
+      
+      # Security & Auth
+      JWT_SECRET: ${JWT_SECRET}
+      FERNET_SECRET: ${FERNET_SECRET}
+      TRIGGER_SIGNING_SECRET: ${TRIGGER_SIGNING_SECRET}
+      AUTH_DISABLED: ${AUTH_DISABLED:-0}
+      
+      # Google OAuth
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # CORS for your domain
+      ALLOWED_CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-https://your-domain.com}
+      
+      # Feature flags
+      LLM_TOKEN_STREAM: ${LLM_TOKEN_STREAM:-true}
+      DEV_ADMIN: ${DEV_ADMIN:-0}
+    volumes:
+      # Persist uploaded avatars/static files
+      - backend_static:/app/static
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - zerg-internal
+      - web
+    labels:
+      # Coolify/Traefik labels for reverse proxy
+      - "traefik.enable=true"
+      - "traefik.http.routers.zerg-backend.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`, `/docs`, `/openapi.json`)"
+      - "traefik.http.routers.zerg-backend.tls=true"
+      - "traefik.http.routers.zerg-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.zerg-backend.loadbalancer.server.port=8000"
+      - "traefik.docker.network=web"
+
+  # Frontend - Build WASM and serve with nginx
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - web
+    labels:
+      # Coolify/Traefik labels for reverse proxy
+      - "traefik.enable=true" 
+      - "traefik.http.routers.zerg-frontend.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.zerg-frontend.tls=true"
+      - "traefik.http.routers.zerg-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.zerg-frontend.loadbalancer.server.port=80"
+      - "traefik.docker.network=web"
+
+volumes:
+  postgres_data:
+    driver: local
+  backend_static:
+    driver: local
+
+networks:
+  # Internal network for backend <-> postgres
+  zerg-internal:
+    driver: bridge
+  # External network for reverse proxy (Coolify creates this)
+  web:
+    external: true
