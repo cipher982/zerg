@@ -12,12 +12,10 @@ const { join } = require('path');
 const fs = require('fs');
 const path = require('path');
 
-// Load dynamic port from .env file
-function getBackendPort() {
-    // Check environment variable first
-    if (process.env.BACKEND_PORT) {
-        return parseInt(process.env.BACKEND_PORT);
-    }
+// Load dynamic port from .env file  
+function getPortsFromEnv() {
+    let BACKEND_PORT = 8001;
+    let FRONTEND_PORT = 8002;
     
     // Load from .env file
     const envPath = path.resolve(__dirname, '../.env');
@@ -26,13 +24,16 @@ function getBackendPort() {
         const lines = envContent.split('\n');
         for (const line of lines) {
             const [key, value] = line.split('=');
-            if (key === 'BACKEND_PORT') {
-                return parseInt(value) || 8001;
-            }
+            if (key === 'BACKEND_PORT') BACKEND_PORT = parseInt(value) || 8001;
+            if (key === 'FRONTEND_PORT') FRONTEND_PORT = parseInt(value) || 8002;
         }
     }
     
-    return 8001; // Default fallback
+    // Allow env vars to override
+    BACKEND_PORT = process.env.BACKEND_PORT ? parseInt(process.env.BACKEND_PORT) : BACKEND_PORT;
+    FRONTEND_PORT = process.env.FRONTEND_PORT ? parseInt(process.env.FRONTEND_PORT) : FRONTEND_PORT;
+    
+    return { BACKEND_PORT, FRONTEND_PORT };
 }
 
 // Get worker ID from command line argument
@@ -42,9 +43,16 @@ if (!workerId) {
     process.exit(1);
 }
 
-const basePort = getBackendPort();
-const port = basePort + parseInt(workerId);
-console.log(`[spawn-backend] Starting isolated backend for worker ${workerId} on port ${port} (base: ${basePort})`);
+const { BACKEND_PORT, FRONTEND_PORT } = getPortsFromEnv();
+const i = parseInt(workerId);
+
+// Use same conflict resolution logic as playwright.config.js
+let port = BACKEND_PORT + i;
+if (port === FRONTEND_PORT) {
+    port = BACKEND_PORT + 4 + i; // Jump ahead to avoid conflict
+}
+
+console.log(`[spawn-backend] Starting isolated backend for worker ${workerId} on port ${port} (avoiding frontend port ${FRONTEND_PORT})`);
 
 // Spawn the test backend with E2E configuration
 const backend = spawn('uv', ['run', 'python', '-m', 'uvicorn', 'test_main:app', `--port=${port}`, '--log-level=warning'], {
