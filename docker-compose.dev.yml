@@ -1,0 +1,153 @@
+# Development Docker Compose - Optimized for local development
+# Use: docker-compose -f docker-compose.dev.yml up
+
+# Docker Compose for Zerg AI Agent Platform - Enhanced Development Mode
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-zerg_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-zerg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Ephemeral database - data is lost when containers stop
+      # Development: expose logs  
+      - ./logs/postgres:/var/log/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zerg} -d ${POSTGRES_DB:-zerg_dev}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - zerg-dev-network
+
+  # Backend API Service (Development mode)
+  backend:
+    build:
+      context: backend
+      dockerfile: ../docker/backend.dockerfile
+      target: development
+      args:
+        BUILD_ENV: development
+      # Local build cache
+      cache_from:
+        - type=local,src=/tmp/docker-cache/backend
+      cache_to:
+        - type=local,dest=/tmp/docker-cache/backend,mode=max
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql://${POSTGRES_USER:-zerg}:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/${POSTGRES_DB:-zerg_dev}
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
+      FERNET_SECRET: ${FERNET_SECRET:-dev_fernet_secret_32_chars_long!}
+      TRIGGER_SIGNING_SECRET: ${TRIGGER_SIGNING_SECRET:-dev_trigger_secret}
+      AUTH_DISABLED: ${AUTH_DISABLED:-1}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ALLOWED_CORS_ORIGINS: "*"
+      LLM_TOKEN_STREAM: ${LLM_TOKEN_STREAM:-true}
+      DEV_ADMIN: ${DEV_ADMIN:-1}
+      # Development-specific settings
+      RELOAD: true
+      DEBUG: true
+      LOG_LEVEL: DEBUG
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      # Hot reload: mount source code
+      - ./backend:/app:cached
+      - backend_dev_static:/app/static
+      # Development logs
+      - ./logs/backend:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - zerg-dev-network
+
+  # Frontend Service (Development mode)
+  frontend:
+    build:
+      context: frontend
+      dockerfile: ../docker/frontend.dockerfile
+      target: development
+      args:
+        BUILD_ENV: development
+        API_BASE_URL: http://localhost:8000
+      # Local build cache
+      cache_from:
+        - type=local,src=/tmp/docker-cache/frontend
+      cache_to:
+        - type=local,dest=/tmp/docker-cache/frontend,mode=max
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      API_BASE_URL: http://localhost:8000
+      RUST_LOG: debug
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    volumes:
+      # Hot reload: mount source code for Rust rebuilds
+      - ./frontend/src:/app/src:cached
+      - ./frontend/Cargo.toml:/app/Cargo.toml:cached
+      - ./frontend/www:/app/www:cached
+      # Development logs
+      - ./logs/frontend:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    networks:
+      - zerg-dev-network
+
+  # Development tools container (optional)
+  # Uncomment to enable: docker compose --profile tools up
+  # devtools:
+  #   image: alpine:latest  
+  #   command: tail -f /dev/null
+  #   volumes:
+  #     - .:/workspace:cached
+  #   networks:
+  #     - zerg-dev-network
+  #   profiles:
+  #     - tools
+
+networks:
+  zerg-dev-network:
+    driver: bridge
+    name: zerg-dev
+
+volumes:
+  backend_dev_static:
+    driver: local
+
+# Development-specific logging (more verbose)
+x-dev-logging: &dev-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "5"
+
+# Apply logging to all services
+services:
+  postgres:
+    logging: *dev-logging
+  backend:
+    logging: *dev-logging
+  frontend:
+    logging: *dev-logging

@@ -1,0 +1,65 @@
+# Root .dockerignore - Controls what gets sent to Docker build context
+# Keep this minimal to allow flexible build contexts
+
+# Version control
+.git
+.gitignore
+
+# Documentation (unless needed for builds)
+*.md
+!README.md
+docs/
+scratch/
+
+# Test artifacts
+test-results/
+e2e/test-results/
+e2e/playwright-report/
+**/.pytest_cache/
+**/htmlcov/
+**/.coverage
+
+# Development artifacts
+**/.vscode/
+**/.idea/
+**/__pycache__/
+**/.DS_Store
+**/Thumbs.db
+
+# Build artifacts that shouldn't be in context
+**/node_modules/
+**/target/
+**/dist/
+**/pkg/
+
+# Environment files (should be passed as build args)
+.env*
+!.env.example
+
+# Database files
+**/*.db
+**/*.db-*
+
+# Logs
+**/*.log
+**/logs/
+
+# Temporary files
+**/tmp/
+**/temp/
+**/.tmp/
+
+# IDE and editor files
+**/.vscode/
+**/.idea/
+**/*.swp
+**/*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files (prevent recursive copying)
+**/Dockerfile*
+**/docker-compose*.yml

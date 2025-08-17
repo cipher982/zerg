@@ -1,0 +1,148 @@
+# Production Docker Compose - Optimized for production deployment
+# Use: docker-compose -f docker-compose.prod.yml up
+
+# Docker Compose for Zerg AI Agent Platform - Production Mode
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-zerg}
+      POSTGRES_USER: ${POSTGRES_USER:-zerg}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-zerg} -d ${POSTGRES_DB:-zerg}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - zerg-network
+
+  # Backend API Service
+  backend:
+    build:
+      context: backend
+      dockerfile: ../docker/backend.dockerfile
+      target: production
+      args:
+        BUILD_ENV: production
+      cache_from:
+        - type=registry,ref=${REGISTRY:-ghcr.io/your-org/zerg}/backend:buildcache
+      cache_to:
+        - type=registry,ref=${REGISTRY:-ghcr.io/your-org/zerg}/backend:buildcache,mode=max
+    image: ${REGISTRY:-ghcr.io/your-org/zerg}/backend:${TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-zerg}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zerg}
+      JWT_SECRET: ${JWT_SECRET}
+      FERNET_SECRET: ${FERNET_SECRET}
+      TRIGGER_SIGNING_SECRET: ${TRIGGER_SIGNING_SECRET}
+      AUTH_DISABLED: ${AUTH_DISABLED:-0}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ALLOWED_CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS}
+      LLM_TOKEN_STREAM: ${LLM_TOKEN_STREAM:-true}
+      DEV_ADMIN: ${DEV_ADMIN:-0}
+    volumes:
+      - backend_static:/app/static
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - zerg-network
+    # Security: read-only root filesystem
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  # Frontend Service
+  frontend:
+    build:
+      context: frontend
+      dockerfile: ../docker/frontend.dockerfile
+      target: production
+      args:
+        BUILD_ENV: production
+        API_BASE_URL: ${API_BASE_URL:-http://backend:8000}
+      cache_from:
+        - type=registry,ref=${REGISTRY:-ghcr.io/your-org/zerg}/frontend:buildcache
+      cache_to:
+        - type=registry,ref=${REGISTRY:-ghcr.io/your-org/zerg}/frontend:buildcache,mode=max
+    image: ${REGISTRY:-ghcr.io/your-org/zerg}/frontend:${TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - zerg-network
+    # Security: read-only root filesystem
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:noexec,nosuid,size=50m
+      - /var/run:noexec,nosuid,size=10m
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+networks:
+  zerg-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  backend_static:
+    driver: local
+
+# Production-specific settings
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Apply logging to all services
+services:
+  postgres:
+    logging: *default-logging
+  backend:
+    logging: *default-logging
+  frontend:
+    logging: *default-logging
