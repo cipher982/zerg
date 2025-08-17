@@ -729,8 +729,8 @@ def upsert_canvas_layout(
     on the ``CanvasLayout`` model.
     """
 
-    from sqlalchemy.dialects.sqlite import insert  # Local import to avoid mandatory PG deps
     from sqlalchemy.sql import func
+    from sqlalchemy.sql import insert  # Generic insert works with all databases
 
     if user_id is None:
         raise ValueError("upsert_canvas_layout: `user_id` must not be None, auth dependency failed?")
