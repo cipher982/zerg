@@ -24,9 +24,20 @@ config = load_config()
 app = create_app(config)
 
 if __name__ == "__main__":
+    import sys
+
     import uvicorn
 
-    worker_id = os.getenv("TEST_WORKER_ID", "0")
-    port = 8000 + int(worker_id)
+    # Check if port is specified via command line (--port=X)
+    port = None
+    for arg in sys.argv:
+        if arg.startswith("--port="):
+            port = int(arg.split("=")[1])
+            break
+
+    # Fallback to worker-based port calculation
+    if port is None:
+        worker_id = os.getenv("TEST_WORKER_ID", "0")
+        port = 8000 + int(worker_id)
 
     uvicorn.run(app, host="0.0.0.0", port=port)

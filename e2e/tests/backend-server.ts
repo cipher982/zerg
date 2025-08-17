@@ -62,6 +62,7 @@ export async function startBackendServer(workerId: string): Promise<BackendServe
         ENVIRONMENT: 'test',
         TEST_WORKER_ID: workerId,
         NODE_ENV: 'test',
+        TESTING: '1',  // Enable testing mode for database reset
       },
       cwd: join(__dirname, '..', '..', 'backend'),
       stdio: 'pipe', // Capture output to avoid noise

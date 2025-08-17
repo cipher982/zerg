@@ -55,6 +55,7 @@ const backend = spawn('uv', ['run', 'python', '-m', 'uvicorn', 'test_main:app', 
         ENVIRONMENT: 'test:e2e',  // Use E2E test config for real models
         TEST_WORKER_ID: workerId,
         NODE_ENV: 'test',
+        TESTING: '1',  // Enable testing mode for database reset
     },
     cwd: join(__dirname, '..', 'backend'),
     stdio: 'inherit'

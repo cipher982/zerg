@@ -20,6 +20,9 @@ if (fs.existsSync(envPath)) {
 BACKEND_PORT = process.env.BACKEND_PORT ? parseInt(process.env.BACKEND_PORT) : BACKEND_PORT;
 FRONTEND_PORT = process.env.FRONTEND_PORT ? parseInt(process.env.FRONTEND_PORT) : FRONTEND_PORT;
 
+// Define workers count first so we can use it later
+const workers = process.env.CI ? 4 : 2;
+
 const config = {
   testDir: './tests',
 
@@ -40,7 +43,7 @@ const config = {
   globalTeardown: require.resolve('./test-teardown.js'),
 
   fullyParallel: true,
-  workers: process.env.CI ? 4 : 2,
+  workers: workers,
   retries: process.env.CI ? 2 : 1,
   
   reporter: [
@@ -64,9 +67,9 @@ const config = {
       reuseExistingServer: !process.env.CI, // Reuse in dev, fresh in CI
       timeout: 180_000,
     },
-    // Start backend servers for all possible workers (up to 4)
-    ...Array.from({ length: 4 }, (_, i) => ({
-      command: `BACKEND_PORT=${BACKEND_PORT + i} node spawn-test-backend.js ${i}`,
+    // Start backend servers for actual workers only
+    ...Array.from({ length: workers }, (_, i) => ({
+      command: `BACKEND_PORT=${BACKEND_PORT} node spawn-test-backend.js ${i}`,
       port: BACKEND_PORT + i,
       cwd: __dirname,
       reuseExistingServer: false, // Each worker needs isolated backend
