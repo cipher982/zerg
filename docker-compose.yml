@@ -1,4 +1,4 @@
-version: '3.8'
+# Docker Compose for Zerg AI Agent Platform - Development Mode
 
 services:
   # PostgreSQL Database
@@ -20,26 +20,30 @@ services:
   # Backend API Service
   backend:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: backend
+      dockerfile: ../docker/backend.dockerfile
+      target: development
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      ENVIRONMENT: production
+      ENVIRONMENT: development
       DATABASE_URL: postgresql://${POSTGRES_USER:-zerg}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zerg}
       JWT_SECRET: ${JWT_SECRET}
       FERNET_SECRET: ${FERNET_SECRET}
       TRIGGER_SIGNING_SECRET: ${TRIGGER_SIGNING_SECRET}
-      AUTH_DISABLED: ${AUTH_DISABLED:-0}
+      AUTH_DISABLED: ${AUTH_DISABLED:-1}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      ALLOWED_CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS}
+      ALLOWED_CORS_ORIGINS: ${ALLOWED_CORS_ORIGINS:-*}
       LLM_TOKEN_STREAM: ${LLM_TOKEN_STREAM:-true}
       DEV_ADMIN: ${DEV_ADMIN:-0}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
     volumes:
+      - ./backend:/app:cached
       - backend_static:/app/static
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/"]
@@ -50,11 +54,18 @@ services:
   # Frontend - Build WASM and serve with nginx
   frontend:
     build:
-      context: .
-      dockerfile: frontend/Dockerfile
+      context: frontend
+      dockerfile: ../docker/frontend.dockerfile
+      target: development
     restart: unless-stopped
     depends_on:
       - backend
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    volumes:
+      - ./frontend/src:/app/src:cached
+      - ./frontend/Cargo.toml:/app/Cargo.toml:cached
+      - ./frontend/www:/app/www:cached
 
 volumes:
   postgres_data:
