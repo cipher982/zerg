@@ -721,39 +721,37 @@ def upsert_canvas_layout(
     viewport: Optional[dict],
     workflow_id: Optional[int] = None,
 ):
-    """Insert **or** update the *canvas layout* for *(user_id, workspace=NULL)*.
+    """Insert **or** update the *canvas layout* for *(user_id, workflow_id)*.
 
-    The helper uses an *atomic* SQL ``INSERT … ON CONFLICT DO UPDATE`` so that
-    concurrent requests cannot create duplicate rows or accidentally lose
-    updates.  It relies on the UNIQUE(user_id, workspace) constraint declared
-    on the ``CanvasLayout`` model.
+    Uses database-agnostic upsert logic that works with both SQLite and PostgreSQL.
+    Relies on the UNIQUE(user_id, workflow_id) constraint declared on the CanvasLayout model.
     """
 
     from sqlalchemy.sql import func
-    from sqlalchemy.sql import insert  # Generic insert works with all databases
 
     if user_id is None:
         raise ValueError("upsert_canvas_layout: `user_id` must not be None, auth dependency failed?")
 
-    stmt = (
-        insert(CanvasLayout)
-        .values(
+    # First, try to find an existing record
+    existing = (
+        db.query(CanvasLayout).filter(CanvasLayout.user_id == user_id, CanvasLayout.workflow_id == workflow_id).first()
+    )
+
+    if existing:
+        # Update existing record
+        existing.nodes_json = nodes
+        existing.viewport = viewport
+        existing.updated_at = func.now()
+    else:
+        # Create new record
+        new_layout = CanvasLayout(
             user_id=user_id,
             workflow_id=workflow_id,
             nodes_json=nodes,
             viewport=viewport,
         )
-        .on_conflict_do_update(
-            index_elements=["user_id", "workflow_id"],
-            set_={
-                "nodes_json": nodes,
-                "viewport": viewport,
-                "updated_at": func.now(),
-            },
-        )
-    )
+        db.add(new_layout)
 
-    db.execute(stmt)
     db.commit()
 
     # Return the *current* row so callers can inspect the stored payload.
