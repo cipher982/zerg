@@ -104,8 +104,9 @@ services:
     # Security: read-only root filesystem
     read_only: true
     tmpfs:
-      - /var/cache/nginx:noexec,nosuid,size=50m
-      - /var/run:noexec,nosuid,size=10m
+      - /var/cache/nginx:noexec,nosuid,size=50m,uid=1000,gid=1000
+      - /var/log/nginx:noexec,nosuid,size=10m,uid=1000,gid=1000
+      - /var/run:noexec,nosuid,size=10m,uid=1000,gid=1000
     # Resource limits
     deploy:
       resources:
