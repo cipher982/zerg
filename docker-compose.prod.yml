@@ -38,11 +38,6 @@ services:
       target: production
       args:
         BUILD_ENV: production
-      cache_from:
-        - type=registry,ref=${REGISTRY:-ghcr.io/your-org/zerg}/backend:buildcache
-      cache_to:
-        - type=registry,ref=${REGISTRY:-ghcr.io/your-org/zerg}/backend:buildcache,mode=max
-    image: ${REGISTRY:-ghcr.io/your-org/zerg}/backend:${TAG:-latest}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -94,11 +89,6 @@ services:
       args:
         BUILD_ENV: production
         API_BASE_URL: ${API_BASE_URL:-http://backend:8000}
-      cache_from:
-        - type=registry,ref=${REGISTRY:-ghcr.io/your-org/zerg}/frontend:buildcache
-      cache_to:
-        - type=registry,ref=${REGISTRY:-ghcr.io/your-org/zerg}/frontend:buildcache,mode=max
-    image: ${REGISTRY:-ghcr.io/your-org/zerg}/frontend:${TAG:-latest}
     restart: unless-stopped
     depends_on:
       - backend
