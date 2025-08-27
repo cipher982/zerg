@@ -1,4 +1,4 @@
-# Frontend Dockerfile with runtime configuration
+# Simple frontend Dockerfile - Build WASM and serve with nginx
 FROM rust:1.89-slim AS builder
 
 # Install system dependencies
@@ -21,28 +21,19 @@ COPY . .
 # Set environment for WASM builds
 ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 
-# Build with placeholder URL - will be replaced at runtime
+# Build with localhost URL - nginx will proxy to backend
 RUN chmod +x build-debug.sh && \
     BUILD_ONLY=true \
-    BACKEND_PORT=8001 \
-    API_BASE_URL="RUNTIME_PLACEHOLDER" \
     ./build-debug.sh
 
 # Production stage with nginx
 FROM nginx:alpine
 
-# Install runtime dependencies
-RUN apk add --no-cache bash
-
-# Copy custom nginx configuration with WASM support
+# Copy nginx configuration with proxy settings
 COPY nginx.conf /etc/nginx/nginx.conf
 
 # Copy built frontend files
 COPY --from=builder /app/www/ /usr/share/nginx/html/
-
-# Copy entrypoint script from context
-COPY frontend-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 
 # Validate nginx config
 RUN nginx -t
@@ -53,6 +44,3 @@ RUN test -f /usr/share/nginx/html/agent_platform_frontend.js || (echo "ERROR: WA
 RUN test -f /usr/share/nginx/html/agent_platform_frontend_bg.wasm || (echo "ERROR: WASM binary missing" && exit 1)
 
 EXPOSE 80
-
-# Use entrypoint for runtime configuration
-ENTRYPOINT ["/entrypoint.sh"]
