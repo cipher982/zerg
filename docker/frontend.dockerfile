@@ -28,18 +28,6 @@ FROM nginx:alpine
 COPY --from=builder /app/www /usr/share/nginx/html
 
 # Replace default nginx config entirely
-RUN echo 'events { worker_connections 1024; } \
-http { \
-    include /etc/nginx/mime.types; \
-    default_type application/octet-stream; \
-    server { \
-        listen 80; \
-        root /usr/share/nginx/html; \
-        index index.html; \
-        location / { \
-            try_files $uri $uri/ /index.html; \
-        } \
-    } \
-}' > /etc/nginx/nginx.conf
+RUN printf 'events {\n    worker_connections 1024;\n}\n\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n    \n    server {\n        listen 80;\n        root /usr/share/nginx/html;\n        index index.html;\n        \n        location / {\n            try_files $uri $uri/ /index.html;\n        }\n    }\n}' > /etc/nginx/nginx.conf
 
 EXPOSE 80
