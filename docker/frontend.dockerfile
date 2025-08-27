@@ -29,7 +29,7 @@ RUN wasm-pack build --release --target web --no-opt --out-dir www
 FROM nginx:alpine
 # Clear nginx default files and copy our application
 RUN rm -rf /usr/share/nginx/html/*
-COPY --from=builder /app/www /usr/share/nginx/html
+COPY --from=builder /app/www/ /usr/share/nginx/html/
 
 # Replace default nginx config entirely
 RUN printf 'events {\n    worker_connections 1024;\n}\n\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n    \n    server {\n        listen 80;\n        root /usr/share/nginx/html;\n        index index.html;\n        \n        location / {\n            try_files $uri $uri/ /index.html;\n        }\n    }\n}' > /etc/nginx/nginx.conf
