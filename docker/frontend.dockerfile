@@ -21,9 +21,12 @@ COPY . .
 # Set environment for WASM builds
 ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 
-# Build WASM (no optimization to avoid timeouts) - output to www root for direct access
-RUN wasm-pack build --release --target web --no-opt --out-dir www
+# Build WASM (no optimization to avoid timeouts) - output to separate directory
+RUN wasm-pack build --release --target web --no-opt --out-dir wasm-build
 
+# Copy WASM files to www directory alongside existing HTML/CSS files
+RUN cp wasm-build/agent_platform_frontend.js www/ && \
+    cp wasm-build/agent_platform_frontend_bg.wasm www/
 
 # Serve with nginx
 FROM nginx:alpine
