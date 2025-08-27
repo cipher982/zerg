@@ -20,8 +20,8 @@ COPY . .
 # Set environment for WASM builds
 ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 
-# Build WASM (no optimization to avoid timeouts)
-RUN wasm-pack build --release --target web --no-opt --out-dir www/pkg
+# Build WASM (no optimization to avoid timeouts) - output to www root for direct access
+RUN wasm-pack build --release --target web --no-opt --out-dir www
 
 # Serve with nginx
 FROM nginx:alpine
