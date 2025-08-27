@@ -23,8 +23,7 @@ ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 
 # Use the existing build script that properly processes templates and builds WASM
 # Set BUILD_ONLY=true to skip dev server startup
-# Set API_BASE_URL for production backend service
-RUN chmod +x build-debug.sh && BUILD_ONLY=true API_BASE_URL=http://backend:8000 ./build-debug.sh
+RUN chmod +x build-debug.sh && BUILD_ONLY=true ./build-debug.sh
 
 # Serve with nginx
 FROM nginx:alpine
