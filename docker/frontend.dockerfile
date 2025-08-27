@@ -98,6 +98,9 @@ RUN addgroup -g 1000 zerg && \
 # Copy built frontend files
 COPY --from=builder --chown=zerg:zerg /app/www /usr/share/nginx/html
 
+# Replace nginx default index.html with our app
+RUN mv /usr/share/nginx/html/index.html.template /usr/share/nginx/html/index.html
+
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
