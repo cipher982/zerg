@@ -85,10 +85,6 @@ services:
     build:
       context: frontend
       dockerfile: ../docker/frontend.dockerfile
-      target: production
-      args:
-        BUILD_ENV: production
-        API_BASE_URL: ${API_BASE_URL:-http://backend:8000}
     restart: unless-stopped
     depends_on:
       - backend
