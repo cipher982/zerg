@@ -30,4 +30,12 @@ COPY --from=builder /app/www /usr/share/nginx/html
 # Replace default nginx config entirely
 RUN printf 'events {\n    worker_connections 1024;\n}\n\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n    \n    server {\n        listen 80;\n        root /usr/share/nginx/html;\n        index index.html;\n        \n        location / {\n            try_files $uri $uri/ /index.html;\n        }\n    }\n}' > /etc/nginx/nginx.conf
 
+# CRITICAL: Validate nginx config during build - fail fast if malformed
+RUN nginx -t
+
+# CRITICAL: Verify our application files exist and are accessible
+RUN test -f /usr/share/nginx/html/index.html || (echo "ERROR: index.html missing" && exit 1)
+RUN test -f /usr/share/nginx/html/agent_platform_frontend.js || (echo "ERROR: WASM JS missing" && exit 1)
+RUN test -f /usr/share/nginx/html/agent_platform_frontend_bg.wasm || (echo "ERROR: WASM binary missing" && exit 1)
+
 EXPOSE 80

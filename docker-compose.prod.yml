@@ -89,7 +89,7 @@ services:
     depends_on:
       - backend
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      test: ["CMD", "sh", "-c", "curl -f http://localhost:80/ | grep -q 'AI Agent Platform' && curl -f http://localhost:80/agent_platform_frontend.js > /dev/null"]
       interval: 30s
       timeout: 10s
       retries: 3
