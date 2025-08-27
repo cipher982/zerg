@@ -70,6 +70,7 @@ RUN --mount=type=cache,target=/app/target \
     TMPDIR="/tmp/wasm_build" wasm-pack build \
     --release \
     --target web \
+    --no-opt \
     --out-dir pkg
 
 # Copy WASM artifacts to www directory
