@@ -88,6 +88,14 @@ async function main() {\
 }\
 main();' > www/bootstrap.js
 
+# Process index.html template with production values
+RUN TIMESTAMP=$(date +%s) && \
+    CACHE_BUST_TAG="<meta name=\"cache-bust\" content=\"${TIMESTAMP}\">" && \
+    sed \
+      -e "s|{{BACKEND_PORT}}|8000|g" \
+      -e "s|{{CACHE_BUST}}|${CACHE_BUST_TAG}|g" \
+      www/index.html.template > www/index.html
+
 # Production nginx stage with security hardening
 FROM nginx:1.25-alpine AS production
 
@@ -97,9 +105,6 @@ RUN addgroup -g 1000 zerg && \
 
 # Copy built frontend files
 COPY --from=builder --chown=zerg:zerg /app/www /usr/share/nginx/html
-
-# Replace nginx default index.html with our app
-RUN mv /usr/share/nginx/html/index.html.template /usr/share/nginx/html/index.html
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
