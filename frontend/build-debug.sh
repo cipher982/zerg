@@ -85,6 +85,13 @@ window.__APP_CONFIG__.BUILD = 'debug';
 EOF
 fi
 
+# If BUILD_ONLY environment variable is set, exit here without starting dev server
+if [ "${BUILD_ONLY:-}" = "true" ]; then
+  echo "[build-debug] BUILD_ONLY=true, skipping dev server startup"
+  echo "[build-debug] Build completed successfully - www/ directory contains processed files"
+  exit 0
+fi
+
 echo "[build-debug] starting dev server on http://localhost:${FRONTEND_PORT} …"
 cd www
 

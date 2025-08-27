@@ -21,17 +21,9 @@ COPY . .
 # Set environment for WASM builds
 ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 
-# Build WASM (no optimization to avoid timeouts) - output to separate directory
-RUN wasm-pack build --release --target web --no-opt --out-dir wasm-build
-
-# Copy WASM files to www directory alongside existing HTML/CSS files  
-RUN cp wasm-build/agent_platform_frontend.js www/ && \
-    cp wasm-build/agent_platform_frontend_bg.wasm www/
-
-# Create index.html from template if it doesn't exist (needed for Coolify environment)
-RUN if [ ! -f www/index.html ] && [ -f www/index.html.template ]; then \
-        cp www/index.html.template www/index.html; \
-    fi
+# Use the existing build script that properly processes templates and builds WASM
+# Set BUILD_ONLY=true to skip dev server startup
+RUN chmod +x build-debug.sh && BUILD_ONLY=true ./build-debug.sh
 
 # Serve with nginx
 FROM nginx:alpine
