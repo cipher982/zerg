@@ -71,7 +71,11 @@ TIMESTAMP=$(date +%s)
 CACHE_BUST_TAG="<meta name=\"cache-bust\" content=\"${TIMESTAMP}\">"
 
 # Set backend URLs for CSP based on API_BASE_URL or fallback to localhost
-if [[ "${API_BASE_URL}" == *"backend:"* ]]; then
+if [[ "${API_BASE_URL}" == "RUNTIME_PLACEHOLDER" ]]; then
+  # Runtime configuration - use placeholders that will be replaced by entrypoint
+  BACKEND_URL="{{BACKEND_URL}}"
+  BACKEND_WS_URL="{{BACKEND_WS_URL}}"
+elif [[ "${API_BASE_URL}" == *"backend:"* ]]; then
   # Production: backend service - extract port from API_BASE_URL
   BACKEND_URL="${API_BASE_URL}"
   BACKEND_WS_URL="${API_BASE_URL/http:/ws:}"
