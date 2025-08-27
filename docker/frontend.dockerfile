@@ -27,14 +27,19 @@ RUN wasm-pack build --release --target web --no-opt --out-dir www/pkg
 FROM nginx:alpine
 COPY --from=builder /app/www /usr/share/nginx/html
 
-# Simple nginx config for SPA
-RUN echo 'server { \
-    listen 80; \
-    root /usr/share/nginx/html; \
-    index index.html; \
-    location / { \
-        try_files $uri $uri/ /index.html; \
+# Replace default nginx config entirely
+RUN echo 'events { worker_connections 1024; } \
+http { \
+    include /etc/nginx/mime.types; \
+    default_type application/octet-stream; \
+    server { \
+        listen 80; \
+        root /usr/share/nginx/html; \
+        index index.html; \
+        location / { \
+            try_files $uri $uri/ /index.html; \
+        } \
     } \
-}' > /etc/nginx/conf.d/default.conf
+}' > /etc/nginx/nginx.conf
 
 EXPOSE 80
