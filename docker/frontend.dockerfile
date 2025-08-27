@@ -24,22 +24,14 @@ ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 # Build WASM (no optimization to avoid timeouts) - output to separate directory
 RUN wasm-pack build --release --target web --no-opt --out-dir wasm-build
 
-# Debug: Check what exists before WASM copy
-RUN echo "=== BEFORE WASM COPY ===" && \
-    ls -la wasm-build/ && \
-    echo "=== WWW DIRECTORY ===" && \
-    ls -la www/ && \
-    echo "========================"
-
 # Copy WASM files to www directory alongside existing HTML/CSS files  
-# Use -f to force overwrite any existing WASM files with fresh builds
-RUN cp -f wasm-build/agent_platform_frontend.js www/ && \
-    cp -f wasm-build/agent_platform_frontend_bg.wasm www/
+RUN cp wasm-build/agent_platform_frontend.js www/ && \
+    cp wasm-build/agent_platform_frontend_bg.wasm www/
 
-# Debug: Check what exists after WASM copy
-RUN echo "=== AFTER WASM COPY ===" && \
-    ls -la www/ && \
-    echo "========================"
+# Create index.html from template if it doesn't exist (needed for Coolify environment)
+RUN if [ ! -f www/index.html ] && [ -f www/index.html.template ]; then \
+        cp www/index.html.template www/index.html; \
+    fi
 
 # Serve with nginx
 FROM nginx:alpine
