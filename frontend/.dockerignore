@@ -38,6 +38,7 @@ test-results/
 # Development scripts
 *.sh
 !build-only.sh
+!build-debug.sh
 
 # Backend code (not needed for frontend)
 ../backend/
