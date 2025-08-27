@@ -23,7 +23,8 @@ ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 
 # Use the existing build script that properly processes templates and builds WASM
 # Set BUILD_ONLY=true to skip dev server startup
-RUN chmod +x build-debug.sh && BUILD_ONLY=true ./build-debug.sh
+# Set API_BASE_URL for production backend service
+RUN chmod +x build-debug.sh && BUILD_ONLY=true API_BASE_URL=http://backend:8000 ./build-debug.sh
 
 # Serve with nginx
 FROM nginx:alpine
@@ -31,8 +32,8 @@ FROM nginx:alpine
 RUN rm -rf /usr/share/nginx/html/*
 COPY --from=builder /app/www/ /usr/share/nginx/html/
 
-# Replace default nginx config entirely
-RUN printf 'events {\n    worker_connections 1024;\n}\n\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n    \n    server {\n        listen 80;\n        root /usr/share/nginx/html;\n        index index.html;\n        \n        location / {\n            try_files $uri $uri/ /index.html;\n        }\n    }\n}' > /etc/nginx/nginx.conf
+# Replace default nginx config entirely with WASM MIME type support
+RUN printf 'events {\n    worker_connections 1024;\n}\n\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n    \n    server {\n        listen 80;\n        root /usr/share/nginx/html;\n        index index.html;\n        \n        # Serve WASM files with correct MIME type\n        location ~* \\.wasm$ {\n            add_header Content-Type application/wasm;\n        }\n        \n        location / {\n            try_files $uri $uri/ /index.html;\n        }\n    }\n}' > /etc/nginx/nginx.conf
 
 # CRITICAL: Validate nginx config during build - fail fast if malformed  
 RUN nginx -t

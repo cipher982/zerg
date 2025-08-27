@@ -70,9 +70,22 @@ echo "[build-debug] generating index.html from template for ports ${BACKEND_PORT
 TIMESTAMP=$(date +%s)
 CACHE_BUST_TAG="<meta name=\"cache-bust\" content=\"${TIMESTAMP}\">"
 
+# Set backend URLs for CSP based on API_BASE_URL or fallback to localhost
+if [[ "${API_BASE_URL}" == *"backend:"* ]]; then
+  # Production: backend service
+  BACKEND_URL="http://backend:8000"
+  BACKEND_WS_URL="ws://backend:8000"
+else
+  # Development: localhost with port
+  BACKEND_URL="http://localhost:${BACKEND_PORT}"
+  BACKEND_WS_URL="ws://localhost:${BACKEND_PORT}"
+fi
+
 # Generate index.html from template
 sed \
   -e "s|{{BACKEND_PORT}}|${BACKEND_PORT}|g" \
+  -e "s|{{BACKEND_URL}}|${BACKEND_URL}|g" \
+  -e "s|{{BACKEND_WS_URL}}|${BACKEND_WS_URL}|g" \
   -e "s|{{CACHE_BUST}}|${CACHE_BUST_TAG}|g" \
   www/index.html.template > www/index.html
 
