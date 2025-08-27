@@ -72,9 +72,9 @@ CACHE_BUST_TAG="<meta name=\"cache-bust\" content=\"${TIMESTAMP}\">"
 
 # Set backend URLs for CSP based on API_BASE_URL or fallback to localhost
 if [[ "${API_BASE_URL}" == *"backend:"* ]]; then
-  # Production: backend service
-  BACKEND_URL="http://backend:8000"
-  BACKEND_WS_URL="ws://backend:8000"
+  # Production: backend service - extract port from API_BASE_URL
+  BACKEND_URL="${API_BASE_URL}"
+  BACKEND_WS_URL="${API_BASE_URL/http:/ws:}"
 else
   # Development: localhost with port
   BACKEND_URL="http://localhost:${BACKEND_PORT}"

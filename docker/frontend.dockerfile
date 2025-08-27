@@ -1,6 +1,9 @@
 # Simple frontend Dockerfile - Build WASM and serve with nginx
 FROM rust:1.89-slim AS builder
 
+# Build arguments for environment configuration
+ARG BACKEND_PORT
+ARG API_BASE_URL
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -23,7 +26,12 @@ ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 
 # Use the existing build script that properly processes templates and builds WASM
 # Set BUILD_ONLY=true to skip dev server startup
-RUN chmod +x build-debug.sh && BUILD_ONLY=true ./build-debug.sh
+# Use build args for environment configuration
+RUN chmod +x build-debug.sh && \
+    BUILD_ONLY=true \
+    BACKEND_PORT=${BACKEND_PORT} \
+    API_BASE_URL=${API_BASE_URL} \
+    ./build-debug.sh
 
 # Serve with nginx
 FROM nginx:alpine
