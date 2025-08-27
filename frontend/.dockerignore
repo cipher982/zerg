@@ -8,7 +8,7 @@ target/
 # WASM build outputs (we rebuild these)
 pkg/
 dist/
-www/pkg/
+# Note: keeping www/ files as they contain source HTML/CSS needed for build
 
 # Node.js artifacts (if any)
 node_modules/
@@ -47,6 +47,6 @@ test-results/
 # Logs
 *.log
 
-# Generated files that will be rebuilt
-bootstrap.js
+# Generated files that will be rebuilt  
+# Note: bootstrap.js and other www files are needed as source files
 pkg/
