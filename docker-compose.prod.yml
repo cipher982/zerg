@@ -92,6 +92,10 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    labels:
+      - "coolify.enabled=true"
+      - "coolify.http.routers.zerg-frontend.rule=Host(`${COOLIFY_FQDN}`)"
+      - "coolify.http.services.zerg-frontend.loadbalancer.server.port=80"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/"]
       interval: 30s
