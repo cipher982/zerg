@@ -15,8 +15,8 @@ RUN cargo install wasm-pack
 RUN rustup target add wasm32-unknown-unknown
 
 WORKDIR /app
-# Copy only frontend directory for build
-COPY frontend/ .
+# Copy current directory (frontend) for build
+COPY . .
 
 # Set environment for WASM builds
 ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
@@ -35,13 +35,13 @@ FROM nginx:alpine
 RUN apk add --no-cache bash
 
 # Copy custom nginx configuration with WASM support
-COPY docker/nginx.conf /etc/nginx/nginx.conf
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # Copy built frontend files
 COPY --from=builder /app/www/ /usr/share/nginx/html/
 
 # Copy entrypoint script from context
-COPY docker/frontend-entrypoint.sh /entrypoint.sh
+COPY frontend-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Validate nginx config
