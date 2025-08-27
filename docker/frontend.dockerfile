@@ -24,11 +24,11 @@ ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 # Build WASM (no optimization to avoid timeouts) - output to www root for direct access
 RUN wasm-pack build --release --target web --no-opt --out-dir www
 
-# Fix bootstrap.js to use same origin instead of localhost
-RUN sed -i "s|http://localhost:47300|window.location.origin|g" www/bootstrap.js
 
 # Serve with nginx
 FROM nginx:alpine
+# Clear nginx default files and copy our application
+RUN rm -rf /usr/share/nginx/html/*
 COPY --from=builder /app/www /usr/share/nginx/html
 
 # Replace default nginx config entirely
