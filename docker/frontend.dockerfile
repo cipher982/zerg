@@ -1,9 +1,5 @@
-# Simple frontend Dockerfile - Build WASM and serve with nginx
+# Frontend Dockerfile with runtime configuration
 FROM rust:1.89-slim AS builder
-
-# Build arguments for environment configuration
-ARG BACKEND_PORT
-ARG API_BASE_URL
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -19,35 +15,44 @@ RUN cargo install wasm-pack
 RUN rustup target add wasm32-unknown-unknown
 
 WORKDIR /app
-COPY . .
+# Copy only frontend directory for build
+COPY frontend/ .
 
 # Set environment for WASM builds
 ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 
-# Use the existing build script that properly processes templates and builds WASM
-# Set BUILD_ONLY=true to skip dev server startup
-# Use build args for environment configuration
+# Build with placeholder URL - will be replaced at runtime
 RUN chmod +x build-debug.sh && \
     BUILD_ONLY=true \
-    BACKEND_PORT=${BACKEND_PORT} \
-    API_BASE_URL=${API_BASE_URL} \
+    BACKEND_PORT=8001 \
+    API_BASE_URL="RUNTIME_PLACEHOLDER" \
     ./build-debug.sh
 
-# Serve with nginx
+# Production stage with nginx
 FROM nginx:alpine
-# Clear nginx default files and copy our application
-RUN rm -rf /usr/share/nginx/html/*
+
+# Install runtime dependencies
+RUN apk add --no-cache bash
+
+# Copy custom nginx configuration with WASM support
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+
+# Copy built frontend files
 COPY --from=builder /app/www/ /usr/share/nginx/html/
 
-# Replace default nginx config entirely with WASM MIME type support
-RUN printf 'events {\n    worker_connections 1024;\n}\n\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n    \n    server {\n        listen 80;\n        root /usr/share/nginx/html;\n        index index.html;\n        \n        # Serve WASM files with correct MIME type\n        location ~* \\.wasm$ {\n            add_header Content-Type application/wasm;\n        }\n        \n        location / {\n            try_files $uri $uri/ /index.html;\n        }\n    }\n}' > /etc/nginx/nginx.conf
+# Copy entrypoint script from context
+COPY docker/frontend-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# CRITICAL: Validate nginx config during build - fail fast if malformed  
+# Validate nginx config
 RUN nginx -t
 
-# CRITICAL: Verify our application files exist and are accessible
+# Verify critical files exist
 RUN test -f /usr/share/nginx/html/index.html || (echo "ERROR: index.html missing" && exit 1)
 RUN test -f /usr/share/nginx/html/agent_platform_frontend.js || (echo "ERROR: WASM JS missing" && exit 1)
 RUN test -f /usr/share/nginx/html/agent_platform_frontend_bg.wasm || (echo "ERROR: WASM binary missing" && exit 1)
 
 EXPOSE 80
+
+# Use entrypoint for runtime configuration
+ENTRYPOINT ["/entrypoint.sh"]
