@@ -30,9 +30,7 @@ pub struct ApiClient;
 impl ApiClient {
     // Get the base URL for API calls
     fn api_base_url() -> String {
-        let url = super::get_api_base_url().expect("API base URL must be set (no fallback allowed)");
-        web_sys::console::log_1(&format!("api_base_url() returning: {}", url).into());
-        url
+        super::get_api_base_url().expect("API base URL must be set (no fallback allowed)")
     }
 
     /// Format HTTP errors with user-friendly messages and show appropriate toasts
@@ -558,20 +556,15 @@ impl ApiClient {
     ) -> Result<String, JsValue> {
         use web_sys::{Headers, Request, RequestInit, RequestMode, Response};
 
-        // Debug: Log the original URL being passed
-        web_sys::console::log_1(&format!("fetch_json called with URL: {}", url).into());
-
         // If the page is served over HTTPS but the URL is HTTP, upgrade it to HTTPS.
         // This prevents mixed-content / CSP violations in production while keeping
         // localhost development (served via HTTP) working as-is.
         let mut effective_url = url.to_string();
         if let Some(win) = web_sys::window() {
             if let Ok(protocol) = win.location().protocol() {
-                web_sys::console::log_1(&format!("Page protocol: {}", protocol).into());
                 if protocol == "https:" && effective_url.starts_with("http://") {
                     // Only rewrite the scheme; host and path remain unchanged.
                     effective_url = effective_url.replacen("http://", "https://", 1);
-                    web_sys::console::log_1(&format!("Upgraded URL: {} -> {}", url, effective_url).into());
                 }
             }
         }
