@@ -71,7 +71,13 @@ def _verify_google_id_token(id_token_str: str) -> dict[str, Any]:
         idinfo = id_token.verify_oauth2_token(id_token_str, request, GOOGLE_CLIENT_ID)
         return idinfo
     except Exception as exc:  # broad but we map to 401 below
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Google token") from exc
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.error(f"Google token validation failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=f"Invalid Google token: {str(exc)}"
+        ) from exc
 
 
 def _issue_access_token(
