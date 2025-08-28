@@ -335,10 +335,15 @@ pub fn start() -> Result<(), JsValue> {
         // back to the previous compile-time logic so production builds that
         // are already configured continue to work.
 
+        web_sys::console::log_1(&"📡 About to fetch system info from API...".into());
         let sys_info_json = match network::api_client::ApiClient::fetch_system_info().await {
-            Ok(j) => j,
+            Ok(j) => {
+                web_sys::console::log_1(&"✅ System info fetched successfully".into());
+                j
+            },
             Err(e) => {
-                web_sys::console::warn_1(&format!("Failed to fetch /system/info: {:?}", e).into());
+                web_sys::console::warn_1(&format!("⚠️ Failed to fetch /system/info: {:?}", e).into());
+                web_sys::console::log_1(&"📋 Using fallback empty config".into());
                 "{}".to_string()
             }
         };
@@ -355,6 +360,9 @@ pub fn start() -> Result<(), JsValue> {
             auth_disabled: false,
             google_client_id: None,
         });
+
+        web_sys::console::log_1(&format!("🔑 System info parsed: auth_disabled={}, has_client_id={}", 
+            info.auth_disabled, info.google_client_id.is_some()).into());
 
         // Store google_client_id in global state for later reuse (e.g. after
         // a manual logout when we need to recreate the overlay quickly).
