@@ -98,11 +98,12 @@ pub fn mount_login_overlay(document: &Document, client_id: &str) {
     overlay.set_id("global-login-overlay");
     overlay.set_class_name("login-overlay");
     
-    // Add inline styles to center the overlay
+    // Add inline styles to center the overlay with subtle backdrop
     overlay.set_attribute("style", 
         "position: fixed; \
          top: 0; left: 0; right: 0; bottom: 0; \
-         background: rgba(0, 0, 0, 0.8); \
+         background: rgba(255, 255, 255, 0.1); \
+         backdrop-filter: blur(4px); \
          display: flex; \
          align-items: center; \
          justify-content: center; \

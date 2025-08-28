@@ -286,19 +286,10 @@ pub fn start() -> Result<(), JsValue> {
     // Initialize better panic messages
     console_error_panic_hook::set_once();
 
-    // Log the API base URL for debugging
-    web_sys::console::log_1(
-        &format!("🚀 NUCLEAR FALLBACK REMOVAL DEPLOYED - API_BASE_URL at build: {:?}", option_env!("API_BASE_URL")).into(),
-    );
-
-    // Initialize API configuration before any network operations  
-    web_sys::console::log_1(&"🔧 About to init API config...".into());
+    // Initialize API configuration before any network operations
     if let Err(e) = network::init_api_config() {
-        web_sys::console::error_1(&format!("❌ API config init failed: {:?}", e).into());
-        web_sys::console::log_1(&"⚠️ Will be overridden by bootstrap.js - continuing...".into());
-        // Don't return error - let bootstrap.js override with runtime config
-    } else {
-        web_sys::console::log_1(&"✅ API config initialized successfully".into());
+        // API config will be overridden by bootstrap.js with runtime config
+        web_sys::console::log_1(&format!("API config will be set by bootstrap.js: {}", e).into());
     }
 
     // Model list fetch moved to after runtime config init to avoid using localhost fallback
@@ -308,10 +299,8 @@ pub fn start() -> Result<(), JsValue> {
     // }
 
     // Get the document
-    web_sys::console::log_1(&"🌐 Getting window and document...".into());
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
-    web_sys::console::log_1(&"📄 Document obtained successfully".into());
 
     // Power-mode keyboard shortcuts are now opt-in.  The handler will be
     // installed via `Message::SetPowerMode(true)` after the user toggles the
@@ -328,22 +317,15 @@ pub fn start() -> Result<(), JsValue> {
     // the bootstrap happens inside the async block.
 
     let doc_clone = document.clone();
-    web_sys::console::log_1(&"🚀 About to spawn_local async block...".into());
     spawn_local(async move {
-        web_sys::console::log_1(&"🔄 Inside async block - starting bootstrap...".into());
         // Attempt to fetch the system info endpoint.  If it fails we fall
         // back to the previous compile-time logic so production builds that
         // are already configured continue to work.
 
-        web_sys::console::log_1(&"📡 About to fetch system info from API...".into());
         let sys_info_json = match network::api_client::ApiClient::fetch_system_info().await {
-            Ok(j) => {
-                web_sys::console::log_1(&"✅ System info fetched successfully".into());
-                j
-            },
+            Ok(j) => j,
             Err(e) => {
-                web_sys::console::warn_1(&format!("⚠️ Failed to fetch /system/info: {:?}", e).into());
-                web_sys::console::log_1(&"📋 Using fallback empty config".into());
+                web_sys::console::warn_1(&format!("Failed to fetch /system/info: {:?}", e).into());
                 "{}".to_string()
             }
         };
@@ -360,9 +342,6 @@ pub fn start() -> Result<(), JsValue> {
             auth_disabled: false,
             google_client_id: None,
         });
-
-        web_sys::console::log_1(&format!("🔑 System info parsed: auth_disabled={}, has_client_id={}", 
-            info.auth_disabled, info.google_client_id.is_some()).into());
 
         // Store google_client_id in global state for later reuse (e.g. after
         // a manual logout when we need to recreate the overlay quickly).
@@ -391,19 +370,14 @@ pub fn start() -> Result<(), JsValue> {
         }
 
         // ─── Auth enabled ───
-        web_sys::console::log_1(&"🔐 Auth enabled - checking login status...".into());
-        
         // If we *already* have a JWT → bootstrap immediately.
         if state::APP_STATE.with(|s| s.borrow().logged_in) {
-            web_sys::console::log_1(&"✅ Already logged in - bootstrapping app...".into());
             if let Err(e) = bootstrap_app_after_login(&doc_clone) {
                 web_sys::console::error_1(&e);
             }
             return;
         }
 
-        web_sys::console::log_1(&"🔑 No existing login - showing Google Sign-In...".into());
-        
         // Otherwise show Google Sign-In overlay (needs client_id).
         let client_id = info.google_client_id.as_deref().unwrap_or("");
 
@@ -414,14 +388,11 @@ pub fn start() -> Result<(), JsValue> {
             return;
         }
 
-        web_sys::console::log_1(&format!("🎯 About to mount login overlay with client_id: {}", &client_id[0..20]).into());
         components_auth::mount_login_overlay(&doc_clone, client_id);
-        web_sys::console::log_1(&"📋 Login overlay mount completed".into());
     });
 
     // Nothing else to do synchronously – actual bootstrap continues in async
     // block above.
-    web_sys::console::log_1(&"✅ start() function completed successfully - UI should mount async".into());
     Ok(())
 }
 
