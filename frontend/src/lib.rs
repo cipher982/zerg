@@ -291,13 +291,14 @@ pub fn start() -> Result<(), JsValue> {
         &format!("🚀 NUCLEAR FALLBACK REMOVAL DEPLOYED - API_BASE_URL at build: {:?}", option_env!("API_BASE_URL")).into(),
     );
 
-    // Initialize API configuration before any network operations
+    // Initialize API configuration before any network operations  
+    web_sys::console::log_1(&"🔧 About to init API config...".into());
     if let Err(e) = network::init_api_config() {
-        web_sys::console::error_1(&format!("Failed to initialize API config: {:?}", e).into());
-        return Err(JsValue::from_str(&format!(
-            "API config initialization failed: {}",
-            e
-        )));
+        web_sys::console::error_1(&format!("❌ API config init failed: {:?}", e).into());
+        web_sys::console::log_1(&"⚠️ Will be overridden by bootstrap.js - continuing...".into());
+        // Don't return error - let bootstrap.js override with runtime config
+    } else {
+        web_sys::console::log_1(&"✅ API config initialized successfully".into());
     }
 
     // Model list fetch moved to after runtime config init to avoid using localhost fallback
