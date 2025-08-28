@@ -34,6 +34,7 @@ dependencies = [
     "langgraph-checkpoint-sqlite>=2.0.10",
     "simpleeval>=1.0.3",
     "psycopg2-binary>=2.9.0",
+    "google-auth>=2.40.3",
 ]
 
 [build-system]
