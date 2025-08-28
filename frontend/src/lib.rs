@@ -308,8 +308,10 @@ pub fn start() -> Result<(), JsValue> {
     // }
 
     // Get the document
+    web_sys::console::log_1(&"🌐 Getting window and document...".into());
     let window = web_sys::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
+    web_sys::console::log_1(&"📄 Document obtained successfully".into());
 
     // Power-mode keyboard shortcuts are now opt-in.  The handler will be
     // installed via `Message::SetPowerMode(true)` after the user toggles the
@@ -326,7 +328,9 @@ pub fn start() -> Result<(), JsValue> {
     // the bootstrap happens inside the async block.
 
     let doc_clone = document.clone();
+    web_sys::console::log_1(&"🚀 About to spawn_local async block...".into());
     spawn_local(async move {
+        web_sys::console::log_1(&"🔄 Inside async block - starting bootstrap...".into());
         // Attempt to fetch the system info endpoint.  If it fails we fall
         // back to the previous compile-time logic so production builds that
         // are already configured continue to work.
@@ -402,6 +406,7 @@ pub fn start() -> Result<(), JsValue> {
 
     // Nothing else to do synchronously – actual bootstrap continues in async
     // block above.
+    web_sys::console::log_1(&"✅ start() function completed successfully - UI should mount async".into());
     Ok(())
 }
 
