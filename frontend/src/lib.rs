@@ -288,7 +288,7 @@ pub fn start() -> Result<(), JsValue> {
 
     // Log the API base URL for debugging
     web_sys::console::log_1(
-        &format!("API_BASE_URL at build: {:?}", option_env!("API_BASE_URL")).into(),
+        &format!("🚀 NUCLEAR FALLBACK REMOVAL DEPLOYED - API_BASE_URL at build: {:?}", option_env!("API_BASE_URL")).into(),
     );
 
     // Initialize API configuration before any network operations
