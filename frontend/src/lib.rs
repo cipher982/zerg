@@ -300,11 +300,11 @@ pub fn start() -> Result<(), JsValue> {
         )));
     }
 
-    // Kick off model list fetch ASAP so dropdown is populated by the time
-    // users open the Agent Config modal.
-    if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-        let _ = crate::components::model_selector::fetch_models_from_backend(&doc);
-    }
+    // Model list fetch moved to after runtime config init to avoid using localhost fallback
+    // Models will be fetched when the dropdown is first accessed
+    // if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+    //     let _ = crate::components::model_selector::fetch_models_from_backend(&doc);
+    // }
 
     // Get the document
     let window = web_sys::window().expect("no global `window` exists");
