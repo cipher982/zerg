@@ -480,6 +480,16 @@ impl WsClientV2 {
 
     /// Connect to the WebSocket server for the first time.
     pub fn connect(&mut self) -> Result<(), JsValue> {
+        // Recompute WS URL from current API config to avoid stale defaults
+        if let Ok(ws_url) = super::get_ws_url() {
+            if self.config.url != ws_url {
+                web_sys::console::log_1(
+                    &format!("Updating WebSocket URL: {} -> {}", self.config.url, ws_url)
+                        .into(),
+                );
+                self.config.url = ws_url;
+            }
+        }
         web_sys::console::log_1(&"Initiating WebSocket connection...".into());
         // Reset reconnection counter when manually connecting
         *self.reconnect_attempt.borrow_mut() = 0;
