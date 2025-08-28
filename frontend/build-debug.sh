@@ -59,7 +59,7 @@ import init, { init_api_config_js } from './agent_platform_frontend.js';
 async function main() {
   await init();            // loads wasm & runs #[wasm_bindgen(start)]
   // Use public backend URL or fallback to localhost for dev
-  const url = window.API_BASE_URL || '${API_BASE_URL:-http://localhost:8001}';
+  const url = window.API_BASE_URL || '${API_BASE_URL}';
   init_api_config_js(url);
 }
 

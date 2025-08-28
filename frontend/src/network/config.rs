@@ -18,7 +18,7 @@ impl Default for ApiConfig {
     /// during tests.
     fn default() -> Self {
         Self {
-            base_url: "http://localhost".to_string(),
+            base_url: "https://api.swarmlet.com".to_string(),
         }
     }
 }
