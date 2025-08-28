@@ -97,6 +97,17 @@ pub fn mount_login_overlay(document: &Document, client_id: &str) {
         .unwrap();
     overlay.set_id("global-login-overlay");
     overlay.set_class_name("login-overlay");
+    
+    // Add inline styles to center the overlay
+    overlay.set_attribute("style", 
+        "position: fixed; \
+         top: 0; left: 0; right: 0; bottom: 0; \
+         background: rgba(0, 0, 0, 0.8); \
+         display: flex; \
+         align-items: center; \
+         justify-content: center; \
+         z-index: 1000;"
+    ).unwrap();
 
     // Container for Google button ------------------------------------------
     let btn_holder: Element = document.create_element("div").expect("create btn holder");
