@@ -29,8 +29,13 @@ fi
 BACKEND_PORT="${BACKEND_PORT:-8001}"
 FRONTEND_PORT="${FRONTEND_PORT:-8002}"
 # API_BASE_URL is required - no localhost fallback
-if [ -z "${API_BASE_URL}" ]; then
-  echo "ERROR: API_BASE_URL environment variable is required"
+# Try API_BASE_URL first, then fall back to Coolify's SERVICE_URL_BACKEND
+if [ -n "${API_BASE_URL}" ]; then
+  API_BASE_URL="${API_BASE_URL}"
+elif [ -n "${SERVICE_URL_BACKEND}" ]; then
+  API_BASE_URL="${SERVICE_URL_BACKEND}"
+else
+  echo "ERROR: API_BASE_URL or SERVICE_URL_BACKEND environment variable is required"
   exit 1
 fi
 
