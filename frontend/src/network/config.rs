@@ -18,6 +18,7 @@ impl Default for ApiConfig {
     /// during tests.
     fn default() -> Self {
         Self {
+            // Force clean rebuild - should be HTTPS only
             base_url: "https://api.swarmlet.com".to_string(),
         }
     }
