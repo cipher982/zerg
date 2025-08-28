@@ -391,14 +391,19 @@ pub fn start() -> Result<(), JsValue> {
         }
 
         // ─── Auth enabled ───
+        web_sys::console::log_1(&"🔐 Auth enabled - checking login status...".into());
+        
         // If we *already* have a JWT → bootstrap immediately.
         if state::APP_STATE.with(|s| s.borrow().logged_in) {
+            web_sys::console::log_1(&"✅ Already logged in - bootstrapping app...".into());
             if let Err(e) = bootstrap_app_after_login(&doc_clone) {
                 web_sys::console::error_1(&e);
             }
             return;
         }
 
+        web_sys::console::log_1(&"🔑 No existing login - showing Google Sign-In...".into());
+        
         // Otherwise show Google Sign-In overlay (needs client_id).
         let client_id = info.google_client_id.as_deref().unwrap_or("");
 
@@ -409,7 +414,9 @@ pub fn start() -> Result<(), JsValue> {
             return;
         }
 
+        web_sys::console::log_1(&format!("🎯 About to mount login overlay with client_id: {}", &client_id[0..20]).into());
         components_auth::mount_login_overlay(&doc_clone, client_id);
+        web_sys::console::log_1(&"📋 Login overlay mount completed".into());
     });
 
     // Nothing else to do synchronously – actual bootstrap continues in async
