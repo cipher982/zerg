@@ -556,6 +556,19 @@ impl ApiClient {
     ) -> Result<String, JsValue> {
         use web_sys::{Headers, Request, RequestInit, RequestMode, Response};
 
+        // If the page is served over HTTPS but the URL is HTTP, upgrade it to HTTPS.
+        // This prevents mixed-content / CSP violations in production while keeping
+        // localhost development (served via HTTP) working as-is.
+        let mut effective_url = url.to_string();
+        if let Some(win) = web_sys::window() {
+            if let Ok(protocol) = win.location().protocol() {
+                if protocol == "https:" && effective_url.starts_with("http://") {
+                    // Only rewrite the scheme; host and path remain unchanged.
+                    effective_url = effective_url.replacen("http://", "https://", 1);
+                }
+            }
+        }
+
         let opts = RequestInit::new();
         // As above, `RequestInit` methods mutate internal JS fields via
         // interior mutability, so a `mut` binding is unnecessary.
@@ -581,7 +594,7 @@ impl ApiClient {
 
         opts.set_headers(&headers);
 
-        let request = Request::new_with_str_and_init(url, &opts)?;
+        let request = Request::new_with_str_and_init(&effective_url, &opts)?;
 
         let window = web_sys::window().expect("no global window exists");
         let resp_value = JsFuture::from(window.fetch_with_request(&request)).await?;

@@ -287,9 +287,16 @@ pub fn start() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
 
     // Initialize API configuration before any network operations
+    // This tries to use compile-time API_BASE_URL. If unavailable, we will
+    // wait for runtime initialization from bootstrap.js to avoid races.
     if let Err(e) = network::init_api_config() {
-        // API config will be overridden by bootstrap.js with runtime config
-        web_sys::console::log_1(&format!("API config will be set by bootstrap.js: {}", e).into());
+        web_sys::console::log_1(
+            &format!(
+                "API config not set at compile time ({}). Waiting for runtime config…",
+                e
+            )
+            .into(),
+        );
     }
 
     // Model list fetch moved to after runtime config init to avoid using localhost fallback
@@ -318,6 +325,30 @@ pub fn start() -> Result<(), JsValue> {
 
     let doc_clone = document.clone();
     spawn_local(async move {
+        // Ensure API configuration is initialized before making any API calls.
+        // This avoids a race where #[wasm_bindgen(start)] fires before
+        // bootstrap.js calls init_api_config_js().
+        async fn wait_for_api_config(timeout_ms: u32) -> bool {
+            use gloo_timers::future::TimeoutFuture;
+            let start = js_sys::Date::now();
+            loop {
+                if crate::network::get_api_base_url().is_ok() {
+                    return true;
+                }
+                let elapsed = js_sys::Date::now() - start;
+                if elapsed >= timeout_ms as f64 {
+                    return false;
+                }
+                TimeoutFuture::new(25).await;
+            }
+        }
+
+        if !wait_for_api_config(3000).await {
+            web_sys::console::warn_1(
+                &"API config still uninitialized after 3s; continuing with whatever is available"
+                    .into(),
+            );
+        }
         // Attempt to fetch the system info endpoint.  If it fails we fall
         // back to the previous compile-time logic so production builds that
         // are already configured continue to work.
