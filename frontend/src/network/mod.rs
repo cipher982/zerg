@@ -51,9 +51,8 @@ pub(crate) fn get_ws_url() -> Result<String, &'static str> {
         guard.as_ref().map(|cfg| cfg.ws_url())
     };
 
-    // Use the configured URL or fall back to a sensible default so unit and
-    // wasm-bindgen tests can run without the full app bootstrap.
-    let base_url = maybe_url.unwrap_or_else(|| ApiConfig::default().ws_url());
+    // API config MUST be initialized - no fallback to avoid localhost issues
+    let base_url = maybe_url.ok_or("API configuration not initialized")?;
 
     // If a JWT is present in localStorage append it as query parameter so the
     // backend can authenticate the WebSocket upgrade request.
@@ -73,5 +72,5 @@ pub(crate) fn get_api_base_url() -> Result<String, &'static str> {
         guard.as_ref().map(|cfg| cfg.base_url().to_string())
     };
 
-    Ok(maybe_base.unwrap_or_else(|| ApiConfig::default().base_url().to_string()))
+    maybe_base.ok_or("API configuration not initialized")
 }

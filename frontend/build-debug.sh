@@ -28,7 +28,11 @@ fi
 # Configure ports from .env with fallback defaults  
 BACKEND_PORT="${BACKEND_PORT:-8001}"
 FRONTEND_PORT="${FRONTEND_PORT:-8002}"
-API_BASE_URL="${API_BASE_URL:-http://localhost:${BACKEND_PORT}}"
+# API_BASE_URL is required - no localhost fallback
+if [ -z "${API_BASE_URL}" ]; then
+  echo "ERROR: API_BASE_URL environment variable is required"
+  exit 1
+fi
 
 # -------------------------------------------------------------
 # RUSTFLAGS — preserve existing debuginfo flag *and* opt-in to
