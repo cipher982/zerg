@@ -84,8 +84,8 @@ if [[ "${API_BASE_URL}" == "RUNTIME_PLACEHOLDER" ]]; then
 elif [[ "${API_BASE_URL}" == *"https://"* ]] || [[ "${API_BASE_URL}" == *"http://"* ]]; then
   # Production: use the actual API URL for CSP
   BACKEND_URL="${API_BASE_URL}"
-  BACKEND_WS_URL="${API_BASE_URL/https:/wss:}"
-  BACKEND_WS_URL="${BACKEND_WS_URL/http:/ws:}"
+  BACKEND_WS_URL="${API_BASE_URL/https:\/\//wss://}"
+  BACKEND_WS_URL="${BACKEND_WS_URL/http:\/\//ws://}"
 else
   # Development: localhost with port
   BACKEND_URL="http://localhost:${BACKEND_PORT}"
