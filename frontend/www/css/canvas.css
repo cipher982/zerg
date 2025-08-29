@@ -11,8 +11,8 @@
 #canvas-root {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  padding-top: 108px; /* header (60) + tabs (48) */
+  /* Occupy the page grid's content row and allow children to size */
+  min-height: 0;
   box-sizing: border-box;
   overflow: visible; /* Allow dropdowns to escape stacking context */
 }
