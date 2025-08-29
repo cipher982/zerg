@@ -79,4 +79,6 @@
   --z-canvas: 10;      /* main interactive canvas layer */
   --z-toolbar: 20;     /* workflow bar, header toolbars */
   --z-overlay: 1000;   /* dropdowns, modals, toasts */
+
+  /* Reserved for future layout metrics */
 }
