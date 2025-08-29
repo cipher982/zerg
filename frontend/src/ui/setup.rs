@@ -3,6 +3,7 @@
 //! which inserts the static header & status-bar at the top of the document.
 
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 use web_sys::Document;
 
 /// Build the basic, always-visible chrome (header and status bar).

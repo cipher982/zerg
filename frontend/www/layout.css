@@ -50,7 +50,8 @@
 body {
   display: grid;
   grid-template-rows: auto 1fr auto;
-  height: 100vh;
+  height: 100vh; /* fallback */
+  height: 100dvh; /* modern mobile viewport */
   /* Body overflow is hidden; inner content rows manage scrolling */
   overflow: hidden;
 }
@@ -60,11 +61,8 @@ body {
 .status-bar { grid-row: 3; }
 
 /* Content containers occupy the middle row */
-#app-container,
-#dashboard-root,
-#canvas-root,
-#chat-root,
-#profile-root {
+#app-container {
   grid-row: 2;
   min-height: 0; /* allow children to size and scroll */
+  overflow: auto; /* content scrolls in the middle row */
 }

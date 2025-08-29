@@ -107,7 +107,7 @@
 }
 
 /* User menu / avatar (top-right) */
-.user-menu-container { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; z-index: 20; }
+.user-menu-container { position: absolute; right: 15px; top: 12px; transform: none; display: flex; align-items: center; z-index: 20; }
 
 .avatar-badge {
   width: 36px; height: 36px; border-radius: 50%; background: #2c3e50; color: #fff;
