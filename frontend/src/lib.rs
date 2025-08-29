@@ -401,12 +401,40 @@ pub fn start() -> Result<(), JsValue> {
         }
 
         // ─── Auth enabled ───
-        // If we *already* have a JWT → bootstrap immediately.
+        // If we believe we're logged in due to a cached JWT, validate it first
+        // by calling `/api/users/me`. Only after a successful profile fetch do
+        // we bootstrap the app to avoid any pre-auth API/WebSocket traffic.
         if state::APP_STATE.with(|s| s.borrow().logged_in) {
-            if let Err(e) = bootstrap_app_after_login(&doc_clone) {
-                web_sys::console::error_1(&e);
+            // Pre-check: ignore obviously expired tokens to avoid a useless network call
+            if let Some(tok) = crate::utils::current_jwt() {
+                if crate::utils::is_jwt_expired(&tok, 60) {
+                    let _ = crate::utils::logout();
+                }
             }
-            return;
+
+            // Re-read the flag after potential logout above
+            if !state::APP_STATE.with(|s| s.borrow().logged_in) {
+                // Fall through to show the overlay below
+            } else {
+                match crate::network::api_client::ApiClient::fetch_current_user().await {
+                    Ok(profile_json) => {
+                        if let Ok(user) = serde_json::from_str::<crate::models::CurrentUser>(&profile_json) {
+                            dispatch_global_message(crate::messages::Message::CurrentUserLoaded(user));
+                            if let Err(e) = bootstrap_app_after_login(&doc_clone) {
+                                web_sys::console::error_1(&e);
+                            }
+                            return;
+                        } else {
+                            // Malformed profile – treat as unauthenticated
+                            let _ = crate::utils::logout();
+                        }
+                    }
+                    Err(_e) => {
+                        // 401 and other failures are handled in fetch_json (logout + toast)
+                        // Fall through to show the login overlay below.
+                    }
+                }
+            }
         }
 
         // Otherwise show Google Sign-In overlay (needs client_id).
