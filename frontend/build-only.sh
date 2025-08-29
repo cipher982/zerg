@@ -27,14 +27,9 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
+BUILD_ENV="${BUILD_ENV:-debug}"
 # Configure ports from .env with fallback defaults
 BACKEND_PORT="${BACKEND_PORT:-8001}"
-# API_BASE_URL is required - no fallbacks
-if [ -z "${API_BASE_URL}" ]; then
-  echo "ERROR: API_BASE_URL environment variable is required"
-  echo "Set it explicitly in your deployment configuration"
-  exit 1
-fi
 
 # --------------------------------------------------
 # Build – dev profile, debuginfo, target web
@@ -54,7 +49,6 @@ if [[ -z "$TMPDIR_OVERRIDDEN" || ! -w "$TMPDIR_OVERRIDDEN" ]]; then
 fi
 
 RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\" -C debuginfo=2" \
-API_BASE_URL="$API_BASE_URL" \
   wasm-pack build --dev --target web --out-dir pkg
 
 # Copy the generated files to www directory
@@ -71,24 +65,39 @@ mkdir -p www
 # bootstrap.js – mirrors build-debug.sh minus live server
 # --------------------------------------------------
 echo "[build-only] ✍️  writing bootstrap.js …" >&2
-cat <<JS > www/bootstrap.js
+cat <<'JS' > www/bootstrap.js
 import init, { init_api_config_js } from './agent_platform_frontend.js';
 
 async function main() {
   await init();
-  const url = window.API_BASE_URL || '${API_BASE_URL}';
-  init_api_config_js(url);
+  if (window.API_BASE_URL) {
+    init_api_config_js(window.API_BASE_URL);
+  }
 }
 
 main();
 JS
 
 # --------------------------------------------------
-# Update CSP for dynamic backend port
+# Generate index.html from template with dynamic values
 # --------------------------------------------------
-echo "[build-only] 🔐 updating CSP for backend port ${BACKEND_PORT} …" >&2
-sed -i.bak "s|connect-src 'self' http://localhost:[0-9]* ws://localhost:[0-9]*|connect-src 'self' http://localhost:${BACKEND_PORT} ws://localhost:${BACKEND_PORT}|" www/index.html
-rm -f www/index.html.bak
+echo "[build-only] 🧩 generating index.html from template …" >&2
+TIMESTAMP=$(date +%s)
+CACHE_BUST_TAG="<meta name=\"cache-bust\" content=\"${TIMESTAMP}\">"
+
+if [[ "${BUILD_ENV}" == "production" ]]; then
+  BACKEND_URL=""
+  BACKEND_WS_URL=""
+else
+  BACKEND_URL="http://localhost:${BACKEND_PORT}"
+  BACKEND_WS_URL="ws://localhost:${BACKEND_PORT}"
+fi
+
+sed \
+  -e "s|{{BACKEND_URL}}|${BACKEND_URL}|g" \
+  -e "s|{{BACKEND_WS_URL}}|${BACKEND_WS_URL}|g" \
+  -e "s|{{CACHE_BUST}}|${CACHE_BUST_TAG}|g" \
+  www/index.html.template > www/index.html
 
 # --------------------------------------------------
 # config.js – tiny placeholder so <script src="config.js"> doesn't 404

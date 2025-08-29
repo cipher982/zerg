@@ -21,11 +21,9 @@ COPY . .
 # Set environment for WASM builds
 ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 
-# Build with public backend URL (should be set in Coolify as build arg)
-ARG API_BASE_URL=https://api.swarmlet.com
 RUN chmod +x build-debug.sh && \
     BUILD_ONLY=true \
-    API_BASE_URL=${API_BASE_URL} \
+    BUILD_ENV=production \
     ./build-debug.sh
 
 # Production stage with nginx

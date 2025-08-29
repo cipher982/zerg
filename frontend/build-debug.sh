@@ -28,12 +28,7 @@ fi
 # Configure ports from .env with fallback defaults  
 BACKEND_PORT="${BACKEND_PORT:-8001}"
 FRONTEND_PORT="${FRONTEND_PORT:-8002}"
-# API_BASE_URL is required - no fallbacks
-if [ -z "${API_BASE_URL}" ]; then
-  echo "ERROR: API_BASE_URL environment variable is required"
-  echo "Set it explicitly in your deployment configuration"
-  exit 1
-fi
+BUILD_ENV="${BUILD_ENV:-debug}"
 
 # -------------------------------------------------------------
 # RUSTFLAGS — preserve existing debuginfo flag *and* opt-in to
@@ -44,7 +39,6 @@ fi
 # -------------------------------------------------------------
 
 RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\" -C debuginfo=2" \
-  API_BASE_URL="$API_BASE_URL" \
   wasm-pack build --dev --target web --out-dir pkg
 
 # Copy the generated files to www directory
@@ -58,14 +52,15 @@ cp pkg/agent_platform_frontend_bg.wasm.d.ts www/
 # Generate bootstrap.js expected by index.html
 # -------------------------------------------------------------
 echo "[build-debug] writing bootstrap.js …"
-cat > www/bootstrap.js <<EOF
+cat > www/bootstrap.js <<'EOF'
 import init, { init_api_config_js } from './agent_platform_frontend.js';
 
 async function main() {
   await init();            // loads wasm & runs #[wasm_bindgen(start)]
-  // Use public backend URL or fallback to localhost for dev
-  const url = window.API_BASE_URL || '${API_BASE_URL}';
-  init_api_config_js(url);
+  // Optional dev override: only set if provided at runtime
+  if (window.API_BASE_URL) {
+    init_api_config_js(window.API_BASE_URL);
+  }
 }
 
 main();
@@ -76,18 +71,11 @@ echo "[build-debug] generating index.html from template for ports ${BACKEND_PORT
 TIMESTAMP=$(date +%s)
 CACHE_BUST_TAG="<meta name=\"cache-bust\" content=\"${TIMESTAMP}\">"
 
-# Set backend URLs for CSP based on API_BASE_URL or fallback to localhost
-if [[ "${API_BASE_URL}" == "RUNTIME_PLACEHOLDER" ]]; then
-  # Runtime configuration - use placeholders that will be replaced by entrypoint
-  BACKEND_URL="{{BACKEND_URL}}"
-  BACKEND_WS_URL="{{BACKEND_WS_URL}}"
-elif [[ "${API_BASE_URL}" == *"https://"* ]] || [[ "${API_BASE_URL}" == *"http://"* ]]; then
-  # Production: use the actual API URL for CSP
-  BACKEND_URL="${API_BASE_URL}"
-  BACKEND_WS_URL="${API_BASE_URL/https:\/\//wss://}"
-  BACKEND_WS_URL="${BACKEND_WS_URL/http:\/\//ws://}"
+# Set backend URLs for CSP: dev allows localhost; production is same-origin only
+if [[ "${BUILD_ENV}" == "production" ]]; then
+  BACKEND_URL=""
+  BACKEND_WS_URL=""
 else
-  # Development: localhost with port
   BACKEND_URL="http://localhost:${BACKEND_PORT}"
   BACKEND_WS_URL="ws://localhost:${BACKEND_PORT}"
 fi
