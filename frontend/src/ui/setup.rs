@@ -80,6 +80,8 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
     body.append_child(&header)?;
     body.append_child(&status_bar)?;
 
+    // With grid layout, header/tabs/status are in normal flow – no offset math needed.
+
     // -------------------------------------------------------------------
     // Reliability fix – ensure any *pending* canvas layout changes are
     // flushed to the backend when the user navigates away (tab close,
@@ -123,3 +125,5 @@ pub fn create_base_ui(document: &Document) -> Result<(), JsValue> {
 
     Ok(())
 }
+
+// No layout CSS var measurement required in grid-based layout

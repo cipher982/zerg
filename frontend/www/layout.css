@@ -38,3 +38,33 @@
 .spacer {
   flex: 1 1 auto;
 }
+
+/* --------------------------------------------------------- */
+/* Application grid layout (header, content, status)          */
+/* --------------------------------------------------------- */
+
+/* Make the whole page a three-row grid:
+   1) Header (includes title + tabs)
+   2) Main content (views)
+   3) Status bar */
+body {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  /* Body overflow is hidden; inner content rows manage scrolling */
+  overflow: hidden;
+}
+
+/* Place elements explicitly so order in DOM does not matter */
+.header { grid-row: 1; }
+.status-bar { grid-row: 3; }
+
+/* Content containers occupy the middle row */
+#app-container,
+#dashboard-root,
+#canvas-root,
+#chat-root,
+#profile-root {
+  grid-row: 2;
+  min-height: 0; /* allow children to size and scroll */
+}
