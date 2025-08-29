@@ -16,14 +16,12 @@ WORKDIR /app
 # Copy frontend sources
 COPY . .
 
-# Build artifacts with explicit API_BASE_URL (overridable via build-arg)
-ARG API_BASE_URL=https://api.swarmlet.com
 ENV RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\""
 
 # Use the project build script to generate WASM, index.html (with CSP), and bootstrap.js
 RUN chmod +x build-debug.sh && \
     BUILD_ONLY=true \
-    API_BASE_URL=${API_BASE_URL} \
+    BUILD_ENV=production \
     ./build-debug.sh
 
 FROM nginx:alpine

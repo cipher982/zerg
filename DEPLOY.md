@@ -13,8 +13,8 @@ This guide covers deploying the Zerg AI Agent Platform using Docker Compose on C
 Test the full stack locally before deploying:
 
 ```bash
-# 1. Build frontend for production
-cd frontend && ./build-only.sh
+# 1. Build frontend for production (same-origin proxy enabled)
+cd frontend && BUILD_ENV=production ./build-only.sh
 
 # 2. Generate production secrets
 python generate-production-secrets.py
@@ -78,7 +78,7 @@ OPENAI_API_KEY=sk-your_production_openai_key
 
 ### **Health Checks**
 - **Frontend**: `https://your-domain.com/health` → "healthy"
-- **Backend API**: `https://your-domain.com/api/` → API documentation
+- **Backend API**: `https://your-domain.com/api/` → proxied by frontend Nginx
 - **WebSocket**: Check browser console for successful WS connection
 
 ### **Database Connection**
@@ -102,8 +102,9 @@ OPENAI_API_KEY=sk-your_production_openai_key
 - Check PostgreSQL container logs for startup issues
 
 **3. CORS errors**
-- Ensure `ALLOWED_CORS_ORIGINS` matches your domain exactly
-- Include `https://` prefix
+- Production uses same-origin proxying; no CORS should be required. If you see
+  CORS errors, verify frontend Nginx has `/api/` and `/api/ws` proxy rules and
+  backend runs with `--proxy-headers`.
 
 **4. Google OAuth issues**
 - Update Google OAuth redirect URIs to include your production domain

@@ -1,5 +1,7 @@
 /// API route configuration
 pub struct ApiConfig {
+    // When empty, the SPA assumes same-origin and builds relative REST URLs
+    // ("/api/...") and computes WebSocket URL from `window.location`.
     base_url: String,
 }
 
@@ -16,24 +18,17 @@ impl Default for ApiConfig {
     /// Keeping the default lightweight avoids having to litter the rest of
     /// the code base with `Option` checks while still preventing hard panics
     /// during tests.
-    fn default() -> Self {
-        Self {
-            // Force clean rebuild - should be HTTPS only
-            base_url: "https://api.swarmlet.com".to_string(),
-        }
-    }
+    fn default() -> Self { Self { base_url: String::new() } }
 }
 
 impl ApiConfig {
     /// Create a new ApiConfig from the API_BASE_URL environment variable
     pub fn new() -> Result<Self, &'static str> {
-        if let Some(url) = option_env!("API_BASE_URL") {
-            Ok(Self {
-                base_url: url.trim_end_matches('/').to_string(),
-            })
-        } else {
-            Err("API_BASE_URL environment variable is not set")
-        }
+        // Env var is optional – fall back to same-origin when missing.
+        let base = option_env!("API_BASE_URL").unwrap_or("");
+        Ok(Self {
+            base_url: base.trim_end_matches('/').to_string(),
+        })
     }
 
     /// Create a new ApiConfig from a URL string
@@ -50,10 +45,24 @@ impl ApiConfig {
 
     /// Get the WebSocket URL
     pub fn ws_url(&self) -> String {
+        // When base_url is empty, compute absolute WS URL from the current page
+        if self.base_url.is_empty() {
+            if let Some(win) = web_sys::window() {
+                let loc = win.location();
+                let host = loc.host().unwrap_or_else(|_| "localhost".into());
+                let proto = loc.protocol().unwrap_or_else(|_| "http:".into());
+                let ws_scheme = if proto == "https:" { "wss" } else { "ws" };
+                return format!("{}://{}/api/ws", ws_scheme, host);
+            }
+            // Fallback for tests
+            return "ws://localhost/api/ws".to_string();
+        }
+
+        // Configured cross-origin base → convert scheme and append /api/ws
         let ws_base = if self.base_url.starts_with("https://") {
-            self.base_url.replace("https://", "wss://")
+            self.base_url.replacen("https://", "wss://", 1)
         } else {
-            self.base_url.replace("http://", "ws://")
+            self.base_url.replacen("http://", "ws://", 1)
         };
         format!("{}/api/ws", ws_base)
     }
