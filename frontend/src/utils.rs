@@ -1,6 +1,8 @@
 //! Utility helpers shared across the WASM frontend.
 
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+use wasm_bindgen::JsCast;
+use js_sys::{Function, Reflect};
 
 /// Format a duration given in **milliseconds** into a short human-readable
 /// string such as `"1 m 23 s"` or `"12 s"`.
@@ -84,6 +86,49 @@ pub fn current_jwt() -> Option<String> {
         }
     }
     None
+}
+
+/// Convert base64url string to standard base64 (adds padding as needed)
+fn base64url_to_base64(input: &str) -> String {
+    let mut s = input.replace('-', "+").replace('_', "/");
+    let rem = s.len() % 4;
+    if rem != 0 {
+        s.push_str(&"=".repeat(4 - rem));
+    }
+    s
+}
+
+/// Decode a JWT payload and return it as a JSON value.
+fn decode_jwt_payload(token: &str) -> Option<serde_json::Value> {
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 { return None; }
+    let payload_b64 = base64url_to_base64(parts[1]);
+
+    // Use window.atob to decode base64 to a (latin1) string; JWT payload is ASCII JSON
+    let window = web_sys::window()?;
+    let atob = Reflect::get(&window, &JsValue::from_str("atob")).ok()?;
+    let atob_fn: Function = atob.dyn_into().ok()?;
+    let decoded = atob_fn.call1(&window, &JsValue::from_str(&payload_b64)).ok()?.as_string()?;
+
+    serde_json::from_str::<serde_json::Value>(&decoded).ok()
+}
+
+/// Return JWT expiration as milliseconds since epoch, if present.
+pub fn jwt_expiration_ms(token: &str) -> Option<u64> {
+    let payload = decode_jwt_payload(token)?;
+    let exp_secs = payload.get("exp")?.as_u64()?;
+    Some(exp_secs * 1000)
+}
+
+/// Quick check: return true if token is expired (with skew seconds).
+pub fn is_jwt_expired(token: &str, skew_seconds: u64) -> bool {
+    if let Some(exp_ms) = jwt_expiration_ms(token) {
+        let now_ms = now_ms();
+        let skew_ms = skew_seconds * 1000;
+        return now_ms + skew_ms >= exp_ms;
+    }
+    // If we cannot parse exp, be conservative and consider it invalid
+    true
 }
 
 /// Fully logs the user out: clears JWT, closes WebSocket, shows login overlay.
