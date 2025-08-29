@@ -80,7 +80,9 @@ CMD ["uvicorn", "zerg.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
      "--workers", "1", \
-     "--access-log"]
+     "--access-log", \
+     "--proxy-headers", \
+     "--forwarded-allow-ips", "*"]
 
 # Development target for local development
 FROM builder AS development
