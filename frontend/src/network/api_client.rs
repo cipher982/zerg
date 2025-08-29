@@ -154,7 +154,8 @@ impl ApiClient {
 
     // Get available models
     pub async fn fetch_available_models() -> Result<String, JsValue> {
-        let url = format!("{}/api/models", Self::api_base_url());
+        // Use trailing slash to avoid framework redirects (which can break under misconfigured proxies)
+        let url = format!("{}/api/models/", Self::api_base_url());
         Self::fetch_json(&url, "GET", None).await
     }
 
@@ -164,7 +165,8 @@ impl ApiClient {
 
     /// Fetch all workflows for the **current** user (active only).
     pub async fn get_workflows() -> Result<String, JsValue> {
-        let url = format!("{}/api/workflows", Self::api_base_url());
+        // Use trailing slash to avoid framework redirects (which can break under misconfigured proxies)
+        let url = format!("{}/api/workflows/", Self::api_base_url());
         Self::fetch_json(&url, "GET", None).await
     }
 
