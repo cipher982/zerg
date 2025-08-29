@@ -115,6 +115,21 @@ pub struct WsClientV2 {
 }
 
 impl WsClientV2 {
+    /// Redact sensitive query parameters (e.g. JWT token) in URLs for logging
+    fn redact_url(url: &str) -> String {
+        if let Some(pos) = url.find("token=") {
+            let start = pos + "token=".len();
+            let end = url[start..]
+                .find('&')
+                .map(|i| start + i)
+                .unwrap_or_else(|| url.len());
+            let mut redacted = url.to_string();
+            redacted.replace_range(start..end, "REDACTED");
+            redacted
+        } else {
+            url.to_string()
+        }
+    }
     /// Create a new WebSocket client with the given configuration
     pub fn new(config: WsConfig) -> Self {
         Self {
@@ -483,10 +498,9 @@ impl WsClientV2 {
         // Recompute WS URL from current API config to avoid stale defaults
         if let Ok(ws_url) = super::get_ws_url() {
             if self.config.url != ws_url {
-                web_sys::console::log_1(
-                    &format!("Updating WebSocket URL: {} -> {}", self.config.url, ws_url)
-                        .into(),
-                );
+                let before = Self::redact_url(&self.config.url);
+                let after = Self::redact_url(&ws_url);
+                web_sys::console::log_1(&format!("Updating WebSocket URL: {} -> {}", before, after).into());
                 self.config.url = ws_url;
             }
         }
