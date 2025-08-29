@@ -49,13 +49,20 @@ fn get_api_config() -> Result<std::sync::RwLockReadGuard<'static, Option<ApiConf
 
 /// Get the WebSocket URL
 pub(crate) fn get_ws_url() -> Result<String, &'static str> {
-    let maybe_url = {
+    let base_url = {
         let guard = API_CONFIG.read().unwrap();
-        guard.as_ref().map(|cfg| cfg.ws_url())
+        if let Some(cfg) = guard.as_ref() {
+            cfg.ws_url()
+        } else {
+            // Fallback to same-origin WebSocket URL
+            let win = web_sys::window().ok_or("window unavailable")?;
+            let loc = win.location();
+            let host = loc.host().map_err(|_| "host unavailable")?;
+            let proto = loc.protocol().map_err(|_| "protocol unavailable")?;
+            let ws_scheme = if proto == "https:" { "wss" } else { "ws" };
+            format!("{}://{}/api/ws", ws_scheme, host)
+        }
     };
-
-    // API config MUST be initialized - no fallback to avoid localhost issues
-    let base_url = maybe_url.ok_or("API configuration not initialized")?;
 
     // If a JWT is present in localStorage append it as query parameter so the
     // backend can authenticate the WebSocket upgrade request.
@@ -70,10 +77,11 @@ pub(crate) fn get_ws_url() -> Result<String, &'static str> {
 
 /// Get the base URL for API calls
 pub(crate) fn get_api_base_url() -> Result<String, &'static str> {
-    let maybe_base = {
-        let guard = API_CONFIG.read().unwrap();
-        guard.as_ref().map(|cfg| cfg.base_url().to_string())
-    };
-
-    maybe_base.ok_or("API configuration not initialized")
+    // Missing config → default to same-origin (empty string) so callers build
+    // relative URLs like "/api/...".
+    let guard = API_CONFIG.read().unwrap();
+    Ok(guard
+        .as_ref()
+        .map(|cfg| cfg.base_url().to_string())
+        .unwrap_or_default())
 }

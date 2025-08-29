@@ -30,7 +30,8 @@ pub struct ApiClient;
 impl ApiClient {
     // Get the base URL for API calls
     fn api_base_url() -> String {
-        super::get_api_base_url().expect("API base URL must be set (no fallback allowed)")
+        // Default to same-origin (empty string → relative "/api" paths)
+        super::get_api_base_url().unwrap_or_default()
     }
 
     /// Format HTTP errors with user-friendly messages and show appropriate toasts
