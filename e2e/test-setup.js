@@ -15,8 +15,8 @@ async function globalSetup(config) {
   const path = require('path');
   
   try {
-    // Call Python cleanup script
-    const cleanup = spawn('python3', ['-c', `
+    // Call Python cleanup script (user must ensure 'python' resolves)
+    const cleanup = spawn('python', ['-c', `
 import sys
 sys.path.insert(0, '${path.resolve('../backend')}')
 from zerg.test_db_manager import cleanup_test_databases
@@ -26,9 +26,7 @@ print("✅ Pre-test cleanup completed")
       cwd: path.resolve('../backend'),
       stdio: 'inherit'
     });
-    cleanup.on('error', (err) => {
-      throw new Error(`Python3 is required for E2E cleanup. Set PYTHON to a valid python3 path or install python3. Original error: ${err.message}`);
-    });
+    // If this fails, the environment must expose 'python' on PATH.
 
     await new Promise((resolve, reject) => {
       cleanup.on('close', (code) => {
