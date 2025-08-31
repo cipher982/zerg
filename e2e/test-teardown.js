@@ -11,7 +11,7 @@ async function globalTeardown(config) {
   
   try {
     // Call Python cleanup script to remove all test databases
-    const cleanup = spawn('python', ['-c', `
+    const cleanup = spawn('python3', ['-c', `
 import sys
 sys.path.insert(0, '${path.resolve('../backend')}')
 from zerg.test_db_manager import cleanup_test_databases
@@ -20,6 +20,9 @@ print("✅ Test database cleanup completed")
     `], {
       cwd: path.resolve('../backend'),
       stdio: 'inherit'
+    });
+    cleanup.on('error', (err) => {
+      throw new Error(`Python3 is required for E2E cleanup. Set PYTHON to a valid python3 path or install python3. Original error: ${err.message}`);
     });
     
     await new Promise((resolve, reject) => {
