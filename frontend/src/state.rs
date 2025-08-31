@@ -354,6 +354,10 @@ pub struct AppState {
     pub is_loading: bool,
     pub data_loaded: bool,
     pub api_load_attempted: bool,
+    /// Monotonic sequence to discard stale FetchCurrentWorkflow responses
+    pub workflow_fetch_seq: u64,
+    /// Monotonic counter to generate unique node identifiers
+    pub next_node_seq: u64,
 
     // Workflow operation loading states
     pub creating_workflow: bool,
@@ -645,6 +649,8 @@ impl AppState {
             is_loading: true,
             data_loaded: false,
             api_load_attempted: false,
+            workflow_fetch_seq: 0,
+            next_node_seq: 0,
 
             // Initialize workflow operation loading states
             creating_workflow: false,
@@ -928,7 +934,9 @@ impl AppState {
         y: f64,
         node_type: WorkflowNodeType,
     ) -> String {
-        let id = format!("node_{}", self.workflow_nodes.len());
+        // Generate a unique, monotonic node id (prefix avoids legacy "node_" collisions)
+        self.next_node_seq = self.next_node_seq.wrapping_add(1);
+        let id = format!("node-{}-{}", js_sys::Date::now() as u64, self.next_node_seq);
         web_sys::console::log_1(
             &format!(
                 "Creating node: id={}, type={:?}, text={}",
@@ -1010,7 +1018,8 @@ impl AppState {
     /// updated so other parts of the frontend can perform O(1) look-ups.
     pub fn add_agent_node(&mut self, agent_id: u32, text: String, x: f64, y: f64) -> String {
         // Create the node manually to avoid double workflow updates
-        let node_id = format!("node_{}", self.workflow_nodes.len());
+        self.next_node_seq = self.next_node_seq.wrapping_add(1);
+        let node_id = format!("node-{}-{}", js_sys::Date::now() as u64, self.next_node_seq);
         web_sys::console::log_1(
             &format!(
                 "Creating agent node: id={}, agent_id={}, text={}",

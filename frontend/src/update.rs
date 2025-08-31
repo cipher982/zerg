@@ -731,18 +731,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::CheckWorkflowSchedule { workflow_id } => {
             commands.push(Command::CheckWorkflowScheduleApi { workflow_id });
         }
-        Message::SelectWorkflow { workflow_id } => {
-            state.current_workflow_id = Some(workflow_id);
-            needs_refresh = true;
-
-            // Refresh run button & log drawer in UI
-            commands.push(Command::UpdateUI(Box::new(|| {
-                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-                    let _ = crate::components::workflow_switcher::update_run_button(&doc);
-                    let _ = crate::components::log_drawer::refresh(&doc);
-                }
-            })));
-        }
+        // Message::SelectWorkflow is handled in reducers/canvas.rs to keep
+        // canvas/workflow state mutations in one place. UI updates are pushed
+        // from there as needed.
         Message::WorkflowCreated(wf) => {
             // Remove any optimistic entry with same name or temp id (<=0)
             let wf_id = wf.id;
@@ -792,7 +783,50 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 }
             }
 
-            // 3. Edges are already in workflow - no duplication needed
+            // 3. If no trigger exists in the loaded workflow, create a default manual trigger
+            let has_trigger = state
+                .workflow_nodes
+                .values()
+                .any(|n| matches!(n.get_semantic_type(), crate::models::NodeType::Trigger { .. }));
+
+            if !has_trigger {
+                // Calculate position: top 1/3, center of viewport
+                let viewport_width = if state.canvas_width > 0.0 {
+                    state.canvas_width
+                } else {
+                    800.0
+                };
+                let viewport_height = if state.canvas_height > 0.0 {
+                    state.canvas_height
+                } else {
+                    600.0
+                };
+
+                let trigger_x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 100.0;
+                let trigger_y = state.viewport_y + (viewport_height / state.zoom_level) / 3.0 - 40.0;
+
+                let trigger_config = crate::models::TriggerConfig {
+                    params: std::collections::HashMap::new(),
+                    enabled: true,
+                    filters: Vec::new(),
+                };
+
+                let trigger_node_type = crate::models::NodeType::Trigger {
+                    trigger_type: crate::models::TriggerType::Manual,
+                    config: trigger_config,
+                };
+
+                let _ = state.add_node(
+                    "Manual Trigger".to_string(),
+                    trigger_x,
+                    trigger_y,
+                    trigger_node_type,
+                );
+
+                web_sys::console::log_1(&"🔧 Added default Manual Trigger node (no trigger present in workflow)".into());
+            }
+
+            // 4. Edges are already in workflow - no duplication needed
             // The renderer reads directly from workflow.edges
 
             needs_refresh = true;
