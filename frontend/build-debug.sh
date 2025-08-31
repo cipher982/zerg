@@ -30,6 +30,12 @@ BACKEND_PORT="${BACKEND_PORT:-8001}"
 FRONTEND_PORT="${FRONTEND_PORT:-8002}"
 BUILD_ENV="${BUILD_ENV:-debug}"
 
+# Ensure compile-time API_BASE_URL does not force cross-origin during dev –
+# we will set it at runtime via config.js so CSP stays aligned with localhost.
+if [[ "${BUILD_ENV}" != "production" ]]; then
+  unset API_BASE_URL || true
+fi
+
 # -------------------------------------------------------------
 # RUSTFLAGS — preserve existing debuginfo flag *and* opt-in to
 # the getrandom JS backend required for wasm32-unknown-unknown.
@@ -88,14 +94,13 @@ sed \
   -e "s|{{CACHE_BUST}}|${CACHE_BUST_TAG}|g" \
   www/index.html.template > www/index.html
 
-# Stub config.js so the HTML include does not 404 in dev.
-echo "[build-debug] ensuring config.js …"
-if [ ! -f www/config.js ]; then
-  cat <<'EOF' > www/config.js
+# Write config.js with local API base URL so the SPA hits the dev backend
+echo "[build-debug] writing config.js …"
+cat > www/config.js <<EOF
 window.__APP_CONFIG__ = window.__APP_CONFIG__ || {};
-window.__APP_CONFIG__.BUILD = 'debug';
+window.__APP_CONFIG__.BUILD = '${BUILD_ENV}';
+window.API_BASE_URL = 'http://localhost:${BACKEND_PORT}';
 EOF
-fi
 
 # If BUILD_ONLY environment variable is set, exit here without starting dev server
 if [ "${BUILD_ONLY:-}" = "true" ]; then
