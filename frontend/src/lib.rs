@@ -161,6 +161,13 @@ mod update;
 mod utils;
 mod views;
 
+// Tests are organized as integration tests via wasm-pack; no internal
+// `mod tests` inclusion here to avoid path resolution issues.
+
+// Dedicated unit tests for trigger invariants (kept internal to avoid path issues)
+#[cfg(test)]
+mod trigger_invariants_tests;
+
 // ---------------------------------------------------------------------------
 // Global keyboard shortcuts
 // ---------------------------------------------------------------------------
@@ -325,6 +332,36 @@ pub fn start() -> Result<(), JsValue> {
 
     let doc_clone = document.clone();
     spawn_local(async move {
+        fn show_fatal_config_error(doc: &Document, msg: &str) {
+            web_sys::console::error_1(&format!("FATAL: {}", msg).into());
+            let overlay = doc.create_element("div").expect("create overlay");
+            overlay.set_id("fatal-config-error");
+            overlay.set_attribute(
+                "style",
+                "position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:99999;",
+            )
+            .ok();
+            let panel = doc.create_element("div").expect("create panel");
+            panel
+                .set_attribute(
+                    "style",
+                    "max-width:720px;background:#fff;border-radius:8px;padding:24px;font-family:system-ui, sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.3);",
+                )
+                .ok();
+            let h = doc.create_element("h2").unwrap();
+            h.set_inner_html("Configuration Error");
+            let p = doc.create_element("pre").unwrap();
+            p.set_attribute(
+                "style",
+                "white-space:pre-wrap;word-break:break-word;font-size:14px;margin-top:8px;",
+            )
+            .ok();
+            p.set_text_content(Some(msg));
+            panel.append_child(&h).ok();
+            panel.append_child(&p).ok();
+            overlay.append_child(&panel).ok();
+            doc.body().unwrap().append_child(&overlay).ok();
+        }
         // Ensure API configuration is initialized before making any API calls.
         // This avoids a race where #[wasm_bindgen(start)] fires before
         // bootstrap.js calls init_api_config_js().
@@ -332,9 +369,12 @@ pub fn start() -> Result<(), JsValue> {
             use gloo_timers::future::TimeoutFuture;
             let start = js_sys::Date::now();
             loop {
-                if crate::network::get_api_base_url().is_ok() {
-                    return true;
-                }
+                // Only proceed once a non-empty API base URL is configured.
+                // This ensures the runtime JS override (window.API_BASE_URL)
+                // has been applied in dev, avoiding same-origin '/api' calls
+                // that the static dev server cannot serve.
+                let base = crate::network::get_api_base_url().unwrap_or_default();
+                if !base.is_empty() { return true; }
                 let elapsed = js_sys::Date::now() - start;
                 if elapsed >= timeout_ms as f64 {
                     return false;
@@ -344,10 +384,8 @@ pub fn start() -> Result<(), JsValue> {
         }
 
         if !wait_for_api_config(3000).await {
-            web_sys::console::warn_1(
-                &"API config still uninitialized after 3s; continuing with whatever is available"
-                    .into(),
-            );
+            show_fatal_config_error(&doc_clone, "API base URL not configured. Ensure window.API_BASE_URL is set in config.js (dev) or API_BASE_URL is provided at build-time (prod).\n\nHint: In dev, build scripts write config.js with window.API_BASE_URL = 'http://localhost:<BACKEND_PORT>'.");
+            return;
         }
         // Attempt to fetch the system info endpoint.  If it fails we fall
         // back to the previous compile-time logic so production builds that
@@ -356,8 +394,12 @@ pub fn start() -> Result<(), JsValue> {
         let sys_info_json = match network::api_client::ApiClient::fetch_system_info().await {
             Ok(j) => j,
             Err(e) => {
-                web_sys::console::warn_1(&format!("Failed to fetch /system/info: {:?}", e).into());
-                "{}".to_string()
+                show_fatal_config_error(&doc_clone, &format!(
+                    "Failed to fetch /api/system/info from API base '{}'.\nError: {:?}",
+                    crate::network::get_api_base_url().unwrap_or_default(),
+                    e
+                ));
+                return;
             }
         };
 
@@ -441,9 +483,7 @@ pub fn start() -> Result<(), JsValue> {
         let client_id = info.google_client_id.as_deref().unwrap_or("");
 
         if client_id.is_empty() {
-            web_sys::console::error_1(
-                &"Google Client ID missing but authentication is enabled".into(),
-            );
+            show_fatal_config_error(&doc_clone, "Authentication is enabled but google_client_id is missing in /api/system/info.\nSet GOOGLE_CLIENT_ID in the backend environment or disable auth in dev (AUTH_DISABLED=1).\nCSP must allow https://accounts.google.com.");
             return;
         }
 
