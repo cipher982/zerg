@@ -773,14 +773,56 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         .ui_state
                         .insert(node.node_id.clone(), UiNodeState::default());
                 }
+
+                // If the selected workflow has no trigger, add a default manual trigger node
+                let has_trigger = state
+                    .workflow_nodes
+                    .values()
+                    .any(|n| matches!(n.get_semantic_type(), crate::models::NodeType::Trigger { .. }));
+                if !has_trigger {
+                    let viewport_width = if state.canvas_width > 0.0 {
+                        state.canvas_width
+                    } else {
+                        800.0
+                    };
+                    let viewport_height = if state.canvas_height > 0.0 {
+                        state.canvas_height
+                    } else {
+                        600.0
+                    };
+
+                    let trigger_x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 100.0;
+                    let trigger_y = state.viewport_y + (viewport_height / state.zoom_level) / 3.0 - 40.0;
+
+                    let trigger_config = crate::models::TriggerConfig {
+                        params: std::collections::HashMap::new(),
+                        enabled: true,
+                        filters: Vec::new(),
+                    };
+
+                    let trigger_node_type = crate::models::NodeType::Trigger {
+                        trigger_type: crate::models::TriggerType::Manual,
+                        config: trigger_config,
+                    };
+
+                    let _ = state.add_node(
+                        "Manual Trigger".to_string(),
+                        trigger_x,
+                        trigger_y,
+                        trigger_node_type,
+                    );
+                    web_sys::console::log_1(&"🔧 Added default Manual Trigger node after selecting workflow (no trigger present)".into());
+                }
             }
             state.mark_dirty();
             state.state_modified = true;
 
             cmds.push(Command::UpdateUI(Box::new(|| {
-                if let (Some(win),) = (web_sys::window(),) {
+                if let Some(win) = web_sys::window() {
                     if let Some(doc) = win.document() {
                         let _ = crate::components::workflow_switcher::refresh(&doc);
+                        let _ = crate::components::workflow_switcher::update_run_button(&doc);
+                        let _ = crate::components::log_drawer::refresh(&doc);
                     }
                 }
             })));

@@ -96,8 +96,8 @@ pub fn render_active_view_by_type(
                 app_container.set_class_name("canvas-view");
             }
 
-            // Ensure trigger node exists every time we switch to Canvas view
-            crate::pages::canvas::ensure_trigger_node_exists();
+            // Trigger-node creation is handled after backend workflow load
+            // in update.rs::CurrentWorkflowLoaded to avoid race conditions.
         }
         ActiveView::Profile => {
             if !crate::pages::profile::is_profile_mounted(document) {

@@ -151,6 +151,13 @@ pub fn execute_fetch_command(cmd: Command) {
         }
 
         Command::FetchCurrentWorkflow => {
+            // Increment request token to identify and drop stale responses
+            let req_id = APP_STATE.with(|state_ref| {
+                let mut st = state_ref.borrow_mut();
+                st.workflow_fetch_seq = st.workflow_fetch_seq.wrapping_add(1);
+                st.workflow_fetch_seq
+            });
+
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_current_workflow().await {
                     Ok(json_str) => {
@@ -179,7 +186,18 @@ pub fn execute_fetch_command(cmd: Command) {
                                     .into(),
                                 );
                                 let workflow: ApiWorkflow = api_wf;
-                                dispatch_global_message(Message::CurrentWorkflowLoaded(workflow));
+                                // Only dispatch if this response matches the latest request token
+                                let should_apply = APP_STATE.with(|state_ref| {
+                                    let st = state_ref.borrow();
+                                    st.workflow_fetch_seq == req_id
+                                });
+                                if should_apply {
+                                    dispatch_global_message(Message::CurrentWorkflowLoaded(workflow));
+                                } else {
+                                    web_sys::console::log_1(
+                                        &"⚠️ Dropping stale workflow response (newer request in flight)".into(),
+                                    );
+                                }
                             }
                             Err(e) => web_sys::console::error_1(
                                 &format!("Failed to parse current workflow: {:?}", e).into(),
