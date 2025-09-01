@@ -66,6 +66,8 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
         let container = document.create_element("div")?;
         container.set_id("canvas-container");
         container.set_class_name("canvas-container");
+        // Stable hook for E2E tests and tools
+        let _ = container.set_attribute("data-testid", "canvas-container");
 
         // Create canvas element
         let canvas = document.create_element("canvas")?;

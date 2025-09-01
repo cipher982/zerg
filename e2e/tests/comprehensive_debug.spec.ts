@@ -1,5 +1,4 @@
 import { test, expect } from './fixtures';
-import { startBackendServer, stopBackendServer } from './backend-server';
 
 /**
  * COMPREHENSIVE DEBUG TEST
@@ -13,7 +12,7 @@ import { startBackendServer, stopBackendServer } from './backend-server';
  */
 
 test.describe('Comprehensive Debug', () => {
-  test('Complete system debug and diagnosis', async ({ page }, testInfo) => {
+  test('Complete system debug and diagnosis', async ({ page, backendUrl }, testInfo) => {
     console.log('🔍 Starting comprehensive debug test...');
     
     // Get the worker ID from test info
@@ -21,16 +20,9 @@ test.describe('Comprehensive Debug', () => {
     console.log('📊 Worker ID:', workerId);
     console.log('📊 NODE_ENV:', process.env.NODE_ENV);
     
-    // Start isolated backend server for this worker
-    console.log('🚀 Starting isolated backend server...');
-    const server = await startBackendServer(workerId);
-    const backendUrl = server.baseUrl;
+    // Use shared backend started by Playwright webServer
     console.log('📊 Backend URL:', backendUrl);
-    
-    // Cleanup function
-    const cleanup = async () => {
-      await stopBackendServer(workerId);
-    };
+    // No per-test server lifecycle required
     
     try {
     
@@ -159,25 +151,23 @@ test.describe('Comprehensive Debug', () => {
       console.log('❌ Minimal agent creation error:', error);
     }
     
-    // Test 7: Database introspection
-    console.log('🔍 Test 7: Database introspection');
+    // Test 7: System health
+    console.log('🔍 Test 7: System health');
     try {
-      // Try to access an admin endpoint that might give us database info
       const adminResponse = await page.request.get(`${backendUrl}/api/system/health`);
       console.log('📊 System health status:', adminResponse.status());
-      if (adminResponse.ok()) {
-        const health = await adminResponse.text();
-        console.log('📊 System health:', health.substring(0, 200));
-      }
+      expect(adminResponse.status()).toBe(200);
+      const health = await adminResponse.json();
+      console.log('📊 System health:', JSON.stringify(health));
     } catch (error) {
       console.log('📊 System health error:', error);
+      throw error;
     }
     
     console.log('✅ Comprehensive debug test complete');
     
     } finally {
-      // Cleanup backend server
-      await cleanup();
+      // No cleanup necessary for shared backend
     }
   });
 });

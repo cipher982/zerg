@@ -42,66 +42,24 @@ interface BackendServer {
 const runningServers = new Map<string, BackendServer>();
 
 export async function startBackendServer(workerId: string): Promise<BackendServer> {
-  const existingServer = runningServers.get(workerId);
-  if (existingServer) {
-    return existingServer;
-  }
-
+  // Single shared backend is started by Playwright webServer; just return baseUrl
   const basePort = getBackendPort();
-  const port = basePort + parseInt(workerId);
-  const baseUrl = `http://localhost:${port}`;
-  
-  console.log(`[backend-server] Starting backend for worker ${workerId} on port ${port}`);
-  
-  const backendProcess = spawn(
-    'uv',
-    ['run', 'python', '-m', 'uvicorn', 'test_main:app', `--port=${port}`, '--log-level=warning'],
-    {
-      env: {
-        ...process.env,
-        ENVIRONMENT: 'test',
-        TEST_WORKER_ID: workerId,
-        NODE_ENV: 'test',
-        TESTING: '1',  // Enable testing mode for database reset
-      },
-      cwd: join(__dirname, '..', '..', 'backend'),
-      stdio: 'pipe', // Capture output to avoid noise
-    }
-  );
+  const baseUrl = `http://localhost:${basePort}`;
 
   const server: BackendServer = {
-    port,
+    port: basePort,
     baseUrl,
-    process: backendProcess,
+    process: undefined,
   };
 
-  runningServers.set(workerId, server);
-
-  // Handle process events
-  backendProcess.on('error', (error) => {
-    console.error(`[backend-server] Worker ${workerId} backend error:`, error);
-    runningServers.delete(workerId);
-  });
-
-  backendProcess.on('close', (code) => {
-    console.log(`[backend-server] Worker ${workerId} backend exited with code ${code}`);
-    runningServers.delete(workerId);
-  });
-
-  // Wait for server to be ready
+  // Ensure it's reachable before proceeding
   await waitForServer(baseUrl);
-  
-  console.log(`[backend-server] Backend ready for worker ${workerId} at ${baseUrl}`);
+  console.log(`[backend-server] Backend ready (shared) for worker ${workerId} at ${baseUrl}`);
   return server;
 }
 
-export async function stopBackendServer(workerId: string): Promise<void> {
-  const server = runningServers.get(workerId);
-  if (server && server.process) {
-    console.log(`[backend-server] Stopping backend for worker ${workerId}`);
-    server.process.kill('SIGTERM');
-    runningServers.delete(workerId);
-  }
+export async function stopBackendServer(_workerId: string): Promise<void> {
+  // No-op in shared backend mode
 }
 
 export async function stopAllBackendServers(): Promise<void> {
@@ -113,8 +71,9 @@ export async function stopAllBackendServers(): Promise<void> {
 async function waitForServer(baseUrl: string, maxAttempts = 30): Promise<void> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await fetch(`${baseUrl}/`, { method: 'GET' });
-      if (response.ok) {
+      // Prefer a known health/info endpoint
+      const response = await fetch(`${baseUrl}/api/system/info`, { method: 'GET' });
+      if (response.ok || response.status === 200) {
         return; // Server is ready
       }
     } catch (error) {

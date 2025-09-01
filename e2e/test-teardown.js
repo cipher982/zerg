@@ -10,8 +10,19 @@ async function globalTeardown(config) {
   const path = require('path');
   
   try {
+    // Resolve a Python interpreter ('python' or 'python3')
+    const pythonCmd = (() => {
+      try { require('child_process').execSync('python --version', { stdio: 'ignore' }); return 'python'; } catch {}
+      try { require('child_process').execSync('python3 --version', { stdio: 'ignore' }); return 'python3'; } catch {}
+      return null;
+    })();
+
+    if (!pythonCmd) {
+      throw new Error("No Python interpreter found (python/python3)");
+    }
+
     // Call Python cleanup script to remove all test databases
-    const cleanup = spawn('python', ['-c', `
+    const cleanup = spawn(pythonCmd, ['-c', `
 import sys
 sys.path.insert(0, '${path.resolve('../backend')}')
 from zerg.test_db_manager import cleanup_test_databases

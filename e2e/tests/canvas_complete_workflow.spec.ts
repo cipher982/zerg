@@ -14,7 +14,7 @@ import { test, expect } from './fixtures';
  */
 
 test.describe('Complete Canvas Workflow', () => {
-  test('End-to-end canvas workflow with agent and tool execution', async ({ page }, testInfo) => {
+  test('End-to-end canvas workflow with agent and tool execution', async ({ page, backendUrl }, testInfo) => {
     console.log('🚀 Starting complete canvas workflow test...');
     
     const workerId = String(testInfo.workerIndex);
@@ -22,7 +22,7 @@ test.describe('Complete Canvas Workflow', () => {
     
     // Step 1: Create Agent via API first to ensure it exists
     console.log('📊 Step 1: Creating test agent...');
-    const agentResponse = await page.request.post('http://localhost:8001/api/agents', {
+    const agentResponse = await page.request.post(`${backendUrl}/api/agents`, {
       data: {
         name: `Canvas Test Agent ${workerId}`,
         system_instructions: 'You are a test agent for canvas workflow testing',
@@ -38,10 +38,12 @@ test.describe('Complete Canvas Workflow', () => {
     // Step 2: Navigate to the application
     console.log('📊 Step 2: Navigating to application...');
     await page.goto('/');
+    await page.waitForFunction(() => (window as any).__APP_READY__ === true, { timeout: 15000 });
     await page.waitForTimeout(2000);
     
     // Step 3: Verify agent appears in dashboard
     console.log('📊 Step 3: Verifying agent in dashboard...');
+    await expect(page.getByTestId('global-dashboard-tab')).toBeVisible({ timeout: 15000 });
     await page.getByTestId('global-dashboard-tab').click();
     await page.waitForTimeout(1000);
     
@@ -52,11 +54,14 @@ test.describe('Complete Canvas Workflow', () => {
     
     // Step 4: Navigate to canvas
     console.log('📊 Step 4: Navigating to canvas...');
+    await expect(page.getByTestId('global-canvas-tab')).toBeVisible({ timeout: 15000 });
     await page.getByTestId('global-canvas-tab').click();
     await page.waitForTimeout(2000);
     
     // Wait for canvas to load
-    const canvasVisible = await page.locator('[data-testid="canvas-container"]').isVisible();
+    const canvasVisible = await page
+      .locator('#canvas-container, [data-testid="canvas-container"], .canvas-wrapper')
+      .isVisible();
     console.log('📊 Canvas visible:', canvasVisible);
     
     if (canvasVisible) {
@@ -64,12 +69,12 @@ test.describe('Complete Canvas Workflow', () => {
       
       // Step 5: Check for agent shelf
       console.log('📊 Step 5: Checking agent shelf...');
-      const agentShelfVisible = await page.locator('[data-testid="agent-shelf"]').isVisible();
+      const agentShelfVisible = await page.locator('#agent-shelf').isVisible();
       console.log('📊 Agent shelf visible:', agentShelfVisible);
       
       if (agentShelfVisible) {
         // Step 6: Look for the created agent in shelf
-        const agentInShelf = await page.locator('[data-testid="agent-shelf"]').locator(`text=${createdAgent.name}`).isVisible();
+        const agentInShelf = await page.locator('#agent-shelf').locator(`text=${createdAgent.name}`).isVisible();
         console.log('📊 Agent visible in shelf:', agentInShelf);
         
         if (agentInShelf) {
@@ -77,13 +82,19 @@ test.describe('Complete Canvas Workflow', () => {
           
           // Step 7: Check for tool palette
           console.log('📊 Step 7: Checking tool palette...');
-          const toolPaletteVisible = await page.locator('[data-testid="tool-palette"]').isVisible();
+          const toolPaletteVisible = await page.locator('#agent-shelf').isVisible();
           console.log('📊 Tool palette visible:', toolPaletteVisible);
           
           if (toolPaletteVisible) {
             // Look for HTTP/URL tools
-            const httpToolVisible = await page.locator('[data-testid="tool-palette"]').locator('text=HTTP').isVisible();
-            const urlToolVisible = await page.locator('[data-testid="tool-palette"]').locator('text=URL').isVisible();
+            const httpToolVisible = await page
+              .locator('#agent-shelf .palette-node-name:has-text("HTTP Request")')
+              .first()
+              .isVisible();
+            const urlToolVisible = await page
+              .locator('#agent-shelf .palette-node-name:has-text("URL")')
+              .first()
+              .isVisible();
             console.log('📊 HTTP tool visible:', httpToolVisible);
             console.log('📊 URL tool visible:', urlToolVisible);
             
@@ -95,7 +106,7 @@ test.describe('Complete Canvas Workflow', () => {
               
               try {
                 // Try to drag agent to canvas
-                const agentElement = page.locator('[data-testid="agent-shelf"]').locator(`text=${createdAgent.name}`).first();
+                const agentElement = page.locator('#agent-shelf').locator(`text=${createdAgent.name}`).first();
                 const canvasArea = page.locator('[data-testid="canvas-container"]');
                 
                 // Perform drag operation
@@ -114,9 +125,9 @@ test.describe('Complete Canvas Workflow', () => {
                   console.log('✅ Agent successfully placed on canvas');
                   
                   // Try to add a tool
-                  const toolElement = httpToolVisible ? 
-                    page.locator('[data-testid="tool-palette"]').locator('text=HTTP').first() :
-                    page.locator('[data-testid="tool-palette"]').locator('text=URL').first();
+                  const toolElement = httpToolVisible
+                    ? page.locator('#agent-shelf .palette-node-name:has-text("HTTP Request")').first()
+                    : page.locator('#agent-shelf .palette-node-name:has-text("URL")').first();
                   
                   await toolElement.dragTo(canvasArea, {
                     targetPosition: { x: 400, y: 200 }

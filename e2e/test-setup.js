@@ -15,8 +15,19 @@ async function globalSetup(config) {
   const path = require('path');
   
   try {
-    // Call Python cleanup script (user must ensure 'python' resolves)
-    const cleanup = spawn('python', ['-c', `
+    // Resolve a Python interpreter ('python' or 'python3')
+    const pythonCmd = (() => {
+      try { require('child_process').execSync('python --version', { stdio: 'ignore' }); return 'python'; } catch {}
+      try { require('child_process').execSync('python3 --version', { stdio: 'ignore' }); return 'python3'; } catch {}
+      return null;
+    })();
+
+    if (!pythonCmd) {
+      throw new Error("No Python interpreter found (python/python3)");
+    }
+
+    // Call Python cleanup script
+    const cleanup = spawn(pythonCmd, ['-c', `
 import sys
 sys.path.insert(0, '${path.resolve('../backend')}')
 from zerg.test_db_manager import cleanup_test_databases

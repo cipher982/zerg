@@ -36,6 +36,8 @@ pub fn refresh_agent_shelf(document: &Document) -> Result<(), JsValue> {
 fn create_root_element(document: &Document) -> Result<Element, JsValue> {
     let el = document.create_element("div")?;
     el.set_id("agent-shelf");
+    // Expose stable hook for E2E tests
+    let _ = el.set_attribute("data-testid", "agent-shelf");
     // No inline styles needed - using CSS now
     Ok(el)
 }
