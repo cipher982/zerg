@@ -68,7 +68,8 @@ features = [
     "EventTarget",
     "AddEventListenerOptions",
     "Location",
-    "HtmlCollection"
+    "HtmlCollection",
+    "NodeList"
 ]
 
 [dev-dependencies]
