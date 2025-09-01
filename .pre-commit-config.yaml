@@ -100,8 +100,10 @@ repos:
 
       - id: tool-contract-validation
         name: Tool contract validation
-        language: system
-        entry: python3 scripts/validate_tool_contracts.py
+        language: python
+        entry: scripts/validate_tool_contracts.py
+        additional_dependencies:
+          - pyyaml
         pass_filenames: false
         files: ^(asyncapi/tools\.yml|backend/zerg/tools/builtin/.*\.py|frontend/src/components/node_palette\.rs)$
 
