@@ -62,10 +62,9 @@ export class ApiClient {
   private headers: Record<string, string>;
 
   constructor(workerId: string = '0', baseUrl?: string) {
-    // Calculate port based on worker ID (worker-specific backend)
+    // Single backend port – per-worker DB isolation is via X-Test-Worker header
     const basePort = getBackendPort();
-    const port = basePort + parseInt(workerId);
-    this.baseUrl = baseUrl || `http://localhost:${port}`;
+    this.baseUrl = baseUrl || `http://localhost:${basePort}`;
     this.headers = {
       'Content-Type': 'application/json',
       // No longer need X-Test-Worker header - isolation is at infrastructure level

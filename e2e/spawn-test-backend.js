@@ -36,24 +36,24 @@ function getPortsFromEnv() {
     return { BACKEND_PORT, FRONTEND_PORT };
 }
 
-// Get worker ID from command line argument
+// Optional worker ID from command line argument (legacy mode)
 const workerId = process.argv[2];
-if (!workerId) {
-    console.error('Usage: node spawn-test-backend.js <worker_id>');
-    process.exit(1);
+const { BACKEND_PORT } = getPortsFromEnv();
+
+const port = workerId ? BACKEND_PORT + parseInt(workerId) : BACKEND_PORT;
+
+if (workerId) {
+    console.log(`[spawn-backend] Starting isolated backend for worker ${workerId} on port ${port}`);
+} else {
+    console.log(`[spawn-backend] Starting single backend on port ${port} (per-worker DB isolation via header)`);
 }
 
-const { BACKEND_PORT } = getPortsFromEnv();
-const port = BACKEND_PORT + parseInt(workerId);
-
-console.log(`[spawn-backend] Starting isolated backend for worker ${workerId} on port ${port}`);
-
 // Spawn the test backend with E2E configuration
-const backend = spawn('uv', ['run', 'python', '-m', 'uvicorn', 'test_main:app', `--port=${port}`, '--log-level=warning'], {
+const backend = spawn('uv', ['run', 'python', '-m', 'uvicorn', 'zerg.main:app', `--port=${port}`, '--log-level=warning'], {
     env: {
         ...process.env,
         ENVIRONMENT: 'test:e2e',  // Use E2E test config for real models
-        TEST_WORKER_ID: workerId,
+        TEST_WORKER_ID: workerId || '0',
         NODE_ENV: 'test',
         TESTING: '1',  // Enable testing mode for database reset
     },

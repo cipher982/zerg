@@ -42,11 +42,9 @@ type TestFixtures = {
 };
 
 export const test = base.extend<TestFixtures>({
-  backendUrl: async ({}, use, testInfo) => {
-    const workerId = testInfo.workerIndex;
+  backendUrl: async ({}, use) => {
     const basePort = getBackendPort();
-    const port = basePort + workerId;
-    await use(`http://localhost:${port}`);
+    await use(`http://localhost:${basePort}`);
   },
   
   request: async ({ playwright, backendUrl }, use, testInfo) => {

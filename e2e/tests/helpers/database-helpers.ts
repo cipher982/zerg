@@ -87,10 +87,9 @@ export async function resetDatabaseViaRequest(
   const { retries = 3, workerId = '0' } = options;
   let attempts = 0;
   
-  // Calculate port based on worker ID
+  // Use single backend port; isolation via X-Test-Worker header
   const basePort = getBackendPort();
-  const port = basePort + parseInt(workerId);
-  const baseUrl = `http://localhost:${port}`;
+  const baseUrl = `http://localhost:${basePort}`;
   
   while (attempts < retries) {
     try {

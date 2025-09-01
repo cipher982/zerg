@@ -78,9 +78,11 @@ test.describe('Agent Creation Full Workflow', () => {
     // Step 5: Test UI integration
     console.log('📊 Step 5: Testing UI integration...');
     await page.goto('/');
+    await page.waitForFunction(() => (window as any).__APP_READY__ === true, { timeout: 15000 });
     await page.waitForTimeout(1000);
     
     // Navigate to dashboard
+    await expect(page.getByTestId('global-dashboard-tab')).toBeVisible({ timeout: 15000 });
     await page.getByTestId('global-dashboard-tab').click();
     await page.waitForTimeout(2000);
     
