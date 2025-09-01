@@ -600,6 +600,12 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
         storage::ActiveView::Dashboard,
     ));
 
+    // Signal to automation/tests that the app finished its initial bootstrap.
+    if let Some(win) = web_sys::window() {
+        let key = js_sys::JsString::from("__APP_READY__");
+        let _ = js_sys::Reflect::set(&win, &key, &JsValue::from_bool(true));
+    }
+
     Ok(())
 }
 

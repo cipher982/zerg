@@ -10,10 +10,13 @@ test.describe('Canvas UI Tests', () => {
   test('Canvas tab loads successfully without errors', async ({ page }) => {
     // User navigates to the app
     await page.goto('/');
+    await page.waitForFunction(() => (window as any).__APP_READY__ === true, { timeout: 15000 });
     
+    // Wait for app header/tabs to render
+    await expect(page.getByTestId('global-dashboard-tab')).toBeVisible({ timeout: 15000 });
     // User clicks on Canvas tab
     const canvasTab = page.getByTestId('global-canvas-tab');
-    await expect(canvasTab).toBeVisible();
+    await expect(canvasTab).toBeVisible({ timeout: 15000 });
     await canvasTab.click();
     
     // Canvas should load without errors
@@ -25,14 +28,16 @@ test.describe('Canvas UI Tests', () => {
     const errorElements = page.locator('.error-message, .error-banner, [data-testid="error"], .alert-danger');
     await expect(errorElements).not.toBeVisible();
     
-    // Tool palette should be visible (indicates canvas loaded properly)
-    const toolPalette = page.locator('[data-testid="tool-palette"], .tool-palette, #tool-palette');
-    await expect(toolPalette).toBeVisible();
+    // Agent/Tool shelf should be visible (left panel)
+    const shelf = page.locator('#agent-shelf');
+    await expect(shelf).toBeVisible();
   });
 
   test('Canvas persists state when switching tabs', async ({ page }) => {
     // Navigate to canvas
     await page.goto('/');
+    await page.waitForFunction(() => (window as any).__APP_READY__ === true, { timeout: 15000 });
+    await expect(page.getByTestId('global-canvas-tab')).toBeVisible({ timeout: 15000 });
     await page.getByTestId('global-canvas-tab').click();
     
     // Wait for canvas to load
@@ -53,6 +58,8 @@ test.describe('Canvas UI Tests', () => {
   test('Canvas workspace is interactive', async ({ page }) => {
     // Navigate to canvas
     await page.goto('/');
+    await page.waitForFunction(() => (window as any).__APP_READY__ === true, { timeout: 15000 });
+    await expect(page.getByTestId('global-canvas-tab')).toBeVisible({ timeout: 15000 });
     await page.getByTestId('global-canvas-tab').click();
     
     // Wait for canvas to load

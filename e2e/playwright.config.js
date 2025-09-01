@@ -61,21 +61,21 @@ const config = {
 
   webServer: [
     {
-      // Start the frontend server
+      // Start the frontend server (static WASM assets)
       command: `cd ../frontend && ./build-only.sh && cd ../e2e && FRONTEND_PORT=${FRONTEND_PORT} node wasm-server.js`,
       port: FRONTEND_PORT,
       reuseExistingServer: !process.env.CI, // Reuse in dev, fresh in CI
       timeout: 180_000,
     },
-    // Start backend servers for actual workers only
-    ...Array.from({ length: workers }, (_, i) => ({
-      command: `BACKEND_PORT=${BACKEND_PORT} node spawn-test-backend.js ${i}`,
-      port: BACKEND_PORT + i,
+    {
+      // Start a single backend server; DB isolation happens via X-Test-Worker header
+      command: `BACKEND_PORT=${BACKEND_PORT} node spawn-test-backend.js`,
+      port: BACKEND_PORT,
       cwd: __dirname,
-      reuseExistingServer: false, // Each worker needs isolated backend
+      reuseExistingServer: false,
       timeout: 60_000,
-    })),
-  ].flat(),
+    },
+  ],
 };
 
 module.exports = config;
