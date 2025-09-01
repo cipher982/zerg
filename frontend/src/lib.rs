@@ -369,12 +369,19 @@ pub fn start() -> Result<(), JsValue> {
             use gloo_timers::future::TimeoutFuture;
             let start = js_sys::Date::now();
             loop {
-                // Only proceed once a non-empty API base URL is configured.
-                // This ensures the runtime JS override (window.API_BASE_URL)
-                // has been applied in dev, avoiding same-origin '/api' calls
-                // that the static dev server cannot serve.
+                // Accept either a configured base URL (dev runtime or compile-time)
+                // or same-origin (empty) when not on localhost.
                 let base = crate::network::get_api_base_url().unwrap_or_default();
                 if !base.is_empty() { return true; }
+                if let Some(win) = web_sys::window() {
+                    if let Ok(hostname) = win.location().hostname() {
+                        let hn = hostname.to_lowercase();
+                        if hn != "localhost" && hn != "127.0.0.1" {
+                            // In production/same-origin, proceed with empty base (relative /api)
+                            return true;
+                        }
+                    }
+                }
                 let elapsed = js_sys::Date::now() - start;
                 if elapsed >= timeout_ms as f64 {
                     return false;
@@ -384,7 +391,7 @@ pub fn start() -> Result<(), JsValue> {
         }
 
         if !wait_for_api_config(3000).await {
-            show_fatal_config_error(&doc_clone, "API base URL not configured. Ensure window.API_BASE_URL is set in config.js (dev) or API_BASE_URL is provided at build-time (prod).\n\nHint: In dev, build scripts write config.js with window.API_BASE_URL = 'http://localhost:<BACKEND_PORT>'.");
+            show_fatal_config_error(&doc_clone, "API base URL not configured. In development, ensure window.API_BASE_URL is set in config.js or set API_BASE_URL at build time. In production, the app will use same-origin '/api' endpoints by default.");
             return;
         }
         // Attempt to fetch the system info endpoint.  If it fails we fall
