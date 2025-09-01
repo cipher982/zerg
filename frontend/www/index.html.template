@@ -74,9 +74,6 @@
     <!-- Single application content container -->
     <div id="app-container"></div>
 
-    <!-- Mobile hamburger to toggle the agent shelf -->
-    <button id="shelf-toggle-btn" aria-label="Toggle agent panel">☰</button>
-
     <!-- Global overlay portal (dropdowns, tooltips, modals that need to escape stacking contexts) -->
     <div id="overlay-root"></div>
 
@@ -86,8 +83,6 @@
     <!-- Load configuration -->
     <script src="config.js"></script>
 
-    <!-- Shelf toggle (mobile) -->
-    <script src="shelf-toggle.js" defer></script>
 
     <!-- Ripple interaction (buttons, tabs) -->
     <script src="ripple-init.js" defer></script>

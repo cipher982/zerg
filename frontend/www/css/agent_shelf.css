@@ -190,3 +190,28 @@
 
   #agent-shelf.open { transform: translateX(0); }
 }
+
+/* Scrim overlay when shelf is open on mobile */
+.shelf-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+  z-index: 1400; /* below shelf (1500), above content */
+  display: none; /* only used on mobile */
+}
+
+body.shelf-open .shelf-scrim { opacity: 1; pointer-events: auto; }
+
+/* Disable animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  #agent-shelf { transition: none; }
+  .shelf-scrim { transition: none; }
+}
+
+/* Only show scrim on small screens */
+@media (max-width: 767px) {
+  .shelf-scrim { display: block; }
+}

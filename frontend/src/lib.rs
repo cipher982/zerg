@@ -501,6 +501,8 @@ pub fn start() -> Result<(), JsValue> {
 pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsValue> {
     // Create base UI elements (header and status bar)
     ui::setup::create_base_ui(document)?;
+    // Wire up shelf toggle, scrim and state persistence
+    ui::setup::init_shelf_toggle_interactions(document)?;
 
     // --- Initialize and Connect WebSocket v2 ---
     // Access the globally initialized WS client and Topic Manager

@@ -38,6 +38,8 @@ fn create_root_element(document: &Document) -> Result<Element, JsValue> {
     el.set_id("agent-shelf");
     // Expose stable hook for E2E tests
     let _ = el.set_attribute("data-testid", "agent-shelf");
+    // Make focusable for accessibility / focus management
+    let _ = el.set_attribute("tabindex", "-1");
     // No inline styles needed - using CSS now
     Ok(el)
 }
@@ -94,6 +96,8 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
                 } else {
                     // Only make draggable if not already on canvas
                     pill.set_attribute("draggable", "true").unwrap();
+                    // Make focusable for keyboard users
+                    pill.set_tab_index(0);
 
                     // Clone data for the closures
                     let agent_id_for_drag = agent_id.to_string();
@@ -193,5 +197,36 @@ fn populate_agent_shelf(document: &Document, shelf_el: &Element) -> Result<(), J
     // Render the node palette into the shelf
     let palette = crate::components::node_palette::NodePalette::new();
     let _ = palette.render_into(document, &node_palette_container);
+    // Apply persisted open state (mobile drawer)
+    apply_persisted_open_state(document);
     Ok(())
+}
+
+fn apply_persisted_open_state(document: &Document) {
+    if let Some(win) = web_sys::window() {
+        if let Ok(Some(storage)) = win.local_storage() {
+            if let Ok(Some(val)) = storage.get_item("agent_shelf_open") {
+                if val == "1" {
+                    if let Some(shelf) = document.get_element_by_id("agent-shelf") {
+                        let _ = shelf.class_list().add_1("open");
+                    }
+                    if let Some(body) = document.body() {
+                        let _ = body.class_list().add_1("shelf-open");
+                    }
+                    if let Some(btn) = document.get_element_by_id("shelf-toggle-btn") {
+                        let _ = btn.set_attribute("aria-expanded", "true");
+                        let _ = btn.set_attribute("aria-label", "Close agent panel");
+                        // Swap icon to 'x' via feather placeholder
+                        if let Ok(icon) = document.create_element("i") {
+                            let _ = icon.set_attribute("data-feather", "x");
+                            while let Some(child) = btn.first_child() {
+                                let _ = btn.remove_child(&child);
+                            }
+                            let _ = btn.append_child(&icon);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
