@@ -94,13 +94,22 @@ sed \
   -e "s|{{CACHE_BUST}}|${CACHE_BUST_TAG}|g" \
   www/index.html.template > www/index.html
 
-# Write config.js with local API base URL so the SPA hits the dev backend
+# Write config.js – in production do not set a localhost API base
 echo "[build-debug] writing config.js …"
-cat > www/config.js <<EOF
+if [[ "${BUILD_ENV}" == "production" ]]; then
+  cat > www/config.js <<EOF
+window.__APP_CONFIG__ = window.__APP_CONFIG__ || {};
+window.__APP_CONFIG__.BUILD = 'production';
+// In production, rely on same-origin '/api' or compile-time API_BASE_URL.
+EOF
+else
+  cat > www/config.js <<EOF
 window.__APP_CONFIG__ = window.__APP_CONFIG__ || {};
 window.__APP_CONFIG__.BUILD = '${BUILD_ENV}';
+// Dev: point to local backend for convenience
 window.API_BASE_URL = 'http://localhost:${BACKEND_PORT}';
 EOF
+fi
 
 # If BUILD_ONLY environment variable is set, exit here without starting dev server
 if [ "${BUILD_ONLY:-}" = "true" ]; then
