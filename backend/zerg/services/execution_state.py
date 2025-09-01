@@ -5,10 +5,14 @@ architecture that separates "what's happening now" (Phase) from "how did it end"
 """
 
 from datetime import datetime
-from typing import Optional, Union
+from typing import Optional
+from typing import Union
 
-from zerg.models.enums import Phase, Result, FailureKind
-from zerg.models.models import WorkflowExecution, NodeExecutionState
+from zerg.models.enums import FailureKind
+from zerg.models.enums import Phase
+from zerg.models.enums import Result
+from zerg.models.models import NodeExecutionState
+from zerg.models.models import WorkflowExecution
 
 
 class ExecutionStateMachine:

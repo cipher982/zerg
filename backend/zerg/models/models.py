@@ -20,9 +20,7 @@ from sqlalchemy.sql import func
 # Local helpers / enums
 from zerg.database import Base
 from zerg.models.enums import AgentStatus
-from zerg.models.enums import FailureKind
 from zerg.models.enums import Phase
-from zerg.models.enums import Result
 from zerg.models.enums import RunStatus
 from zerg.models.enums import RunTrigger
 from zerg.models.enums import ThreadType
