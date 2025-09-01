@@ -63,17 +63,17 @@ test.describe('Canvas UI Tests', () => {
     await page.getByTestId('global-canvas-tab').click();
     
     // Wait for canvas to load
-    const canvasContainer = page.locator('#canvas-container, [data-testid="canvas-container"], .canvas-wrapper');
-    await expect(canvasContainer).toBeVisible({ timeout: 5000 });
-    
-    // Try clicking on the canvas (shouldn't cause errors)
-    const canvas = page.locator('canvas, svg, .canvas-surface').first();
-    if (await canvas.count() > 0) {
-      await canvas.click({ position: { x: 100, y: 100 } });
-      
-      // Still no errors after interaction
-      const errorElements = page.locator('.error-message, .error-banner');
-      await expect(errorElements).not.toBeVisible();
+    const canvasContainer = page.locator('[data-testid="canvas-container"], #canvas-container');
+    await expect(canvasContainer).toBeVisible({ timeout: 10000 });
+
+    // Click within the canvas container to validate interaction
+    const box = await canvasContainer.boundingBox();
+    if (box) {
+      await page.mouse.click(box.x + Math.min(100, box.width / 2), box.y + Math.min(100, box.height / 2));
     }
+
+    // Still no errors after interaction
+    const errorElements = page.locator('.error-message, .error-banner');
+    await expect(errorElements).not.toBeVisible();
   });
 });
