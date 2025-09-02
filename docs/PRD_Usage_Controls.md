@@ -57,7 +57,12 @@ Task B: Model Allowlist for Non‑Admins
   - Admin unaffected.
 - Acceptance
   - Correct HTTP status and behavior; tests pass.
-- Status: [ ] Not started
+- Status: [x] Done
+- Notes:
+  - Added `ALLOWED_MODELS_NON_ADMIN` and `DEFAULT_MODEL_NON_ADMIN` to settings.
+  - Enforced allowlist in agent create/update routes for non‑admin users (admins unrestricted).
+  - Filtered `/api/models` response for non‑admins to allowed subset when configured.
+  - Added tests: non‑admin blocked on disallowed model; allowed model passes; admin bypass; models endpoint filtering.
 
 Task C: Per‑User Runs/Day (non‑admins)
 - Implementation
@@ -71,7 +76,11 @@ Task C: Per‑User Runs/Day (non‑admins)
   - Non‑admin blocked after N runs; admin allowed.
 - Acceptance
   - Correct denial at threshold; HTTP 429/403 chosen consistently.
-- Status: [ ] Not started
+- Status: [x] Done
+- Notes:
+  - Added shared helper `zerg.services.quota.assert_can_start_run` to enforce `DAILY_RUNS_PER_USER` (0 disables).
+  - Wired into `services/task_runner.execute_agent_task` and `routers/threads.run_thread`.
+  - Added tests (`test_daily_runs_cap.py`) covering non‑admin blocking, admin exemption, and both thread/task entrypoints.
 
 Task D: Token Usage Capture + Cost Estimate
 - Implementation
