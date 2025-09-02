@@ -238,12 +238,12 @@ def google_sign_in(body: dict[str, str], db: Session = Depends(get_db)) -> Token
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google token missing email claim")
 
     user = crud.get_user_by_email(db, email)
+    settings = get_settings()
+    admin_emails = {e.strip().lower() for e in (settings.admin_emails or "").split(",") if e.strip()}
+    is_admin = email.lower() in admin_emails
+
     if not user:
         # Enforce simple signup cap with admin exemption
-        settings = get_settings()
-        admin_emails = {e.strip().lower() for e in (settings.admin_emails or "").split(",") if e.strip()}
-        is_admin = email.lower() in admin_emails
-
         # When not testing and not admin, stop creating new users once MAX_USERS reached
         if not settings.testing and not is_admin:
             try:
@@ -259,6 +259,17 @@ def google_sign_in(body: dict[str, str], db: Session = Depends(get_db)) -> Token
         # Create user; grant ADMIN role if email is in admin list
         role = "ADMIN" if is_admin else "USER"
         user = crud.create_user(db, email=email, provider="google", provider_user_id=sub, role=role)
+    else:
+        # Existing user – promote to ADMIN if configured and not already admin
+        if is_admin and getattr(user, "role", None) != "ADMIN":
+            try:
+                _ = crud.update_user(db, user.id, display_name=user.display_name)
+                # direct SQLAlchemy update for role (update_user doesn't expose role)
+                user.role = "ADMIN"  # type: ignore[assignment]
+                db.commit()
+                db.refresh(user)
+            except Exception:  # pragma: no cover – best-effort promotion
+                pass
 
     # 3. Issue platform JWT
     access_token = _issue_access_token(
