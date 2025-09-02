@@ -54,6 +54,35 @@ def _validate_model_or_400(model_id: str) -> None:
         )
 
 
+def _enforce_model_allowlist_or_422(model_id: str, current_user) -> str:
+    """Return a permitted model_id for the user or raise 422.
+
+    Non-admin users are restricted to the comma-separated allowlist
+    from settings.ALLOWED_MODELS_NON_ADMIN when provided. Admins are
+    unrestricted. If the requested model is disallowed and a default
+    is configured, we still reject (explicit) to avoid silent changes.
+    """
+    role = getattr(current_user, "role", "USER")
+    if role == "ADMIN":
+        return model_id
+
+    settings = get_settings()
+    raw = settings.allowed_models_non_admin or ""
+    allow = [m.strip() for m in raw.split(",") if m.strip()]
+    if not allow:
+        # No allowlist configured – permit any registered model
+        return model_id
+
+    if model_id in allow:
+        return model_id
+
+    allowed_str = ",".join(allow)
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=f"Model '{model_id}' is not allowed for non-admin users. Allowed: {allowed_str}",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Router & deps
 # ---------------------------------------------------------------------------
@@ -104,6 +133,8 @@ async def create_agent(
     current_user=Depends(get_current_user),
 ):
     _validate_model_or_400(agent.model)
+    # Enforce role-based allowlist for non-admin users
+    model_to_use = _enforce_model_allowlist_or_422(agent.model, current_user)
 
     try:
         return crud.create_agent(
@@ -112,7 +143,7 @@ async def create_agent(
             name=agent.name,
             system_instructions=agent.system_instructions,
             task_instructions=agent.task_instructions,
-            model=agent.model,
+            model=model_to_use,
             schedule=agent.schedule,
             config=agent.config,
         )
@@ -130,9 +161,18 @@ def read_agent(agent_id: int, db: Session = Depends(get_db)):
 
 @router.put("/{agent_id}", response_model=Agent)
 @publish_event(EventType.AGENT_UPDATED)
-async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(get_db)):
+async def update_agent(
+    agent_id: int,
+    agent: AgentUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     if agent.model is not None:
         _validate_model_or_400(agent.model)
+        # Enforce role-based allowlist for non-admin users when updating model
+        agent_model_validated = _enforce_model_allowlist_or_422(agent.model, current_user)
+    else:
+        agent_model_validated = None
 
     try:
         row = crud.update_agent(
@@ -141,7 +181,7 @@ async def update_agent(agent_id: int, agent: AgentUpdate, db: Session = Depends(
             name=agent.name,
             system_instructions=agent.system_instructions,
             task_instructions=agent.task_instructions,
-            model=agent.model,
+            model=agent_model_validated,
             status=agent.status.value if agent.status else None,
             schedule=agent.schedule,
             config=agent.config,
