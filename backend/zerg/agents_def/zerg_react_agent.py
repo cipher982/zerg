@@ -62,7 +62,23 @@ def _make_llm(agent_row, tools):
         "api_key": get_settings().openai_api_key,
     }
 
-    llm = ChatOpenAI(**kwargs)
+    # Enforce a maximum completion length if configured (>0)
+    try:
+        max_toks = int(get_settings().max_output_tokens)
+    except Exception:  # noqa: BLE001 – defensive parsing
+        max_toks = 0
+    if max_toks and max_toks > 0:
+        kwargs["max_tokens"] = max_toks
+
+    # Be defensive against older stubs or versions that don't accept max_tokens
+    try:
+        llm = ChatOpenAI(**kwargs)
+    except TypeError:
+        if "max_tokens" in kwargs:
+            kwargs.pop("max_tokens", None)
+            llm = ChatOpenAI(**kwargs)
+        else:
+            raise
 
     # Note: callbacks should be passed during invocation, not construction
     # The WsTokenCallback should be handled at the invocation level
