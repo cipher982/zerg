@@ -113,3 +113,10 @@ repos:
         entry: bash -c 'cd frontend && ./check_pact_coverage.sh'
         pass_filenames: false
         files: ^(frontend/src/network/ws_schema\.rs|frontend/src/bin/contract_capture\.rs|backend/zerg/websocket/).*$
+
+      - id: prod-config-guard
+        name: Production config guard (no localhost override)
+        language: python
+        entry: scripts/validate_prod_frontend_config.py
+        pass_filenames: false
+        files: ^frontend/(build-only\.sh|build-debug\.sh)$
