@@ -69,12 +69,17 @@ def read_threads(
 
 @router.post("/", response_model=Thread, status_code=status.HTTP_201_CREATED)
 @router.post("", response_model=Thread, status_code=status.HTTP_201_CREATED)
-def create_thread(thread: ThreadCreate, db: Session = Depends(get_db)):
+def create_thread(thread: ThreadCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Create a new thread"""
     # Ensure agent exists and fetch row
     agent_row = crud.get_agent(db, agent_id=thread.agent_id)
     if agent_row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+    # Authorization: only owner (or admin) can create a thread for an agent
+    is_admin = getattr(current_user, "role", "USER") == "ADMIN"
+    if not is_admin and agent_row.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: not agent owner")
 
     # Delegate creation to ThreadService so the mandatory system message is
     # inserted atomically.
@@ -101,11 +106,16 @@ def create_thread(thread: ThreadCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{thread_id}", response_model=Thread)
-def read_thread(thread_id: int, db: Session = Depends(get_db)):
+def read_thread(thread_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Get a specific thread by ID"""
     db_thread = crud.get_thread(db, thread_id=thread_id)
     if db_thread is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+    # Authorization: only owner or admin can read
+    agent = crud.get_agent(db, agent_id=db_thread.agent_id)
+    is_admin = getattr(current_user, "role", "USER") == "ADMIN"
+    if not is_admin and agent and agent.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: not thread owner")
     return db_thread
 
 
@@ -134,11 +144,24 @@ def delete_thread(thread_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{thread_id}/messages", response_model=List[ThreadMessageResponse])
-def read_thread_messages(thread_id: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def read_thread_messages(
+    thread_id: int,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """Get all messages for a thread"""
     # First check if thread exists
-    if not crud.get_thread(db, thread_id=thread_id):
+    db_thread = crud.get_thread(db, thread_id=thread_id)
+    if not db_thread:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+
+    # Authorization: only owner or admin can read messages
+    agent = crud.get_agent(db, agent_id=db_thread.agent_id)
+    is_admin = getattr(current_user, "role", "USER") == "ADMIN"
+    if not is_admin and agent and agent.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: not thread owner")
 
     # Fetch ORM messages and map to response schema including tool metadata
     orm_msgs = crud.get_thread_messages(db, thread_id=thread_id, skip=skip, limit=limit)
@@ -184,14 +207,23 @@ def read_thread_messages(thread_id: int, skip: int = 0, limit: int = 100, db: Se
     response_model=ThreadMessageResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_thread_message(thread_id: int, message: ThreadMessageCreate, db: Session = Depends(get_db)):
+def create_thread_message(
+    thread_id: int, message: ThreadMessageCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)
+):
     """Create a new message in a thread"""
     logger.info(f"Creating message in thread {thread_id}: role={message.role}, content={message.content}")
 
     # First check if thread exists
-    if not crud.get_thread(db, thread_id=thread_id):
+    db_thread = crud.get_thread(db, thread_id=thread_id)
+    if not db_thread:
         logger.warning(f"Thread {thread_id} not found when creating message")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+
+    # Authorization: only owner or admin can post messages
+    agent = crud.get_agent(db, agent_id=db_thread.agent_id)
+    is_admin = getattr(current_user, "role", "USER") == "ADMIN"
+    if not is_admin and agent and agent.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: not thread owner")
 
     # Create the message (note: by default, processed=False for user messages)
     new_message = crud.create_thread_message(db=db, thread_id=thread_id, role=message.role, content=message.content)
@@ -207,16 +239,19 @@ async def run_thread(thread_id: int, db: Session = Depends(get_db), current_user
     # Enforce per-user daily run cap (non-admins are restricted)
     assert_can_start_run(db, user=current_user)
 
-    # Validate thread & agent
+    # Validate thread & agent and ownership
     thread = crud.get_thread(db, thread_id=thread_id)
     if thread is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+    agent = crud.get_agent(db, agent_id=thread.agent_id)
+    is_admin = getattr(current_user, "role", "USER") == "ADMIN"
+    if not is_admin and agent and agent.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: not thread owner")
 
     messages = crud.get_unprocessed_messages(db, thread_id=thread_id)
     if not messages:
         return {"status": "No unprocessed messages"}
 
-    agent = crud.get_agent(db, agent_id=thread.agent_id)
     if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 

@@ -256,10 +256,15 @@ def create_agent_message(agent_id: int, message: MessageCreate, db: Session = De
 
 
 @router.post("/{agent_id}/task", status_code=status.HTTP_202_ACCEPTED)
-async def run_agent_task(agent_id: int, db: Session = Depends(get_db)):
+async def run_agent_task(agent_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     agent = crud.get_agent(db, agent_id)
     if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+    # Authorization: only owner or admin may run an agent's task
+    is_admin = getattr(current_user, "role", "USER") == "ADMIN"
+    if not is_admin and agent.owner_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: not agent owner")
 
     from zerg.services.task_runner import execute_agent_task
 

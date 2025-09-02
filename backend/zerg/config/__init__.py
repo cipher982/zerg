@@ -69,7 +69,6 @@ class Settings:  # noqa: D401 – simple data container
     max_output_tokens: int
     # Model policy ------------------------------------------------------
     allowed_models_non_admin: str  # csv list
-    default_model_non_admin: str
     # Quotas ------------------------------------------------------------
     daily_runs_per_user: int
 
@@ -147,7 +146,6 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
         admin_emails=os.getenv("ADMIN_EMAILS", os.getenv("ADMIN_EMAIL", "")),
         max_output_tokens=int(os.getenv("MAX_OUTPUT_TOKENS", "1000")),
         allowed_models_non_admin=os.getenv("ALLOWED_MODELS_NON_ADMIN", ""),
-        default_model_non_admin=os.getenv("DEFAULT_MODEL_NON_ADMIN", ""),
         daily_runs_per_user=int(os.getenv("DAILY_RUNS_PER_USER", "0")),
     )
 
