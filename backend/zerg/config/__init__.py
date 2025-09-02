@@ -62,6 +62,9 @@ class Settings:  # noqa: D401 – simple data container
     environment: Any
     allowed_cors_origins: str
     openai_api_key: Any
+    # User/account limits ----------------------------------------------
+    max_users: int
+    admin_emails: str  # comma-separated list
 
     # ------------------------------------------------------------------
     # Dynamic feature helper – evaluates *each time* so tests that tweak the
@@ -127,6 +130,8 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
         environment=os.getenv("ENVIRONMENT"),
         allowed_cors_origins=os.getenv("ALLOWED_CORS_ORIGINS", ""),
         openai_api_key=os.getenv("OPENAI_API_KEY"),
+        max_users=int(os.getenv("MAX_USERS", "20")),
+        admin_emails=os.getenv("ADMIN_EMAILS", os.getenv("ADMIN_EMAIL", "")),
     )
 
 

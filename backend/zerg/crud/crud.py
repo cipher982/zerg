@@ -240,6 +240,11 @@ def get_user_by_email(db: Session, email: str) -> Optional[User]:
     )
 
 
+def count_users(db: Session) -> int:
+    """Return total number of users in the system."""
+    return db.query(User).count()
+
+
 def create_user(
     db: Session,
     *,
