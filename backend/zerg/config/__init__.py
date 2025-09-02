@@ -65,6 +65,8 @@ class Settings:  # noqa: D401 – simple data container
     # User/account limits ----------------------------------------------
     max_users: int
     admin_emails: str  # comma-separated list
+    # LLM limits --------------------------------------------------------
+    max_output_tokens: int
 
     # Dynamic guards (evaluated at runtime) -----------------------------
     @property
@@ -138,6 +140,7 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
         openai_api_key=os.getenv("OPENAI_API_KEY"),
         max_users=int(os.getenv("MAX_USERS", "20")),
         admin_emails=os.getenv("ADMIN_EMAILS", os.getenv("ADMIN_EMAIL", "")),
+        max_output_tokens=int(os.getenv("MAX_OUTPUT_TOKENS", "1000")),
     )
 
 
