@@ -239,7 +239,26 @@ def google_sign_in(body: dict[str, str], db: Session = Depends(get_db)) -> Token
 
     user = crud.get_user_by_email(db, email)
     if not user:
-        user = crud.create_user(db, email=email, provider="google", provider_user_id=sub)
+        # Enforce simple signup cap with admin exemption
+        settings = get_settings()
+        admin_emails = {e.strip().lower() for e in (settings.admin_emails or "").split(",") if e.strip()}
+        is_admin = email.lower() in admin_emails
+
+        # When not testing and not admin, stop creating new users once MAX_USERS reached
+        if not settings.testing and not is_admin:
+            try:
+                total = crud.count_users(db)
+            except Exception:  # pragma: no cover – extremely unlikely
+                total = 0
+            if settings.max_users and total >= settings.max_users:
+                # Explicit 403 so frontend can show a friendly message
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="Sign-ups disabled: user limit reached"
+                )
+
+        # Create user; grant ADMIN role if email is in admin list
+        role = "ADMIN" if is_admin else "USER"
+        user = crud.create_user(db, email=email, provider="google", provider_user_id=sub, role=role)
 
     # 3. Issue platform JWT
     access_token = _issue_access_token(
