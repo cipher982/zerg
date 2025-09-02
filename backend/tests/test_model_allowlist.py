@@ -135,3 +135,39 @@ async def test_models_endpoint_admin_sees_all(client, db_session, monkeypatch):
     ids = {m["id"] for m in resp.json()}
     # Registry includes more than the single allowed id
     assert "gpt-4o-mini" in ids and len(ids) > 1
+
+
+@pytest.mark.asyncio
+async def test_non_admin_update_agent_disallowed_model(client, db_session, _dev_user, monkeypatch):
+    monkeypatch.setenv("ALLOWED_MODELS_NON_ADMIN", "gpt-4o-mini")
+    # Ensure current user is non-admin dev user
+    from zerg.dependencies.auth import get_current_user
+
+    app.dependency_overrides[get_current_user] = lambda: _dev_user
+    try:
+        # Create an allowed agent first
+        resp = client.post(
+            "/api/agents",
+            json={
+                "name": "Agent",
+                "system_instructions": "sys",
+                "task_instructions": "task",
+                "model": "gpt-4o-mini",
+                "schedule": None,
+                "config": {},
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        aid = resp.json()["id"]
+
+        # Try to update to disallowed model
+        resp2 = client.put(
+            f"/api/agents/{aid}",
+            json={
+                "model": "gpt-4o",
+            },
+        )
+        assert resp2.status_code == 422, resp2.text
+    finally:
+        with contextlib.suppress(Exception):
+            del app.dependency_overrides[get_current_user]
