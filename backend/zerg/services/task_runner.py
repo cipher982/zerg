@@ -34,6 +34,7 @@ from zerg.events.event_bus import event_bus
 from zerg.managers.agent_runner import AgentRunner
 from zerg.models.models import Agent as AgentModel
 from zerg.models.models import Thread as ThreadModel
+from zerg.services.quota import assert_can_start_run
 from zerg.services.thread_service import ThreadService
 
 logger = logging.getLogger(__name__)
@@ -66,11 +67,17 @@ async def execute_agent_task(db: Session, agent: AgentModel, *, thread_type: str
     # Global kill switch – prevent outbound LLM calls when enabled
     # ------------------------------------------------------------------
     settings = get_settings()
+    owner = crud.get_user(db, agent.owner_id)
     if settings.llm_disabled:
-        owner = crud.get_user(db, agent.owner_id)
         owner_role = getattr(owner, "role", "USER") if owner else "USER"
         if owner_role != "ADMIN":
             raise ValueError("LLM is temporarily disabled by the administrator")
+
+    # ------------------------------------------------------------------
+    # Per-user daily run cap (non-admins only)
+    # ------------------------------------------------------------------
+    if owner:
+        assert_can_start_run(db, user=owner)
 
     # ------------------------------------------------------------------
     # Validate pre-conditions
