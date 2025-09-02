@@ -34,6 +34,7 @@ from zerg.schemas.schemas import ThreadCreate
 from zerg.schemas.schemas import ThreadMessageCreate
 from zerg.schemas.schemas import ThreadMessageResponse
 from zerg.schemas.schemas import ThreadUpdate
+from zerg.services.quota import assert_can_start_run
 from zerg.services.run_history import execute_thread_run_with_history
 
 # Thread service façade
@@ -200,8 +201,11 @@ def create_thread_message(thread_id: int, message: ThreadMessageCreate, db: Sess
 
 
 @router.post("/{thread_id}/run", status_code=status.HTTP_202_ACCEPTED)
-async def run_thread(thread_id: int, db: Session = Depends(get_db)):
+async def run_thread(thread_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Process any unprocessed messages in the thread and stream back the result."""
+
+    # Enforce per-user daily run cap (non-admins are restricted)
+    assert_can_start_run(db, user=current_user)
 
     # Validate thread & agent
     thread = crud.get_thread(db, thread_id=thread_id)
