@@ -27,6 +27,7 @@ from datetime import timezone
 
 from sqlalchemy.orm import Session
 
+from zerg.config import get_settings
 from zerg.crud import crud
 from zerg.events import EventType
 from zerg.events.event_bus import event_bus
@@ -60,6 +61,16 @@ async def execute_agent_task(db: Session, agent: AgentModel, *, thread_type: str
     ValueError
         If agent has no task instructions or if agent is already running.
     """
+
+    # ------------------------------------------------------------------
+    # Global kill switch – prevent outbound LLM calls when enabled
+    # ------------------------------------------------------------------
+    settings = get_settings()
+    if settings.llm_disabled:
+        owner = crud.get_user(db, agent.owner_id)
+        owner_role = getattr(owner, "role", "USER") if owner else "USER"
+        if owner_role != "ADMIN":
+            raise ValueError("LLM is temporarily disabled by the administrator")
 
     # ------------------------------------------------------------------
     # Validate pre-conditions

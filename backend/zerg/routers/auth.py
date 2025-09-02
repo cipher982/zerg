@@ -228,6 +228,9 @@ def google_sign_in(body: dict[str, str], db: Session = Depends(get_db)) -> Token
 
     # 1. Validate & decode Google token
     claims = _verify_google_id_token(raw_token)
+    # Enforce verified emails to protect admin allowlist semantics
+    if claims.get("email_verified") is False:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google email not verified")
 
     # 2. Upsert (or fetch) user record
     email: str = claims.get("email")  # type: ignore[assignment]

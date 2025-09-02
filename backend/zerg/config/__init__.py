@@ -66,6 +66,12 @@ class Settings:  # noqa: D401 – simple data container
     max_users: int
     admin_emails: str  # comma-separated list
 
+    # Dynamic guards (evaluated at runtime) -----------------------------
+    @property
+    def llm_disabled(self) -> bool:  # noqa: D401
+        """Return True when outbound LLM calls are globally disabled."""
+        return _truthy(os.getenv("LLM_DISABLED"))
+
     # ------------------------------------------------------------------
     # Dynamic feature helper – evaluates *each time* so tests that tweak the
     # env var at runtime still propagate.
@@ -160,6 +166,14 @@ def _validate_required(settings: Settings) -> None:  # noqa: D401 – helper
             "starting the application.  Refusing to continue with an empty "
             "key to avoid hard-to-debug runtime failures.",
         )
+
+    # Harden JWT secret when auth is enabled – avoid weak/default secrets
+    if not settings.auth_disabled:
+        weak = settings.jwt_secret.strip() in {"", "dev-secret"} or len(settings.jwt_secret) < 16
+        if weak:
+            raise RuntimeError(
+                "JWT_SECRET is too weak or unset. Set a strong secret (>=16 chars) when AUTH is enabled."
+            )
 
 
 def get_settings() -> Settings:  # noqa: D401 – public accessor
