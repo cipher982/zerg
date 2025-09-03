@@ -196,7 +196,28 @@ async def execute_agent_task(db: Session, agent: AgentModel, *, thread_type: str
     end_ts = datetime.now(timezone.utc)
     duration_ms = int((end_ts - start_ts).total_seconds() * 1000)
 
-    crud.mark_finished(db, run_row.id, finished_at=end_ts, duration_ms=duration_ms)
+    # Persist usage + cost if available
+    total_tokens = runner.usage_total_tokens
+    total_cost_usd = None
+    if runner.usage_prompt_tokens is not None and runner.usage_completion_tokens is not None:
+        # Compute cost only when pricing known
+        from zerg.pricing import get_usd_prices_per_1k
+
+        prices = get_usd_prices_per_1k(agent.model)
+        if prices is not None:
+            in_price, out_price = prices
+            total_cost_usd = (
+                (runner.usage_prompt_tokens * in_price) + (runner.usage_completion_tokens * out_price)
+            ) / 1000.0
+
+    crud.mark_finished(
+        db,
+        run_row.id,
+        finished_at=end_ts,
+        duration_ms=duration_ms,
+        total_tokens=total_tokens,
+        total_cost_usd=total_cost_usd,
+    )
 
     await event_bus.publish(
         EventType.RUN_UPDATED,
