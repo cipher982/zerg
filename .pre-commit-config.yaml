@@ -42,6 +42,8 @@ repos:
         pass_filenames: false
         files: ^asyncapi/
 
+      
+
       - id: contract-field-validation
         name: "Contract field name validation"
         language: system
