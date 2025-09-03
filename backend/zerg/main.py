@@ -232,30 +232,27 @@ async def ensure_cors_on_errors(request: Request, exc: Exception):
     # Log the actual error for debugging
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
 
-    # Get the origin from the request
-    origin = request.headers.get("origin", "*")
+    # Determine allowed origin strictly (no wildcard fallback in prod).
+    origin = request.headers.get("origin")
+    headers = {"Vary": "Origin"}
+    if origin and ("*" in cors_origins or origin in cors_origins):
+        headers.update(
+            {
+                "Access-Control-Allow-Origin": origin if "*" not in cors_origins else "*",
+                # Default to no credentials; opt-in via middleware config if needed
+                "Access-Control-Allow-Credentials": "false",
+                "Access-Control-Allow-Methods": "*",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
 
-    # Return error response with CORS headers
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"},
-        headers={
-            "Access-Control-Allow-Origin": origin
-            if origin in cors_origins or "*" in cors_origins
-            else cors_origins[0]
-            if cors_origins
-            else "*",
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Methods": "*",
-            "Access-Control-Allow-Headers": "*",
-        },
-    )
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"}, headers=headers)
 
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
