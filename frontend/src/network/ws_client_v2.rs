@@ -6,6 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::{MessageEvent, WebSocket};
+use crate::debug_log;
 
 use super::messages::builders;
 
@@ -500,11 +501,11 @@ impl WsClientV2 {
             if self.config.url != ws_url {
                 let before = Self::redact_url(&self.config.url);
                 let after = Self::redact_url(&ws_url);
-                web_sys::console::log_1(&format!("Updating WebSocket URL: {} -> {}", before, after).into());
+                debug_log!("Updating WebSocket URL: {} -> {}", before, after);
                 self.config.url = ws_url;
             }
         }
-        web_sys::console::log_1(&"Initiating WebSocket connection...".into());
+        debug_log!("Initiating WebSocket connection...");
         // Reset reconnection counter when manually connecting
         *self.reconnect_attempt.borrow_mut() = 0;
 
@@ -552,7 +553,7 @@ impl WsClientV2 {
 
     /// Close the WebSocket connection gracefully.
     pub async fn close(&mut self) -> Result<(), JsValue> {
-        web_sys::console::log_1(&"Closing WebSocket connection...".into());
+        debug_log!("Closing WebSocket connection...");
         // Clear ping interval
         self.clear_ping_interval();
 
@@ -562,7 +563,7 @@ impl WsClientV2 {
         if let Some(ws) = self.websocket.take() {
             // Use take to remove it
             match ws.close_with_code(1000) {
-                Ok(_) => web_sys::console::log_1(&"WebSocket close command sent.".into()),
+                Ok(_) => debug_log!("WebSocket close command sent."),
                 Err(e) => web_sys::console::error_1(
                     &format!("Error sending close command: {:?}", e).into(),
                 ),
@@ -597,12 +598,12 @@ impl IWsClient for WsClientV2 {
     }
 
     fn close(&mut self) -> Result<(), JsValue> {
-        web_sys::console::log_1(&"Closing WebSocket connection...".into());
+        debug_log!("Closing WebSocket connection...");
         self.clear_ping_interval();
         *self.state.borrow_mut() = ConnectionState::Disconnected;
         if let Some(ws) = self.websocket.take() {
             match ws.close_with_code(1000) {
-                Ok(_) => web_sys::console::log_1(&"WebSocket close command sent.".into()),
+                Ok(_) => debug_log!("WebSocket close command sent."),
                 Err(e) => web_sys::console::error_1(
                     &format!("Error sending close command: {:?}", e).into(),
                 ),
