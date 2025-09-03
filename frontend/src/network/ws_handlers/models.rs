@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::JsValue;
+use crate::debug_log;
 use crate::state;
 use crate::models_config::ModelConfig;
 use crate::network::messages::builders;
@@ -19,7 +20,7 @@ pub fn init_models_websocket() -> Result<(), JsValue> {
     // Create a handler for model data
     let models_handler: TopicHandler = Rc::new(RefCell::new(move |data| {
         // Parse models from the WebSocket message data
-        web_sys::console::log_1(&format!("Received models: {:?}", data).into());
+        debug_log!("Received models: {:?}", data);
 
         if let Some(models_array) = data.as_array() {
             // Try to parse into ModelConfig objects
@@ -82,7 +83,7 @@ pub fn request_models() -> Result<(), JsValue> {
     let ws_client = ws_client_rc.borrow();
     ws_client.send_serialized_message(&msg_json)?;
 
-    web_sys::console::log_1(&"Sent models request via WebSocket".into());
+    debug_log!("Sent models request via WebSocket");
 
     Ok(())
 }

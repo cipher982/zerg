@@ -858,12 +858,9 @@ pub fn load_agents() {
                                                 agents_data
                                             ) {
                                                 Ok(agents) => {
-                                                    web_sys::console::log_1(
-                                                        &format!(
-                                                            "Loaded {} agents from API",
-                                                            agents.len()
-                                                        )
-                                                        .into(),
+                                                    debug_log!(
+                                                        "Loaded {} agents from API",
+                                                        agents.len()
                                                     );
 
                                                     // Update the agents HashMap in AppState
@@ -1105,12 +1102,9 @@ fn create_nodes_for_agents(state: &mut crate::state::AppState) {
             name,
         );
 
-        web_sys::console::log_1(
-            &format!(
-                "Created visual node with ID: {} for agent {}",
-                node_id, agent_id
-            )
-            .into(),
+        debug_log!(
+            "Created visual node with ID: {} for agent {}",
+            node_id, agent_id
         );
     }
 }

@@ -18,6 +18,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, HtmlElement};
+use crate::debug_log;
 
 // ---------------------------------------------------------------------------
 // Utility helpers
@@ -336,7 +337,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
 
     // Add click event handler for Create Agent button
     let create_callback = Closure::wrap(Box::new(move || {
-        web_sys::console::log_1(&"Create new agent from dashboard".into());
+        debug_log!("Create new agent from dashboard");
 
         // Generate a random agent name
         let agent_name = format!(
@@ -369,7 +370,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     // we'll fetch the button by id when toggling loading
 
     let reset_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
-        web_sys::console::log_1(&"Reset database requested".into());
+        debug_log!("Reset database requested");
 
         if let Some(window) = web_sys::window() {
             // Confirm dialog before proceeding
@@ -392,9 +393,7 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
 
                 match ApiClient::reset_database().await {
                     Ok(response) => {
-                        web_sys::console::log_1(
-                            &format!("Database reset successful: {}", response).into(),
-                        );
+                        debug_log!("Database reset successful: {}", response);
 
                         // Use message-based state update instead of direct mutation
                         crate::state::dispatch_global_message(
@@ -919,7 +918,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
             }
         }
 
-        web_sys::console::log_1(&format!("Run agent: {}", agent_id).into());
+        debug_log!("Run agent: {}", agent_id);
 
         // Immediate user feedback
         crate::toast::info("Run started");
@@ -945,9 +944,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
         wasm_bindgen_futures::spawn_local(async move {
             match crate::network::api_client::ApiClient::run_agent(agent_id).await {
                 Ok(response) => {
-                    web_sys::console::log_1(
-                        &format!("Agent {} run triggered: {}", agent_id, response).into(),
-                    );
+                    debug_log!("Agent {} run triggered: {}", agent_id, response);
 
                     // After the task completes we refresh the specific agent to
                     // pick up the final status and timestamps.
@@ -995,7 +992,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let agent_id = agent.id;
     let edit_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         event.stop_propagation();
-        web_sys::console::log_1(&format!("Edit agent: {}", agent_id).into());
+        debug_log!("Edit agent: {}", agent_id);
 
         // Dispatch EditAgent message with the u32 ID
         // NOTE: Message::EditAgent needs to be updated to accept u32
@@ -1023,7 +1020,7 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
     let agent_id = agent.id;
     let chat_callback = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
         event.stop_propagation();
-        web_sys::console::log_1(&format!("Chat with agent: {}", agent_id).into());
+        debug_log!("Chat with agent: {}", agent_id);
 
         // Dispatch NavigateToAgentChat message with the u32 ID
         crate::state::dispatch_global_message(crate::messages::Message::NavigateToAgentChat(

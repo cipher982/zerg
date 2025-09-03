@@ -445,12 +445,9 @@ impl WsClientV2 {
         let reconnect_callback = Closure::once(Box::new(move || {
             // Only attempt reconnection if we're still disconnected
             if *state_clone.borrow() == ConnectionState::Disconnected {
-                web_sys::console::log_1(
-                    &format!(
-                        "Attempting reconnection (attempt {})",
-                        *client_clone.reconnect_attempt.borrow()
-                    )
-                    .into(),
+                debug_log!(
+                    "Attempting reconnection (attempt {})",
+                    *client_clone.reconnect_attempt.borrow()
                 );
 
                 // Update state to connecting before attempting
@@ -706,12 +703,9 @@ mod tests {
 // Helper function to send a message to a thread via WebSocket
 #[allow(dead_code)]
 pub fn send_thread_message(text: &str, message_id: String) {
-    web_sys::console::log_1(
-        &format!(
-            "Network: Sending thread message: '{}', message_id: {}",
-            text, message_id
-        )
-        .into(),
+    debug_log!(
+        "Network: Sending thread message: '{}', message_id: {}",
+        text, message_id
     );
 
     super::ui_updates::flash_activity(); // Flash on send
@@ -760,9 +754,7 @@ pub fn send_thread_message(text: &str, message_id: String) {
                     // Convert JsString to String before sending
                     if let Some(string_data) = body_string.as_string() {
                         // Send through WebSocket
-                        web_sys::console::log_1(
-                            &format!("Sending message: {}", string_data).into(),
-                        );
+                        debug_log!("Sending message: {}", string_data);
                         let _ = ws.send_with_str(&string_data);
                     } else {
                         web_sys::console::error_1(&"Failed to convert JSON to string".into());

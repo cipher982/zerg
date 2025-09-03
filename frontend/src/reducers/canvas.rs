@@ -5,6 +5,7 @@
 use crate::messages::{Command, Message};
 use crate::models::{NodeType, UiNodeState};
 use crate::state::AppState;
+use crate::debug_log;
 
 pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> bool {
     match msg {
@@ -75,9 +76,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 let x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 75.0;
                 let y = state.viewport_y + (viewport_height / state.zoom_level) / 2.0 - 50.0;
                 let node_id = state.add_node(text.clone(), x, y, node_type.clone());
-                web_sys::console::log_1(
-                    &format!("Created visual node for agent: {}", node_id).into(),
-                );
+                debug_log!("Created visual node for agent: {}", node_id);
             } else {
                 let _ = state.add_node(text.clone(), *x, *y, node_type.clone());
             }
@@ -276,7 +275,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         } => {
             let node_id =
                 state.add_node_with_agent(*agent_id, *x, *y, node_type.clone(), text.clone());
-            web_sys::console::log_1(&format!("Created new node: {}", node_id).into());
+            debug_log!("Created new node: {}", node_id);
             state.state_modified = true;
 
             true
@@ -442,7 +441,13 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                                 _ => return true, // Should not reach here due to filter above
                             };
 
-                            web_sys::console::log_1(&format!("Updating agent {} status from '{}' to '{}' due to node {} workflow execution", agent_id, agent.status.as_ref().unwrap_or(&"unknown".to_string()), agent_status, node_id).into());
+                            debug_log!(
+                                "Updating agent {} status from '{}' to '{}' due to node {} workflow execution",
+                                agent_id,
+                                agent.status.as_ref().unwrap_or(&"unknown".to_string()),
+                                agent_status,
+                                node_id
+                            );
 
                             agent.status = Some(agent_status.to_string());
                             let update = crate::models::ApiAgentUpdate {
@@ -738,33 +743,26 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::SelectWorkflow { workflow_id } => {
             state.current_workflow_id = Some(*workflow_id);
-            web_sys::console::log_1(
-                &format!(
-                    "DEBUG: SelectWorkflow {} - clearing {} nodes",
-                    workflow_id,
-                    state.workflow_nodes.len()
-                )
-                .into(),
+            debug_log!(
+                "DEBUG: SelectWorkflow {} - clearing {} nodes",
+                workflow_id,
+                state.workflow_nodes.len()
             );
             for (id, node) in &state.workflow_nodes {
-                web_sys::console::log_1(
-                    &format!("DEBUG: Clearing node {} (type: {:?})", id, node.node_type).into(),
-                );
+                debug_log!("DEBUG: Clearing node {} (type: {:?})", id, node.node_type);
             }
             state.workflow_nodes.clear();
             state.ui_state.clear();
             if let Some(workflow) = state.workflows.get(workflow_id) {
                 let nodes = workflow.get_nodes();
-                web_sys::console::log_1(
-                    &format!("DEBUG: Repopulating with {} workflow nodes", nodes.len()).into(),
+                debug_log!(
+                    "DEBUG: Repopulating with {} workflow nodes",
+                    nodes.len()
                 );
                 for node in &nodes {
-                    web_sys::console::log_1(
-                        &format!(
-                            "DEBUG: Restoring node {} (type: {:?})",
-                            node.node_id, node.node_type
-                        )
-                        .into(),
+                    debug_log!(
+                        "DEBUG: Restoring node {} (type: {:?})",
+                        node.node_id, node.node_type
                     );
                     state
                         .workflow_nodes
@@ -811,7 +809,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         trigger_y,
                         trigger_node_type,
                     );
-                    web_sys::console::log_1(&"🔧 Added default Manual Trigger node after selecting workflow (no trigger present)".into());
+                    debug_log!(
+                        "🔧 Added default Manual Trigger node after selecting workflow (no trigger present)"
+                    );
                 }
             }
             state.mark_dirty();
@@ -835,7 +835,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             label,
         } => {
             let edge_id = state.add_edge(from_node_id.clone(), to_node_id.clone(), label.clone());
-            web_sys::console::log_1(&format!("Created new edge with ID: {}", edge_id).into());
+            debug_log!("Created new edge with ID: {}", edge_id);
             state.mark_dirty();
             state.state_modified = true;
 
@@ -857,12 +857,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 state.add_agent_node(*agent_id, name.clone(), x, y);
                 nodes_created += 1;
             }
-            web_sys::console::log_1(
-                &format!(
-                    "Created {} nodes for agents without visual representation",
-                    nodes_created
-                )
-                .into(),
+            debug_log!(
+                "Created {} nodes for agents without visual representation",
+                nodes_created
             );
             if nodes_created > 0 {
                 state.state_modified = true;
@@ -879,7 +876,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 state.connection_source_node = None;
                 state.selected_node_id = None;
             }
-            web_sys::console::log_1(&format!("Connection mode: {}", state.connection_mode).into());
+            debug_log!("Connection mode: {}", state.connection_mode);
             state.mark_dirty();
 
             // Update button appearance
@@ -896,9 +893,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             if state.connection_mode {
                 state.connection_source_node = Some(node_id.clone());
                 state.selected_node_id = Some(node_id.clone());
-                web_sys::console::log_1(
-                    &format!("Selected node {} as connection source", node_id).into(),
-                );
+                debug_log!("Selected node {} as connection source", node_id);
                 state.mark_dirty();
             }
             true
@@ -910,12 +905,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     if source_node_id != *target_node_id {
                         let edge_id =
                             state.add_edge(source_node_id.clone(), target_node_id.clone(), None);
-                        web_sys::console::log_1(
-                            &format!(
-                                "Created connection from {} to {} (edge ID: {})",
-                                source_node_id, target_node_id, edge_id
-                            )
-                            .into(),
+                        debug_log!(
+                            "Created connection from {} to {} (edge ID: {})",
+                            source_node_id, target_node_id, edge_id
                         );
                         state.mark_dirty();
                         state.state_modified = true;
@@ -924,10 +916,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         state.connection_source_node = None;
                         state.selected_node_id = None;
                     } else {
-                        web_sys::console::log_1(&"Cannot connect node to itself".into());
+                        debug_log!("Cannot connect node to itself");
                     }
                 } else {
-                    web_sys::console::log_1(&"No source node selected for connection".into());
+                    debug_log!("No source node selected for connection");
                 }
             }
             true
@@ -936,7 +928,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         Message::ClearNodeSelection => {
             state.connection_source_node = None;
             state.selected_node_id = None;
-            web_sys::console::log_1(&"Cleared node selection".into());
+            debug_log!("Cleared node selection");
             state.mark_dirty();
             true
         }
@@ -951,12 +943,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             state.connection_drag_active = true;
             state.connection_drag_start = Some((node_id.clone(), handle_position.clone()));
             state.connection_drag_current = Some((*start_x, *start_y));
-            web_sys::console::log_1(
-                &format!(
-                    "Started connection drag from {} handle of node {}",
-                    handle_position, node_id
-                )
-                .into(),
+            debug_log!(
+                "Started connection drag from {} handle of node {}",
+                handle_position, node_id
             );
             state.mark_dirty();
             true
@@ -996,19 +985,19 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                                         target_node_id.clone(),
                                         None,
                                     );
-                                    web_sys::console::log_1(&format!("Created valid connection from {} ({}) to {} ({}) (edge ID: {})", source_node_id, source_handle, target_node_id, target_handle, edge_id).into());
+                                    debug_log!(
+                                        "Created valid connection from {} ({}) to {} ({}) (edge ID: {})",
+                                        source_node_id, source_handle, target_node_id, target_handle, edge_id
+                                    );
                                     state.state_modified = true;
                                     connection_created = true;
                                 } else {
-                                    web_sys::console::log_1(
-                                        &format!(
-                                            "Invalid connection: {} ({}) to {} ({})",
-                                            source_node_id,
-                                            source_handle,
-                                            target_node_id,
-                                            target_handle
-                                        )
-                                        .into(),
+                                    debug_log!(
+                                        "Invalid connection: {} ({}) to {} ({})",
+                                        source_node_id,
+                                        source_handle,
+                                        target_node_id,
+                                        target_handle
                                     );
                                 }
                                 break;
@@ -1034,19 +1023,19 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                                         target_node_id.clone(),
                                         None,
                                     );
-                                    web_sys::console::log_1(&format!("Created auto-routed connection from {} ({}) to {} (input) (edge ID: {})", source_node_id, source_handle, target_node_id, edge_id).into());
+                                    debug_log!(
+                                        "Created auto-routed connection from {} ({}) to {} (input) (edge ID: {})",
+                                        source_node_id, source_handle, target_node_id, edge_id
+                                    );
                                     state.state_modified = true;
                                 } else {
-                                    web_sys::console::log_1(
-                                        &format!(
-                                            "Invalid auto-route connection: {} ({}) to {} (input)",
-                                            source_node_id, source_handle, target_node_id
-                                        )
-                                        .into(),
+                                    debug_log!(
+                                        "Invalid auto-route connection: {} ({}) to {} (input)",
+                                        source_node_id, source_handle, target_node_id
                                     );
                                 }
                             } else {
-                                web_sys::console::log_1(&"Cannot connect node to itself".into());
+                                debug_log!("Cannot connect node to itself");
                             }
                         }
                     }

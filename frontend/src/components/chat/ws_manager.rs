@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::JsValue;
+use crate::debug_log;
 use web_sys;
 
 use crate::generated::ws_handlers::{ChatHandler, ChatMessageRouter};
@@ -167,12 +168,9 @@ impl ChatViewWsManager {
         let mut router = ChatMessageRouter::new(manager_rc.clone());
 
         let handler = Rc::new(RefCell::new(move |data: serde_json::Value| {
-            web_sys::console::log_1(
-                &format!(
-                    "🔍 [CHAT WS] Received message for thread {}: {:?}",
-                    thread_id, data
-                )
-                .into(),
+            debug_log!(
+                "🔍 [CHAT WS] Received message for thread {}: {:?}",
+                thread_id, data
             );
 
             // Extract message type from envelope format
@@ -181,9 +179,7 @@ impl ChatViewWsManager {
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
 
-            web_sys::console::log_1(
-                &format!("🔍 [CHAT WS] Processing message type: {}", message_type).into(),
-            );
+            debug_log!("🔍 [CHAT WS] Processing message type: {}", message_type);
 
             // Use the generated router for chat messages
             if let Ok(envelope) =
@@ -207,12 +203,9 @@ impl ChatViewWsManager {
         let topic = format!("thread:{}", thread_id);
         self.thread_subscription_handler = Some(handler.clone());
         topic_manager.subscribe(topic.clone(), handler)?;
-        web_sys::console::log_1(
-            &format!(
-                "ChatViewWsManager: Subscribed to topic '{}' for thread {}",
-                topic, thread_id
-            )
-            .into(),
+        debug_log!(
+            "ChatViewWsManager: Subscribed to topic '{}' for thread {}",
+            topic, thread_id
         );
         Ok(())
     }
@@ -226,12 +219,9 @@ impl ChatViewWsManager {
 
         if let Some(handler) = self.thread_subscription_handler.take() {
             if let Some(thread_id) = self.current_thread_id {
-                web_sys::console::log_1(
-                    &format!(
-                        "ChatViewWsManager: Cleaning up thread subscription handler for thread {}",
-                        thread_id
-                    )
-                    .into(),
+                debug_log!(
+                    "ChatViewWsManager: Cleaning up thread subscription handler for thread {}",
+                    thread_id
                 );
                 let topic = format!("thread:{}", thread_id);
                 topic_manager.unsubscribe_handler(&topic, &handler)?;
@@ -260,12 +250,9 @@ pub fn init_chat_view_ws(
     CHAT_VIEW_WS.with(|cell| {
         let mut manager_opt = cell.borrow_mut();
         if manager_opt.is_none() {
-            web_sys::console::log_1(
-                &format!(
-                    "Initializing ChatViewWsManager singleton for thread {}...",
-                    thread_id
-                )
-                .into(),
+            debug_log!(
+                "Initializing ChatViewWsManager singleton for thread {}...",
+                thread_id
             );
             let mut manager = ChatViewWsManager::new();
             manager.initialize(thread_id, topic_manager)?;
@@ -274,12 +261,9 @@ pub fn init_chat_view_ws(
             // If manager exists but thread changed, reinitialize
             if let Some(manager) = manager_opt.as_mut() {
                 if manager.current_thread_id != Some(thread_id) {
-                    web_sys::console::log_1(
-                        &format!(
-                            "Reinitializing ChatViewWsManager for new thread {}...",
-                            thread_id
-                        )
-                        .into(),
+                    debug_log!(
+                        "Reinitializing ChatViewWsManager for new thread {}...",
+                        thread_id
                     );
                     // Clean up existing subscriptions
                     manager.cleanup(topic_manager.clone())?;
@@ -298,7 +282,7 @@ pub fn cleanup_chat_view_ws(topic_manager: Rc<RefCell<dyn ITopicManager>>) -> Re
     CHAT_VIEW_WS.with(|cell| {
         let mut manager_opt = cell.borrow_mut();
         if let Some(manager) = manager_opt.as_mut() {
-            web_sys::console::log_1(&"Cleaning up ChatViewWsManager singleton...".into());
+            debug_log!("Cleaning up ChatViewWsManager singleton...");
             manager.cleanup(topic_manager)?;
         }
         Ok(())

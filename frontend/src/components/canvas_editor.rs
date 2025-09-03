@@ -674,7 +674,7 @@ fn setup_canvas_drag_drop(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
         let y = event.offset_y() as f64;
 
         // Log drop event for debugging
-        web_sys::console::log_1(&format!("Drop event at position: x={}, y={}", x, y).into());
+        crate::debug_log!("Drop event at position: x={}, y={}", x, y);
 
         // Get the data transfer object
         if let Some(dt) = event.data_transfer() {
@@ -698,7 +698,7 @@ fn setup_canvas_drag_drop(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
             }
             // Fallback: Get the agent data that was set during dragstart
             if let Ok(data_str) = dt.get_data("text/plain") {
-                web_sys::console::log_1(&format!("Dropped agent data: {}", data_str).into());
+                crate::debug_log!("Dropped agent data: {}", data_str);
 
                 // Parse the JSON data
                 if let Ok(data) = serde_json::from_str::<Value>(&data_str) {
@@ -706,8 +706,9 @@ fn setup_canvas_drag_drop(canvas: &HtmlCanvasElement) -> Result<(), JsValue> {
                     let agent_id = data["agent_id"].as_u64().map(|id| id as u32);
                     let name = data["name"].as_str().unwrap_or("Unknown Agent").to_string();
 
-                    web_sys::console::log_1(
-                        &format!("Parsed agent_id: {:?}, name: {}", agent_id, name).into(),
+                    crate::debug_log!(
+                        "Parsed agent_id: {:?}, name: {}",
+                        agent_id, name
                     );
 
                     // No viewport transformation needed since viewport is fixed at (0,0) and zoom is 1.0
