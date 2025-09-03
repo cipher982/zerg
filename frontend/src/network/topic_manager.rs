@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use wasm_bindgen::JsValue;
+use crate::debug_log;
 // Ensure uuid crate is added to Cargo.toml
 
 use super::messages::builders::{create_subscribe, create_unsubscribe};
@@ -91,21 +92,15 @@ impl TopicManager {
             if self.subscribed_topics.remove(topic) {
                 self.send_unsubscribe_message(topic)?;
             } else {
-                web_sys::console::log_1(
-                    &format!(
-                        "Removed local handlers for topic {} but was not subscribed on backend.",
-                        topic
-                    )
-                    .into(),
+                debug_log!(
+                    "Removed local handlers for topic {} but was not subscribed on backend.",
+                    topic
                 );
             }
         } else {
-            web_sys::console::log_1(
-                &format!(
-                    "Attempted to unsubscribe from topic {} with no handlers.",
-                    topic
-                )
-                .into(),
+            debug_log!(
+                "Attempted to unsubscribe from topic {} with no handlers.",
+                topic
             );
         }
 
@@ -131,9 +126,7 @@ impl TopicManager {
                 .position(|h| Rc::ptr_eq(h, handler_to_remove))
             {
                 handlers.remove(pos);
-                web_sys::console::log_1(
-                    &format!("Removed specific handler for topic: {}", topic).into(),
-                );
+                debug_log!("Removed specific handler for topic: {}", topic);
                 removed = true;
                 topic_is_empty = handlers.is_empty();
             } else {
@@ -145,12 +138,9 @@ impl TopicManager {
 
         // If we removed a handler and the topic list is now empty, clean up the topic subscription
         if removed && topic_is_empty {
-            web_sys::console::log_1(
-                &format!(
-                    "Last handler removed for topic: {}. Cleaning up subscription.",
-                    topic
-                )
-                .into(),
+            debug_log!(
+                "Last handler removed for topic: {}. Cleaning up subscription.",
+                topic
             );
             self.topic_handlers.remove(topic);
             // Only send unsubscribe to backend if we were actually tracking this subscription
@@ -164,9 +154,7 @@ impl TopicManager {
 
     // Helper to send the unsubscribe message
     fn send_unsubscribe_message(&self, topic: &Topic) -> Result<(), JsValue> {
-        web_sys::console::log_1(
-            &format!("Sending unsubscribe request for topic: {}", topic).into(),
-        );
+        debug_log!("Sending unsubscribe request for topic: {}", topic);
         let msg = create_unsubscribe(vec![topic.clone()]);
         let msg_json = serde_json::to_string(&msg)
             .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))?;
@@ -185,16 +173,13 @@ impl TopicManager {
     /// Resubscribes to all topics currently tracked in `subscribed_topics`.
     /// Typically called after a successful reconnection.
     pub fn resubscribe_all_topics(&self) -> Result<(), JsValue> {
-        web_sys::console::log_1(&"Resubscribing to all topics after connection...".into());
+        debug_log!("Resubscribing to all topics after connection...");
         let topics_to_resubscribe: Vec<Topic> = self.subscribed_topics.iter().cloned().collect();
 
         if !topics_to_resubscribe.is_empty() {
-            web_sys::console::log_1(
-                &format!(
-                    "Sending resubscribe request for topics: {:?}",
-                    topics_to_resubscribe
-                )
-                .into(),
+            debug_log!(
+                "Sending resubscribe request for topics: {:?}",
+                topics_to_resubscribe
             );
             let msg = create_subscribe(topics_to_resubscribe);
             let msg_json = serde_json::to_string(&msg)
@@ -209,7 +194,7 @@ impl TopicManager {
                 }
             }
         } else {
-            web_sys::console::log_1(&"No topics to resubscribe.".into());
+            debug_log!("No topics to resubscribe.");
         }
 
         Ok(())

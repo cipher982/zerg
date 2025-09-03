@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
+use crate::debug_log;
 // Additional helpers and legacy extension traits – these will gradually be
 // trimmed once the new storage pipeline stabilises.
 
@@ -198,15 +199,12 @@ fn try_load_layout_from_api() {
                     // Log number of nodes & viewport after remote hydration
                     crate::state::APP_STATE.with(|s| {
                         let st = s.borrow();
-                        web_sys::console::log_1(
-                            &format!(
-                                "[layout] remote load success – nodes={} viewport=({}, {}, {})",
-                                st.workflow_nodes.len(),
-                                st.viewport_x,
-                                st.viewport_y,
-                                st.zoom_level
-                            )
-                            .into(),
+                        debug_log!(
+                            "[layout] remote load success – nodes={} viewport=({}, {}, {})",
+                            st.workflow_nodes.len(),
+                            st.viewport_x,
+                            st.viewport_y,
+                            st.zoom_level
                         );
                     });
 
@@ -237,7 +235,7 @@ fn try_load_layout_from_api() {
                 // user so they realise a first save is still required.
                 update_layout_status("Layout: no saved layout yet", "yellow");
 
-                web_sys::console::log_1(&"No remote canvas layout found (204)".into());
+                debug_log!("No remote canvas layout found (204)");
             }
         }
     });
@@ -287,7 +285,7 @@ pub fn try_load_from_localstorage() {
                 }
             }
 
-            web_sys::console::log_1(&"Layout loaded from localStorage fallback".into());
+            debug_log!("Layout loaded from localStorage fallback");
             update_layout_status("Layout: local offline copy", "orange");
         }
     }
@@ -435,9 +433,7 @@ pub fn load_state_from_api(app_state: &mut AppState) {
             Ok(agents_json) => {
                 match from_str::<Vec<ApiAgent>>(&agents_json) {
                     Ok(agents) => {
-                        web_sys::console::log_1(
-                            &format!("Loaded {} agents from API", agents.len()).into(),
-                        );
+                        debug_log!("Loaded {} agents from API", agents.len());
 
                         // Update the agents in the global APP_STATE
                         crate::state::APP_STATE.with(|state_ref| {
@@ -461,7 +457,7 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                             // If there are no nodes but we have agents, show a message to user
                             if state.workflow_nodes.is_empty() && !state.agents.is_empty() {
                                 // Show message that agents are loaded but not displayed
-                                web_sys::console::log_1(&"Agents loaded but no nodes exist. Use 'Generate Canvas' to visualize agents.".into());
+                                debug_log!("Agents loaded but no nodes exist. Use 'Generate Canvas' to visualize agents.");
 
                                 // In a real app, you might want to display a UI message or button
                                 // that lets users generate nodes for their agents
@@ -584,9 +580,7 @@ pub fn save_agent_messages_to_api(node_id: &str, messages: &[crate::models::Mess
                         &format!("Error saving message to API: {:?}", e).into(),
                     );
                 } else {
-                    web_sys::console::log_1(
-                        &format!("Saved message to agent {} in API", agent_id).into(),
-                    );
+                    debug_log!("Saved message to agent {} in API", agent_id);
                 }
             }
         });
@@ -613,13 +607,10 @@ pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
                 Ok(messages_json) => {
                     match from_str::<Vec<crate::models::ApiMessage>>(&messages_json) {
                         Ok(api_messages) => {
-                            web_sys::console::log_1(
-                                &format!(
-                                    "Loaded {} messages for agent {}",
-                                    api_messages.len(),
-                                    agent_id
-                                )
-                                .into(),
+                            debug_log!(
+                                "Loaded {} messages for agent {}",
+                                api_messages.len(),
+                                agent_id
                             );
 
                             // Convert API messages to our internal Message type
@@ -654,7 +645,7 @@ pub fn load_agent_messages_from_api(node_id: &String, _agent_id: u32) {
 #[allow(dead_code)]
 fn save_nodes_to_api(nodes: &HashMap<String, WorkflowNode>) -> Result<(), JsValue> {
     // Implementation to save nodes to API
-    web_sys::console::log_1(&format!("Saving {} nodes to API", nodes.len()).into());
+    debug_log!("Saving {} nodes to API", nodes.len());
 
     for (node_id, node) in nodes {
         if matches!(
@@ -662,9 +653,7 @@ fn save_nodes_to_api(nodes: &HashMap<String, WorkflowNode>) -> Result<(), JsValu
             crate::models::NodeType::AgentIdentity
         ) {
             // Create or update agent in API
-            web_sys::console::log_1(
-                &format!("Would save agent {}: {}", node_id, node.get_text()).into(),
-            );
+            debug_log!("Would save agent {}: {}", node_id, node.get_text());
             // Here you would call your API client to save the agent
         }
     }
@@ -801,8 +790,8 @@ pub fn load_workflows(_app_state: &mut AppState) -> Result<(), JsValue> {
     }
     */
 
-    web_sys::console::log_1(
-        &"Workflows will be loaded from backend API instead of localStorage".into(),
+    debug_log!(
+        "Workflows will be loaded from backend API instead of localStorage"
     );
     Ok(())
 }
@@ -863,7 +852,7 @@ pub fn save_canvas_data_to_api(app_state: &AppState) {
         return;
     }
 
-    web_sys::console::log_1(&"🚀 Sending canvas data via type-safe generated client".into());
+    debug_log!("🚀 Sending canvas data via type-safe generated client");
 
     // Use type-safe generated client instead of manual API calls
     crate::network::generated_client::save_canvas_data_typed(canvas_data);

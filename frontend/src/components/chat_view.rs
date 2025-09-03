@@ -492,13 +492,10 @@ pub fn update_conversation_ui(
 ) -> Result<(), JsValue> {
     // DEBUG: Log message count and roles to help diagnose missing bubbles
     let roles: Vec<String> = messages.iter().map(|m| m.role.clone()).collect();
-    web_sys::console::log_1(
-        &format!(
-            "[DEBUG] update_conversation_ui: {} messages, roles: {:?}",
-            messages.len(),
-            roles
-        )
-        .into(),
+    crate::debug_log!(
+        "[DEBUG] update_conversation_ui: {} messages, roles: {:?}",
+        messages.len(),
+        roles
     );
     if let Some(messages_container) = document
         .query_selector(".messages-container")
@@ -552,12 +549,9 @@ pub fn update_conversation_ui(
             .filter(|m| m.role != "system" && m.role != "tool")
         {
             // DEBUG: Log each message about to be rendered
-            web_sys::console::log_1(
-                &format!(
-                    "[DEBUG] Rendering message: role={}, content={:?}",
-                    message.role, message.content
-                )
-                .into(),
+            crate::debug_log!(
+                "[DEBUG] Rendering message: role={}, content={:?}",
+                message.role, message.content
             );
 
             // If this assistant bubble has **no textual content**, we skip
@@ -760,32 +754,28 @@ fn get_current_agent_id(state: &std::cell::Ref<crate::state::AppState>) -> Optio
 pub fn refresh_chat_ui_from_agent_state(agent_id: u32) {
     use crate::state::APP_STATE;
 
-    web_sys::console::log_1(
-        &format!(
-            "🔍 [UI] refresh_chat_ui_from_agent_state called for agent {}",
-            agent_id
-        )
-        .into(),
+    crate::debug_log!(
+        "🔍 [UI] refresh_chat_ui_from_agent_state called for agent {}",
+        agent_id
     );
 
     if let Some(document) = web_sys::window().and_then(|w| w.document()) {
-        web_sys::console::log_1(&"🔍 [UI] Document found, accessing APP_STATE".into());
+        crate::debug_log!("🔍 [UI] Document found, accessing APP_STATE");
         APP_STATE.with(|state| {
             let state = state.borrow();
 
             if let Some(agent_state) = state.agent_states.get(&agent_id) {
-                web_sys::console::log_1(
-                    &format!("🔍 [UI] Found agent state for agent {}", agent_id).into(),
+                crate::debug_log!(
+                    "🔍 [UI] Found agent state for agent {}",
+                    agent_id
                 );
-                web_sys::console::log_1(
-                    &format!("🔍 [UI] Agent has {} threads", agent_state.threads.len()).into(),
+                crate::debug_log!(
+                    "🔍 [UI] Agent has {} threads",
+                    agent_state.threads.len()
                 );
-                web_sys::console::log_1(
-                    &format!(
-                        "🔍 [UI] Current thread ID: {:?}",
-                        agent_state.current_thread_id
-                    )
-                    .into(),
+                crate::debug_log!(
+                    "🔍 [UI] Current thread ID: {:?}",
+                    agent_state.current_thread_id
                 );
 
                 // Update thread list from agent state
@@ -793,12 +783,9 @@ pub fn refresh_chat_ui_from_agent_state(agent_id: u32) {
                 let thread_refs: Vec<crate::models::ApiThread> =
                     threads.into_iter().cloned().collect();
 
-                web_sys::console::log_1(
-                    &format!(
-                        "🔍 [UI] Updating thread list with {} threads",
-                        thread_refs.len()
-                    )
-                    .into(),
+                crate::debug_log!(
+                    "🔍 [UI] Updating thread list with {} threads",
+                    thread_refs.len()
                 );
                 let _ = update_thread_list_ui(
                     &document,
@@ -810,18 +797,15 @@ pub fn refresh_chat_ui_from_agent_state(agent_id: u32) {
                 // Update conversation UI if we have a current thread
                 if let Some(current_thread_id) = agent_state.current_thread_id {
                     if let Some(messages) = agent_state.thread_messages.get(&current_thread_id) {
-                        web_sys::console::log_1(
-                            &format!(
-                                "🔍 [UI] Updating conversation with {} messages for thread {}",
-                                messages.len(),
-                                current_thread_id
-                            )
-                            .into(),
+                        crate::debug_log!(
+                            "🔍 [UI] Updating conversation with {} messages for thread {}",
+                            messages.len(),
+                            current_thread_id
                         );
                         let current_user_opt = state.current_user.clone();
                         let _ =
                             update_conversation_ui(&document, messages, current_user_opt.as_ref());
-                        web_sys::console::log_1(&"🔍 [UI] Conversation UI update completed".into());
+                        crate::debug_log!("🔍 [UI] Conversation UI update completed");
                     } else {
                         web_sys::console::warn_1(
                             &format!(

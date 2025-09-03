@@ -75,6 +75,11 @@ class Settings:  # noqa: D401 – simple data container
     daily_cost_per_user_cents: int
     daily_cost_global_cents: int
 
+    # Discord alerts/digest (ops)
+    discord_webhook_url: str | None
+    discord_enable_alerts: bool
+    discord_daily_digest_cron: str
+
     # Dynamic guards (evaluated at runtime) -----------------------------
     @property
     def llm_disabled(self) -> bool:  # noqa: D401
@@ -152,6 +157,9 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
         daily_runs_per_user=int(os.getenv("DAILY_RUNS_PER_USER", "0")),
         daily_cost_per_user_cents=int(os.getenv("DAILY_COST_PER_USER_CENTS", "0")),
         daily_cost_global_cents=int(os.getenv("DAILY_COST_GLOBAL_CENTS", "0")),
+        discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
+        discord_enable_alerts=_truthy(os.getenv("DISCORD_ENABLE_ALERTS")),
+        discord_daily_digest_cron=os.getenv("DISCORD_DAILY_DIGEST_CRON", "0 8 * * *"),
     )
 
 

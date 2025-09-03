@@ -7,6 +7,7 @@ use crate::state::APP_STATE;
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::JsValue;
+use crate::debug_log;
 
 // Conversion from generated RunUpdateData to ApiAgentRun
 impl From<RunUpdateData> for crate::models::ApiAgentRun {
@@ -151,9 +152,7 @@ impl DashboardWsManager {
 
         // If we already have a handler, just subscribe new agents to it
         if let Some(existing_handler) = &self.agent_subscription_handler {
-            web_sys::console::log_1(
-                &"DashboardWsManager: Using existing handler for new agents".into(),
-            );
+            debug_log!("DashboardWsManager: Using existing handler for new agents");
 
             let mut topic_manager = topic_manager_rc.borrow_mut();
             for aid in agent_ids {
@@ -166,8 +165,8 @@ impl DashboardWsManager {
         }
 
         // Create new handler only if we don't have one
-        web_sys::console::log_1(
-            &"DashboardWsManager: Creating new handler with generated routing".into(),
+        debug_log!(
+            "DashboardWsManager: Creating new handler with generated routing"
         );
         let mut topic_manager = topic_manager_rc.borrow_mut();
 
@@ -193,17 +192,17 @@ impl DashboardWsManager {
                     }
                     Some("chat") => {
                         // Thread messages handled by chat components - skip
-                        web_sys::console::log_1(
-                            &format!("Skipping chat message type: {}", envelope.message_type)
-                                .into(),
+                        debug_log!(
+                            "Skipping chat message type: {}",
+                            envelope.message_type
                         );
                         return;
                     }
                     Some("system") => {
                         // System messages (ping/pong/error) handled by WebSocket connection - skip
-                        web_sys::console::log_1(
-                            &format!("Skipping system message type: {}", envelope.message_type)
-                                .into(),
+                        debug_log!(
+                            "Skipping system message type: {}",
+                            envelope.message_type
                         );
                         return;
                     }
@@ -272,9 +271,7 @@ impl DashboardWsManager {
         let mut topic_manager = topic_manager_rc.borrow_mut();
 
         if let Some(handler) = self.agent_subscription_handler.take() {
-            web_sys::console::log_1(
-                &"DashboardWsManager: Cleaning up agent subscription handler".into(),
-            );
+            debug_log!("DashboardWsManager: Cleaning up agent subscription handler");
             // We do not track which specific agent topics we subscribed to.
             // As a simple cleanup we iterate over the agents currently in
             // state and attempt to unsubscribe from their topics.
@@ -317,15 +314,13 @@ pub fn init_dashboard_ws() -> Result<(), JsValue> {
         let mut manager_opt = cell.borrow_mut();
         if let Some(mgr) = manager_opt.as_mut() {
             // Already initialised – ensure we are subscribed to any new agents.
-            web_sys::console::log_1(
-                &"DashboardWsManager: refreshing subscriptions for new agents".into(),
-            );
+            debug_log!("DashboardWsManager: refreshing subscriptions for new agents");
             let topic_manager_trait_rc = APP_STATE.with(|state_ref| {
                 state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>
             });
             mgr.subscribe_to_agent_events(topic_manager_trait_rc)?;
         } else {
-            web_sys::console::log_1(&"Initializing DashboardWsManager singleton...".into());
+            debug_log!("Initializing DashboardWsManager singleton...");
             let mut manager = DashboardWsManager::new();
             manager.initialize()?;
             *manager_opt = Some(manager);
@@ -340,7 +335,7 @@ pub fn cleanup_dashboard_ws() -> Result<(), JsValue> {
     DASHBOARD_WS.with(|cell| {
         let mut manager_opt = cell.borrow_mut();
         if let Some(manager) = manager_opt.as_mut() {
-            web_sys::console::log_1(&"Cleaning up DashboardWsManager singleton...".into());
+            debug_log!("Cleaning up DashboardWsManager singleton...");
             // Get the trait object from APP_STATE to pass to cleanup
             let topic_manager_trait_rc = APP_STATE.with(|state_ref| {
                 state_ref.borrow().topic_manager.clone() as Rc<RefCell<dyn ITopicManager>>

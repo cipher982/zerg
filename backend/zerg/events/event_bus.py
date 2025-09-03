@@ -47,6 +47,9 @@ class EventType(str, Enum):
     EXECUTION_FINISHED = "execution_finished"
     NODE_LOG = "node_log"
 
+    # Ops dashboard events
+    BUDGET_DENIED = "budget_denied"
+
 
 class EventBus:
     """Central event bus for publishing and subscribing to events."""

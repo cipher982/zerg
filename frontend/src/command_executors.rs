@@ -4,6 +4,7 @@ use crate::models::ApiWorkflow;
 use crate::models::{ApiAgent, ApiThread, ApiThreadMessage};
 use crate::network::api_client::ApiClient;
 use crate::state::{dispatch_global_message, APP_STATE};
+use crate::debug_log;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -84,16 +85,12 @@ pub fn execute_fetch_command(cmd: Command) {
                 state.dashboard_scope.as_str().to_string()
             });
 
-            web_sys::console::log_1(
-                &format!("Executing FetchAgents command (scope={})", scope_str).into(),
-            );
+            debug_log!("Executing FetchAgents command (scope={})", scope_str);
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_agents_scoped(&scope_str).await {
                     Ok(agents_json) => match serde_json::from_str::<Vec<ApiAgent>>(&agents_json) {
                         Ok(agents) => {
-                            web_sys::console::log_1(
-                                &format!("Fetched {} agents from API", agents.len()).into(),
-                            );
+                            debug_log!("Fetched {} agents from API", agents.len());
                             // Clear loading state before dispatching agents
                             APP_STATE.with(|state_ref| {
                                 let mut state = state_ref.borrow_mut();
@@ -161,9 +158,7 @@ pub fn execute_fetch_command(cmd: Command) {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::get_current_workflow().await {
                     Ok(json_str) => {
-                        web_sys::console::log_1(
-                            &format!("🔍 Raw workflow JSON from backend: {}", json_str).into(),
-                        );
+                        debug_log!("🔍 Raw workflow JSON from backend: {}", json_str);
                         match serde_json::from_str::<crate::models::ApiWorkflow>(&json_str) {
                             Ok(api_wf) => {
                                 let node_count = api_wf
@@ -178,12 +173,9 @@ pub fn execute_fetch_command(cmd: Command) {
                                     .and_then(|obj| obj.get("edges"))
                                     .and_then(|edges| edges.as_array())
                                     .map_or(0, |arr| arr.len());
-                                web_sys::console::log_1(
-                                    &format!(
-                                        "🔍 Parsed workflow: {} nodes, {} edges",
-                                        node_count, edge_count
-                                    )
-                                    .into(),
+                                debug_log!(
+                                    "🔍 Parsed workflow: {} nodes, {} edges",
+                                    node_count, edge_count
                                 );
                                 let workflow: ApiWorkflow = api_wf;
                                 // Only dispatch if this response matches the latest request token
@@ -194,8 +186,8 @@ pub fn execute_fetch_command(cmd: Command) {
                                 if should_apply {
                                     dispatch_global_message(Message::CurrentWorkflowLoaded(workflow));
                                 } else {
-                                    web_sys::console::log_1(
-                                        &"⚠️ Dropping stale workflow response (newer request in flight)".into(),
+                                    debug_log!(
+                                        "⚠️ Dropping stale workflow response (newer request in flight)"
                                     );
                                 }
                             }
@@ -349,9 +341,7 @@ pub fn execute_fetch_command(cmd: Command) {
                 match ApiClient::start_reserved_execution(execution_id).await {
                     Ok(_json_str) => {
                         // Execution started successfully
-                        web_sys::console::log_1(
-                            &format!("✅ Reserved execution {} started", execution_id).into(),
-                        );
+                        debug_log!("✅ Reserved execution {} started", execution_id);
                     }
                     Err(_) => {
                         // Error toast already shown by ApiClient::format_http_error
@@ -370,12 +360,9 @@ pub fn execute_fetch_command(cmd: Command) {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::schedule_workflow(workflow_id, &cron_expression).await {
                     Ok(json_str) => {
-                        web_sys::console::log_1(
-                            &format!(
-                                "Workflow {} scheduled successfully: {}",
-                                workflow_id, json_str
-                            )
-                            .into(),
+                        debug_log!(
+                            "Workflow {} scheduled successfully: {}",
+                            workflow_id, json_str
                         );
                         // Could dispatch success message / toast
                         crate::toast::success(&format!(
@@ -397,8 +384,9 @@ pub fn execute_fetch_command(cmd: Command) {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::unschedule_workflow(workflow_id).await {
                     Ok(_) => {
-                        web_sys::console::log_1(
-                            &format!("Workflow {} unscheduled successfully", workflow_id).into(),
+                        debug_log!(
+                            "Workflow {} unscheduled successfully",
+                            workflow_id
                         );
                         crate::toast::success("Workflow unscheduled successfully");
                     }
@@ -423,18 +411,15 @@ pub fn execute_fetch_command(cmd: Command) {
                                     if let Some(next_run) =
                                         val.get("next_run_time").and_then(|v| v.as_str())
                                     {
-                                        web_sys::console::log_1(
-                                            &format!(
-                                                "Workflow {} is scheduled, next run: {}",
-                                                workflow_id, next_run
-                                            )
-                                            .into(),
+                                        debug_log!(
+                                            "Workflow {} is scheduled, next run: {}",
+                                            workflow_id, next_run
                                         );
                                     }
                                 } else {
-                                    web_sys::console::log_1(
-                                        &format!("Workflow {} is not scheduled", workflow_id)
-                                            .into(),
+                                    debug_log!(
+                                        "Workflow {} is not scheduled",
+                                        workflow_id
                                     );
                                 }
                             }
@@ -664,12 +649,9 @@ pub fn execute_thread_command(cmd: Command) {
             content,
             client_id,
         } => {
-            web_sys::console::log_1(
-                &format!(
-                    "Executor: Handling Command::SendThreadMessage for thread {}: '{}'",
-                    thread_id, content
-                )
-                .into(),
+            debug_log!(
+                "Executor: Handling Command::SendThreadMessage for thread {}: '{}'",
+                thread_id, content
             );
 
             let _client_id_str = client_id.map(|id| id.to_string()).unwrap_or_default();
@@ -698,9 +680,7 @@ pub fn execute_thread_command(cmd: Command) {
                     // Show error toast directly instead of using deprecated message
                     crate::toast::error("Failed to process message. Please try again.");
                 } else {
-                    web_sys::console::log_1(
-                        &format!("Executor: Processing started for thread {}", thread_id).into(),
-                    );
+                    debug_log!("Executor: Processing started for thread {}", thread_id);
                 }
             });
         }
@@ -718,12 +698,9 @@ pub fn execute_thread_command(cmd: Command) {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::run_thread(thread_id).await {
                     Ok(response) => {
-                        web_sys::console::log_1(
-                            &format!(
-                                "Executor: run_thread (manual) POST succeeded for thread {}: {}",
-                                thread_id, response
-                            )
-                            .into(),
+                        debug_log!(
+                            "Executor: run_thread (manual) POST succeeded for thread {}: {}",
+                            thread_id, response
                         );
                     }
                     Err(e) => {
@@ -741,8 +718,9 @@ pub fn execute_thread_command(cmd: Command) {
         Command::UpdateThreadTitle { thread_id, title } => {
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::update_thread(thread_id, &title).await {
-                    Ok(_) => web_sys::console::log_1(
-                        &format!("Successfully updated thread title for {}", thread_id).into(),
+                    Ok(_) => debug_log!(
+                        "Successfully updated thread title for {}",
+                        thread_id
                     ),
                     Err(e) => web_sys::console::error_1(
                         &format!("Failed to update thread title: {:?}", e).into(),
@@ -812,20 +790,15 @@ pub fn execute_network_command(cmd: Command) {
             on_success,
             on_error,
         } => {
-            web_sys::console::log_1(
-                &format!(
-                    "Executor: Updating agent {} with payload: {}",
-                    agent_id, payload
-                )
-                .into(),
+            debug_log!(
+                "Executor: Updating agent {} with payload: {}",
+                agent_id, payload
             );
 
             wasm_bindgen_futures::spawn_local(async move {
                 match ApiClient::update_agent(agent_id, &payload).await {
                     Ok(response) => {
-                        web_sys::console::log_1(
-                            &format!("Agent update successful: {}", response).into(),
-                        );
+                        debug_log!("Agent update successful: {}", response);
 
                         // 1. Notify the state layer that the update succeeded so it
                         //    can refresh the agent list (or optimistic cache).
@@ -912,12 +885,9 @@ pub fn execute_websocket_command(cmd: Command) {
                                 // Create a simple handler that logs the received messages
                                 let handler =
                                     Rc::new(RefCell::new(move |json_value: serde_json::Value| {
-                                        web_sys::console::log_1(
-                                            &format!(
-                                                "WS: Received message for topic {}: {:?}",
-                                                topic_for_handler, json_value
-                                            )
-                                            .into(),
+                                        debug_log!(
+                                            "WS: Received message for topic {}: {:?}",
+                                            topic_for_handler, json_value
                                         );
                                     }));
 
@@ -934,13 +904,10 @@ pub fn execute_websocket_command(cmd: Command) {
                                     );
                                 } else {
                                     // No need to clone here, topic_str wasn't moved in this path if subscribe succeeded
-                                    web_sys::console::log_1(
-                                        &format!(
-                                            "Successfully subscribed to topic {}",
-                                            topic_for_error_log
-                                        )
-                                        .into(),
-                                    ); // Use the cloned value here too for consistency, although original topic_str *could* be used if subscribe didn't move.
+                                    debug_log!(
+                                        "Successfully subscribed to topic {}",
+                                        topic_for_error_log
+                                    );
                                 }
                             });
                         });

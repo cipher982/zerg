@@ -51,6 +51,7 @@ from zerg.routers.graph_layout import router as graph_router
 from zerg.routers.mcp_servers import router as mcp_servers_router
 from zerg.routers.metrics import router as metrics_router
 from zerg.routers.models import router as models_router
+from zerg.routers.ops import router as ops_router
 from zerg.routers.runs import router as runs_router
 from zerg.routers.system import router as system_router
 from zerg.routers.templates import router as templates_router
@@ -71,6 +72,7 @@ from zerg.routers.workflows import router as workflows_router
 # friction-free we skip service start-up when the environment variable
 # ``TESTING`` is truthy (set automatically by `backend/tests/conftest.py`).
 from zerg.services.email_trigger_service import email_trigger_service  # noqa: E402
+from zerg.services.ops_events import ops_events_bridge  # noqa: E402
 from zerg.services.scheduler_service import scheduler_service  # noqa: E402
 
 _log_level_name = _settings.log_level.upper()
@@ -128,6 +130,7 @@ async def lifespan(app: FastAPI):
         if not _settings.testing:
             await scheduler_service.start()
             await email_trigger_service.start()
+            ops_events_bridge.start()
 
         logger.info("Background services initialised (scheduler + email triggers)")
     except Exception as e:
@@ -141,6 +144,7 @@ async def lifespan(app: FastAPI):
         if not _settings.testing:
             await scheduler_service.stop()
             await email_trigger_service.stop()
+            ops_events_bridge.stop()
 
         # Shutdown websocket manager
         from zerg.websocket.manager import topic_manager
@@ -296,6 +300,7 @@ app.include_router(templates_router, prefix=f"{API_PREFIX}")
 app.include_router(graph_router, prefix=f"{API_PREFIX}")
 app.include_router(system_router, prefix=API_PREFIX)
 app.include_router(metrics_router)  # no prefix – Prometheus expects /metrics
+app.include_router(ops_router, prefix=f"{API_PREFIX}")
 
 # ---------------------------------------------------------------------------
 # Legacy admin routes without /api prefix – keep at very end so they override

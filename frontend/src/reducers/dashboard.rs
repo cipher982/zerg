@@ -2,6 +2,7 @@
 
 use crate::messages::{Command, Message};
 use crate::state::AppState;
+use crate::debug_log;
 
 /// Handles dashboard-related messages. Returns true if the message was handled.
 pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) -> bool {
@@ -92,7 +93,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             // We don't need to do anything here because:
             // 1. The page will be refreshed immediately after this (in dashboard.rs)
             // 2. On refresh, it will automatically load the fresh state from the backend
-            web_sys::console::log_1(&"Reset database message received - state will refresh".into());
+            debug_log!("Reset database message received - state will refresh");
             true
         }
         Message::ToggleRunHistory { agent_id } => {
@@ -117,9 +118,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             system_instructions,
             task_instructions,
         } => {
-            web_sys::console::log_1(
-                &format!("Dashboard: Creating agent with name: {}", name).into(),
-            );
+            debug_log!("Dashboard: Creating agent with name: {}", name);
 
             // Use the default model from state - no fallbacks, backend should always provide this
             let model = &state.default_model_id;
