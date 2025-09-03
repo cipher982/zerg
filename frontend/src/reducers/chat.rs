@@ -6,18 +6,16 @@
 
 use crate::messages::{Command, Message};
 use crate::state::AppState;
+use crate::debug_log;
 
 /// Returns `true` when the message was handled by the chat reducer.
 pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> bool {
     match msg {
         crate::messages::Message::CreateThread(agent_id, title) => {
             // Log for debugging
-            web_sys::console::log_1(
-                &format!(
-                    "Creating thread for agent {} with title: {}",
-                    agent_id, title
-                )
-                .into(),
+            debug_log!(
+                "Creating thread for agent {} with title: {}",
+                agent_id, title
             );
             // Instead of spawning directly, return a command that will be executed after state update
             cmds.push(crate::messages::Command::CreateThread {
@@ -27,9 +25,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         crate::messages::Message::ThreadCreated(thread) => {
-            web_sys::console::log_1(
-                &format!("Update: Handling ThreadCreated: {:?}", thread).into(),
-            );
+            debug_log!("Update: Handling ThreadCreated: {:?}", thread);
             if let Some(thread_id) = thread.id {
                 let agent_id = thread.agent_id;
 
@@ -442,12 +438,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                             parent_id: None,
                         };
                         messages.push(assistant_message);
-                        web_sys::console::log_1(
-                            &format!(
-                                "Added assistant_message for thread {}: {}",
-                                thread_id, content
-                            )
-                            .into(),
+                        debug_log!(
+                            "Added assistant_message for thread {}: {}",
+                            thread_id, content
                         );
                     }
                 } else {
@@ -471,9 +464,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     if let Some(agent_state) = state.get_agent_state_mut(agent_id) {
                         let messages = agent_state.thread_messages.entry(*thread_id).or_default();
                         if start_new {
-                            web_sys::console::log_1(
-                                &"Update: starting NEW assistant bubble".into(),
-                            );
+                            debug_log!("Update: starting NEW assistant bubble");
                             let now = chrono::Utc::now().to_rfc3339();
                             let assistant_message = crate::models::ApiThreadMessage {
                                 id: mid_u32,
@@ -507,11 +498,11 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             if let Some(agent_state) = state.current_agent() {
                 if agent_state.current_thread_id == Some(*thread_id) {
                     if let Some(messages) = agent_state.thread_messages.get(thread_id) {
-                        web_sys::console::log_1(&format!(
+                        debug_log!(
                             "[DEBUG] Scheduling UI update after ReceiveStreamChunk for thread {} ({} messages)",
                             thread_id,
                             messages.len()
-                        ).into());
+                        );
                         let messages_clone = messages.clone();
                         cmds.push(Command::UpdateUI(Box::new(move || {
                             crate::state::dispatch_global_message(
@@ -526,7 +517,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         crate::messages::Message::ReceiveStreamStart(thread_id) => {
             state.streaming_threads.insert(*thread_id);
             state.active_streams.insert(*thread_id, None);
-            web_sys::console::log_1(&format!("Stream started for thread {}.", thread_id).into());
+            debug_log!("Stream started for thread {}.", thread_id);
             true
         }
         crate::messages::Message::ReceiveStreamEnd(thread_id) => {
@@ -553,12 +544,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                             messages.iter_mut().filter(|msg| msg.role == "user").last()
                         {
                             last_user_message.id = None;
-                            web_sys::console::log_1(
-                                &format!(
-                                    "Stream ended: Set last user message ID to None for thread {}.",
-                                    thread_id
-                                )
-                                .into(),
+                            debug_log!(
+                                "Stream ended: Set last user message ID to None for thread {}.",
+                                thread_id
                             );
                         }
 
@@ -582,19 +570,16 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     }
                 }
             }
-            web_sys::console::log_1(&format!("Stream ended for thread {}.", thread_id).into());
+            debug_log!("Stream ended for thread {}.", thread_id);
             true
         }
         crate::messages::Message::ReceiveAssistantId {
             thread_id,
             message_id,
         } => {
-            web_sys::console::log_1(
-                &format!(
-                    "Received AssistantId {} for thread {}",
-                    message_id, thread_id
-                )
-                .into(),
+            debug_log!(
+                "Received AssistantId {} for thread {}",
+                message_id, thread_id
             );
             state.active_streams.insert(*thread_id, Some(*message_id));
 
@@ -805,14 +790,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         crate::messages::Message::RequestNewThread => {
             let agent_id_opt = state.current_agent_id;
-            web_sys::console::log_1(
-                &format!("RequestNewThread - agent_id: {:?}", agent_id_opt).into(),
-            );
+            debug_log!("RequestNewThread - agent_id: {:?}", agent_id_opt);
             if let Some(agent_id) = agent_id_opt {
                 let title = crate::constants::DEFAULT_THREAD_TITLE.to_string();
-                web_sys::console::log_1(
-                    &format!("Creating new thread for agent: {}", agent_id).into(),
-                );
+                debug_log!("Creating new thread for agent: {}", agent_id);
                 cmds.push(crate::messages::Command::SendMessage(
                     crate::messages::Message::CreateThread(agent_id, title),
                 ));
@@ -825,9 +806,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             if let Some(agent_id) = state.current_agent_id {
                 if let Some(agent_state) = state.get_agent_state(agent_id) {
                     if let Some(thread_id) = agent_state.current_thread_id {
-                        web_sys::console::log_1(
-                            &format!("Sending message to thread {}: {}", thread_id, content).into(),
-                        );
+                        debug_log!("Sending message to thread {}: {}", thread_id, content);
 
                         // Dispatch SendThreadMessage to trigger optimistic UI update
                         cmds.push(crate::messages::Command::SendMessage(
@@ -851,33 +830,23 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         crate::messages::Message::SendThreadMessage(thread_id, content) => {
-            web_sys::console::log_1(
-                &format!(
-                    "🔍 [DEBUG] Processing SendThreadMessage for thread {}: {}",
-                    thread_id, content
-                )
-                .into(),
+            debug_log!(
+                "🔍 [DEBUG] Processing SendThreadMessage for thread {}: {}",
+                thread_id, content
             );
 
             // Find which agent owns this thread for optimistic UI update
             let mut owning_agent_id = None;
-            web_sys::console::log_1(
-                &format!("🔍 [DEBUG] Looking for agent owning thread {}", thread_id).into(),
-            );
+            debug_log!("🔍 [DEBUG] Looking for agent owning thread {}", thread_id);
             for (agent_id, agent_state) in &state.agent_states {
-                web_sys::console::log_1(
-                    &format!(
-                        "🔍 [DEBUG] Checking agent {} with {} threads",
-                        agent_id,
-                        agent_state.threads.len()
-                    )
-                    .into(),
+                debug_log!(
+                    "🔍 [DEBUG] Checking agent {} with {} threads",
+                    agent_id,
+                    agent_state.threads.len()
                 );
                 if agent_state.threads.contains_key(thread_id) {
                     owning_agent_id = Some(*agent_id);
-                    web_sys::console::log_1(
-                        &format!("🔍 [DEBUG] Found owning agent: {}", agent_id).into(),
-                    );
+                    debug_log!("🔍 [DEBUG] Found owning agent: {}", agent_id);
                     break;
                 }
             }
@@ -934,26 +903,19 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
 
                 // Trigger UI update if needed
                 if should_update_ui {
-                    web_sys::console::log_1(
-                        &format!("🔍 [DEBUG] Triggering UI update for agent {}", agent_id).into(),
-                    );
+                    debug_log!("🔍 [DEBUG] Triggering UI update for agent {}", agent_id);
                     let current_agent_id = agent_id;
                     cmds.push(crate::messages::Command::UpdateUI(Box::new(move || {
-                        web_sys::console::log_1(
-                            &format!(
-                                "🔍 [DEBUG] Executing UI refresh for agent {}",
-                                current_agent_id
-                            )
-                            .into(),
+                        debug_log!(
+                            "🔍 [DEBUG] Executing UI refresh for agent {}",
+                            current_agent_id
                         );
                         crate::components::chat_view::refresh_chat_ui_from_agent_state(
                             current_agent_id,
                         );
                     })));
                 } else {
-                    web_sys::console::log_1(
-                        &format!("🔍 [DEBUG] Skipping UI update - not current agent/thread").into(),
-                    );
+                    debug_log!("🔍 [DEBUG] Skipping UI update - not current agent/thread");
                 }
             }
 
@@ -979,7 +941,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             true
         }
         crate::messages::Message::LoadThreads(agent_id) => {
-            web_sys::console::log_1(&format!("Loading threads for agent: {}", agent_id).into());
+            debug_log!("Loading threads for agent: {}", agent_id);
             cmds.push(crate::messages::Command::FetchThreads(*agent_id));
             true
         }
@@ -994,7 +956,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
 
         // NEW: Agent-Scoped Thread Handlers
         crate::messages::Message::NavigateToAgentChat(agent_id) => {
-            web_sys::console::log_1(&format!("NavigateToAgentChat: agent_id={}", agent_id).into());
+            debug_log!("NavigateToAgentChat: agent_id={}", agent_id);
 
             // Set up chat view and clean agent state
             state.active_view = crate::storage::ActiveView::ChatView;
@@ -1063,13 +1025,10 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
 
         crate::messages::Message::AgentThreadsLoaded { agent_id, threads } => {
-            web_sys::console::log_1(
-                &format!(
-                    "AgentThreadsLoaded: agent_id={}, {} threads",
-                    agent_id,
-                    threads.len()
-                )
-                .into(),
+            debug_log!(
+                "AgentThreadsLoaded: agent_id={}, {} threads",
+                agent_id,
+                threads.len()
             );
 
             // Get or create agent state
@@ -1110,12 +1069,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
 
             // Automatically select the thread to set up proper WebSocket subscriptions
             if let Some(thread_id) = selected_thread_id {
-                web_sys::console::log_1(
-                    &format!(
-                        "Auto-selecting thread {} for agent {} to set up WebSocket subscriptions",
-                        thread_id, agent_id
-                    )
-                    .into(),
+                debug_log!(
+                    "Auto-selecting thread {} for agent {} to set up WebSocket subscriptions",
+                    thread_id, agent_id
                 );
                 cmds.push(crate::messages::Command::SendMessage(
                     crate::messages::Message::SelectAgentThread {
@@ -1131,12 +1087,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             agent_id,
             thread_id,
         } => {
-            web_sys::console::log_1(
-                &format!(
-                    "SelectAgentThread: agent_id={}, thread_id={}",
-                    agent_id, thread_id
-                )
-                .into(),
+            debug_log!(
+                "SelectAgentThread: agent_id={}, thread_id={}",
+                agent_id, thread_id
             );
 
             if let Some(agent_state) = state.get_agent_state_mut(*agent_id) {

@@ -2,12 +2,13 @@
 
 use crate::messages::{Command, Message};
 use crate::state::AppState;
+use crate::debug_log;
 
 /// Handles MCP/integration-related messages. Returns true if the message was handled.
 pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) -> bool {
     match msg {
         Message::LoadMcpTools(agent_id) => {
-            web_sys::console::log_1(&format!("LoadMcpTools for agent {}", agent_id).into());
+            debug_log!("LoadMcpTools for agent {}", agent_id);
             let agent_id_clone = *agent_id;
             commands.push(Command::UpdateUI(Box::new(move || {
                 wasm_bindgen_futures::spawn_local(async move {
@@ -96,17 +97,14 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             state
                 .available_mcp_tools
                 .insert(*agent_id, mcp_tools.values().flatten().cloned().collect());
-            web_sys::console::log_1(
-                &format!(
-                    "McpToolsLoaded for agent {}: {:?} built-in, {:?} mcp",
-                    agent_id, builtin_tools, mcp_tools
-                )
-                .into(),
+            debug_log!(
+                "McpToolsLoaded for agent {}: {:?} built-in, {:?} mcp",
+                agent_id, builtin_tools, mcp_tools
             );
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
                     if let Some(_doc) = win.document() {
-                        web_sys::console::log_1(&"Render MCP tools UI after loading".into());
+                        debug_log!("Render MCP tools UI after loading");
                     }
                 }
             })));
@@ -116,9 +114,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             agent_id,
             server_config,
         } => {
-            web_sys::console::log_1(
-                &format!("AddMcpServer for agent {}: {:?}", agent_id, server_config).into(),
-            );
+            debug_log!("AddMcpServer for agent {}: {:?}", agent_id, server_config);
             let payload = serde_json::to_string(server_config).unwrap_or_else(|_| "{}".to_string());
             commands.push(Command::NetworkCall {
                 endpoint: format!("/api/agents/{}/mcp-servers", agent_id),
@@ -139,9 +135,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             agent_id,
             server_name,
         } => {
-            web_sys::console::log_1(
-                &format!("RemoveMcpServer for agent {}: {}", agent_id, server_name).into(),
-            );
+            debug_log!("RemoveMcpServer for agent {}: {}", agent_id, server_name);
             commands.push(Command::NetworkCall {
                 endpoint: format!("/api/agents/{}/mcp-servers/{}", agent_id, server_name),
                 method: "DELETE".to_string(),
@@ -161,12 +155,9 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             agent_id,
             server_config,
         } => {
-            web_sys::console::log_1(
-                &format!(
-                    "TestMcpConnection for agent {}: {:?}",
-                    agent_id, server_config
-                )
-                .into(),
+            debug_log!(
+                "TestMcpConnection for agent {}: {:?}",
+                agent_id, server_config
             );
             let payload = serde_json::to_string(server_config).unwrap_or_else(|_| "{}".to_string());
             commands.push(Command::NetworkCall {
@@ -193,12 +184,9 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
         } => {
             let key = format!("{}:{}", agent_id, server_name);
             state.mcp_connection_status.insert(key, status.clone());
-            web_sys::console::log_1(
-                &format!(
-                    "McpConnectionTested for agent {}: {} status {:?}",
-                    agent_id, server_name, status
-                )
-                .into(),
+            debug_log!(
+                "McpConnectionTested for agent {}: {} status {:?}",
+                agent_id, server_name, status
             );
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
@@ -226,16 +214,13 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
                     },
                 );
             }
-            web_sys::console::log_1(
-                &format!(
-                    "UpdateAllowedTools for agent {}: {:?}",
-                    agent_id,
-                    state
-                        .agent_mcp_configs
-                        .get(agent_id)
-                        .map(|c| &c.allowed_tools)
-                )
-                .into(),
+            debug_log!(
+                "UpdateAllowedTools for agent {}: {:?}",
+                agent_id,
+                state
+                    .agent_mcp_configs
+                    .get(agent_id)
+                    .map(|c| &c.allowed_tools)
             );
             true
         }
@@ -244,9 +229,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             server_name,
         } => {
             commands.push(Command::SendMessage(Message::LoadMcpTools(*agent_id)));
-            web_sys::console::log_1(
-                &format!("McpServerAdded for agent {}: {}", agent_id, server_name).into(),
-            );
+            debug_log!("McpServerAdded for agent {}: {}", agent_id, server_name);
             true
         }
         Message::McpServerRemoved {
@@ -254,9 +237,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             server_name,
         } => {
             commands.push(Command::SendMessage(Message::LoadMcpTools(*agent_id)));
-            web_sys::console::log_1(
-                &format!("McpServerRemoved for agent {}: {}", agent_id, server_name).into(),
-            );
+            debug_log!("McpServerRemoved for agent {}: {}", agent_id, server_name);
             true
         }
         Message::McpError { agent_id, error } => {
@@ -266,11 +247,11 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             true
         }
         Message::SetMCPTab { agent_id, tab } => {
-            web_sys::console::log_1(&format!("SetMCPTab for agent {}: {:?}", agent_id, tab).into());
+            debug_log!("SetMCPTab for agent {}: {:?}", agent_id, tab);
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
                     if let Some(_doc) = win.document() {
-                        web_sys::console::log_1(&"MCP tab switch UI update".into());
+                        debug_log!("MCP tab switch UI update");
                     }
                 }
             })));
@@ -280,9 +261,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             agent_id,
             preset_id,
         } => {
-            web_sys::console::log_1(
-                &format!("ConnectMCPPreset for agent {}: {}", agent_id, preset_id).into(),
-            );
+            debug_log!("ConnectMCPPreset for agent {}: {}", agent_id, preset_id);
             let preset_id_cloned = preset_id.clone();
             commands.push(Command::UpdateUI(Box::new(move || {
                 if web_sys::window().is_some() {
@@ -301,14 +280,11 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             preset,
             auth_token,
         } => {
-            web_sys::console::log_1(
-                &format!(
-                    "AddMCPServer for agent {}: {} ({})",
-                    agent_id,
-                    name,
-                    url.as_deref().unwrap_or("preset")
-                )
-                .into(),
+            debug_log!(
+                "AddMCPServer for agent {}: {} ({})",
+                agent_id,
+                name,
+                url.as_deref().unwrap_or("preset")
             );
             let server_config = crate::state::McpServerConfig {
                 name: name.clone(),
@@ -326,9 +302,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             agent_id,
             server_name,
         } => {
-            web_sys::console::log_1(
-                &format!("RemoveMCPServer for agent {}: {}", agent_id, server_name).into(),
-            );
+            debug_log!("RemoveMCPServer for agent {}: {}", agent_id, server_name);
             commands.push(Command::SendMessage(Message::RemoveMcpServer {
                 agent_id: *agent_id,
                 server_name: server_name.clone(),
@@ -341,12 +315,9 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             name,
             auth_token,
         } => {
-            web_sys::console::log_1(
-                &format!(
-                    "TestMCPConnection for agent {}: {} at {}",
-                    agent_id, name, url
-                )
-                .into(),
+            debug_log!(
+                "TestMCPConnection for agent {}: {} at {}",
+                agent_id, name, url
             );
             let server_config = crate::state::McpServerConfig {
                 name: name.clone(),

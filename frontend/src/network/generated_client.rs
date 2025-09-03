@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::debug_log;
 use wasm_bindgen_futures::spawn_local;
 
 /// Contract-enforced models matching backend Pydantic schemas exactly
@@ -92,12 +93,12 @@ impl TypeSafeApiClient {
 
 /// Convenience function for storage layer
 pub fn save_canvas_data_typed(canvas_data: serde_json::Value) {
-    web_sys::console::log_1(&"🚀 Sending canvas data via type-safe generated client".into());
+    debug_log!("🚀 Sending canvas data via type-safe generated client");
 
     spawn_local(async move {
         match TypeSafeApiClient::update_workflow_canvas_data(canvas_data).await {
             Ok(_) => {
-                web_sys::console::log_1(&"✅ Canvas data saved via type-safe client".into());
+                debug_log!("✅ Canvas data saved via type-safe client");
             }
             Err(e) => {
                 web_sys::console::error_1(&format!("❌ Type-safe API call failed: {}", e).into());
