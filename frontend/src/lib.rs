@@ -810,21 +810,23 @@ fn setup_auto_save_timer(interval_ms: i32) -> Result<(), JsValue> {
 
 // Debug helpers for e2e tests - expose app state info
 
+#[cfg(debug_assertions)]
 #[wasm_bindgen]
 pub fn debug_get_node_count() -> usize {
     crate::state::APP_STATE.with(|state| {
         let state_ref = state.borrow();
         let count = state_ref.workflow_nodes.len();
-        web_sys::console::log_1(&format!("debug_get_node_count: found {} nodes", count).into());
+        debug_log!("debug_get_node_count: found {} nodes", count);
 
         // Log all node IDs for debugging
         let node_ids: Vec<String> = state_ref.workflow_nodes.keys().cloned().collect();
-        web_sys::console::log_1(&format!("debug_get_node_count: node IDs = {:?}", node_ids).into());
+        debug_log!("debug_get_node_count: node IDs = {:?}", node_ids);
 
         count
     })
 }
 
+#[cfg(debug_assertions)]
 #[wasm_bindgen]
 pub fn debug_has_trigger_node() -> bool {
     crate::state::APP_STATE.with(|state| {
@@ -838,6 +840,7 @@ pub fn debug_has_trigger_node() -> bool {
     })
 }
 
+#[cfg(debug_assertions)]
 #[wasm_bindgen]
 pub fn debug_get_trigger_node_info() -> String {
     crate::state::APP_STATE.with(|state| {
