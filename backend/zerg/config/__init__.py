@@ -71,6 +71,9 @@ class Settings:  # noqa: D401 – simple data container
     allowed_models_non_admin: str  # csv list
     # Quotas ------------------------------------------------------------
     daily_runs_per_user: int
+    # Cost budgets (in cents) ------------------------------------------
+    daily_cost_per_user_cents: int
+    daily_cost_global_cents: int
 
     # Dynamic guards (evaluated at runtime) -----------------------------
     @property
@@ -147,6 +150,8 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
         max_output_tokens=int(os.getenv("MAX_OUTPUT_TOKENS", "1000")),
         allowed_models_non_admin=os.getenv("ALLOWED_MODELS_NON_ADMIN", ""),
         daily_runs_per_user=int(os.getenv("DAILY_RUNS_PER_USER", "0")),
+        daily_cost_per_user_cents=int(os.getenv("DAILY_COST_PER_USER_CENTS", "0")),
+        daily_cost_global_cents=int(os.getenv("DAILY_COST_GLOBAL_CENTS", "0")),
     )
 
 
