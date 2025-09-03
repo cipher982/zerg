@@ -70,7 +70,7 @@ def validate_workflow(
         )
 
 
-@router.post("/", response_model=Workflow)
+@router.post("/", response_model=Workflow, status_code=status.HTTP_201_CREATED)
 def create_workflow(
     *,
     request: Request,
