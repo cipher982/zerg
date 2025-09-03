@@ -28,141 +28,75 @@ test.describe('Comprehensive Debug', () => {
     
     // Test 1: Basic connectivity
     console.log('🔍 Test 1: Basic connectivity');
-    try {
-      const response = await page.request.get(`${backendUrl}/`);
-      console.log('📊 Basic connectivity status:', response.status());
-      if (response.ok()) {
-        console.log('✅ Backend is accessible');
-      } else {
-        console.log('❌ Backend connectivity failed');
-        return;
-      }
-    } catch (error) {
-      console.log('❌ Backend connectivity error:', error);
-      return;
-    }
+    const response = await page.request.get(`${backendUrl}/`);
+    expect(response.status()).toBe(200);
+    console.log('✅ Backend is accessible');
     
     // Test 2: Header transmission
     console.log('🔍 Test 2: Header transmission');
-    try {
-      const response = await page.request.get(`${backendUrl}/`, {
-        headers: {
-          'X-Debug-Test': 'header-test'
-        }
-      });
-      console.log('📊 Header transmission status:', response.status());
-      console.log('✅ Headers can be sent');
-    } catch (error) {
-      console.log('❌ Header transmission error:', error);
-    }
+    const headerResponse = await page.request.get(`${backendUrl}/`, {
+      headers: {
+        'X-Debug-Test': 'header-test'
+      }
+    });
+    expect(headerResponse.status()).toBe(200);
+    console.log('✅ Headers can be sent');
     
     // Test 3: Agent endpoint - GET (should work)
     console.log('🔍 Test 3: Agent GET endpoint');
-    try {
-      const response = await page.request.get(`${backendUrl}/api/agents`);
-      console.log('📊 Agent GET status:', response.status());
-      if (response.ok()) {
-        const agents = await response.json();
-        console.log('📊 Agent GET count:', agents.length);
-        console.log('✅ Agent GET endpoint working');
-      } else {
-        const error = await response.text();
-        console.log('❌ Agent GET failed:', error.substring(0, 200));
-      }
-    } catch (error) {
-      console.log('❌ Agent GET error:', error);
-    }
+    const agentGetResponse = await page.request.get(`${backendUrl}/api/agents`);
+    expect(agentGetResponse.status()).toBe(200);
+    const agents = await agentGetResponse.json();
+    console.log('📊 Agent GET count:', agents.length);
+    console.log('✅ Agent GET endpoint working');
     
     // Test 4: Different HTTP methods to test database
     console.log('🔍 Test 4: Testing different database operations');
     
     // Try a simpler POST endpoint first
-    try {
-      console.log('📊 Testing user endpoint...');
-      const userResponse = await page.request.get(`${backendUrl}/api/users/me`);
-      console.log('📊 User endpoint status:', userResponse.status());
-      if (userResponse.ok()) {
-        const user = await userResponse.json();
-        console.log('📊 User data available:', !!user);
-      }
-    } catch (error) {
-      console.log('📊 User endpoint error:', error);
-    }
+    console.log('📊 Testing user endpoint...');
+    const userResponse = await page.request.get(`${backendUrl}/api/users/me`);
+    expect(userResponse.status()).toBe(200);
+    const user = await userResponse.json();
+    console.log('📊 User data available:', !!user);
     
-    // Test 5: Try creating a workflow instead of agent
+    // Test 5: Try creating a workflow (with proper canvas)
     console.log('🔍 Test 5: Workflow creation test');
-    try {
-      const workflowResponse = await page.request.post(`${backendUrl}/api/workflows`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        data: {
-          name: `Test Workflow ${workerId}`,
-          description: 'Test workflow for debugging',
-        }
-      });
-      console.log('📊 Workflow creation status:', workflowResponse.status());
-      if (workflowResponse.ok()) {
-        const workflow = await workflowResponse.json();
-        console.log('📊 Workflow created ID:', workflow.id);
-        console.log('✅ Workflow creation working');
-      } else {
-        const error = await workflowResponse.text();
-        console.log('❌ Workflow creation failed:', error.substring(0, 200));
+    const workflowResponse = await page.request.post(`${backendUrl}/api/workflows`, {
+      headers: { 'Content-Type': 'application/json' },
+      data: {
+        name: `Test Workflow ${workerId}`,
+        description: 'Test workflow for debugging',
+        canvas: { nodes: [], edges: [] }
       }
-    } catch (error) {
-      console.log('❌ Workflow creation error:', error);
-    }
+    });
+    expect(workflowResponse.status()).toBe(201);
+    const workflow = await workflowResponse.json();
+    console.log('📊 Workflow created ID:', workflow.id);
+    console.log('✅ Workflow creation working');
     
     // Test 6: Agent creation with minimal data
     console.log('🔍 Test 6: Minimal agent creation');
-    try {
-      const agentResponse = await page.request.post(`${backendUrl}/api/agents`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        data: {
-          name: 'Minimal Agent',
-          system_instructions: 'System instructions',
-          task_instructions: 'Task instructions',
-          model: 'gpt-mock', // Use mock model to avoid external dependencies
-        }
-      });
-      console.log('📊 Minimal agent creation status:', agentResponse.status());
-      if (agentResponse.ok()) {
-        const agent = await agentResponse.json();
-        console.log('📊 Minimal agent created ID:', agent.id);
-        console.log('✅ Agent creation working with mock model');
-      } else {
-        const error = await agentResponse.text();
-        console.log('❌ Minimal agent creation failed:', error.substring(0, 400));
-        
-        // If it's a 422, try to parse the validation error
-        if (agentResponse.status() === 422) {
-          try {
-            const errorJson = JSON.parse(error);
-            console.log('📊 Validation errors:', JSON.stringify(errorJson, null, 2));
-          } catch (e) {
-            console.log('📊 Could not parse validation error');
-          }
-        }
+    const agentResponse = await page.request.post(`${backendUrl}/api/agents`, {
+      headers: { 'Content-Type': 'application/json' },
+      data: {
+        name: 'Minimal Agent',
+        system_instructions: 'System instructions',
+        task_instructions: 'Task instructions',
+        model: 'gpt-mock', // Use mock model to avoid external dependencies
       }
-    } catch (error) {
-      console.log('❌ Minimal agent creation error:', error);
-    }
+    });
+    expect(agentResponse.status()).toBe(201);
+    const agent = await agentResponse.json();
+    console.log('📊 Minimal agent created ID:', agent.id);
+    console.log('✅ Agent creation working with mock model');
     
     // Test 7: System health
     console.log('🔍 Test 7: System health');
-    try {
-      const adminResponse = await page.request.get(`${backendUrl}/api/system/health`);
-      console.log('📊 System health status:', adminResponse.status());
-      expect(adminResponse.status()).toBe(200);
-      const health = await adminResponse.json();
-      console.log('📊 System health:', JSON.stringify(health));
-    } catch (error) {
-      console.log('📊 System health error:', error);
-      throw error;
-    }
+    const adminResponse = await page.request.get(`${backendUrl}/api/system/health`);
+    expect(adminResponse.status()).toBe(200);
+    const health = await adminResponse.json();
+    console.log('📊 System health:', JSON.stringify(health));
     
     console.log('✅ Comprehensive debug test complete');
     
