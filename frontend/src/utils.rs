@@ -243,6 +243,31 @@ macro_rules! debug_log {
     }};
 }
 
+// ---------------------------------------------------------------------------
+// info_log!/warn_log!/error_log! helpers
+// ---------------------------------------------------------------------------
+
+#[macro_export]
+macro_rules! info_log {
+    ($($t:tt)*) => {{
+        web_sys::console::log_1(&format!($($t)*).into());
+    }};
+}
+
+#[macro_export]
+macro_rules! warn_log {
+    ($($t:tt)*) => {{
+        web_sys::console::warn_1(&format!($($t)*).into());
+    }};
+}
+
+#[macro_export]
+macro_rules! error_log {
+    ($($t:tt)*) => {{
+        web_sys::console::error_1(&format!($($t)*).into());
+    }};
+}
+
 // wasm-bindgen tests ----------------------------------------------------------
 
 #[cfg(test)]

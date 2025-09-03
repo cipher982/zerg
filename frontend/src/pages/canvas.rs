@@ -7,11 +7,12 @@
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 use web_sys::{Document, Element};
+use crate::debug_log;
 
 /// Mount the canvas view by creating necessary DOM elements
 /// This function is called when switching to the canvas view
 pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
-    web_sys::console::log_1(&"CANVAS: Starting mount".into());
+    debug_log!("CANVAS: Starting mount");
 
     // Get app container for proper layout
     let app_container = document
@@ -19,11 +20,11 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
         .ok_or(JsValue::from_str("Could not find app-container"))?;
 
     // Add canvas-view class for flexbox layout
-    web_sys::console::log_1(&"CANVAS: Setting app-container to canvas-view class".into());
+    debug_log!("CANVAS: Setting app-container to canvas-view class");
     app_container.set_class_name("canvas-view");
 
     // First create/ensure agent shelf exists (sidebar)
-    web_sys::console::log_1(&"CANVAS: Creating/refreshing agent shelf".into());
+    debug_log!("CANVAS: Creating/refreshing agent shelf");
 
     // Agent shelf state is managed by workflow loading - no manual sync needed
 
@@ -40,12 +41,12 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
             || p.dyn_ref::<Element>()
                 .map_or(true, |e| e.id() != "app-container")
     }) {
-        web_sys::console::log_1(&"CANVAS: Appending agent shelf to app container".into());
+        debug_log!("CANVAS: Appending agent shelf to app container");
         app_container.append_child(&agent_shelf)?;
     }
 
     // Create main content area if it doesn't exist
-    web_sys::console::log_1(&"CANVAS: Creating/finding main content area".into());
+    debug_log!("CANVAS: Creating/finding main content area");
     let main_content = if let Some(content) = document.get_element_by_id("main-content-area") {
         content
     } else {
@@ -59,7 +60,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     // Removed: input panel (toolbar) creation and mounting; controls are now in workflow bar
 
     // Create canvas container if needed
-    web_sys::console::log_1(&"CANVAS: Creating/finding canvas container".into());
+    debug_log!("CANVAS: Creating/finding canvas container");
     let canvas_container = if let Some(container) = document.get_element_by_id("canvas-container") {
         container
     } else {
@@ -87,7 +88,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     crate::dom_utils::show(&canvas_container);
 
     // Initialize/refresh the workflow switcher bar for this canvas view
-    web_sys::console::log_1(&"CANVAS: Initializing workflow switcher".into());
+    debug_log!("CANVAS: Initializing workflow switcher");
     if let Err(e) = crate::components::workflow_switcher::init(document) {
         web_sys::console::error_1(
             &format!("Failed to initialize workflow switcher: {:?}", e).into(),
@@ -95,7 +96,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
     }
 
     // Initialize the execution results panel
-    web_sys::console::log_1(&"CANVAS: Initializing execution results panel".into());
+    debug_log!("CANVAS: Initializing execution results panel");
     // Removed execution results panel initialization.
 
     // Initialize the particle system for the canvas background via message dispatch
@@ -104,7 +105,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
         height: crate::state::APP_STATE.with(|state| state.borrow().canvas_height),
     });
 
-    web_sys::console::log_1(&"CANVAS: Setup canvas drawing (no state borrowed)".into());
+    debug_log!("CANVAS: Setup canvas drawing (no state borrowed)");
 
     // NOTE: Trigger-node auto-creation has been centralized to the
     // CurrentWorkflowLoaded handler in update.rs to avoid races between
@@ -122,7 +123,7 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
         }
     }
 
-    web_sys::console::log_1(&"CANVAS: Mount complete".into());
+    debug_log!("CANVAS: Mount complete");
     Ok(())
 }
 
@@ -133,11 +134,11 @@ pub fn mount_canvas(document: &Document) -> Result<(), JsValue> {
 /// This function is called when switching away from the canvas view
 #[allow(dead_code)]
 pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
-    web_sys::console::log_1(&"CANVAS: Starting unmount".into());
+    debug_log!("CANVAS: Starting unmount");
 
     // Remove workflow bar
     if let Some(workflow_bar) = document.get_element_by_id("workflow-bar") {
-        web_sys::console::log_1(&"CANVAS: Removing workflow bar".into());
+        debug_log!("CANVAS: Removing workflow bar");
         if let Some(parent) = workflow_bar.parent_node() {
             parent.remove_child(&workflow_bar)?;
         }
@@ -145,7 +146,7 @@ pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
 
     // Remove input panel
     if let Some(panel) = document.get_element_by_id("canvas-input-panel") {
-        web_sys::console::log_1(&"CANVAS: Removing input panel".into());
+        debug_log!("CANVAS: Removing input panel");
         if let Some(parent) = panel.parent_node() {
             parent.remove_child(&panel)?;
         }
@@ -153,7 +154,7 @@ pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
 
     // Remove canvas container
     if let Some(container) = document.get_element_by_id("canvas-container") {
-        web_sys::console::log_1(&"CANVAS: Removing canvas container".into());
+        debug_log!("CANVAS: Removing canvas container");
         if let Some(parent) = container.parent_node() {
             parent.remove_child(&container)?;
         }
@@ -161,7 +162,7 @@ pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
 
     // Remove main content area
     if let Some(content) = document.get_element_by_id("main-content-area") {
-        web_sys::console::log_1(&"CANVAS: Removing main content area".into());
+        debug_log!("CANVAS: Removing main content area");
         if let Some(parent) = content.parent_node() {
             parent.remove_child(&content)?;
         }
@@ -169,7 +170,7 @@ pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
 
     // Remove agent shelf - critical to ensure it doesn't appear in dashboard view
     if let Some(shelf) = document.get_element_by_id("agent-shelf") {
-        web_sys::console::log_1(&"CANVAS: Removing agent shelf".into());
+        debug_log!("CANVAS: Removing agent shelf");
         if let Some(parent) = shelf.parent_node() {
             parent.remove_child(&shelf)?;
         }
@@ -177,14 +178,14 @@ pub fn unmount_canvas(document: &Document) -> Result<(), JsValue> {
 
     // Reset app-container class back to default (remove canvas-view)
     if let Some(app_container) = document.get_element_by_id("app-container") {
-        web_sys::console::log_1(&"CANVAS: Resetting app container class".into());
+        debug_log!("CANVAS: Resetting app container class");
         app_container.set_class_name("");
     }
 
     // Clear the particle system when unmounting the canvas via message dispatch
     crate::state::dispatch_global_message(crate::messages::Message::ClearParticleSystem);
 
-    web_sys::console::log_1(&"CANVAS: Unmount complete".into());
+    debug_log!("CANVAS: Unmount complete");
     Ok(())
 }
 

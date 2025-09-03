@@ -8,6 +8,7 @@ use crate::constants::{DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH};
 use serde::Deserialize;
 use std::rc::Rc;
 use web_sys::RequestMode;
+use crate::debug_log;
 
 #[derive(Deserialize)]
 struct TokenOut {
@@ -253,9 +254,7 @@ impl ApiClient {
         let url = format!("{}/api/agents?scope={}", Self::api_base_url(), scope);
         let result = Self::fetch_json(&url, "GET", None).await;
         match &result {
-            Ok(json) => web_sys::console::log_1(
-                &format!("API_CLIENT: GET /api/agents returned: {}", json).into(),
-            ),
+            Ok(json) => debug_log!("API_CLIENT: GET /api/agents returned: {}", json),
             Err(e) => web_sys::console::error_1(
                 &format!("API_CLIENT: GET /api/agents error: {:?}", e).into(),
             ),

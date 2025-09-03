@@ -718,7 +718,7 @@ fn initialize_data_loading() {
 
 // Create tab navigation for switching between dashboard and canvas
 fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
-    web_sys::console::log_1(&"create_tab_navigation called".into());
+    debug_log!("create_tab_navigation called");
     // Create a tabs container
     let tabs_container = document.create_element("div")?;
     tabs_container.set_id("global-tabs-container");
@@ -748,7 +748,7 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     // Set up dashboard tab click handler
     {
         let dashboard_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
-            web_sys::console::log_1(&"Dashboard tab clicked".into());
+            debug_log!("Dashboard tab clicked");
             dispatch_global_message(messages::Message::ToggleView(
                 storage::ActiveView::Dashboard,
             ));
@@ -762,7 +762,7 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
     // Set up canvas tab click handler
     {
         let canvas_click = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
-            web_sys::console::log_1(&"Canvas tab clicked".into());
+            debug_log!("Canvas tab clicked");
             dispatch_global_message(messages::Message::ToggleView(storage::ActiveView::Canvas));
         }) as Box<dyn FnMut(_)>);
 
@@ -776,7 +776,7 @@ fn create_tab_navigation(document: &Document) -> Result<(), JsValue> {
         .get_element_by_id("header")
         .ok_or_else(|| JsValue::from_str("Header not found"))?;
     header.append_child(&tabs_container)?;
-    web_sys::console::log_1(&"Tabs added to DOM".into());
+    debug_log!("Tabs added to DOM");
 
     Ok(())
 }
