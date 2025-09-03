@@ -15,7 +15,6 @@ from fastapi import Response
 from fastapi import status
 
 # Instantiate OpenAI client with API key from central settings
-from openai import OpenAI
 from sqlalchemy.orm import Session
 
 from zerg.config import get_settings
@@ -91,7 +90,6 @@ from zerg.dependencies.auth import get_current_user  # noqa: E402
 
 router = APIRouter(tags=["agents"], dependencies=[Depends(get_current_user)])
 
-client = OpenAI(api_key=get_settings().openai_api_key)
 
 # ---------------------------------------------------------------------------
 # List / create
