@@ -92,7 +92,16 @@ Task D: Token Usage Capture + Cost Estimate
   - Inject fake usage metadata; validate persisted totals.
 - Acceptance
   - Totals appear on `AgentRun`; tests pass.
-- Status: [ ] Not started
+- Status: [x] Done (usage); [ ] Pricing map population
+- Notes:
+  - Aggregates provider-supplied usage from AIMessage.response_metadata/additional_kwargs only (no estimates).
+  - Persists `total_tokens` on AgentRun when available; otherwise leaves NULL and logs.
+  - Adds pricing catalog scaffold `zerg/pricing.py` (empty except gpt-mock).
+  - Pricing is loaded from external JSON when `PRICING_CATALOG_PATH` (or `PRICING_CATALOG_JSON`) is set. Shape:
+    - `{ "<model_id>": [<in_price_per_1k>, <out_price_per_1k>] }` or
+    - `{ "<model_id>": {"in": 0.001, "out": 0.002} }`.
+  - Cost is computed only when a model has an explicit entry; otherwise left NULL.
+  - Tests cover metadata present and missing; cache cleared per test for deterministic behavior.
 
 Task E: Budget Thresholds (User + Global, per day)
 - Implementation
@@ -100,6 +109,7 @@ Task E: Budget Thresholds (User + Global, per day)
   - Log warning at ≥80%; deny non‑admin at ≥100%.
   - Admins exempt.
   - Env: `DAILY_COST_PER_USER_CENTS`, `DAILY_COST_GLOBAL_CENTS`.
+  - Aggregation uses `AgentRun.total_cost_usd` (unknown costs are ignored).
 - Tests
   - Threshold triggers and denial behavior validated.
 - Acceptance
@@ -108,9 +118,9 @@ Task E: Budget Thresholds (User + Global, per day)
 
 Task F: CORS Tightening
 - Implementation
-  - Use exact origins from `ALLOWED_CORS_ORIGINS` in prod.
+  - Use exact origins from `ALLOWED_CORS_ORIGINS` in prod; wildcard only in dev/test.
   - Update error handler to only set `Access-Control-Allow-Origin` when request origin is allowed; add `Vary: Origin`.
-  - Default `allow_credentials=False` unless cookie flows are introduced.
+  - Default `allow_credentials=False` (cookie flows can opt-in later).
 - Tests
   - Minimal integration checks for CORS headers with allowed vs. disallowed origins.
 - Acceptance
