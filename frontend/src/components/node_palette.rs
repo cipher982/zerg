@@ -507,8 +507,9 @@ pub fn create_node_from_palette(state: &mut AppState, palette_node: &PaletteNode
     // Add node to current workflow structure (same as agent nodes)
     state.add_node_to_current_workflow(node);
 
-    web_sys::console::log_1(
-        &format!("Created node {} at ({}, {})", node_id, world_x, world_y).into(),
+    crate::debug_log!(
+        "Created node {} at ({}, {})",
+        node_id, world_x, world_y
     );
 
     // Mark state as dirty for re-render

@@ -2,6 +2,7 @@
 
 use crate::messages::{Command, Message};
 use crate::state::AppState;
+use crate::debug_log;
 
 /// Handles agent-related messages. Returns true if the message was handled.
 pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) -> bool {
@@ -25,12 +26,9 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
         } => {
             // DO NOT automatically create canvas nodes for dashboard-created agents
             // Users should drag them from the shelf to the canvas when needed
-            web_sys::console::log_1(
-                &format!(
-                    "Agent {} created - available in shelf for dragging to canvas",
-                    name
-                )
-                .into(),
+            debug_log!(
+                "Agent {} created - available in shelf for dragging to canvas",
+                name
             );
 
             // After creating the agent, immediately create a default thread
@@ -49,20 +47,15 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             true
         }
         Message::EditAgent(agent_id) => {
-            web_sys::console::log_1(
-                &format!("Update: Handling EditAgent for agent_id: {}", agent_id).into(),
-            );
+            debug_log!("Update: Handling EditAgent for agent_id: {}", agent_id);
             // Quick O(1) lookup via the explicit map
             let node_id_to_select = state.agent_id_to_node_id.get(agent_id).cloned();
 
             if let Some(node_id) = node_id_to_select {
                 // Happy‑path: we already have a visual node for this agent
-                web_sys::console::log_1(
-                    &format!(
-                        "Found node_id {} for agent_id {}, selecting it.",
-                        node_id, agent_id
-                    )
-                    .into(),
+                debug_log!(
+                    "Found node_id {} for agent_id {}, selecting it.",
+                    node_id, agent_id
                 );
                 let node_id_cloned = node_id.clone();
                 state.selected_node_id = Some(node_id);
@@ -292,9 +285,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
         Message::AgentInfoLoaded(agent_box) => {
             // Data is already Box<ApiAgent>
             let agent = agent_box.as_ref(); // Borrow the agent, do not move
-            web_sys::console::log_1(
-                &format!("Update: Handling AgentInfoLoaded: {:?}", agent).into(),
-            ); // Use {:?}
+            debug_log!("Update: Handling AgentInfoLoaded: {:?}", agent); // Use {:?}
             if state.active_view == crate::storage::ActiveView::ChatView {
                 if let Some(agent_id) = agent.id {
                     state.agents.insert(agent_id, (**agent_box).clone()); // Clone the agent to insert
@@ -345,18 +336,15 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
         }
         Message::RefreshAgentsFromAPI => {
             // Trigger an async operation to fetch agents from the API
-            web_sys::console::log_1(&"Requesting agent refresh from API".into());
+            debug_log!("Requesting agent refresh from API");
             // Return a command to fetch agents instead of doing it directly
             commands.push(Command::FetchAgents);
             true
         }
         Message::AgentsRefreshed(agents) => {
-            web_sys::console::log_1(
-                &format!(
-                    "Update: Handling AgentsRefreshed with {} agents",
-                    agents.len()
-                )
-                .into(),
+            debug_log!(
+                "Update: Handling AgentsRefreshed with {} agents",
+                agents.len()
             );
 
             // Get the current set of agent IDs BEFORE updating
@@ -382,12 +370,9 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
 
             if just_created_agent_ids.len() == 1 {
                 let new_agent_id = just_created_agent_ids[0];
-                web_sys::console::log_1(
-                    &format!(
-                        "Detected newly created agent ID: {}. Creating default thread.",
-                        new_agent_id
-                    )
-                    .into(),
+                debug_log!(
+                    "Detected newly created agent ID: {}. Creating default thread.",
+                    new_agent_id
                 );
                 commands.push(Command::SendMessage(
                     crate::messages::Message::CreateThread(

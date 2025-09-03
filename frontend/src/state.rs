@@ -8,6 +8,7 @@ use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, WebSocket};
+use crate::debug_log;
 
 use crate::canvas::{background::ParticleSystem, renderer};
 use crate::messages::{Command, Message};
@@ -937,12 +938,9 @@ impl AppState {
         // Generate a unique, monotonic node id (prefix avoids legacy "node_" collisions)
         self.next_node_seq = self.next_node_seq.wrapping_add(1);
         let id = format!("node-{}-{}", js_sys::Date::now() as u64, self.next_node_seq);
-        web_sys::console::log_1(
-            &format!(
-                "Creating node: id={}, type={:?}, text={}",
-                id, node_type, text
-            )
-            .into(),
+        debug_log!(
+            "Creating node: id={}, type={:?}, text={}",
+            id, node_type, text
         );
 
         // Determine color based on node type
@@ -972,22 +970,16 @@ impl AppState {
         node.set_text(text);
         node.set_parent_id(None);
 
-        web_sys::console::log_1(
-            &format!(
-                "Node created with dimensions: {}x{} at position ({}, {})",
-                width, height, x, y
-            )
-            .into(),
+        debug_log!(
+            "Node created with dimensions: {}x{} at position ({}, {})",
+            width, height, x, y
         );
 
         self.workflow_nodes.insert(id.clone(), node.clone());
         self.ui_state.insert(id.clone(), UiNodeState::default());
-        web_sys::console::log_1(
-            &format!(
-                "DEBUG: Added node {} to nodes map (type: {:?})",
-                id, node.node_type
-            )
-            .into(),
+        debug_log!(
+            "DEBUG: Added node {} to nodes map (type: {:?})",
+            id, node.node_type
         );
 
         // Add node to current workflow structure
@@ -1002,11 +994,11 @@ impl AppState {
 
         // Auto-fit all nodes if enabled
         if self.auto_fit && self.workflow_nodes.len() > 1 {
-            web_sys::console::log_1(&JsValue::from_str("Auto-fitting nodes to view"));
+            debug_log!("Auto-fitting nodes to view");
             self.fit_nodes_to_view();
         }
 
-        web_sys::console::log_1(&format!("Successfully added node {}", id).into());
+        debug_log!("Successfully added node {}", id);
         id
     }
 
@@ -1020,12 +1012,9 @@ impl AppState {
         // Create the node manually to avoid double workflow updates
         self.next_node_seq = self.next_node_seq.wrapping_add(1);
         let node_id = format!("node-{}-{}", js_sys::Date::now() as u64, self.next_node_seq);
-        web_sys::console::log_1(
-            &format!(
-                "Creating agent node: id={}, agent_id={}, text={}",
-                node_id, agent_id, text
-            )
-            .into(),
+        debug_log!(
+            "Creating agent node: id={}, agent_id={}, text={}",
+            node_id, agent_id, text
         );
 
         let mut node = WorkflowNode::new_with_type(node_id.clone(), &NodeType::AgentIdentity);
@@ -1041,12 +1030,9 @@ impl AppState {
         self.workflow_nodes.insert(node_id.clone(), node.clone());
         self.ui_state
             .insert(node_id.clone(), UiNodeState::default());
-        web_sys::console::log_1(
-            &format!(
-                "DEBUG: Added agent node {} to nodes map (agent_id: {:?}, type: {:?})",
-                node_id, agent_id, node.node_type
-            )
-            .into(),
+        debug_log!(
+            "DEBUG: Added agent node {} to nodes map (agent_id: {:?}, type: {:?})",
+            node_id, agent_id, node.node_type
         );
 
         // Add node to current workflow structure with correct agent_id
@@ -1595,9 +1581,7 @@ impl AppState {
             state.active_view.clone() // Clone to avoid borrowing issues
         });
 
-        web_sys::console::log_1(
-            &format!("Refreshing UI for active view: {:?}", active_view).into(),
-        );
+        debug_log!("Refreshing UI for active view: {:?}", active_view);
 
         // First render the active view to ensure proper display of containers
         crate::views::render_active_view_by_type(&active_view, &document)?;
@@ -1606,12 +1590,12 @@ impl AppState {
         match active_view {
             crate::storage::ActiveView::Dashboard => {
                 // For Dashboard view, only refresh the dashboard component
-                web_sys::console::log_1(&"Refreshing dashboard components".into());
+                debug_log!("Refreshing dashboard components");
                 crate::components::dashboard::refresh_dashboard(&document)?;
             }
             crate::storage::ActiveView::Canvas => {
                 // For Canvas view, refresh the canvas and agent shelf
-                web_sys::console::log_1(&"Refreshing canvas components".into());
+                debug_log!("Refreshing canvas components");
 
                 // Check if we need to refresh canvas in a separate borrow scope
                 let has_canvas = APP_STATE.with(|state| {
@@ -1632,12 +1616,12 @@ impl AppState {
             }
             crate::storage::ActiveView::ChatView => {
                 // For Chat view, refresh chat components
-                web_sys::console::log_1(&"Refreshing chat components".into());
+                debug_log!("Refreshing chat components");
                 // Chat view refreshes are handled by its own code
             }
             crate::storage::ActiveView::Profile => {
                 // Profile page currently doesn't need dynamic refresh logic
-                web_sys::console::log_1(&"Refreshing profile components".into());
+                debug_log!("Refreshing profile components");
             }
         }
 
@@ -1841,29 +1825,23 @@ impl AppState {
                 let node_id_for_log = node.node_id.clone();
                 workflow.add_node(node);
 
-                web_sys::console::log_1(
-                    &format!(
-                        "📋 Added node {} to workflow (total: {} nodes, {} edges)",
-                        node_id_for_log,
-                        workflow.get_nodes().len(),
-                        workflow.get_edges().len()
-                    )
-                    .into(),
+                debug_log!(
+                    "📋 Added node {} to workflow (total: {} nodes, {} edges)",
+                    node_id_for_log,
+                    workflow.get_nodes().len(),
+                    workflow.get_edges().len()
                 );
-                web_sys::console::log_1(
-                    &format!(
-                        "🔍 Workflow structure: nodes={:?}",
-                        workflow
-                            .get_nodes()
-                            .iter()
-                            .map(|n| &n.node_id)
-                            .collect::<Vec<_>>()
-                    )
-                    .into(),
+                debug_log!(
+                    "🔍 Workflow structure: nodes={:?}",
+                    workflow
+                        .get_nodes()
+                        .iter()
+                        .map(|n| &n.node_id)
+                        .collect::<Vec<_>>()
                 );
             } else {
-                web_sys::console::log_1(
-                    &"⚠️ Current workflow not found, creating default workflow for node".into(),
+                debug_log!(
+                    "⚠️ Current workflow not found, creating default workflow for node"
                 );
                 // Create a default workflow if it doesn't exist
                 let default_workflow = ApiWorkflow {
@@ -1882,9 +1860,7 @@ impl AppState {
                 self.workflows.insert(workflow_id, default_workflow);
             }
         } else {
-            web_sys::console::log_1(
-                &"📋 No current workflow, creating new workflow for node".into(),
-            );
+            debug_log!("📋 No current workflow, creating new workflow for node");
             // Create a new workflow for this node
             let new_workflow_id = self.create_workflow("My Canvas Workflow".to_string());
             if let Some(workflow) = self.workflows.get_mut(&new_workflow_id) {
@@ -1949,25 +1925,22 @@ impl AppState {
             },
         };
 
-        web_sys::console::log_1(&format!("🔗 Connecting {} → {}", from_node_id, to_node_id).into());
+        debug_log!("🔗 Connecting {} → {}", from_node_id, to_node_id);
 
         // If we have a current workflow, add this edge to it
         if let Some(workflow_id) = self.current_workflow_id {
             if let Some(workflow) = self.workflows.get_mut(&workflow_id) {
                 workflow.add_edge(edge);
-                web_sys::console::log_1(
-                    &format!(
-                        "✅ Connection saved! ({} total)",
-                        workflow.get_edges().len()
-                    )
-                    .into(),
+                debug_log!(
+                    "✅ Connection saved! ({} total)",
+                    workflow.get_edges().len()
                 );
 
                 // TODO: Trigger immediate graph rebuild in backend
                 // self.trigger_graph_rebuild();
             } else {
-                web_sys::console::log_1(
-                    &format!("📋 Auto-creating workflow for your canvas connections...",).into(),
+                debug_log!(
+                    "📋 Auto-creating workflow for your canvas connections...",
                 );
                 // Create a default workflow if it doesn't exist
                 let default_workflow = ApiWorkflow {
@@ -1984,29 +1957,23 @@ impl AppState {
                     updated_at: None,
                 };
                 self.workflows.insert(workflow_id, default_workflow);
-                web_sys::console::log_1(
-                    &format!(
-                        "✅ Created workflow '{}' - your connections will be saved here!",
-                        "My Canvas Workflow"
-                    )
-                    .into(),
+                debug_log!(
+                    "✅ Created workflow '{}' - your connections will be saved here!",
+                    "My Canvas Workflow"
                 );
 
                 // TODO: Trigger immediate graph rebuild in backend
                 // self.trigger_graph_rebuild();
             }
         } else {
-            web_sys::console::log_1(&"📋 Creating your first canvas workflow...".into());
+            debug_log!("📋 Creating your first canvas workflow...");
             // Create a new default workflow
             let new_workflow_id = self.create_workflow("My Canvas Workflow".to_string());
             if let Some(workflow) = self.workflows.get_mut(&new_workflow_id) {
                 workflow.add_edge(edge);
-                web_sys::console::log_1(
-                    &format!(
-                        "✅ Created '{}' - start building your workflow!",
-                        "My Canvas Workflow"
-                    )
-                    .into(),
+                debug_log!(
+                    "✅ Created '{}' - start building your workflow!",
+                    "My Canvas Workflow"
                 );
             }
         }
@@ -2020,7 +1987,7 @@ impl AppState {
     /// Trigger immediate graph rebuild in backend by sending canvas data
     #[allow(dead_code)]
     fn trigger_graph_rebuild(&self) {
-        web_sys::console::log_1(&"🔄 Triggering graph rebuild in backend...".into());
+        debug_log!("🔄 Triggering graph rebuild in backend...");
 
         // TODO: Implement graph rebuild trigger
         // Need to add proper message type and canvas data structure
@@ -2078,9 +2045,7 @@ pub fn update_node_id(old_id: &str, new_id: &str) {
                 .workflow_nodes
                 .insert(new_id.to_string(), updated_node);
 
-            web_sys::console::log_1(
-                &format!("Updated node ID from {} to {}", old_id, new_id).into(),
-            );
+            debug_log!("Updated node ID from {} to {}", old_id, new_id);
 
             // Also update any relationships like parent IDs
             for (_, child_node) in state.workflow_nodes.iter_mut() {

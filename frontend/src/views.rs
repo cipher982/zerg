@@ -8,6 +8,7 @@ use crate::dom_utils;
 use crate::storage::ActiveView;
 use wasm_bindgen::JsValue;
 use web_sys::Document;
+use crate::debug_log;
 
 /// Helper: hide a DOM element (`display:none`) if it exists.
 fn hide_by_id(document: &web_sys::Document, id: &str) {
@@ -47,7 +48,7 @@ pub fn render_active_view_by_type(
     document: &Document,
 ) -> Result<(), JsValue> {
     // First log which view we're switching to for debugging
-    web_sys::console::log_1(&format!("Switching to view: {:?}", view_type).into());
+    debug_log!("Switching to view: {:?}", view_type);
 
     // -------------------------------------------------------------
     // Step 1: Hide *all* view containers (if they exist).

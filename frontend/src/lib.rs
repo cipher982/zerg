@@ -297,12 +297,9 @@ pub fn start() -> Result<(), JsValue> {
     // This tries to use compile-time API_BASE_URL. If unavailable, we will
     // wait for runtime initialization from bootstrap.js to avoid races.
     if let Err(e) = network::init_api_config() {
-        web_sys::console::log_1(
-            &format!(
-                "API config not set at compile time ({}). Waiting for runtime config…",
-                e
-            )
-            .into(),
+        debug_log!(
+            "API config not set at compile time ({}). Waiting for runtime config…",
+            e
         );
     }
 
@@ -602,7 +599,7 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
     });
 
     // By default, start with dashboard view
-    web_sys::console::log_1(&"Setting initial view to Dashboard".into());
+    debug_log!("Setting initial view to Dashboard");
 
     // Set initial view to Dashboard via message dispatch (uses update+commands)
     dispatch_global_message(crate::messages::Message::ToggleView(
@@ -626,7 +623,7 @@ fn setup_websocket_callbacks(
     // Set on_connect: Call topic_manager.resubscribe_all_topics
     let tm_on_connect = topic_manager.clone();
     ws_client.set_on_connect(move || {
-        web_sys::console::log_1(&"on_connect callback triggered".into());
+        debug_log!("on_connect callback triggered");
         if let Err(e) = tm_on_connect.borrow().resubscribe_all_topics() {
             web_sys::console::error_1(&format!("Failed to resubscribe topics: {:?}", e).into());
         }

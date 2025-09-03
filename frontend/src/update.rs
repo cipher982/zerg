@@ -23,6 +23,7 @@ impl From<crate::generated::ws_messages::UserUpdateData> for crate::models::Curr
 use std::collections::HashMap;
 use wasm_bindgen::JsValue;
 use web_sys::Document;
+use crate::debug_log;
 
 // ---------------------------------------------------------------------------
 // Internal helper – encapsulates all DOM + side-effects when the user switches
@@ -360,7 +361,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // We don't need to do anything here because:
             // 1. The page will be refreshed immediately after this (in dashboard.rs)
             // 2. On refresh, it will automatically load the fresh state from the backend
-            web_sys::console::log_1(&"Reset database message received - state will refresh".into());
+            debug_log!("Reset database message received - state will refresh");
         }
 
         // Thread-related messages
@@ -385,8 +386,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
 
         // --- NEW WebSocket Event Handlers ---
         Message::ReceiveAgentUpdate(agent_data) => {
-            web_sys::console::log_1(
-                &format!("Update handler: Received agent update: {:?}", agent_data).into(),
+            debug_log!(
+                "Update handler: Received agent update: {:?}",
+                agent_data
             );
             // TODO: Update agent list/details in AppState if needed
             // state.agents.insert(agent_data.id as u32, agent_data.into()); // Example update
@@ -394,9 +396,7 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         }
 
         Message::ReceiveAgentDelete(agent_id) => {
-            web_sys::console::log_1(
-                &format!("Update handler: Received agent delete: {}", agent_id).into(),
-            );
+            debug_log!("Update handler: Received agent delete: {}", agent_id);
             // TODO: Remove agent from AppState if needed
             // state.agents.remove(&(agent_id as u32)); // Example removal
             needs_refresh = true; // Assume agent list UI might need refresh
@@ -405,15 +405,15 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::ReceiveThreadHistory(messages) => {
             let system_messages_count = messages.iter().filter(|msg| msg.role == "system").count();
             if system_messages_count > 0 {
-                web_sys::console::log_1(&format!("Thread history contains {} system messages which won't be displayed in the chat UI", system_messages_count).into());
+                debug_log!(
+                    "Thread history contains {} system messages which won't be displayed in the chat UI",
+                    system_messages_count
+                );
             }
-            web_sys::console::log_1(
-                &format!(
-                    "Update handler: Received thread history ({} messages, {} displayable)",
-                    messages.len(),
-                    messages.len() - system_messages_count
-                )
-                .into(),
+            debug_log!(
+                "Update handler: Received thread history ({} messages, {} displayable)",
+                messages.len(),
+                messages.len() - system_messages_count
             );
 
             // Use agent-scoped state for thread messages
@@ -823,21 +823,20 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     trigger_node_type,
                 );
 
-                web_sys::console::log_1(&"🔧 Added default Manual Trigger node (no trigger present in workflow)".into());
+                debug_log!(
+                    "🔧 Added default Manual Trigger node (no trigger present in workflow)"
+                );
             }
 
             // 4. Edges are already in workflow - no duplication needed
             // The renderer reads directly from workflow.edges
 
             needs_refresh = true;
-            web_sys::console::log_1(
-                &format!(
-                    "🎨 Rebuilt canvas from workflow '{}': {} nodes + {} edges",
-                    wf.name,
-                    state.workflow_nodes.len(),
-                    wf.get_edges().len()
-                )
-                .into(),
+            debug_log!(
+                "🎨 Rebuilt canvas from workflow '{}': {} nodes + {} edges",
+                wf.name,
+                state.workflow_nodes.len(),
+                wf.get_edges().len()
             );
         }
 

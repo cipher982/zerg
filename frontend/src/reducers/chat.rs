@@ -386,9 +386,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                     if let Some(agent_state) = state.get_agent_state_mut(agent_id) {
                         let messages = agent_state.thread_messages.entry(*thread_id).or_default();
                         messages.push(tool_message);
-                        web_sys::console::log_1(
-                            &format!("Added tool message for thread {}: {}", thread_id, content)
-                                .into(),
+                        debug_log!(
+                            "Added tool message for thread {}: {}",
+                            thread_id, content
                         );
                     }
                 } else {
@@ -402,12 +402,9 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 }
             } else if chunk_type.as_deref() == Some("assistant_message") {
                 // Non-streaming assistant message - should have message_id
-                web_sys::console::log_1(
-                    &format!(
-                        "Processing assistant_message chunk with message_id: {:?}",
-                        message_id
-                    )
-                    .into(),
+                debug_log!(
+                    "Processing assistant_message chunk with message_id: {:?}",
+                    message_id
                 );
 
                 let mid_u32 = message_id.as_ref().and_then(|s| s.parse::<u32>().ok());
@@ -708,15 +705,15 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         crate::messages::Message::ReceiveThreadHistory(messages) => {
             let system_messages_count = messages.iter().filter(|msg| msg.role == "system").count();
             if system_messages_count > 0 {
-                web_sys::console::log_1(&format!("Thread history contains {} system messages which won't be displayed in the chat UI", system_messages_count).into());
+                debug_log!(
+                    "Thread history contains {} system messages which won't be displayed in the chat UI",
+                    system_messages_count
+                );
             }
-            web_sys::console::log_1(
-                &format!(
-                    "Update handler: Received thread history ({} messages, {} displayable)",
-                    messages.len(),
-                    messages.len() - system_messages_count
-                )
-                .into(),
+            debug_log!(
+                "Update handler: Received thread history ({} messages, {} displayable)",
+                messages.len(),
+                messages.len() - system_messages_count
             );
 
             // Use current agent's current thread
@@ -982,7 +979,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
 
         crate::messages::Message::LoadAgentThreads(agent_id) => {
-            web_sys::console::log_1(&format!("LoadAgentThreads: agent_id={}", agent_id).into());
+            debug_log!("LoadAgentThreads: agent_id={}", agent_id);
 
             let agent_id_for_fetch = *agent_id;
             wasm_bindgen_futures::spawn_local(async move {

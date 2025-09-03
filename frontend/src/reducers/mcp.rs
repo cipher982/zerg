@@ -191,9 +191,7 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             commands.push(Command::UpdateUI(Box::new(move || {
                 if let Some(win) = web_sys::window() {
                     if let Some(_doc) = win.document() {
-                        web_sys::console::log_1(
-                            &"Render MCP tools UI after connection test".into(),
-                        );
+                        debug_log!("Render MCP tools UI after connection test");
                     }
                 }
             })));

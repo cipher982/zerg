@@ -15,9 +15,12 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from zerg.config import get_settings
+from zerg.events import EventType
+from zerg.events.event_bus import event_bus
 from zerg.models.models import Agent as AgentModel
 from zerg.models.models import AgentRun as AgentRunModel
 from zerg.models.models import User as UserModel
+from zerg.services.ops_discord import send_budget_alert
 
 
 def _is_admin(user: UserModel | None) -> bool:
@@ -107,16 +110,44 @@ def assert_can_start_run(db: Session, *, user: UserModel) -> None:
         global_cost_usd = float(global_cost_q.scalar() or 0.0)
 
     # Helper to check a single budget
+    async def _emit_budget_denied(scope: str, percent: float) -> None:
+        try:
+            await event_bus.publish(
+                EventType.BUDGET_DENIED,
+                {
+                    "scope": scope,
+                    "percent": percent,
+                    "used_usd": used_usd,
+                    "limit_cents": budget_cents,
+                    "user_email": getattr(user, "email", None),
+                },
+            )
+        except Exception:  # pragma: no cover – robust guard
+            pass
+
     def _check_budget(used_usd: float, budget_cents: int, scope: str) -> None:
         if budget_cents <= 0:
             return
         budget_usd = budget_cents / 100.0
+        percent = (used_usd / budget_usd) * 100.0 if budget_usd > 0 else 0.0
         if used_usd >= budget_usd:
             msg = (
                 f"Daily {scope} budget exhausted "
                 f"(${used_usd:.2f}/${budget_usd:.2f}). "
                 "Try again tomorrow or contact admin."
             )
+            # Fire-and-forget notifications; ignore failures
+            try:
+                # Discord alert at 100%
+                import asyncio
+
+                asyncio.create_task(
+                    send_budget_alert(scope, 100.0, used_usd, budget_cents, getattr(user, "email", None))
+                )
+                # Publish ops ticker event
+                asyncio.create_task(_emit_budget_denied(scope, percent))
+            except Exception:  # pragma: no cover – robustness
+                pass
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=msg)
         # Warn at 80% and above
         warn_threshold = 0.8 * budget_usd
@@ -126,8 +157,17 @@ def assert_can_start_run(db: Session, *, user: UserModel) -> None:
                 scope,
                 used_usd,
                 budget_usd,
-                (used_usd / budget_usd) * 100.0,
+                percent,
             )
+            # Optional alert at 80% if enabled – non-blocking
+            try:
+                import asyncio
+
+                asyncio.create_task(
+                    send_budget_alert(scope, percent, used_usd, budget_cents, getattr(user, "email", None))
+                )
+            except Exception:  # pragma: no cover
+                pass
 
     _check_budget(user_cost_usd, user_budget_cents, "user")
     _check_budget(global_cost_usd, global_budget_cents, "global")

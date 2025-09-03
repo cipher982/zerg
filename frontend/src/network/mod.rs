@@ -32,9 +32,7 @@ pub fn init_api_config() -> Result<(), &'static str> {
 /// This allows runtime configuration of the API endpoints.
 #[wasm_bindgen]
 pub fn init_api_config_js(api_base_url: &str) -> Result<(), JsValue> {
-    web_sys::console::log_1(
-        &format!("Initializing API config from JS: {}", api_base_url).into(),
-    );
+    crate::debug_log!("Initializing API config from JS: {}", api_base_url);
     let config = ApiConfig::from_url(api_base_url);
     *API_CONFIG.write().unwrap() = Some(config);
     Ok(())
