@@ -25,7 +25,6 @@ Key Decisions
 Environment Variables
 - MAX_OUTPUT_TOKENS (int, default 1000; 0 disables)
 - ALLOWED_MODELS_NON_ADMIN (csv; e.g., gpt-4o-mini)
-- DEFAULT_MODEL_NON_ADMIN (string; e.g., gpt-4o-mini)
 - DAILY_RUNS_PER_USER (int; 0 disables)
 - DAILY_COST_PER_USER_CENTS (int)
 - DAILY_COST_GLOBAL_CENTS (int)
@@ -50,7 +49,7 @@ Task A: Output Cap (LLM max tokens)
 Task B: Model Allowlist for Non‑Admins
 - Implementation
   - Extend agents create/update routes to enforce allowlist when `current_user.role != ADMIN`.
-  - If disallowed/empty: reject (422) or fall back to `DEFAULT_MODEL_NON_ADMIN` (configurable behavior).
+  - If disallowed/empty: reject (422).
   - Optional: Filter `/api/models` list for non‑admin to allowed subset.
 - Tests
   - Non‑admin cannot create/update agent with disallowed model.
@@ -59,7 +58,7 @@ Task B: Model Allowlist for Non‑Admins
   - Correct HTTP status and behavior; tests pass.
 - Status: [x] Done
 - Notes:
-  - Added `ALLOWED_MODELS_NON_ADMIN` and `DEFAULT_MODEL_NON_ADMIN` to settings.
+  - Added `ALLOWED_MODELS_NON_ADMIN` to settings.
   - Enforced allowlist in agent create/update routes for non‑admin users (admins unrestricted).
   - Filtered `/api/models` response for non‑admins to allowed subset when configured.
   - Added tests: non‑admin blocked on disallowed model; allowed model passes; admin bypass; models endpoint filtering.
