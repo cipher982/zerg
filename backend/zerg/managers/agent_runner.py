@@ -26,6 +26,7 @@ from typing import Dict
 from typing import Sequence
 from typing import Tuple
 
+from langchain_core.messages import AIMessage
 from sqlalchemy.orm import Session
 
 from zerg.agents_def import zerg_react_agent
@@ -58,6 +59,10 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
     def __init__(self, agent_row: AgentModel, *, thread_service: ThreadService | None = None):
         self.agent = agent_row
         self.thread_service = thread_service or ThreadService
+        # Aggregated usage for the last run (provider metadata only)
+        self.usage_prompt_tokens: int | None = None
+        self.usage_completion_tokens: int | None = None
+        self.usage_total_tokens: int | None = None
 
         # Whether this runner/LLM emits per-token chunks – treat env value
         # case-insensitively; anything truthy like "1", "true", "yes" enables
@@ -155,6 +160,37 @@ class AgentRunner:  # noqa: D401 – naming follows project conventions
 
         new_messages = updated_messages[len(original_msgs) :]
         logger.info(f"[AgentRunner] Extracted {len(new_messages)} new messages")
+
+        # Aggregate usage strictly from provider metadata
+        p_sum = 0
+        c_sum = 0
+        t_sum = 0
+        for msg in new_messages:
+            if isinstance(msg, AIMessage):
+                meta = getattr(msg, "response_metadata", None) or {}
+                addl = getattr(msg, "additional_kwargs", None) or {}
+                usage = (
+                    meta.get("token_usage") or meta.get("usage") or addl.get("token_usage") or addl.get("usage") or {}
+                )
+                try:
+                    p = int(usage.get("prompt_tokens", 0))
+                    c = int(usage.get("completion_tokens", 0))
+                    # Some providers include total_tokens; otherwise derive strictly if both components present
+                    if "total_tokens" in usage:
+                        t = int(usage.get("total_tokens", 0))
+                    else:
+                        t = p + c if ("prompt_tokens" in usage and "completion_tokens" in usage) else 0
+                except Exception:
+                    p = c = t = 0
+                p_sum += p
+                c_sum += c
+                t_sum += t
+
+        if p_sum or c_sum or t_sum:
+            self.usage_prompt_tokens = p_sum if p_sum else None
+            self.usage_completion_tokens = c_sum if c_sum else None
+            # Prefer explicit totals if any contributed them; otherwise keep None when 0
+            self.usage_total_tokens = t_sum if t_sum else None
 
         # Log each new message for debugging
         for i, msg in enumerate(new_messages):
