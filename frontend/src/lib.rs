@@ -277,6 +277,9 @@ fn route_hash(hash: &str) {
         "#/profile" => {
             crate::state::dispatch_global_message(Message::ToggleView(ActiveView::Profile))
         }
+        "#/admin/ops" | "#/ops" => {
+            crate::state::dispatch_global_message(Message::ToggleView(ActiveView::AdminOps))
+        }
         "#/canvas" => {
             crate::state::dispatch_global_message(Message::ToggleView(ActiveView::Canvas))
         }
@@ -505,6 +508,9 @@ pub(crate) fn bootstrap_app_after_login(document: &Document) -> Result<(), JsVal
     ui::setup::create_base_ui(document)?;
     // Wire up shelf toggle, scrim and state persistence
     ui::setup::init_shelf_toggle_interactions(document)?;
+
+    // Mount compact Ops HUD (admin-gated via REST on first fetch)
+    let _ = crate::components::ops::mount_ops_hud(document);
 
     // --- Initialize and Connect WebSocket v2 ---
     // Access the globally initialized WS client and Topic Manager

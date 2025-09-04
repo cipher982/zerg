@@ -65,8 +65,11 @@ pub fn execute_fetch_command(cmd: Command) {
             });
         }
         Command::FetchAgents => {
-            // Set loading state before starting fetch
-            dispatch_global_message(Message::SetLoadingState(true));
+            // Set loading state before starting fetch - direct mutation since we're in command executor
+            APP_STATE.with(|state_ref| {
+                let mut state = state_ref.borrow_mut();
+                state.is_loading = true;
+            });
 
             // Trigger UI refresh to show loading state
             if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
@@ -88,21 +91,30 @@ pub fn execute_fetch_command(cmd: Command) {
                     Ok(agents_json) => match serde_json::from_str::<Vec<ApiAgent>>(&agents_json) {
                         Ok(agents) => {
                             debug_log!("Fetched {} agents from API", agents.len());
-                            // Clear loading state before dispatching agents
-                            dispatch_global_message(Message::SetLoadingState(false));
+                            // Clear loading state before dispatching agents - direct mutation in command executor
+                            APP_STATE.with(|state_ref| {
+                                let mut state = state_ref.borrow_mut();
+                                state.is_loading = false;
+                            });
                             dispatch_global_message(Message::AgentsRefreshed(agents))
                         }
                         Err(e) => {
-                            // Clear loading state on error
-                            dispatch_global_message(Message::SetLoadingState(false));
+                            // Clear loading state on error - direct mutation in command executor
+                            APP_STATE.with(|state_ref| {
+                                let mut state = state_ref.borrow_mut();
+                                state.is_loading = false;
+                            });
                             web_sys::console::error_1(
                                 &format!("Failed to parse agents: {:?}", e).into(),
                             );
                         }
                     },
                     Err(e) => {
-                        // Clear loading state on error
-                        dispatch_global_message(Message::SetLoadingState(false));
+                        // Clear loading state on error - direct mutation in command executor
+                        APP_STATE.with(|state_ref| {
+                            let mut state = state_ref.borrow_mut();
+                            state.is_loading = false;
+                        });
                         web_sys::console::error_1(
                             &format!("Failed to fetch agents: {:?}", e).into(),
                         );
@@ -136,12 +148,11 @@ pub fn execute_fetch_command(cmd: Command) {
         }
 
         Command::FetchCurrentWorkflow => {
-            // Increment request token to identify and drop stale responses
+            // Increment request token to identify and drop stale responses - direct mutation in command executor
             let req_id = APP_STATE.with(|state_ref| {
-                let st = state_ref.borrow();
-                let new_seq = st.workflow_fetch_seq.wrapping_add(1);
-                dispatch_global_message(Message::SetWorkflowFetchSeq(new_seq));
-                new_seq
+                let mut st = state_ref.borrow_mut();
+                st.workflow_fetch_seq = st.workflow_fetch_seq.wrapping_add(1);
+                st.workflow_fetch_seq
             });
 
             wasm_bindgen_futures::spawn_local(async move {

@@ -87,6 +87,33 @@ impl ApiClient {
     }
 
     // -------------------------------------------------------------------
+    // Ops Dashboard (admin-only)
+    // -------------------------------------------------------------------
+
+    /// GET /api/ops/summary – returns the daily ops summary object.
+    pub async fn get_ops_summary() -> Result<String, JsValue> {
+        let url = format!("{}/api/ops/summary", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    /// GET /api/ops/timeseries?metric=...&window=today – returns 24 points.
+    pub async fn get_ops_timeseries(metric: &str, window: &str) -> Result<String, JsValue> {
+        let base = Self::api_base_url();
+        let url = format!("{}/api/ops/timeseries?metric={}&window={}", base, metric, window);
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    /// GET /api/ops/top?kind=agents&window=today&limit=5 – top lists.
+    pub async fn get_ops_top(kind: &str, window: &str, limit: u32) -> Result<String, JsValue> {
+        let base = Self::api_base_url();
+        let url = format!(
+            "{}/api/ops/top?kind={}&window={}&limit={}",
+            base, kind, window, limit
+        );
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    // -------------------------------------------------------------------
     // Workflow execution history
     // -------------------------------------------------------------------
 
