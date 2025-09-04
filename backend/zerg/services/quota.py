@@ -39,31 +39,29 @@ def assert_can_start_run(db: Session, *, user: UserModel) -> None:
     except Exception:  # noqa: BLE001
         limit = 0
 
-    if limit <= 0:
-        return
-
+    # Admins are exempt from all limits/budgets
     if _is_admin(user):
         return
 
-    today_utc = datetime.now(timezone.utc).date()
-
-    # Count runs started today for this user by joining AgentRun → Agent(owner)
-    count_q = (
-        db.query(func.count(AgentRunModel.id))
-        .join(AgentModel, AgentModel.id == AgentRunModel.agent_id)
-        .filter(
-            AgentModel.owner_id == user.id,
-            AgentRunModel.started_at.isnot(None),
-            func.date(AgentRunModel.started_at) == today_utc,
+    # Enforce run cap when configured (> 0). If disabled (0), skip this block
+    if limit > 0:
+        today_utc = datetime.now(timezone.utc).date()
+        count_q = (
+            db.query(func.count(AgentRunModel.id))
+            .join(AgentModel, AgentModel.id == AgentRunModel.agent_id)
+            .filter(
+                AgentModel.owner_id == user.id,
+                AgentRunModel.started_at.isnot(None),
+                func.date(AgentRunModel.started_at) == today_utc,
+            )
         )
-    )
-    used = int(count_q.scalar() or 0)
+        used = int(count_q.scalar() or 0)
 
-    if used >= limit:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Daily run limit reached ({used}/{limit}). Try again tomorrow or contact admin.",
-        )
+        if used >= limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Daily run limit reached ({used}/{limit}). Try again tomorrow or contact admin.",
+            )
 
     # --------------------------------------------------------------
     # Budget thresholds (user + global) – optional, admins exempt
@@ -78,9 +76,6 @@ def assert_can_start_run(db: Session, *, user: UserModel) -> None:
         global_budget_cents = int(getattr(settings, "daily_cost_global_cents", 0))
     except Exception:  # noqa: BLE001
         global_budget_cents = 0
-
-    if _is_admin(user):
-        return
 
     if user_budget_cents <= 0 and global_budget_cents <= 0:
         return
@@ -110,21 +105,6 @@ def assert_can_start_run(db: Session, *, user: UserModel) -> None:
         global_cost_usd = float(global_cost_q.scalar() or 0.0)
 
     # Helper to check a single budget
-    async def _emit_budget_denied(scope: str, percent: float) -> None:
-        try:
-            await event_bus.publish(
-                EventType.BUDGET_DENIED,
-                {
-                    "scope": scope,
-                    "percent": percent,
-                    "used_usd": used_usd,
-                    "limit_cents": budget_cents,
-                    "user_email": getattr(user, "email", None),
-                },
-            )
-        except Exception:  # pragma: no cover – robust guard
-            pass
-
     def _check_budget(used_usd: float, budget_cents: int, scope: str) -> None:
         if budget_cents <= 0:
             return
@@ -138,14 +118,25 @@ def assert_can_start_run(db: Session, *, user: UserModel) -> None:
             )
             # Fire-and-forget notifications; ignore failures
             try:
-                # Discord alert at 100%
                 import asyncio
 
+                # Discord alert at 100%
                 asyncio.create_task(
                     send_budget_alert(scope, 100.0, used_usd, budget_cents, getattr(user, "email", None))
                 )
-                # Publish ops ticker event
-                asyncio.create_task(_emit_budget_denied(scope, percent))
+
+                # Publish ops ticker event with captured values
+                async def _emit(frame):  # pragma: no cover - tiny helper
+                    await event_bus.publish(EventType.BUDGET_DENIED, frame)
+
+                frame = {
+                    "scope": scope,
+                    "percent": percent,
+                    "used_usd": used_usd,
+                    "limit_cents": budget_cents,
+                    "user_email": getattr(user, "email", None),
+                }
+                asyncio.create_task(_emit(frame))
             except Exception:  # pragma: no cover – robustness
                 pass
             raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=msg)
