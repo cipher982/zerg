@@ -39,6 +39,8 @@ pub enum ActiveView {
     ChatView,
     /// User profile & preferences page
     Profile,
+    /// Admin-only Ops dashboard
+    AdminOps,
 }
 
 /// Save current app state to API
@@ -433,8 +435,12 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                         // Update the agents in the global APP_STATE using message dispatch
                         crate::state::dispatch_global_message(crate::messages::Message::ClearAgents);
                         crate::state::dispatch_global_message(crate::messages::Message::AddAgents(agents.clone()));
-                        crate::state::dispatch_global_message(crate::messages::Message::SetLoadingState(false));
-                        crate::state::dispatch_global_message(crate::messages::Message::SetDataLoaded(true));
+                        // Update loading state directly in storage operations
+                        crate::state::APP_STATE.with(|state_ref| {
+                            let mut state = state_ref.borrow_mut();
+                            state.is_loading = false;
+                            state.data_loaded = true;
+                        });
 
                         // --- IMPORTANT --------------------------------------------------
                         // We just mutated `state` above and now want to run
@@ -452,7 +458,10 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                             &format!("Error parsing agents from API: {}", e).into(),
                         );
                         // Update loading state flags even in case of error
-                        crate::state::dispatch_global_message(crate::messages::Message::SetLoadingState(false));
+                        crate::state::APP_STATE.with(|state_ref| {
+                            let mut state = state_ref.borrow_mut();
+                            state.is_loading = false;
+                        });
                     }
                 }
             }
@@ -461,7 +470,10 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                     &format!("Error fetching agents from API: {:?}", e).into(),
                 );
                 // Update loading state flags even in case of error
-                crate::state::dispatch_global_message(crate::messages::Message::SetLoadingState(false));
+                crate::state::APP_STATE.with(|state_ref| {
+                    let mut state = state_ref.borrow_mut();
+                    state.is_loading = false;
+                });
             }
         }
 
@@ -475,8 +487,12 @@ pub fn load_state_from_api(app_state: &mut AppState) {
 
 // Helper function to mark loading as complete and refresh UI
 fn mark_loading_complete() {
-    crate::state::dispatch_global_message(crate::messages::Message::SetLoadingState(false));
-    crate::state::dispatch_global_message(crate::messages::Message::SetDataLoaded(true));
+    // Update loading state directly in storage operations
+    crate::state::APP_STATE.with(|state_ref| {
+        let mut state = state_ref.borrow_mut();
+        state.is_loading = false;
+        state.data_loaded = true;
+    });
 
     // Schedule UI refresh
     let window = web_sys::window().expect("no global window exists");

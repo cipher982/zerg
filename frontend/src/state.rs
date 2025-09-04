@@ -12,6 +12,7 @@ use crate::debug_log;
 use crate::canvas::{background::ParticleSystem, renderer};
 use crate::messages::{Command, Message};
 use crate::models::ApiAgentDetails;
+use crate::models::OpsSummary;
 use crate::network::{TopicManager, WsClientV2};
 use crate::storage::ActiveView;
 
@@ -57,6 +58,14 @@ use wasm_bindgen::JsValue;
 pub const MIN_ZOOM: f64 = 1.0;
 pub const MAX_ZOOM: f64 = 1.0;
 // Bring legacy helper trait into scope (methods formerly on CanvasNode)
+
+// Lightweight ticker entry for Ops events rendered in the dashboard
+#[derive(Clone, Debug)]
+pub struct OpsTick {
+    pub ts: u64,
+    pub kind: String,
+    pub text: String,
+}
 
 // ---------------------------------------------------------------------------
 // Agent Debug Pane (read-only modal) – Phase 1
@@ -502,6 +511,16 @@ pub struct AppState {
 
     /// Whether the template gallery modal is currently shown
     pub show_template_gallery: bool,
+
+    // -------------------------------------------------------------------
+    // Ops Dashboard / HUD state
+    // -------------------------------------------------------------------
+    /// Latest ops summary (polled or after page load)
+    pub ops_summary: Option<OpsSummary>,
+    /// Rolling ticker buffer (newest first), capped at N=200
+    pub ops_ticker: Vec<OpsTick>,
+    /// Whether we've subscribed to `ops:events` on this session
+    pub ops_ws_subscribed: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -728,6 +747,11 @@ impl AppState {
             show_my_templates_only: false,
             templates_loading: false,
             show_template_gallery: false,
+
+            // Ops defaults
+            ops_summary: None,
+            ops_ticker: Vec::new(),
+            ops_ws_subscribed: false,
 
             current_execution: None,
             execution_logs: Vec::new(),
@@ -1614,6 +1638,10 @@ impl AppState {
             crate::storage::ActiveView::Profile => {
                 // Profile page currently doesn't need dynamic refresh logic
                 debug_log!("Refreshing profile components");
+            }
+            crate::storage::ActiveView::AdminOps => {
+                debug_log!("Refreshing Ops dashboard components");
+                crate::components::ops::render_ops_dashboard(&document)?;
             }
         }
 

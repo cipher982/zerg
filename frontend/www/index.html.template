@@ -41,6 +41,7 @@
     <link rel="stylesheet" href="css/dashboard.css">
     <link rel="stylesheet" href="css/toast.css">
     <link rel="stylesheet" href="css/status.css">
+    <link rel="stylesheet" href="css/ops.css">
     <link rel="stylesheet" href="css/modal.css">
     <link rel="stylesheet" href="css/tool_config_modal.css">
     <link rel="stylesheet" href="css/mcp.css">

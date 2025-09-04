@@ -6,3 +6,4 @@
 pub mod canvas;
 pub mod dashboard;
 pub mod profile;
+pub mod ops;
