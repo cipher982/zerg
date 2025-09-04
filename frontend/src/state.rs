@@ -279,6 +279,7 @@ pub struct AppState {
     pub ui_edge_state: UiEdgeStateMap,
     pub workflows: HashMap<u32, ApiWorkflow>, // Workflows collection
     pub current_workflow_id: Option<u32>,     // Currently active workflow
+    pub trigger_creation_in_progress: bool,   // Race condition protection for trigger creation
 
     // Canvas and rendering related
     pub canvas: Option<HtmlCanvasElement>,
@@ -558,6 +559,7 @@ impl AppState {
             ui_edge_state: HashMap::new(),
             workflows: HashMap::new(),
             current_workflow_id: None,
+            trigger_creation_in_progress: false,
             canvas: None,
             context: None,
             connection_animation_offset: 0.0,

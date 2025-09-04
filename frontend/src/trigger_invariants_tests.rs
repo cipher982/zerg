@@ -47,9 +47,31 @@ fn default_trigger_added_on_select_workflow_once() {
     state.workflows.insert(wf.id, wf);
 
     crate::update::update(&mut state, Message::SelectWorkflow { workflow_id: 2 });
-    assert_eq!(count_triggers(&state), 1, "exactly one trigger after first select");
+    assert_eq!(count_triggers(&state), 0, "no triggers added by SelectWorkflow (moved to CurrentWorkflowLoaded)");
 
     crate::update::update(&mut state, Message::SelectWorkflow { workflow_id: 2 });
-    assert_eq!(count_triggers(&state), 1, "still exactly one trigger after reselection");
+    assert_eq!(count_triggers(&state), 0, "still no triggers after reselection");
+}
+
+#[wasm_bindgen_test]
+fn no_race_condition_between_select_and_load() {
+    let mut state = AppState::new();
+
+    // Simulate the race condition: SelectWorkflow followed by CurrentWorkflowLoaded
+    let wf = empty_workflow(3, "wf-race");
+    
+    // First: SelectWorkflow processes empty workflow (should NOT create trigger anymore)
+    state.workflows.insert(wf.id, wf.clone());
+    crate::update::update(&mut state, Message::SelectWorkflow { workflow_id: 3 });
+    assert_eq!(count_triggers(&state), 0, "SelectWorkflow should not create triggers");
+    
+    // Then: CurrentWorkflowLoaded processes same empty workflow from backend
+    crate::update::update(&mut state, Message::CurrentWorkflowLoaded(wf.clone()));
+    assert_eq!(count_triggers(&state), 1, "CurrentWorkflowLoaded should create exactly one trigger");
+    
+    // Rapid sequence should still result in only one trigger
+    crate::update::update(&mut state, Message::SelectWorkflow { workflow_id: 3 });
+    crate::update::update(&mut state, Message::CurrentWorkflowLoaded(wf));
+    assert_eq!(count_triggers(&state), 1, "race condition should not create duplicate triggers");
 }
 
