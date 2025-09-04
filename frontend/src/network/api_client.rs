@@ -200,10 +200,11 @@ impl ApiClient {
     }
 
     /// Create a new workflow – returns the JSON representation from backend.
+    /// Uses "minimal" template by default to ensure workflows start with a trigger.
     pub async fn create_workflow(name: &str) -> Result<String, JsValue> {
-        // Minimal payload; description empty and canvas empty object
+        // Request minimal template by default - backend will provide complete workflow with trigger
         let body = format!(
-            "{{\"name\": \"{}\", \"description\": \"\", \"canvas\": {{\"nodes\": [], \"edges\": []}}}}",
+            "{{\"name\": \"{}\", \"description\": \"\", \"template_name\": \"minimal\"}}",
             name
         );
         let url = format!("{}/api/workflows/", Self::api_base_url());

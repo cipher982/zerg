@@ -28,15 +28,16 @@ fn empty_workflow(id: u32, name: &str) -> ApiWorkflow {
 }
 
 #[wasm_bindgen_test]
-fn default_trigger_added_on_workflow_load_only_once() {
+fn no_frontend_trigger_creation_on_workflow_load() {
     let mut state = AppState::new();
 
+    // Phase 2: Frontend no longer creates triggers - backend provides complete workflows
     let wf = empty_workflow(1, "wf-load");
     crate::update::update(&mut state, Message::CurrentWorkflowLoaded(wf.clone()));
-    assert_eq!(count_triggers(&state), 1, "exactly one trigger after first load");
+    assert_eq!(count_triggers(&state), 0, "no triggers created by frontend (backend provides via templates)");
 
     crate::update::update(&mut state, Message::CurrentWorkflowLoaded(wf));
-    assert_eq!(count_triggers(&state), 1, "still exactly one trigger after reload");
+    assert_eq!(count_triggers(&state), 0, "still no frontend trigger creation after reload");
 }
 
 #[wasm_bindgen_test]
@@ -54,24 +55,24 @@ fn default_trigger_added_on_select_workflow_once() {
 }
 
 #[wasm_bindgen_test]
-fn no_race_condition_between_select_and_load() {
+fn no_race_condition_with_backend_templates() {
     let mut state = AppState::new();
 
-    // Simulate the race condition: SelectWorkflow followed by CurrentWorkflowLoaded
+    // Phase 2: No race condition possible since frontend doesn't create triggers
     let wf = empty_workflow(3, "wf-race");
     
-    // First: SelectWorkflow processes empty workflow (should NOT create trigger anymore)
+    // SelectWorkflow: No trigger creation (as expected)
     state.workflows.insert(wf.id, wf.clone());
     crate::update::update(&mut state, Message::SelectWorkflow { workflow_id: 3 });
-    assert_eq!(count_triggers(&state), 0, "SelectWorkflow should not create triggers");
+    assert_eq!(count_triggers(&state), 0, "SelectWorkflow never creates triggers");
     
-    // Then: CurrentWorkflowLoaded processes same empty workflow from backend
+    // CurrentWorkflowLoaded: No trigger creation (backend provides complete workflows)
     crate::update::update(&mut state, Message::CurrentWorkflowLoaded(wf.clone()));
-    assert_eq!(count_triggers(&state), 1, "CurrentWorkflowLoaded should create exactly one trigger");
+    assert_eq!(count_triggers(&state), 0, "CurrentWorkflowLoaded doesn't create triggers (backend templates)");
     
-    // Rapid sequence should still result in only one trigger
+    // Rapid sequence: Still no triggers (race condition eliminated)
     crate::update::update(&mut state, Message::SelectWorkflow { workflow_id: 3 });
     crate::update::update(&mut state, Message::CurrentWorkflowLoaded(wf));
-    assert_eq!(count_triggers(&state), 1, "race condition should not create duplicate triggers");
+    assert_eq!(count_triggers(&state), 0, "no race condition possible with backend templates");
 }
 
