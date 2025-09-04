@@ -419,7 +419,7 @@ class WorkflowTemplate(Base):
     description = Column(Text, nullable=True)
     category = Column(String, nullable=False, index=True)
     canvas = Column(MutableDict.as_mutable(JSON), nullable=False)
-    tags = Column(MutableDict.as_mutable(JSON), nullable=True, default=list)  # List of strings
+    tags = Column(JSON, nullable=True, default=lambda: [])  # List of strings
     preview_image_url = Column(String, nullable=True)
     is_public = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
