@@ -180,11 +180,33 @@ pub fn logout() -> Result<(), JsValue> {
 #[cfg(debug_assertions)]
 pub mod debug {
     use std::collections::VecDeque;
+    use std::cell::RefCell;
     use web_sys::CanvasRenderingContext2d;
 
     /// Maximum ring buffer capacity.
     #[allow(dead_code)] // Referenced only when `debug_log!` is invoked in dev builds
     pub const RING_CAP: usize = 200;
+
+    // Independent debug ring buffer - completely separate from APP_STATE
+    thread_local! {
+        static DEBUG_RING: RefCell<VecDeque<String>> = RefCell::new(VecDeque::new());
+    }
+
+    /// Add a message to the debug ring buffer (independent of APP_STATE)
+    pub fn add_to_debug_ring(msg: String) {
+        DEBUG_RING.with(|ring| {
+            let mut ring = ring.borrow_mut();
+            if ring.len() >= RING_CAP {
+                ring.pop_front();
+            }
+            ring.push_back(msg);
+        });
+    }
+
+    /// Get a copy of the debug ring for display
+    pub fn get_debug_ring() -> VecDeque<String> {
+        DEBUG_RING.with(|ring| ring.borrow().clone())
+    }
 
     /// Draw the translucent overlay that shows the last few debug lines.
     pub fn draw_overlay(ctx: &CanvasRenderingContext2d, ring: &VecDeque<String>) {
@@ -229,8 +251,9 @@ macro_rules! debug_log {
             let msg = format!($($t)*);
             web_sys::console::log_1(&msg.clone().into());
             
-            // Use command dispatch instead of direct borrow_mut to avoid RefCell panics
-            crate::state::dispatch_global_message(crate::messages::Message::DebugLog(msg));
+            // Debug ring is separate from application state to avoid circular dependencies
+            // The debug overlay will read from this separate ring buffer
+            crate::utils::debug::add_to_debug_ring(msg);
         }
     }};
 }

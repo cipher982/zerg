@@ -663,7 +663,8 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         #[cfg(debug_assertions)]
                         {
                             if let Some(ctx) = st.context.as_ref() {
-                                crate::utils::debug::draw_overlay(ctx, &st.debug_ring);
+                                let debug_ring = crate::utils::debug::get_debug_ring();
+                                crate::utils::debug::draw_overlay(ctx, &debug_ring);
                             }
                         }
                     });
