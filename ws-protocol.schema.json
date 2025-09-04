@@ -571,6 +571,72 @@
           "type": "string"
         }
       }
+    },
+    "OpsEventData": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "run_started",
+            "run_success",
+            "run_failed",
+            "agent_created",
+            "agent_updated",
+            "thread_message_created",
+            "budget_denied"
+          ]
+        },
+        "agent_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "run_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "thread_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "error": {
+          "type": "string"
+        },
+        "agent_name": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "user",
+            "global"
+          ]
+        },
+        "percent": {
+          "type": "number"
+        },
+        "used_usd": {
+          "type": "number"
+        },
+        "limit_cents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "user_email": {
+          "type": "string",
+          "format": "email"
+        }
+      }
     }
   }
 }
