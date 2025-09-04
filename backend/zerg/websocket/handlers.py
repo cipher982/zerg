@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from zerg.crud import crud
+from zerg.dependencies.auth import DEV_EMAIL  # noqa: F401  # may be used in future gating
 from zerg.generated.ws_messages import AgentEventData
 
 # ---------------------------------------------------------------------------
@@ -31,8 +32,6 @@ from zerg.generated.ws_messages import ThreadMessageData
 from zerg.generated.ws_messages import UnsubscribeData
 from zerg.generated.ws_messages import UserUpdateData
 from zerg.websocket.manager import topic_manager
-from zerg.dependencies.auth import DEV_EMAIL  # noqa: F401  # may be used in future gating
-from zerg.crud import crud
 
 logger = logging.getLogger(__name__)
 
@@ -367,27 +366,6 @@ async def _subscribe_workflow_execution(client_id: str, execution_id: int, messa
 
         logger.info("Client %s subscribed to workflow execution topic %s", client_id, topic)
 
-
-async def _subscribe_ops_events(client_id: str, message_id: str, db: Session) -> None:
-    """Subscribe to the admin-only ops ticker topic."""
-    try:
-        # Determine the user id for this client
-        user_id = topic_manager.client_users.get(client_id)
-        if not user_id:
-            await send_error(client_id, "Unauthorized", message_id)
-            return
-        user = crud.get_user(db, int(user_id))
-        if user is None or getattr(user, "role", "USER") != "ADMIN":
-            await send_error(client_id, "Admin privileges required for ops:events", message_id, close_code=4403)
-            return
-        topic = "ops:events"
-        await topic_manager.subscribe_to_topic(client_id, topic)
-        # No initial payload – ticker is live-only
-        logger.info("Client %s subscribed to ops topic %s", client_id, topic)
-    except Exception as exc:  # pragma: no cover
-        logger.error("Error in _subscribe_ops_events: %s", exc)
-        await send_error(client_id, "Failed to subscribe to ops", message_id)
-
         # ------------------------------------------------------------------
         # Send *current* execution status snapshot so late subscribers still
         # receive the final state even when the run already finished.
@@ -445,6 +423,27 @@ async def _subscribe_ops_events(client_id: str, message_id: str, db: Session) ->
     except Exception as e:
         logger.error(f"Error in _subscribe_workflow_execution: {str(e)}")
         await send_error(client_id, "Failed to subscribe to workflow execution", message_id)
+
+
+async def _subscribe_ops_events(client_id: str, message_id: str, db: Session) -> None:
+    """Subscribe to the admin-only ops ticker topic."""
+    try:
+        # Determine the user id for this client
+        user_id = topic_manager.client_users.get(client_id)
+        if not user_id:
+            await send_error(client_id, "Unauthorized", message_id)
+            return
+        user = crud.get_user(db, int(user_id))
+        if user is None or getattr(user, "role", "USER") != "ADMIN":
+            await send_error(client_id, "Admin privileges required for ops:events", message_id, close_code=4403)
+            return
+        topic = "ops:events"
+        await topic_manager.subscribe_to_topic(client_id, topic)
+        # No initial payload – ticker is live-only
+        logger.info("Client %s subscribed to ops topic %s", client_id, topic)
+    except Exception as exc:  # pragma: no cover
+        logger.error("Error in _subscribe_ops_events: %s", exc)
+        await send_error(client_id, "Failed to subscribe to ops", message_id)
 
 
 async def handle_subscribe(client_id: str, envelope: Envelope, db: Session) -> None:
