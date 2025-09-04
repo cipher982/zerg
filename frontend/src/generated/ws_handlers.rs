@@ -1,5 +1,5 @@
 // AUTO-GENERATED FILE - DO NOT EDIT
-// Generated from ws-protocol-asyncapi.yml at 2025-08-27T14:14:03.691466Z
+// Generated from ws-protocol-asyncapi.yml at 2025-09-04T01:45:41.605504Z
 //
 // Handler traits and message routing with modern patterns
 
@@ -9,13 +9,14 @@ use crate::generated::ws_messages::*;
 
 // Handler trait definitions with compile-time validation
 
-/// Handles agent management, runs, and workflow execution events
+/// Handles agent management, runs, workflow execution, and ops ticker
 pub trait DashboardHandler {
     fn handle_run_update(&self, data: RunUpdateData) -> Result<(), JsValue>;
     fn handle_agent_event(&self, data: AgentEventData) -> Result<(), JsValue>;
     fn handle_execution_finished(&self, data: ExecutionFinishedData) -> Result<(), JsValue>;
     fn handle_node_state(&self, data: NodeStateData) -> Result<(), JsValue>;
     fn handle_node_log(&self, data: NodeLogData) -> Result<(), JsValue>;
+    fn handle_ops_event(&self, data: OpsEventData) -> Result<(), JsValue>;
 }
 
 /// Handles thread messages and streaming events
@@ -133,6 +134,15 @@ impl<T: DashboardHandler> DashboardMessageRouter<T> {
                     }
                 }
             }
+            "ops_event" => {
+                match serde_json::from_value::<OpsEventData>(message_data.clone()) {
+                    Ok(data) => self.handler.borrow().handle_ops_event(data),
+                    Err(e) => {
+                        web_sys::console::error_1(&format!("Failed to parse ops_event: {}", e).into());
+                        Err(JsValue::from_str(&format!("Parse error: {}", e)))
+                    }
+                }
+            }
             _ => {
                 web_sys::console::warn_1(&format!("DashboardMessageRouter: Unknown message type: {}", message_type).into());
                 Ok(())
@@ -233,7 +243,7 @@ pub fn validate_message_format(envelope: &Envelope) -> Result<(), String> {
 }
 
 pub fn get_handler_for_topic(topic: &str) -> Option<&'static str> {
-    if topic.starts_with("agent:") || topic.starts_with("workflow_execution:") {
+    if topic.starts_with("agent:") || topic.starts_with("workflow_execution:") || topic.starts_with("ops:") {
         Some("dashboard")
     } else if topic.starts_with("thread:") {
         Some("chat")

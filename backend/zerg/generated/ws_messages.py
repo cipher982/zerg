@@ -1,5 +1,5 @@
 # AUTO-GENERATED FILE - DO NOT EDIT
-# Generated from ws-protocol-asyncapi.yml at 2025-08-27T14:14:03.688999Z
+# Generated from ws-protocol-asyncapi.yml at 2025-09-04T01:45:41.604051Z
 # Using AsyncAPI 3.0 + Modern Python Code Generation
 #
 # This file contains strongly-typed WebSocket message definitions.
@@ -247,6 +247,32 @@ class NodeLogData(BaseModel):
     text: str
 
 
+class OpsEventData(BaseModel):
+    """Payload for OpsEventData messages"""
+
+    type: Literal[
+        "run_started",
+        "run_success",
+        "run_failed",
+        "agent_created",
+        "agent_updated",
+        "thread_message_created",
+        "budget_denied",
+    ]  # noqa: E501
+    agent_id: Optional[int] = Field(default=None, ge=1, description="")
+    run_id: Optional[int] = Field(default=None, ge=1, description="")
+    thread_id: Optional[int] = Field(default=None, ge=1, description="")
+    duration_ms: Optional[int] = Field(default=None, ge=0, description="")
+    error: Optional[str] = None
+    agent_name: Optional[str] = None
+    status: Optional[str] = None
+    scope: Optional[Literal["user", "global"]] = None
+    percent: Optional[float] = None
+    used_usd: Optional[float] = None
+    limit_cents: Optional[int] = Field(default=None, ge=0, description="")
+    user_email: Optional[str] = None
+
+
 class MessageType(str, Enum):
     """Enumeration of all WebSocket message types."""
 
@@ -268,6 +294,7 @@ class MessageType(str, Enum):
     NODE_STATE = "node_state"
     EXECUTION_FINISHED = "execution_finished"
     NODE_LOG = "node_log"
+    OPS_EVENT = "ops_event"
 
 
 # Typed emitter for contract enforcement

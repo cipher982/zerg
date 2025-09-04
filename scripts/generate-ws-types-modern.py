@@ -559,7 +559,9 @@ impl Envelope {
         for prop_name, prop_schema in properties.items():
             rust_type = self._json_type_to_rust_modern(prop_schema)
             is_required = prop_name in required
-            
+            # Escape Rust keywords (e.g., `type`) using raw identifiers
+            field_name = prop_name if prop_name != "type" else "r#type"
+
             if not is_required:
                 rust_type = f"Option<{rust_type}>"
                 
@@ -568,7 +570,7 @@ impl Envelope {
             if attributes:
                 lines.append(f"    {attributes}")
                 
-            lines.append(f"    pub {prop_name}: {rust_type},")
+            lines.append(f"    pub {field_name}: {rust_type},")
             
         lines.append("}")
         return "\n".join(lines)
@@ -815,7 +817,7 @@ pub fn validate_message_format(envelope: &Envelope) -> Result<(), String> {
 }
 
 pub fn get_handler_for_topic(topic: &str) -> Option<&'static str> {
-    if topic.starts_with("agent:") || topic.starts_with("workflow_execution:") {
+    if topic.starts_with("agent:") || topic.starts_with("workflow_execution:") || topic.starts_with("ops:") {
         Some("dashboard")
     } else if topic.starts_with("thread:") {
         Some("chat")

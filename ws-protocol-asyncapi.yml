@@ -99,6 +99,13 @@ channels:
       NodeLog:
         $ref: '#/components/messages/NodeLog'
 
+  OpsChannel:
+    address: ops:events
+    description: Admin-only operational ticker with normalized events
+    messages:
+      OpsEvent:
+        $ref: '#/components/messages/OpsEvent'
+
 # ---------------------------------------------------------------------------
 # Operations - Send/receive semantics for each message type
 # ---------------------------------------------------------------------------
@@ -138,6 +145,12 @@ operations:
     channel:
       $ref: '#/channels/WorkflowExecutionChannel'
     summary: Handle workflow execution WebSocket operations
+
+  OpsOperations:
+    action: send
+    channel:
+      $ref: '#/channels/OpsChannel'
+    summary: Handle operational ticker messages
 
 # ---------------------------------------------------------------------------
 # Components - Messages and schemas
@@ -292,6 +305,14 @@ components:
       payload:
         $ref: '#/components/schemas/NodeLogData'
       x-handler-method: handle_node_log
+      x-aliases: []
+
+    OpsEvent:
+      name: ops_event
+      summary: Normalized operational ticker event for admin dashboard
+      payload:
+        $ref: '#/components/schemas/OpsEventData'
+      x-handler-method: handle_ops_event
       x-aliases: []
 
   schemas:
@@ -657,22 +678,74 @@ components:
         text:
           type: string
 
+    # Ops ticker payload (admin-only)
+    OpsEventData:
+      type: object
+      required: [type]
+      properties:
+        # Discriminator for client-side rendering
+        type:
+          type: string
+          enum:
+            - run_started
+            - run_success
+            - run_failed
+            - agent_created
+            - agent_updated
+            - thread_message_created
+            - budget_denied
+        # Common optional fields used by various event kinds
+        agent_id:
+          type: integer
+          minimum: 1
+        run_id:
+          type: integer
+          minimum: 1
+        thread_id:
+          type: integer
+          minimum: 1
+        duration_ms:
+          type: integer
+          minimum: 0
+        error:
+          type: string
+        agent_name:
+          type: string
+        status:
+          type: string
+        # Budget-specific fields
+        scope:
+          type: string
+          enum: [user, global]
+        percent:
+          type: number
+        used_usd:
+          type: number
+        limit_cents:
+          type: integer
+          minimum: 0
+        user_email:
+          type: string
+          format: email
+
 # ---------------------------------------------------------------------------
 # Extensions for code generation
 # ---------------------------------------------------------------------------
 
 x-handler-groups:
   dashboard:
-    description: Handles agent management, runs, and workflow execution events
+    description: Handles agent management, runs, workflow execution, and ops ticker
     handles:
       - run_update
       - agent_event
       - execution_finished
       - node_state
       - node_log
+      - ops_event
     topics:
       - "agent:*"
       - "workflow_execution:*"
+      - "ops:*"
       
   chat:
     description: Handles thread messages and streaming events
