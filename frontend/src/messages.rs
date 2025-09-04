@@ -674,9 +674,6 @@ pub enum Message {
     },
     TemplateDeployed(ApiWorkflow),
     
-    // Debug logging - avoid RefCell borrows by using command dispatch
-    DebugLog(String),
-    
     // Loading state management - avoid direct mutations
     SetLoadingState(bool),
     SetWorkflowFetchSeq(u64),

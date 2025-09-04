@@ -4,7 +4,6 @@ use crate::models::{
     UiNodeState, UiStateMap, WorkflowEdge, WorkflowNode, WorkflowNodeType,
 };
 use std::cell::RefCell;
-use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, WebSocket};
@@ -432,11 +431,7 @@ pub struct AppState {
     /// “Email (Gmail)” option in the *Add Trigger* wizard is clickable.
     pub gmail_connected: bool,
 
-    // ---------------------------------------------------------------
-    // Debug overlay (only compiled in debug builds)
-    // ---------------------------------------------------------------
-    #[cfg(debug_assertions)]
-    pub debug_ring: VecDeque<String>,
+    // Debug overlay moved to separate module to avoid circular dependencies
 
     /// Runs currently in `running` status for which the dashboard should show
     /// a ticking duration value.  Stores *run_id* (primary key) – agent_id can
@@ -692,9 +687,6 @@ impl AppState {
 
             // The very first frame must draw the freshly created canvas.
             dirty: true,
-
-            #[cfg(debug_assertions)]
-            debug_ring: VecDeque::new(),
 
             // -------------------------------------------------------------------
             // Authentication state – look for a persisted JWT.
