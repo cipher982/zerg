@@ -1094,19 +1094,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.particle_system = None;
             needs_refresh = true; // Particle system cleared, likely needs a redraw
         }
-        Message::DebugLog(msg) => {
-            // Handle debug logging through command dispatch to avoid RefCell borrows
-            #[cfg(debug_assertions)]
-            {
-                use crate::utils::debug::RING_CAP;
-                if state.debug_ring.len() >= RING_CAP {
-                    state.debug_ring.pop_front();
-                }
-                state.debug_ring.push_back(msg);
-                state.mark_dirty();
-            }
-            needs_refresh = false; // Debug logs don't require UI refresh
-        }
         Message::SetLoadingState(loading) => {
             state.is_loading = loading;
             needs_refresh = false; // Loading state changes don't require UI refresh
