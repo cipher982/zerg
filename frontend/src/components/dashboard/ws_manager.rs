@@ -116,6 +116,12 @@ impl DashboardHandler for DashboardWsManager {
         });
         Ok(())
     }
+
+    fn handle_ops_event(&self, _data: crate::generated::ws_messages::OpsEventData) -> Result<(), JsValue> {
+        // Placeholder: ops ticker integration will append to a rolling buffer (N=200)
+        // For now, no-op to satisfy typed routing until Ops dashboard UI lands.
+        Ok(())
+    }
 }
 
 impl DashboardWsManager {

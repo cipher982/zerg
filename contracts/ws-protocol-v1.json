@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2025-08-27T14:14:03.692526Z",
+  "generated_at": "2025-09-04T01:45:41.605745Z",
   "asyncapi_version": "3.0.0",
   "info": {
     "title": "Zerg WebSocket Protocol",
@@ -91,6 +91,14 @@
         "NodeState",
         "ExecutionFinished",
         "NodeLog"
+      ]
+    },
+    "OpsChannel": {
+      "address": "ops:events",
+      "description": "Admin-only operational ticker with normalized events",
+      "parameters": {},
+      "messages": [
+        "OpsEvent"
       ]
     }
   },
@@ -249,6 +257,14 @@
       },
       "handler_method": "handle_node_log",
       "aliases": []
+    },
+    "ops_event": {
+      "summary": "Normalized operational ticker event for admin dashboard",
+      "payload_schema": {
+        "$ref": "#/components/schemas/OpsEventData"
+      },
+      "handler_method": "handle_ops_event",
+      "aliases": []
     }
   },
   "operations": {
@@ -284,6 +300,13 @@
       "action": "send",
       "channel": {
         "$ref": "#/channels/WorkflowExecutionChannel"
+      },
+      "messages": []
+    },
+    "OpsOperations": {
+      "action": "send",
+      "channel": {
+        "$ref": "#/channels/OpsChannel"
       },
       "messages": []
     }

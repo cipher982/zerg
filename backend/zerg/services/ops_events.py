@@ -10,11 +10,11 @@ import logging
 from typing import Any
 from typing import Dict
 
-from fastapi.encoders import jsonable_encoder
-
 from zerg.events import EventType
 from zerg.events.event_bus import event_bus
-from zerg.generated.ws_messages import Envelope
+from zerg.generated.ws_messages import MessageType
+from zerg.generated.ws_messages import OpsEventData
+from zerg.generated.ws_messages import create_typed_emitter
 from zerg.websocket.manager import topic_manager
 
 logger = logging.getLogger(__name__)
@@ -22,11 +22,8 @@ logger = logging.getLogger(__name__)
 
 OPS_TOPIC = "ops:events"
 
-
-def _make_envelope(message_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
-    """Create a WS envelope for the ops topic."""
-    envelope = Envelope.create(message_type=message_type, topic=OPS_TOPIC, data=jsonable_encoder(data))
-    return envelope.model_dump()
+# Typed emitter bound to our topic manager broadcaster
+typed_emitter = create_typed_emitter(topic_manager.broadcast_to_topic)
 
 
 class OpsEventsBridge:
@@ -52,18 +49,15 @@ class OpsEventsBridge:
             # Ignore queued and unknown statuses for the ticker
             return
 
-        payload = {
-            "type": msg_type,
-            "agent_id": agent_id,
-            "run_id": run_id,
-            # Optional extras if present
-            "thread_id": data.get("thread_id"),
-            "duration_ms": data.get("duration_ms"),
-            "error": data.get("error"),
-            "started_at": data.get("started_at"),
-            "finished_at": data.get("finished_at"),
-        }
-        await topic_manager.broadcast_to_topic(OPS_TOPIC, _make_envelope("ops_event", payload))
+        payload = OpsEventData(
+            type=msg_type,
+            agent_id=agent_id,
+            run_id=run_id,
+            thread_id=data.get("thread_id"),
+            duration_ms=data.get("duration_ms"),
+            error=data.get("error"),
+        )
+        await typed_emitter.send_typed(OPS_TOPIC, MessageType.OPS_EVENT, payload)
 
     async def _handle_agent_event(self, data: Dict[str, Any]) -> None:
         agent_id = data.get("id")
@@ -73,38 +67,35 @@ class OpsEventsBridge:
         # Try to infer created
         if data.get("event_type") == "agent_created":
             event_type = "agent_created"
-        payload = {
-            "type": event_type,
-            "agent_id": agent_id,
-            "agent_name": data.get("name"),
-            "status": data.get("status"),
-        }
-        await topic_manager.broadcast_to_topic(OPS_TOPIC, _make_envelope("ops_event", payload))
+        payload = OpsEventData(
+            type=event_type,
+            agent_id=agent_id,
+            agent_name=data.get("name"),
+            status=data.get("status"),
+        )
+        await typed_emitter.send_typed(OPS_TOPIC, MessageType.OPS_EVENT, payload)
 
     async def _handle_thread_message(self, data: Dict[str, Any]) -> None:
         thread_id = data.get("thread_id")
         if not thread_id:
             return
-        payload = {
-            "type": "thread_message_created",
-            "thread_id": thread_id,
-        }
-        await topic_manager.broadcast_to_topic(OPS_TOPIC, _make_envelope("ops_event", payload))
+        payload = OpsEventData(type="thread_message_created", thread_id=thread_id)
+        await typed_emitter.send_typed(OPS_TOPIC, MessageType.OPS_EVENT, payload)
 
     async def _handle_budget_denied(self, data: Dict[str, Any]) -> None:
         # Data expected: { scope, percent, used_usd, limit_cents, user_email }
         scope = data.get("scope")
         if not scope:
             return
-        payload = {
-            "type": "budget_denied",
-            "scope": scope,
-            "percent": data.get("percent"),
-            "used_usd": data.get("used_usd"),
-            "limit_cents": data.get("limit_cents"),
-            "user_email": data.get("user_email"),
-        }
-        await topic_manager.broadcast_to_topic(OPS_TOPIC, _make_envelope("ops_event", payload))
+        payload = OpsEventData(
+            type="budget_denied",
+            scope=scope,
+            percent=data.get("percent"),
+            used_usd=data.get("used_usd"),
+            limit_cents=data.get("limit_cents"),
+            user_email=data.get("user_email"),
+        )
+        await typed_emitter.send_typed(OPS_TOPIC, MessageType.OPS_EVENT, payload)
 
     def start(self) -> None:
         if self._started:

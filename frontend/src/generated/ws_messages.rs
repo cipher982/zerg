@@ -1,5 +1,5 @@
 // AUTO-GENERATED FILE - DO NOT EDIT
-// Generated from ws-protocol-asyncapi.yml at 2025-08-27T14:14:03.690423Z
+// Generated from ws-protocol-asyncapi.yml at 2025-09-04T01:45:41.604561Z
 // Using AsyncAPI 3.0 + Modern Rust Code Generation
 //
 // This file contains strongly-typed WebSocket message definitions.
@@ -211,6 +211,23 @@ pub struct NodeLogData {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct OpsEventData {
+    pub r#type: String,
+    pub agent_id: Option<u32>,
+    pub run_id: Option<u32>,
+    pub thread_id: Option<u32>,
+    pub duration_ms: Option<u32>,
+    pub error: Option<String>,
+    pub agent_name: Option<String>,
+    pub status: Option<String>,
+    pub scope: Option<String>,
+    pub percent: Option<f64>,
+    pub used_usd: Option<f64>,
+    pub limit_cents: Option<u32>,
+    pub user_email: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "type")]
 pub enum WsMessage {
     #[serde(rename = "ping")]
@@ -266,6 +283,9 @@ pub enum WsMessage {
 
     #[serde(rename = "node_log")]
     NodeLog { data: NodeLogData },
+
+    #[serde(rename = "ops_event")]
+    OpsEvent { data: OpsEventData },
 
     #[serde(other)]
     Unknown,
