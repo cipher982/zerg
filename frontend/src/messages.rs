@@ -673,6 +673,23 @@ pub enum Message {
         description: String,
     },
     TemplateDeployed(ApiWorkflow),
+    
+    // Debug logging - avoid RefCell borrows by using command dispatch
+    DebugLog(String),
+    
+    // Loading state management - avoid direct mutations
+    SetLoadingState(bool),
+    SetWorkflowFetchSeq(u64),
+    
+    // Storage system state updates - avoid direct mutations
+    UpdateViewport { x: f64, y: f64, zoom: f64 },
+    UpdateWorkflowNodes(std::collections::HashMap<String, crate::models::WorkflowNode>),
+    SetDataLoaded(bool),
+    ClearAgents,
+    AddAgents(Vec<crate::models::ApiAgent>),
+    
+    // Initialization state updates - avoid direct mutations
+    SetGoogleClientId(Option<String>),
 }
 
 /// Commands represent side effects that should be executed after state updates.
