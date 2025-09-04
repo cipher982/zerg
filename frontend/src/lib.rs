@@ -422,9 +422,7 @@ pub fn start() -> Result<(), JsValue> {
 
         // Store google_client_id in global state for later reuse (e.g. after
         // a manual logout when we need to recreate the overlay quickly).
-        state::APP_STATE.with(|st| {
-            st.borrow_mut().google_client_id = info.google_client_id.clone();
-        });
+        state::dispatch_global_message(messages::Message::SetGoogleClientId(info.google_client_id.clone()));
 
         if info.auth_disabled {
             // ─── Dev mode ───
