@@ -918,6 +918,55 @@ impl ApiAgent {
 }
 
 // -----------------------------------------------------------------------------
+//  Ops Dashboard Models
+// -----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OpsBudget {
+    pub limit_cents: Option<u32>,
+    pub used_usd: Option<f64>,
+    #[serde(default)]
+    pub percent: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OpsTopAgent {
+    pub agent_id: u32,
+    pub name: String,
+    pub owner_email: Option<String>,
+    pub runs: u32,
+    pub cost_usd: Option<f64>,
+    pub p95_ms: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OpsLatencyMs {
+    pub p50: Option<u32>,
+    pub p95: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OpsSummary {
+    pub runs_today: u32,
+    pub cost_today_usd: Option<f64>,
+    pub budget_user: Option<OpsBudget>,
+    pub budget_global: Option<OpsBudget>,
+    pub active_users_24h: u32,
+    pub agents_total: u32,
+    pub agents_scheduled: u32,
+    pub latency_ms: Option<OpsLatencyMs>,
+    pub errors_last_hour: u32,
+    #[serde(default)]
+    pub top_agents_today: Vec<OpsTopAgent>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OpsSeriesPoint {
+    pub hour_iso: String,
+    pub value: f64,
+}
+
+// -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
 

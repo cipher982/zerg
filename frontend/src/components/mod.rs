@@ -8,6 +8,7 @@ pub mod canvas_editor;
 pub mod chat;
 pub mod chat_view;
 pub mod dashboard;
+pub mod ops;
 pub mod execution_sidebar;
 pub mod log_drawer;
 pub mod mcp_server_manager;

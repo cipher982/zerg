@@ -202,6 +202,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     if crate::reducers::canvas::update(state, &msg, &mut commands) {
         return commands;
     }
+    if crate::reducers::ops::update(state, &msg, &mut commands) {
+        return commands;
+    }
     if crate::reducers::agent::update(state, &msg, &mut commands) {
         return commands;
     }
@@ -324,6 +327,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     let _ = match view_clone {
                         crate::storage::ActiveView::Profile => {
                             window.location().set_hash("#/profile")
+                        }
+                        crate::storage::ActiveView::AdminOps => {
+                            window.location().set_hash("#/admin/ops")
                         }
                         crate::storage::ActiveView::Dashboard => {
                             window.location().set_hash("#/dashboard")
@@ -1093,14 +1099,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
         Message::ClearParticleSystem => {
             state.particle_system = None;
             needs_refresh = true; // Particle system cleared, likely needs a redraw
-        }
-        Message::SetLoadingState(loading) => {
-            state.is_loading = loading;
-            needs_refresh = false; // Loading state changes don't require UI refresh
-        }
-        Message::SetWorkflowFetchSeq(seq) => {
-            state.workflow_fetch_seq = seq;
-            needs_refresh = false; // Sequence updates don't require UI refresh
         }
         Message::UpdateViewport { x, y, zoom } => {
             state.viewport_x = x;

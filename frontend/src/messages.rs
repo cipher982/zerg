@@ -674,10 +674,6 @@ pub enum Message {
     },
     TemplateDeployed(ApiWorkflow),
     
-    // Loading state management - avoid direct mutations
-    SetLoadingState(bool),
-    SetWorkflowFetchSeq(u64),
-    
     // Storage system state updates - avoid direct mutations
     UpdateViewport { x: f64, y: f64, zoom: f64 },
     UpdateWorkflowNodes(std::collections::HashMap<String, crate::models::WorkflowNode>),
@@ -687,6 +683,12 @@ pub enum Message {
     
     // Initialization state updates - avoid direct mutations
     SetGoogleClientId(Option<String>),
+
+    // -------------------------------------------------------------------
+    // Ops Dashboard / HUD
+    // -------------------------------------------------------------------
+    OpsSummaryLoaded(crate::models::OpsSummary),
+    OpsAppendEvent { ts: u64, kind: String, text: String },
 }
 
 /// Commands represent side effects that should be executed after state updates.

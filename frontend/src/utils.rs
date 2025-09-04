@@ -253,7 +253,7 @@ macro_rules! debug_log {
             
             // Debug ring is separate from application state to avoid circular dependencies
             // The debug overlay will read from this separate ring buffer
-            crate::utils::debug::add_to_debug_ring(msg);
+            $crate::utils::debug::add_to_debug_ring(msg);
         }
     }};
 }

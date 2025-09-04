@@ -65,6 +65,7 @@ pub fn render_active_view_by_type(
     hide_by_id(document, "node-palette-shelf");
     hide_by_id(document, "profile-container");
     hide_by_id(document, "chat-view-container");
+    hide_by_id(document, "ops-dashboard-container");
 
     // -------------------------------------------------------------
     // Step 2: Ensure requested view is mounted once, then show it.
@@ -124,6 +125,16 @@ pub fn render_active_view_by_type(
                 app_container.set_class_name("");
             }
         }
+        ActiveView::AdminOps => {
+            if !crate::pages::ops::is_ops_dashboard_mounted(document) {
+                crate::pages::ops::mount_ops_dashboard(document)?;
+            }
+            show_block_by_id(document, "ops-dashboard-container");
+
+            if let Some(app_container) = document.get_element_by_id("app-container") {
+                app_container.set_class_name("");
+            }
+        }
     }
 
     // Update tab styling based on active view
@@ -160,6 +171,9 @@ fn update_tab_styling(view_type: &ActiveView, document: &Document) -> Result<(),
         }
         ActiveView::ChatView => {
             // Chat doesn't have a tab currently, could add one in the future
+        }
+        ActiveView::AdminOps => {
+            // Ops dashboard has no tab – keep both inactive
         }
     }
 
