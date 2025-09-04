@@ -66,10 +66,7 @@ pub fn execute_fetch_command(cmd: Command) {
         }
         Command::FetchAgents => {
             // Set loading state before starting fetch
-            APP_STATE.with(|state_ref| {
-                let mut state = state_ref.borrow_mut();
-                state.is_loading = true;
-            });
+            dispatch_global_message(Message::SetLoadingState(true));
 
             // Trigger UI refresh to show loading state
             if let Err(e) = crate::state::AppState::refresh_ui_after_state_change() {
@@ -92,18 +89,12 @@ pub fn execute_fetch_command(cmd: Command) {
                         Ok(agents) => {
                             debug_log!("Fetched {} agents from API", agents.len());
                             // Clear loading state before dispatching agents
-                            APP_STATE.with(|state_ref| {
-                                let mut state = state_ref.borrow_mut();
-                                state.is_loading = false;
-                            });
+                            dispatch_global_message(Message::SetLoadingState(false));
                             dispatch_global_message(Message::AgentsRefreshed(agents))
                         }
                         Err(e) => {
                             // Clear loading state on error
-                            APP_STATE.with(|state_ref| {
-                                let mut state = state_ref.borrow_mut();
-                                state.is_loading = false;
-                            });
+                            dispatch_global_message(Message::SetLoadingState(false));
                             web_sys::console::error_1(
                                 &format!("Failed to parse agents: {:?}", e).into(),
                             );
@@ -111,10 +102,7 @@ pub fn execute_fetch_command(cmd: Command) {
                     },
                     Err(e) => {
                         // Clear loading state on error
-                        APP_STATE.with(|state_ref| {
-                            let mut state = state_ref.borrow_mut();
-                            state.is_loading = false;
-                        });
+                        dispatch_global_message(Message::SetLoadingState(false));
                         web_sys::console::error_1(
                             &format!("Failed to fetch agents: {:?}", e).into(),
                         );
@@ -150,9 +138,10 @@ pub fn execute_fetch_command(cmd: Command) {
         Command::FetchCurrentWorkflow => {
             // Increment request token to identify and drop stale responses
             let req_id = APP_STATE.with(|state_ref| {
-                let mut st = state_ref.borrow_mut();
-                st.workflow_fetch_seq = st.workflow_fetch_seq.wrapping_add(1);
-                st.workflow_fetch_seq
+                let st = state_ref.borrow();
+                let new_seq = st.workflow_fetch_seq.wrapping_add(1);
+                dispatch_global_message(Message::SetWorkflowFetchSeq(new_seq));
+                new_seq
             });
 
             wasm_bindgen_futures::spawn_local(async move {

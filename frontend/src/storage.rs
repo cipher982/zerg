@@ -132,11 +132,10 @@ fn try_load_layout_from_api() {
                         }
 
                         if let Ok(vp) = serde_json::from_value::<Vp>(vp_val.clone()) {
-                            crate::state::APP_STATE.with(|s| {
-                                let mut st = s.borrow_mut();
-                                st.viewport_x = vp.x;
-                                st.viewport_y = vp.y;
-                                st.zoom_level = vp.zoom;
+                            crate::state::dispatch_global_message(crate::messages::Message::UpdateViewport {
+                                x: vp.x,
+                                y: vp.y,
+                                zoom: vp.zoom,
                             });
                         }
                     }
@@ -261,10 +260,7 @@ pub fn try_load_from_localstorage() {
                     std::collections::HashMap<String, crate::models::WorkflowNode>,
                 >(&nodes_str)
                 {
-                    crate::state::APP_STATE.with(|s| {
-                        let mut st = s.borrow_mut();
-                        st.workflow_nodes = nodes_map;
-                    });
+                    crate::state::dispatch_global_message(crate::messages::Message::UpdateWorkflowNodes(nodes_map));
                 }
             }
 
@@ -276,11 +272,10 @@ pub fn try_load_from_localstorage() {
                     zoom: f64,
                 }
                 if let Ok(vp) = serde_json::from_str::<Vp>(&vp_str) {
-                    crate::state::APP_STATE.with(|s| {
-                        let mut st = s.borrow_mut();
-                        st.viewport_x = vp.x;
-                        st.viewport_y = vp.y;
-                        st.zoom_level = vp.zoom;
+                    crate::state::dispatch_global_message(crate::messages::Message::UpdateViewport {
+                        x: vp.x,
+                        y: vp.y,
+                        zoom: vp.zoom,
                     });
                 }
             }
@@ -435,41 +430,11 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                     Ok(agents) => {
                         debug_log!("Loaded {} agents from API", agents.len());
 
-                        // Update the agents in the global APP_STATE
-                        crate::state::APP_STATE.with(|state_ref| {
-                            let mut state = state_ref.borrow_mut();
-                            state.agents.clear();
-
-                            // Add each agent to the HashMap
-                            for agent in &agents {
-                                if let Some(id) = agent.id {
-                                    state.agents.insert(id, agent.clone());
-                                }
-                            }
-
-                            // IMPORTANT: We no longer automatically create nodes for agents
-                            // This is a key part of separating agent domain logic from node UI logic
-
-                            // Update loading state flags after the API call completes
-                            state.is_loading = false;
-                            state.data_loaded = true;
-
-                            // If there are no nodes but we have agents, show a message to user
-                            if state.workflow_nodes.is_empty() && !state.agents.is_empty() {
-                                // Show message that agents are loaded but not displayed
-                                debug_log!("Agents loaded but no nodes exist. Use 'Generate Canvas' to visualize agents.");
-
-                                // In a real app, you might want to display a UI message or button
-                                // that lets users generate nodes for their agents
-                            }
-                            // Deferred stub reconciliation happens *after*
-                            // this `borrow_mut` guard is released to avoid a
-                            // nested mutable-borrow panic.  We signal the
-                            // caller via a bool return value so the async
-                            // task can call `fix_stub_nodes()` once the
-                            // RefCell lock is dropped.
-                            state.mark_dirty();
-                        });
+                        // Update the agents in the global APP_STATE using message dispatch
+                        crate::state::dispatch_global_message(crate::messages::Message::ClearAgents);
+                        crate::state::dispatch_global_message(crate::messages::Message::AddAgents(agents.clone()));
+                        crate::state::dispatch_global_message(crate::messages::Message::SetLoadingState(false));
+                        crate::state::dispatch_global_message(crate::messages::Message::SetDataLoaded(true));
 
                         // --- IMPORTANT --------------------------------------------------
                         // We just mutated `state` above and now want to run
@@ -487,10 +452,7 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                             &format!("Error parsing agents from API: {}", e).into(),
                         );
                         // Update loading state flags even in case of error
-                        crate::state::APP_STATE.with(|state_ref| {
-                            let mut state = state_ref.borrow_mut();
-                            state.is_loading = false;
-                        });
+                        crate::state::dispatch_global_message(crate::messages::Message::SetLoadingState(false));
                     }
                 }
             }
@@ -499,10 +461,7 @@ pub fn load_state_from_api(app_state: &mut AppState) {
                     &format!("Error fetching agents from API: {:?}", e).into(),
                 );
                 // Update loading state flags even in case of error
-                crate::state::APP_STATE.with(|state_ref| {
-                    let mut state = state_ref.borrow_mut();
-                    state.is_loading = false;
-                });
+                crate::state::dispatch_global_message(crate::messages::Message::SetLoadingState(false));
             }
         }
 
@@ -516,11 +475,8 @@ pub fn load_state_from_api(app_state: &mut AppState) {
 
 // Helper function to mark loading as complete and refresh UI
 fn mark_loading_complete() {
-    crate::state::APP_STATE.with(|state_ref| {
-        let mut state = state_ref.borrow_mut();
-        state.is_loading = false;
-        state.data_loaded = true;
-    });
+    crate::state::dispatch_global_message(crate::messages::Message::SetLoadingState(false));
+    crate::state::dispatch_global_message(crate::messages::Message::SetDataLoaded(true));
 
     // Schedule UI refresh
     let window = web_sys::window().expect("no global window exists");

@@ -1094,6 +1094,57 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.particle_system = None;
             needs_refresh = true; // Particle system cleared, likely needs a redraw
         }
+        Message::DebugLog(msg) => {
+            // Handle debug logging through command dispatch to avoid RefCell borrows
+            #[cfg(debug_assertions)]
+            {
+                use crate::utils::debug::RING_CAP;
+                if state.debug_ring.len() >= RING_CAP {
+                    state.debug_ring.pop_front();
+                }
+                state.debug_ring.push_back(msg);
+                state.mark_dirty();
+            }
+            needs_refresh = false; // Debug logs don't require UI refresh
+        }
+        Message::SetLoadingState(loading) => {
+            state.is_loading = loading;
+            needs_refresh = false; // Loading state changes don't require UI refresh
+        }
+        Message::SetWorkflowFetchSeq(seq) => {
+            state.workflow_fetch_seq = seq;
+            needs_refresh = false; // Sequence updates don't require UI refresh
+        }
+        Message::UpdateViewport { x, y, zoom } => {
+            state.viewport_x = x;
+            state.viewport_y = y;
+            state.zoom_level = zoom;
+            needs_refresh = true; // Viewport changes require redraw
+        }
+        Message::UpdateWorkflowNodes(nodes) => {
+            state.workflow_nodes = nodes;
+            needs_refresh = true; // Node changes require redraw
+        }
+        Message::SetDataLoaded(loaded) => {
+            state.data_loaded = loaded;
+            needs_refresh = false; // Data loaded flag changes don't require UI refresh
+        }
+        Message::ClearAgents => {
+            state.agents.clear();
+            needs_refresh = true; // Agent changes may affect UI
+        }
+        Message::AddAgents(agents) => {
+            for agent in agents {
+                if let Some(id) = agent.id {
+                    state.agents.insert(id, agent);
+                }
+            }
+            needs_refresh = true; // Agent changes may affect UI
+        }
+        Message::SetGoogleClientId(client_id) => {
+            state.google_client_id = client_id;
+            needs_refresh = false; // Client ID changes don't require UI refresh
+        }
         // Catch-all for any unhandled messages
         _ => {
             // Warn about unexpected messages so nothing silently fails
