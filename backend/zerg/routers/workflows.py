@@ -80,24 +80,70 @@ def create_workflow(
 ):
     """
     Create new workflow.
+    Supports template deployment via template_id or template_name.
     Rate limited to 100 workflows per minute per user.
     """
     # Check rate limit first
     check_workflow_creation_rate_limit(request, current_user.id)
-    try:
-        # WorkflowData validation happens automatically via pydantic
-        canvas_dict = workflow_in.canvas.model_dump(by_alias=True)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid workflow data: {e}")
 
-    workflow = crud.create_workflow(
-        db=db,
-        owner_id=current_user.id,
-        name=workflow_in.name,
-        description=workflow_in.description,
-        canvas=canvas_dict,
-    )
-    return workflow
+    # Handle template deployment
+    if workflow_in.template_id is not None:
+        # Deploy by template ID
+        return crud.deploy_workflow_template(
+            db=db,
+            template_id=workflow_in.template_id,
+            owner_id=current_user.id,
+            name=workflow_in.name,
+            description=workflow_in.description,
+        )
+    elif workflow_in.template_name is not None:
+        # Deploy by template name (e.g., "minimal")
+        template = crud.get_workflow_template_by_name(db=db, template_name=workflow_in.template_name)
+        if not template:
+            raise HTTPException(status_code=404, detail=f"Template '{workflow_in.template_name}' not found")
+        return crud.deploy_workflow_template(
+            db=db,
+            template_id=template.id,
+            owner_id=current_user.id,
+            name=workflow_in.name,
+            description=workflow_in.description,
+        )
+    elif workflow_in.canvas is not None:
+        # Create workflow with explicit canvas
+        try:
+            canvas_dict = workflow_in.canvas.model_dump(by_alias=True)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid workflow data: {e}")
+
+        workflow = crud.create_workflow(
+            db=db,
+            owner_id=current_user.id,
+            name=workflow_in.name,
+            description=workflow_in.description,
+            canvas=canvas_dict,
+        )
+        return workflow
+    else:
+        # Default to "minimal" template
+        template = crud.get_workflow_template_by_name(db=db, template_name="minimal")
+        if not template:
+            # Fallback to empty workflow if minimal template doesn't exist
+            workflow = crud.create_workflow(
+                db=db,
+                owner_id=current_user.id,
+                name=workflow_in.name,
+                description=workflow_in.description,
+                canvas={"nodes": [], "edges": []},
+            )
+            return workflow
+
+        return crud.deploy_workflow_template(
+            db=db,
+            template_id=template.id,
+            owner_id=current_user.id,
+            name=workflow_in.name,
+            description=workflow_in.description,
+        )
 
 
 @router.get("/current", response_model=Workflow)

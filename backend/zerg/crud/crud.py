@@ -944,6 +944,13 @@ def get_workflow_template(db: Session, template_id: int):
     return db.query(WorkflowTemplate).filter_by(id=template_id).first()
 
 
+def get_workflow_template_by_name(db: Session, template_name: str):
+    """Get a specific workflow template by name."""
+    from zerg.models.models import WorkflowTemplate
+
+    return db.query(WorkflowTemplate).filter_by(name=template_name, is_public=True).first()
+
+
 def get_template_categories(db: Session):
     """Get all unique template categories."""
     from zerg.models.models import WorkflowTemplate

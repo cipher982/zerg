@@ -293,7 +293,9 @@ class WorkflowBase(BaseModel):
 
 
 class WorkflowCreate(WorkflowBase):
-    canvas: WorkflowData
+    canvas: Optional[WorkflowData] = None
+    template_id: Optional[int] = None  # Optional template to deploy
+    template_name: Optional[str] = None  # Optional template name (e.g., "minimal")
 
 
 class WorkflowUpdate(BaseModel):
