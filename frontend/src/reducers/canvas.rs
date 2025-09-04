@@ -773,47 +773,8 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         .insert(node.node_id.clone(), UiNodeState::default());
                 }
 
-                // If the selected workflow has no trigger, add a default manual trigger node
-                let has_trigger = state
-                    .workflow_nodes
-                    .values()
-                    .any(|n| matches!(n.get_semantic_type(), crate::models::NodeType::Trigger { .. }));
-                if !has_trigger {
-                    let viewport_width = if state.canvas_width > 0.0 {
-                        state.canvas_width
-                    } else {
-                        800.0
-                    };
-                    let viewport_height = if state.canvas_height > 0.0 {
-                        state.canvas_height
-                    } else {
-                        600.0
-                    };
-
-                    let trigger_x = state.viewport_x + (viewport_width / state.zoom_level) / 2.0 - 100.0;
-                    let trigger_y = state.viewport_y + (viewport_height / state.zoom_level) / 3.0 - 40.0;
-
-                    let trigger_config = crate::models::TriggerConfig {
-                        params: std::collections::HashMap::new(),
-                        enabled: true,
-                        filters: Vec::new(),
-                    };
-
-                    let trigger_node_type = crate::models::NodeType::Trigger {
-                        trigger_type: crate::models::TriggerType::Manual,
-                        config: trigger_config,
-                    };
-
-                    let _ = state.add_node(
-                        "Manual Trigger".to_string(),
-                        trigger_x,
-                        trigger_y,
-                        trigger_node_type,
-                    );
-                    debug_log!(
-                        "🔧 Added default Manual Trigger node after selecting workflow (no trigger present)"
-                    );
-                }
+                // NOTE: Trigger creation is now handled exclusively by CurrentWorkflowLoaded 
+                // to prevent race conditions and duplicate triggers
             }
             state.mark_dirty();
             state.state_modified = true;

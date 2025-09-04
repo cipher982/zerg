@@ -795,7 +795,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 .values()
                 .any(|n| matches!(n.get_semantic_type(), crate::models::NodeType::Trigger { .. }));
 
-            if !has_trigger {
+            if !has_trigger && !state.trigger_creation_in_progress {
+                state.trigger_creation_in_progress = true;
+                
                 // Calculate position: top 1/3, center of viewport
                 let viewport_width = if state.canvas_width > 0.0 {
                     state.canvas_width
@@ -832,6 +834,8 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                 debug_log!(
                     "🔧 Added default Manual Trigger node (no trigger present in workflow)"
                 );
+                
+                state.trigger_creation_in_progress = false;
             }
 
             // 4. Edges are already in workflow - no duplication needed
