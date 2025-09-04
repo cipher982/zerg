@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Seed script to create the "minimal" workflow template.
-Run this after setting up the database to ensure the minimal template exists.
+Clean seed script to create the "minimal" workflow template using proper ORM.
+Run this after initializing the database.
 """
 
 import uuid
@@ -11,7 +11,7 @@ from zerg.database import db_session
 
 
 def create_minimal_template():
-    """Create the minimal workflow template with a manual trigger."""
+    """Create the minimal workflow template with a manual trigger using proper ORM."""
 
     # Define the minimal template canvas with a single Manual Trigger node
     minimal_canvas = {
@@ -44,36 +44,23 @@ def create_minimal_template():
             print(f"✓ Minimal template already exists with ID: {existing.id}")
             return existing
 
-        # Create the minimal template directly using SQL to avoid ORM field issues
-        import json
-
-        from sqlalchemy import text
-
-        result = db.execute(
-            text("""
-            INSERT INTO workflow_templates 
-            (created_by, name, description, category, canvas, tags, 
-             preview_image_url, is_public, created_at, updated_at)
-            VALUES 
-            (1, 'minimal', 'Minimal workflow template with a manual trigger for getting started', 
-             'starter', :canvas, '[]', NULL, 1, datetime('now'), datetime('now'))
-        """),
-            {"canvas": json.dumps(minimal_canvas)},
+        # Create the minimal template using proper CRUD function (clean approach)
+        template = crud.create_workflow_template(
+            db=db,
+            created_by=1,  # System/admin user
+            name="minimal",
+            description="Minimal workflow template with a manual trigger for getting started",
+            category="starter",
+            canvas=minimal_canvas,
+            tags=["starter", "minimal", "trigger"],  # Proper list now that model is fixed
+            preview_image_url=None,
         )
-
-        template_id = result.lastrowid
-        db.commit()
-
-        # Fetch the created template through ORM
-        from zerg.models.models import WorkflowTemplate
-
-        template = db.query(WorkflowTemplate).filter_by(id=template_id).first()
 
         print(f"✓ Created minimal template with ID: {template.id}")
         return template
 
 
 if __name__ == "__main__":
-    print("🌱 Creating minimal workflow template...")
+    print("🌱 Creating minimal workflow template (clean approach)...")
     template = create_minimal_template()
     print(f"🎉 Minimal template ready: '{template.name}' (ID: {template.id})")
