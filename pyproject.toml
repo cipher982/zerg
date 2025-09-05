@@ -49,6 +49,12 @@ dev = [
     "jsonschema-rs",
     "hypothesis",
     "hypothesis-jsonschema",
+    "pre-commit",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit",
 ]
 
 # Build hooks for automatic WebSocket type generation
