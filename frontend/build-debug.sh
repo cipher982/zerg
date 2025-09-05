@@ -94,6 +94,14 @@ sed \
   -e "s|{{CACHE_BUST}}|${CACHE_BUST_TAG}|g" \
   www/index.html.template > www/index.html
 
+# Cache-bust module graph and WASM to prevent JS/WASM version skew
+# 1) Ensure bootstrap.js itself is re-fetched
+sed -i.bak -e "s|src=\"bootstrap.js\"|src=\"bootstrap.js?v=${TIMESTAMP}\"|g" www/index.html && rm -f www/index.html.bak
+# 2) Ensure the ESM import of the glue uses the same version
+sed -i.bak -e "s|'./agent_platform_frontend.js'|'./agent_platform_frontend.js?v=${TIMESTAMP}'|g" www/bootstrap.js && rm -f www/bootstrap.js.bak
+# 3) Ensure the glue fetches the matching WASM URL
+sed -i.bak -e "s|new URL('agent_platform_frontend_bg.wasm', import.meta.url)|new URL('agent_platform_frontend_bg.wasm?v=${TIMESTAMP}', import.meta.url)|g" www/agent_platform_frontend.js && rm -f www/agent_platform_frontend.js.bak
+
 # Write config.js – in production do not set a localhost API base
 echo "[build-debug] writing config.js …"
 if [[ "${BUILD_ENV}" == "production" ]]; then
