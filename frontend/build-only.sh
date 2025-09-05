@@ -70,6 +70,9 @@ cp pkg/agent_platform_frontend_bg.wasm.d.ts www/
 # Ensure output dir exists (wasm-pack creates it but be safe)
 mkdir -p www
 
+# Build ID used for cache-busting query parameters across JS/WASM
+TIMESTAMP=$(date +%s)
+
 # --------------------------------------------------
 # bootstrap.js – mirrors build-debug.sh minus live server
 # --------------------------------------------------
@@ -87,11 +90,13 @@ async function main() {
 main();
 JS
 
+# Patch bootstrap import to include version so the module graph is refreshed
+sed -i.bak -e "s|'./agent_platform_frontend.js'|'./agent_platform_frontend.js?v=${TIMESTAMP}'|g" www/bootstrap.js && rm -f www/bootstrap.js.bak
+
 # --------------------------------------------------
 # Generate index.html from template with dynamic values
 # --------------------------------------------------
 echo "[build-only] 🧩 generating index.html from template …" >&2
-TIMESTAMP=$(date +%s)
 CACHE_BUST_TAG="<meta name=\"cache-bust\" content=\"${TIMESTAMP}\">"
 
 if [[ "${BUILD_ENV}" == "production" ]]; then
@@ -107,6 +112,12 @@ sed \
   -e "s|{{BACKEND_WS_URL}}|${BACKEND_WS_URL}|g" \
   -e "s|{{CACHE_BUST}}|${CACHE_BUST_TAG}|g" \
   www/index.html.template > www/index.html
+
+# Ensure the HTML references the versioned bootstrap
+sed -i.bak -e "s|src=\"bootstrap.js\"|src=\"bootstrap.js?v=${TIMESTAMP}\"|g" www/index.html && rm -f www/index.html.bak
+
+# Ensure the glue fetches the matching WASM URL (same version id)
+sed -i.bak -e "s|new URL('agent_platform_frontend_bg.wasm', import.meta.url)|new URL('agent_platform_frontend_bg.wasm?v=${TIMESTAMP}', import.meta.url)|g" www/agent_platform_frontend.js && rm -f www/agent_platform_frontend.js.bak
 
 # --------------------------------------------------
 # config.js – tiny placeholder so <script src="config.js"> doesn't 404

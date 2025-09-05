@@ -77,3 +77,23 @@ async def send_daily_digest(content: str) -> None:
     if not url:
         return
     await _post_discord(url, content)
+
+
+async def send_user_signup_alert(user_email: str, user_count: Optional[int] = None) -> None:
+    """Send a user signup notification to Discord with @here ping.
+
+    Fire-and-forget; respects DISCORD_ENABLE_ALERTS and webhook presence.
+    """
+    if not _alerts_enabled():
+        return
+    url = _webhook_url()
+    if not url:
+        return
+
+    # Format user count info if provided
+    count_info = f" (#{user_count} total)" if user_count else ""
+
+    content = f"@here 🎉 **New User Signup!** {user_email} just joined Zerg{count_info}"
+
+    # Fire-and-forget
+    asyncio.create_task(_post_discord(url, content))
