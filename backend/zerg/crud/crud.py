@@ -266,6 +266,33 @@ def create_user(
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    # Send Discord notification for new user signup
+    import asyncio
+    import threading
+
+    from zerg.services.ops_discord import send_user_signup_alert
+
+    # Get total user count for the notification
+    try:
+        total_users = count_users(db)
+    except Exception:
+        total_users = None
+
+    # Fire-and-forget Discord notification in background thread
+    def _send_discord_notification():
+        try:
+            asyncio.run(send_user_signup_alert(email, total_users))
+        except Exception:
+            # Don't fail user creation if Discord notification fails
+            pass
+
+    try:
+        threading.Thread(target=_send_discord_notification, daemon=True).start()
+    except Exception:
+        # Don't fail user creation if Discord notification fails
+        pass
+
     return new_user
 
 
