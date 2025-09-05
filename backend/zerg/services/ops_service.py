@@ -176,103 +176,165 @@ def get_summary(db: Session, current_user: UserModel) -> Dict[str, Any]:
 
 
 def get_timeseries(db: Session, metric: str, window: str = "today") -> List[Dict[str, Any]]:
-    """Return hourly series for supported metrics within the given window.
+    """Return simple time-series suitable for small sparklines.
 
-    Window currently supports only "today" (UTC).
+    - Hourly series for window=today
+    - Daily series for window=7d or 30d
     """
-    if window != "today":
-        raise ValueError("Only window=today is supported")
-
     today = _today_date_utc()
-    result: Dict[int, float] = {h: 0 for h in range(24)}
 
-    if metric == "runs_by_hour":
-        # Count runs grouped by hour started
-        rows = (
-            db.query(func.strftime("%H", AgentRunModel.started_at), func.count(AgentRunModel.id))
-            .filter(AgentRunModel.started_at.isnot(None), func.date(AgentRunModel.started_at) == today)
-            .group_by(func.strftime("%H", AgentRunModel.started_at))
-            .all()
-        )
-        for hour_str, count in rows:
-            result[int(hour_str)] = int(count)
+    if window == "today":
+        result: Dict[int, float] = {h: 0 for h in range(24)}
 
-    elif metric == "errors_by_hour":
-        rows = (
-            db.query(func.strftime("%H", AgentRunModel.finished_at), func.count(AgentRunModel.id))
-            .filter(
-                AgentRunModel.finished_at.isnot(None),
-                func.date(AgentRunModel.finished_at) == today,
-                AgentRunModel.status == "failed",
+        if metric == "runs_by_hour":
+            rows = (
+                db.query(func.strftime("%H", AgentRunModel.started_at), func.count(AgentRunModel.id))
+                .filter(AgentRunModel.started_at.isnot(None), func.date(AgentRunModel.started_at) == today)
+                .group_by(func.strftime("%H", AgentRunModel.started_at))
+                .all()
             )
-            .group_by(func.strftime("%H", AgentRunModel.finished_at))
-            .all()
-        )
-        for hour_str, count in rows:
-            result[int(hour_str)] = int(count)
+            for hour_str, count in rows:
+                result[int(hour_str)] = int(count)
 
-    elif metric == "cost_by_hour":
-        rows = (
-            db.query(
-                func.strftime("%H", AgentRunModel.finished_at),
-                func.coalesce(func.sum(AgentRunModel.total_cost_usd), 0.0),
+        elif metric == "errors_by_hour":
+            rows = (
+                db.query(func.strftime("%H", AgentRunModel.finished_at), func.count(AgentRunModel.id))
+                .filter(
+                    AgentRunModel.finished_at.isnot(None),
+                    func.date(AgentRunModel.finished_at) == today,
+                    AgentRunModel.status == "failed",
+                )
+                .group_by(func.strftime("%H", AgentRunModel.finished_at))
+                .all()
             )
-            .filter(
-                AgentRunModel.finished_at.isnot(None),
-                func.date(AgentRunModel.finished_at) == today,
-                AgentRunModel.total_cost_usd.isnot(None),
+            for hour_str, count in rows:
+                result[int(hour_str)] = int(count)
+
+        elif metric == "cost_by_hour":
+            rows = (
+                db.query(
+                    func.strftime("%H", AgentRunModel.finished_at),
+                    func.coalesce(func.sum(AgentRunModel.total_cost_usd), 0.0),
+                )
+                .filter(
+                    AgentRunModel.finished_at.isnot(None),
+                    func.date(AgentRunModel.finished_at) == today,
+                    AgentRunModel.total_cost_usd.isnot(None),
+                )
+                .group_by(func.strftime("%H", AgentRunModel.finished_at))
+                .all()
             )
-            .group_by(func.strftime("%H", AgentRunModel.finished_at))
-            .all()
+            for hour_str, total in rows:
+                result[int(hour_str)] = float(total)
+        else:
+            raise ValueError("Unsupported metric for window=today")
+
+        return [{"hour_iso": f"{h:02d}:00Z", "value": result[h]} for h in range(24)]
+
+    # Daily windows -------------------------------------------------
+    if window not in {"7d", "30d"}:
+        raise ValueError("Unsupported window")
+
+    days = 7 if window == "7d" else 30
+    start_date = today - timedelta(days=days - 1)
+
+    # Prepare zero-filled map of date -> value
+    result_day: Dict[str, float] = {}
+    for i in range(days):
+        d = start_date + timedelta(days=i)
+        result_day[d.isoformat()] = 0.0
+
+    def _group_and_fill(select_date_col, select_value_expr, base_filter):
+        rows = db.query(select_date_col, select_value_expr).filter(base_filter).group_by(select_date_col).all()
+        for day_value, v in rows:
+            key = day_value.isoformat() if hasattr(day_value, "isoformat") else str(day_value)
+            if key in result_day:
+                result_day[key] = float(v)
+
+    if metric == "runs_by_day":
+        date_col = func.date(AgentRunModel.started_at)
+        value = func.count(AgentRunModel.id)
+        filt = AgentRunModel.started_at.isnot(None) & (func.date(AgentRunModel.started_at) >= start_date)
+        _group_and_fill(date_col, value, filt)
+
+    elif metric == "errors_by_day":
+        date_col = func.date(AgentRunModel.finished_at)
+        value = func.count(AgentRunModel.id)
+        filt = (
+            AgentRunModel.finished_at.isnot(None)
+            & (func.date(AgentRunModel.finished_at) >= start_date)
+            & (AgentRunModel.status == "failed")
         )
-        for hour_str, total in rows:
-            result[int(hour_str)] = float(total)
+        _group_and_fill(date_col, value, filt)
+
+    elif metric == "cost_by_day":
+        date_col = func.date(AgentRunModel.finished_at)
+        value = func.coalesce(func.sum(AgentRunModel.total_cost_usd), 0.0)
+        filt = (
+            AgentRunModel.finished_at.isnot(None)
+            & (func.date(AgentRunModel.finished_at) >= start_date)
+            & (AgentRunModel.total_cost_usd.isnot(None))
+        )
+        _group_and_fill(date_col, value, filt)
     else:
-        raise ValueError("Unsupported metric")
+        raise ValueError("Unsupported metric for daily window")
 
-    # Render as array with 0..23 hours
-    return [{"hour_iso": f"{h:02d}:00Z", "value": result[h]} for h in range(24)]
+    # Render as ordered array by day
+    out: List[Dict[str, Any]] = []
+    for i in range(days):
+        d = start_date + timedelta(days=i)
+        key = d.isoformat()
+        out.append({"hour_iso": key, "value": result_day.get(key, 0.0)})
+    return out
 
 
 def get_top_agents(db: Session, window: str = "today", limit: int = 5) -> List[Dict[str, Any]]:
-    """Compute per-agent aggregates for the given window."""
-    if window != "today":
-        raise ValueError("Only window=today is supported")
+    """Compute per-agent aggregates for the given window.
+
+    Supports "today", "7d", and "30d".
+    """
     today = _today_date_utc()
+    start_date: Optional[datetime.date] = None
+    if window == "7d":
+        start_date = today - timedelta(days=6)
+    elif window == "30d":
+        start_date = today - timedelta(days=29)
+    elif window != "today":
+        raise ValueError("Unsupported window")
 
     # Base: runs started today per agent
-    runs_rows = (
-        db.query(AgentRunModel.agent_id, func.count(AgentRunModel.id).label("runs"))
-        .filter(AgentRunModel.started_at.isnot(None), func.date(AgentRunModel.started_at) == today)
-        .group_by(AgentRunModel.agent_id)
-        .all()
+    base_runs_q = db.query(AgentRunModel.agent_id, func.count(AgentRunModel.id).label("runs")).filter(
+        AgentRunModel.started_at.isnot(None)
     )
+    if start_date is not None:
+        base_runs_q = base_runs_q.filter(func.date(AgentRunModel.started_at) >= start_date)
+    else:
+        base_runs_q = base_runs_q.filter(func.date(AgentRunModel.started_at) == today)
+    runs_rows = base_runs_q.group_by(AgentRunModel.agent_id).all()
     runs_map = {agent_id: int(runs) for agent_id, runs in runs_rows}
 
     # Cost sum for finished runs today with cost
-    cost_rows = (
-        db.query(AgentRunModel.agent_id, func.coalesce(func.sum(AgentRunModel.total_cost_usd), 0.0))
-        .filter(
-            AgentRunModel.finished_at.isnot(None),
-            func.date(AgentRunModel.finished_at) == today,
-            AgentRunModel.total_cost_usd.isnot(None),
-        )
-        .group_by(AgentRunModel.agent_id)
-        .all()
+    base_cost_q = db.query(AgentRunModel.agent_id, func.coalesce(func.sum(AgentRunModel.total_cost_usd), 0.0)).filter(
+        AgentRunModel.finished_at.isnot(None), AgentRunModel.total_cost_usd.isnot(None)
     )
+    if start_date is not None:
+        base_cost_q = base_cost_q.filter(func.date(AgentRunModel.finished_at) >= start_date)
+    else:
+        base_cost_q = base_cost_q.filter(func.date(AgentRunModel.finished_at) == today)
+    cost_rows = base_cost_q.group_by(AgentRunModel.agent_id).all()
     cost_map = {agent_id: float(total) for agent_id, total in cost_rows}
 
     # p95 duration for successful runs today per agent (compute in Python)
-    dur_rows = (
-        db.query(AgentRunModel.agent_id, AgentRunModel.duration_ms)
-        .filter(
-            AgentRunModel.duration_ms.isnot(None),
-            AgentRunModel.started_at.isnot(None),
-            func.date(AgentRunModel.started_at) == today,
-            AgentRunModel.status == "success",
-        )
-        .all()
+    base_dur_q = db.query(AgentRunModel.agent_id, AgentRunModel.duration_ms).filter(
+        AgentRunModel.duration_ms.isnot(None),
+        AgentRunModel.started_at.isnot(None),
+        AgentRunModel.status == "success",
     )
+    if start_date is not None:
+        base_dur_q = base_dur_q.filter(func.date(AgentRunModel.started_at) >= start_date)
+    else:
+        base_dur_q = base_dur_q.filter(func.date(AgentRunModel.started_at) == today)
+    dur_rows = base_dur_q.all()
     durations_by_agent: Dict[int, List[int]] = defaultdict(list)
     for agent_id, d in dur_rows:
         if d is not None and agent_id is not None:
