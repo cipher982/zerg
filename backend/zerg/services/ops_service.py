@@ -188,32 +188,32 @@ def get_timeseries(db: Session, metric: str, window: str = "today") -> List[Dict
 
         if metric == "runs_by_hour":
             rows = (
-                db.query(func.strftime("%H", AgentRunModel.started_at), func.count(AgentRunModel.id))
+                db.query(func.extract("hour", AgentRunModel.started_at), func.count(AgentRunModel.id))
                 .filter(AgentRunModel.started_at.isnot(None), func.date(AgentRunModel.started_at) == today)
-                .group_by(func.strftime("%H", AgentRunModel.started_at))
+                .group_by(func.extract("hour", AgentRunModel.started_at))
                 .all()
             )
-            for hour_str, count in rows:
-                result[int(hour_str)] = int(count)
+            for hour_value, count in rows:
+                result[int(hour_value)] = int(count)
 
         elif metric == "errors_by_hour":
             rows = (
-                db.query(func.strftime("%H", AgentRunModel.finished_at), func.count(AgentRunModel.id))
+                db.query(func.extract("hour", AgentRunModel.finished_at), func.count(AgentRunModel.id))
                 .filter(
                     AgentRunModel.finished_at.isnot(None),
                     func.date(AgentRunModel.finished_at) == today,
                     AgentRunModel.status == "failed",
                 )
-                .group_by(func.strftime("%H", AgentRunModel.finished_at))
+                .group_by(func.extract("hour", AgentRunModel.finished_at))
                 .all()
             )
-            for hour_str, count in rows:
-                result[int(hour_str)] = int(count)
+            for hour_value, count in rows:
+                result[int(hour_value)] = int(count)
 
         elif metric == "cost_by_hour":
             rows = (
                 db.query(
-                    func.strftime("%H", AgentRunModel.finished_at),
+                    func.extract("hour", AgentRunModel.finished_at),
                     func.coalesce(func.sum(AgentRunModel.total_cost_usd), 0.0),
                 )
                 .filter(
@@ -221,11 +221,11 @@ def get_timeseries(db: Session, metric: str, window: str = "today") -> List[Dict
                     func.date(AgentRunModel.finished_at) == today,
                     AgentRunModel.total_cost_usd.isnot(None),
                 )
-                .group_by(func.strftime("%H", AgentRunModel.finished_at))
+                .group_by(func.extract("hour", AgentRunModel.finished_at))
                 .all()
             )
-            for hour_str, total in rows:
-                result[int(hour_str)] = float(total)
+            for hour_value, total in rows:
+                result[int(hour_value)] = float(total)
         else:
             raise ValueError("Unsupported metric for window=today")
 
