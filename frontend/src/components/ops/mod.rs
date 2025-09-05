@@ -173,34 +173,8 @@ pub fn render_ops_dashboard(document: &Document) -> Result<(), JsValue> {
                     crate::state::dispatch_global_message(
                         crate::messages::Message::OpsSummaryLoaded(summary.clone()),
                     );
-                    // Fetch series and top concurrently
-                    let runs_fut = crate::network::api_client::ApiClient::get_ops_timeseries(
-                        "runs_by_hour",
-                        "today",
-                    );
-                    let errs_fut = crate::network::api_client::ApiClient::get_ops_timeseries(
-                        "errors_by_hour",
-                        "today",
-                    );
-                    let top_fut = crate::network::api_client::ApiClient::get_ops_top(
-                        "agents",
-                        "today",
-                        5,
-                    );
-
-                    let runs_js = runs_fut.await;
-                    let errs_js = errs_fut.await;
-                    let top_js = top_fut.await;
-
-                    let mut runs_series: Vec<OpsSeriesPoint> = Vec::new();
-                    let mut errs_series: Vec<OpsSeriesPoint> = Vec::new();
-                    let mut top_agents: Vec<OpsTopAgent> = summary.top_agents_today.clone();
-                    if let Ok(j) = runs_js { let _ = serde_json::from_str::<Vec<OpsSeriesPoint>>(&j).map(|v| runs_series = v); }
-                    if let Ok(j) = errs_js { let _ = serde_json::from_str::<Vec<OpsSeriesPoint>>(&j).map(|v| errs_series = v); }
-                    if let Ok(j) = top_js { let _ = serde_json::from_str::<Vec<OpsTopAgent>>(&j).map(|v| top_agents = v); }
-
-                    // Render UI from gathered data
-                    let _ = build_ops_dashboard_ui(&doc_clone, &summary, &runs_series, &errs_series, &top_agents);
+                    // Default to 30d view on initial load
+                    let _ = render_ops_dashboard_for_window(&doc_clone, &summary, "30d").await;
 
                     // Subscribe to WS ops:events (admin-only; let server enforce)
                     subscribe_ops_events();
@@ -225,6 +199,35 @@ pub fn render_ops_dashboard(document: &Document) -> Result<(), JsValue> {
     Ok(())
 }
 
+async fn render_ops_dashboard_for_window(
+    document: &Document,
+    summary: &OpsSummary,
+    window: &str,
+) -> Result<(), JsValue> {
+    // Decide metrics by window
+    let (runs_metric, errs_metric, cost_metric) = match window {
+        "today" => ("runs_by_hour", "errors_by_hour", "cost_by_hour"),
+        "7d" => ("runs_by_day", "errors_by_day", "cost_by_day"),
+        _ => ("runs_by_day", "errors_by_day", "cost_by_day"),
+    };
+
+    let runs_js = crate::network::api_client::ApiClient::get_ops_timeseries(runs_metric, window).await;
+    let errs_js = crate::network::api_client::ApiClient::get_ops_timeseries(errs_metric, window).await;
+    let cost_js = crate::network::api_client::ApiClient::get_ops_timeseries(cost_metric, window).await;
+    let top_js = crate::network::api_client::ApiClient::get_ops_top("agents", window, 5).await;
+
+    let mut runs_series: Vec<OpsSeriesPoint> = Vec::new();
+    let mut errs_series: Vec<OpsSeriesPoint> = Vec::new();
+    let mut cost_series: Vec<OpsSeriesPoint> = Vec::new();
+    let mut top_agents: Vec<OpsTopAgent> = summary.top_agents_today.clone();
+    if let Ok(j) = runs_js { let _ = serde_json::from_str::<Vec<OpsSeriesPoint>>(&j).map(|v| runs_series = v); }
+    if let Ok(j) = errs_js { let _ = serde_json::from_str::<Vec<OpsSeriesPoint>>(&j).map(|v| errs_series = v); }
+    if let Ok(j) = cost_js { let _ = serde_json::from_str::<Vec<OpsSeriesPoint>>(&j).map(|v| cost_series = v); }
+    if let Ok(j) = top_js { let _ = serde_json::from_str::<Vec<OpsTopAgent>>(&j).map(|v| top_agents = v); }
+
+    build_ops_dashboard_ui(document, summary, &runs_series, &errs_series, &cost_series, &top_agents, window)
+}
+
 fn show_no_access(document: &Document, detail: Option<&str>) {
     if let Some(root) = document.get_element_by_id("ops-dashboard") {
         let mut msg = String::from("Ops Dashboard is admin-only.");
@@ -238,26 +241,94 @@ fn build_ops_dashboard_ui(
     summary: &OpsSummary,
     runs_series: &[OpsSeriesPoint],
     errs_series: &[OpsSeriesPoint],
+    cost_series: &[OpsSeriesPoint],
     top_agents: &[OpsTopAgent],
+    window: &str,
 ) -> Result<(), JsValue> {
     let root = document.get_element_by_id("ops-dashboard").unwrap();
     root.set_inner_html("");
 
+    // Header – compact title + status chip
+    let head = document.create_element("div")?;
+    head.set_class_name("ops-head");
+    let g_pct = summary
+        .budget_global
+        .as_ref()
+        .and_then(|b| b.percent)
+        .unwrap_or(0.0);
+    let status_class = if g_pct >= 100.0 || summary.errors_last_hour > 50 {
+        "down"
+    } else if g_pct >= 80.0 || summary.errors_last_hour > 0 {
+        "degraded"
+    } else {
+        "healthy"
+    };
+    let status_label = match status_class {
+        "down" => "Down",
+        "degraded" => "Degraded",
+        _ => "Healthy",
+    };
+    let (window_label, a_today, a_7d, a_30d) = match window {
+        "today" => ("Today", "active", "", ""),
+        "7d" => ("Last 7 days", "", "active", ""),
+        _ => ("Last 30 days", "", "", "active"),
+    };
+    let head_html = format!(
+        "<div class=\"title\">Operational Overview</div>\
+         <div class=\"ops-range\">\
+           <button id=\"ops-range-today\" class=\"{}\">Today</button>\
+           <button id=\"ops-range-7d\" class=\"{}\">7d</button>\
+           <button id=\"ops-range-30d\" class=\"{}\">30d</button>\
+         </div>\
+         <div class=\"status-chip {cls}\" title=\"{window_label}\">{label}</div>",
+        a_today, a_7d, a_30d,
+        cls = status_class,
+        window_label = window_label,
+        label = status_label
+    );
+    head.set_inner_html(&head_html);
+    root.append_child(&head)?;
+
+    // Attach range toggle handlers
+    let attach = |id: &str, w: &'static str, sum: OpsSummary| {
+        if let Some(btn) = document.get_element_by_id(id) {
+            let doc2 = document.clone();
+            let cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+                let doc3 = doc2.clone();
+                let sum_clone = sum.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let _ = render_ops_dashboard_for_window(&doc3, &sum_clone, w).await;
+                });
+            }));
+            let _ = btn.add_event_listener_with_callback("click", cb.as_ref().unchecked_ref());
+            cb.forget();
+        }
+    };
+    attach("ops-range-today", "today", summary.clone());
+    attach("ops-range-7d", "7d", summary.clone());
+    attach("ops-range-30d", "30d", summary.clone());
+
     // KPI row ---------------------------------------------------------
     let kpis = document.create_element("div")?;
     kpis.set_class_name("kpi-row");
+    // Compute aggregates for current window
+    let runs_sum: f64 = runs_series.iter().map(|p| p.value).sum();
+    let errs_sum: f64 = errs_series.iter().map(|p| p.value).sum();
+    let cost_sum: f64 = cost_series.iter().map(|p| p.value).sum();
+    let success_rate = if runs_sum > 0.0 { ((runs_sum - errs_sum) / runs_sum) * 100.0 } else { f64::NAN };
     let kpi_html = format!(
-        "<div class=card><div class=label>Runs Today</div><div class=value>{}</div></div>
-         <div class=card><div class=label>Cost Today</div><div class=value>{}</div></div>
-         <div class=card><div class=label>Active Users (24h)</div><div class=value>{}</div></div>
-         <div class=card><div class=label>Errors (1h)</div><div class=value>{}</div></div>",
-        summary.runs_today,
-        summary
-            .cost_today_usd
-            .map(|v| format!("${:.2}", v))
-            .unwrap_or("—".to_string()),
-        summary.active_users_24h,
-        summary.errors_last_hour,
+        "<div class=card><div class=label>Runs ({})</div><div class=value>{}</div></div>
+         <div class=card><div class=label>Cost ({})</div><div class=value>{}</div></div>
+         <div class=card><div class=label>Success Rate ({})</div><div class=value>{}</div></div>
+         <div class=card><div class=label>Errors ({})</div><div class=value>{}</div></div>",
+        window_label,
+        runs_sum as i32,
+        window_label,
+        format!("${:.2}", cost_sum),
+        window_label,
+        if success_rate.is_nan() { "—".to_string() } else { format!("{:.0}%", success_rate) },
+        window_label,
+        errs_sum as i32,
     );
     kpis.set_inner_html(&kpi_html);
     root.append_child(&kpis)?;
@@ -290,8 +361,9 @@ fn build_ops_dashboard_ui(
     // Sparklines ------------------------------------------------------
     let charts = document.create_element("div")?;
     charts.set_class_name("charts-row");
-    charts.append_child(&sparkline(document, "Runs by hour", runs_series)?.into())?;
-    charts.append_child(&sparkline(document, "Errors by hour", errs_series)?.into())?;
+    charts.append_child(&sparkline(document, &format!("Runs ({})", window_label), runs_series)?.into())?;
+    charts.append_child(&sparkline(document, &format!("Errors ({})", window_label), errs_series)?.into())?;
+    charts.append_child(&sparkline(document, &format!("Cost ({})", window_label), cost_series)?.into())?;
     root.append_child(&charts)?;
 
     // Top agents table -----------------------------------------------
@@ -352,8 +424,12 @@ fn sparkline(document: &Document, label: &str, series: &[OpsSeriesPoint]) -> Res
         let y = if max <= 0.0 { h } else { h - (p.value / max * h) };
         points.push_str(&format!("{:.2},{:.2} ", x, y));
     }
+    // Use theme token for stroke via style attribute to allow CSS variables
     let svg = format!(
-        "<div class=\"label\">{}</div><svg width=\"{}\" height=\"{}\"><polyline fill=\"none\" stroke=\"#4f46e5\" stroke-width=\"2\" points=\"{}\"/></svg>",
+        "<div class=\"label\">{}</div>\
+         <svg width=\"{}\" height=\"{}\">\
+           <polyline fill=\"none\" style=\"stroke: var(--secondary)\" stroke-width=\"2\" points=\"{}\"/>\
+         </svg>",
         label, w as i32, h as i32, points
     );
     wrap.set_inner_html(&svg);

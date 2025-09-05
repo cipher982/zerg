@@ -26,8 +26,11 @@ def get_summary(current_user: UserModel = Depends(require_admin), db: Session = 
 
 @router.get("/timeseries")
 def get_timeseries(
-    metric: str = Query(..., pattern="^(runs_by_hour|errors_by_hour|cost_by_hour)$"),
-    window: str = Query("today", pattern="^today$"),
+    metric: str = Query(
+        ...,
+        pattern="^(runs_by_hour|errors_by_hour|cost_by_hour|runs_by_day|errors_by_day|cost_by_day)$",
+    ),
+    window: str = Query("today", pattern="^(today|7d|30d)$"),
     db: Session = Depends(get_db),
 ):
     try:
@@ -39,7 +42,7 @@ def get_timeseries(
 @router.get("/top")
 def get_top(
     kind: str = Query("agents", pattern="^agents$"),
-    window: str = "today",
+    window: str = Query("today", pattern="^(today|7d|30d)$"),
     limit: int = 5,
     db: Session = Depends(get_db),
 ):
