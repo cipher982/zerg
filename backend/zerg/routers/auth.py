@@ -344,12 +344,34 @@ def connect_gmail(
 
     # Optionally start a Gmail watch immediately (best effort)
     try:
-        if callback_url:
+        # Derive/validate callback URL server-side for security
+        final_callback: str | None = None
+        settings = get_settings()
+        if settings.app_public_url:
+            base = str(settings.app_public_url).rstrip("/")
+            final_callback = f"{base}/api/email/webhook/google"
+        elif callback_url:
+            # In testing we allow arbitrary callback to keep unit-tests simple
+            if settings.testing:
+                final_callback = callback_url
+            else:
+                # Minimal validation when APP_PUBLIC_URL is not set – only accept https
+                # and the expected webhook path.
+                from urllib.parse import urlparse
+
+                try:
+                    parsed = urlparse(callback_url)
+                    if parsed.scheme == "https" and parsed.path.endswith("/api/email/webhook/google"):
+                        final_callback = callback_url
+                except Exception:  # pragma: no cover – defensive parsing guard
+                    final_callback = None
+
+        if final_callback:
             # Exchange refresh->access token and start watch
             from zerg.services import gmail_api
 
             access_token = gmail_api.exchange_refresh_token(refresh_token)
-            watch_info = gmail_api.start_watch(access_token=access_token, callback_url=callback_url)
+            watch_info = gmail_api.start_watch(access_token=access_token, callback_url=final_callback)
 
             cfg = dict(conn.config or {})
             cfg.update({"history_id": watch_info["history_id"], "watch_expiry": watch_info["watch_expiry"]})
