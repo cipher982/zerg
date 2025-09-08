@@ -35,6 +35,7 @@ dependencies = [
     "simpleeval>=1.0.3",
     "psycopg2-binary>=2.9.0",
     "google-auth>=2.40.3",
+    "PyJWT[crypto]>=2.8.0",
 ]
 
 [build-system]
