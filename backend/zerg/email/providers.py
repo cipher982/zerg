@@ -339,6 +339,12 @@ class GmailProvider:  # noqa: D101 – obvious from context
                 conn.config = cfg  # type: ignore[assignment]
                 try:
                     flag_modified(conn, "config")
+                    # Update metrics
+                    from zerg.metrics import gmail_connector_history_id
+
+                    gmail_connector_history_id.labels(connector_id=str(connector_id), owner_id=str(conn.owner_id)).set(
+                        max_hid
+                    )
                 except Exception:
                     pass
                 session.add(conn)
