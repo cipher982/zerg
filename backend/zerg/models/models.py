@@ -111,6 +111,12 @@ class Connector(Base):
     """
 
     __tablename__ = "connectors"
+    __table_args__ = (
+        # Ensure a user cannot create duplicate connectors for the same
+        # (type, provider) pair. Prevents accidental duplicates during
+        # repeated connect flows.
+        UniqueConstraint("owner_id", "type", "provider", name="uix_connector_owner_type_provider"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
 
@@ -127,6 +133,7 @@ class Connector(Base):
     config = Column(MutableDict.as_mutable(JSON), nullable=True)
 
     created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 class Agent(Base):
