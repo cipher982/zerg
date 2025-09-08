@@ -174,6 +174,11 @@ async def gmail_pubsub_webhook(
     import asyncio
 
     async def _process_connector():
+        # Track processing with metrics
+        from zerg.metrics import pubsub_webhook_processing
+
+        pubsub_webhook_processing.inc()
+
         try:
             await gmail_provider.process_connector(matching_connector.id)
             logger.info(
@@ -190,6 +195,9 @@ async def gmail_pubsub_webhook(
             from zerg.metrics import gmail_webhook_error_total
 
             gmail_webhook_error_total.inc()
+        finally:
+            # Decrement processing gauge
+            pubsub_webhook_processing.dec()
 
     asyncio.create_task(_process_connector())
 
