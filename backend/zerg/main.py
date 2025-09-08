@@ -46,6 +46,7 @@ from zerg.database import initialize_database
 from zerg.routers.admin import router as admin_router
 from zerg.routers.agents import router as agents_router
 from zerg.routers.auth import router as auth_router
+from zerg.routers.connectors import router as connectors_router
 from zerg.routers.email_webhooks import router as email_webhook_router
 from zerg.routers.graph_layout import router as graph_router
 from zerg.routers.mcp_servers import router as mcp_servers_router
@@ -287,6 +288,7 @@ app.include_router(models_router, prefix=f"{API_PREFIX}{MODELS_PREFIX}")
 app.include_router(websocket_router, prefix=API_PREFIX)
 app.include_router(admin_router, prefix=API_PREFIX)
 app.include_router(email_webhook_router, prefix=f"{API_PREFIX}")
+app.include_router(connectors_router, prefix=f"{API_PREFIX}")
 app.include_router(triggers_router, prefix=f"{API_PREFIX}")
 app.include_router(runs_router, prefix=f"{API_PREFIX}")
 app.include_router(workflows_router, prefix=f"{API_PREFIX}")
