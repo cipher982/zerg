@@ -25,7 +25,10 @@ from zerg.database import get_db
 from zerg.models.models import Connector
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["email-webhooks"])
+# Align path with existing webhook routes under "/email/webhook" so the
+# final endpoint becomes "/api/email/webhook/google/pubsub" once mounted
+# with the global API prefix in main.py.
+router = APIRouter(prefix="/email/webhook", tags=["email-webhooks"])
 
 
 def validate_pubsub_token(authorization: str | None) -> bool:
@@ -40,11 +43,8 @@ def validate_pubsub_token(authorization: str | None) -> bool:
     if not authorization or not authorization.startswith("Bearer "):
         return False
 
-    settings = get_settings()
-
-    # In testing mode, skip validation
-    if settings.testing:
-        return True
+    # Always validate in both dev and prod; tests explicitly monkeypatch this
+    # function when they want to bypass validation.
 
     # Extract token
     token = authorization[7:]  # Remove "Bearer " prefix
@@ -62,7 +62,7 @@ def validate_pubsub_token(authorization: str | None) -> bool:
             token,
             signing_key.key,
             algorithms=["RS256"],
-            audience=getattr(settings, "pubsub_audience", None),
+            audience=getattr(get_settings(), "pubsub_audience", None),
             issuer="https://accounts.google.com",
             options={"verify_exp": True},
         )
