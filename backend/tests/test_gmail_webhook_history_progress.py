@@ -51,19 +51,16 @@ async def test_history_id_advancement_and_dedup(client, db_session, _dev_user, m
         lambda _code: {"refresh_token": "rt", "access_token": "at"},
     )
 
-    client.post("/api/auth/google/gmail", json={"auth_code": "x"})
+    resp = client.post("/api/auth/google/gmail", json={"auth_code": "x"})
+    connector_id = resp.json().get("connector_id")
 
-    # --------------------------------- 2) Patch *watch* stub → history_id = 0
-    # Create connector explicitly and seed history
+    # --------------------------------- 2) Update the connector's history_id to 0
     from zerg.crud import crud as _crud
 
-    conn = _crud.create_connector(
-        db_session,
-        owner_id=_dev_user.id,
-        type="email",
-        provider="gmail",
-        config={"refresh_token": "x", "history_id": 0},
-    )
+    conn = _crud.get_connector(db_session, connector_id)
+    config = dict(conn.config or {})
+    config["history_id"] = 0
+    _crud.update_connector(db_session, conn.id, config=config)
 
     # --------------------------------- 3) Prepare agent + gmail trigger
     agent_id = client.post(
@@ -122,7 +119,7 @@ async def test_history_id_advancement_and_dedup(client, db_session, _dev_user, m
             headers={"X-Goog-Channel-Token": str(conn.id), "X-Goog-Message-Number": "1"},
         )
 
-        await asyncio.sleep(0)
+        await asyncio.sleep(0.1)  # Give async task time to run
 
         assert exec_counter["runs"] == 1
 
@@ -141,7 +138,7 @@ async def test_history_id_advancement_and_dedup(client, db_session, _dev_user, m
             headers={"X-Goog-Channel-Token": str(conn.id), "X-Goog-Message-Number": "2"},
         )
 
-        await asyncio.sleep(0)
+        await asyncio.sleep(0.1)  # Give async task time to run
 
         assert exec_counter["runs"] == 2, "New message number should schedule another run"
 

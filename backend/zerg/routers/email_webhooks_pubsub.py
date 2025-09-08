@@ -25,7 +25,7 @@ from zerg.database import get_db
 from zerg.models.models import Connector
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/email/webhook", tags=["email-webhooks"])
+router = APIRouter(tags=["email-webhooks"])
 
 
 def validate_pubsub_token(authorization: str | None) -> bool:
