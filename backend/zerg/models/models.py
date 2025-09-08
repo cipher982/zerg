@@ -96,6 +96,39 @@ class User(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+# ---------------------------------------------------------------------------
+# Integrations – Connectors (single source of truth for provider creds)
+# ---------------------------------------------------------------------------
+
+
+class Connector(Base):
+    """External integration connector.
+
+    Stores provider credentials/config for both inbound (triggers) and
+    outbound (notifications/actions). This becomes the single source of
+    truth – triggers reference a connector, and providers operate strictly
+    via a connector id.
+    """
+
+    __tablename__ = "connectors"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Ownership – the user who created/owns this connector
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    owner = relationship("User", backref="connectors")
+
+    # High-level type and provider identifier
+    # Examples: type="email", provider="gmail" | provider="smtp"
+    type = Column(String, nullable=False)
+    provider = Column(String, nullable=False)
+
+    # Provider-specific configuration (encrypted secrets, meta, watch info, etc.)
+    config = Column(MutableDict.as_mutable(JSON), nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+
 class Agent(Base):
     __tablename__ = "agents"
 

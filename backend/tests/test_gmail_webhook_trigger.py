@@ -2,13 +2,9 @@
 
 The scenario:
 
-1. Create an *agent* and an associated *email* trigger whose config marks it
-   as a **gmail** provider (`{"provider": "gmail"}`).
-2. Call the *connect Gmail* endpoint to store an *offline* refresh token for
-   the current (dev) user.  The OAuth exchange is monkey-patched so no
-   external HTTP request is made.
-3. Fire the Gmail webhook callback (`/api/email/webhook/google`).  We assert
-   that the SchedulerService is instructed to run the agent.
+1. Create an *agent* and an associated *email* trigger referencing a Gmail connector.
+2. Connect Gmail to store a refresh token (monkey-patched).
+3. Fire the Gmail webhook callback with connector id in channel token.
 """
 
 from __future__ import annotations
@@ -41,7 +37,7 @@ def _patch_google_token_exchange(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_gmail_webhook_triggers_agent(client, db_session):
+async def test_gmail_webhook_triggers_agent(client, db_session, _dev_user):
     """Full flow: trigger creation → Gmail connect → webhook callback."""
 
     # 1) Create agent ----------------------------------------------------
@@ -56,18 +52,23 @@ async def test_gmail_webhook_triggers_agent(client, db_session):
     assert resp.status_code == 201, resp.text
     agent_id = resp.json()["id"]
 
-    # 2) Create *email* trigger (provider = gmail) -----------------------
-    trigger_payload = {
-        "agent_id": agent_id,
-        "type": "email",
-        "config": {"provider": "gmail"},
-    }
+    # 2) Create Gmail connector + email trigger ------------------------
+    from zerg.crud import crud as _crud
 
-    trg_resp = client.post("/api/triggers/", json=trigger_payload)
+    conn = _crud.create_connector(
+        db_session,
+        owner_id=_dev_user.id,
+        type="email",
+        provider="gmail",
+        config={"refresh_token": "enc", "history_id": 0},
+    )
+    trg_resp = client.post(
+        "/api/triggers/",
+        json={"agent_id": agent_id, "type": "email", "config": {"connector_id": conn.id}},
+    )
     assert trg_resp.status_code == 201, trg_resp.text
-    trigger_id = trg_resp.json()["id"]
 
-    # 3) Connect Gmail (stores refresh token) ----------------------------
+    # 3) Connect Gmail (endpoint stubbed – no-op for connector already present)
     connect_resp = client.post("/api/auth/google/gmail", json={"auth_code": "dummy"})
     assert connect_resp.status_code == 200, connect_resp.text
 
@@ -102,7 +103,7 @@ async def test_gmail_webhook_triggers_agent(client, db_session):
 
     try:
         # 5) Fire Gmail webhook (msg_no=1) -----------------------------
-        headers = {"X-Goog-Channel-Token": "123", "X-Goog-Message-Number": "1"}
+        headers = {"X-Goog-Channel-Token": str(conn.id), "X-Goog-Message-Number": "1"}
         wh_resp = client.post("/api/email/webhook/google", headers=headers)
         assert wh_resp.status_code == 202, wh_resp.text
 
@@ -113,9 +114,9 @@ async def test_gmail_webhook_triggers_agent(client, db_session):
         assert called["agent_id"] == agent_id
 
         # Inspect stored last_msg_no before second callback
-        from zerg.models.models import Trigger
+        from zerg.models.models import Connector as ConnectorModel
 
-        stored = db_session.query(Trigger).filter(Trigger.id == trigger_id).first()
+        stored = db_session.query(ConnectorModel).filter(ConnectorModel.id == conn.id).first()
         assert stored is not None
         assert stored.config.get("last_msg_no") == 1
 

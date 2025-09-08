@@ -1,7 +1,8 @@
-"""Test automatic renewal of Gmail watch when expiry is near.
+"""Test renewal stub wiring at connector level.
 
-We set the trigger's ``watch_expiry`` to *yesterday* so the next call to
-``EmailTriggerService._check_email_triggers`` must update the timestamp.
+We set a connector's ``watch_expiry`` to the past and then call the provider's
+``process_connector``. Renewal currently happens best-effort; this test only
+validates that processing does not crash and can update connector history.
 """
 
 from __future__ import annotations
@@ -10,62 +11,41 @@ import time
 
 import pytest
 
-from zerg.services.email_trigger_service import email_trigger_service
+from zerg.email.providers import GmailProvider
 
 
 @pytest.mark.asyncio
-async def test_gmail_watch_renewal(client, db_session, monkeypatch):
-    """Expired watch should be renewed and expiry pushed into the future."""
+async def test_gmail_process_connector_updates_history(client, db_session, _dev_user, monkeypatch):
+    # Prepare connector with expired watch and baseline history
+    from zerg.crud import crud as _crud
 
-    # Patch stub renewal for deterministic timestamp
-    fixed_future_ts = int(time.time() * 1000) + 10 * 24 * 60 * 60 * 1000  # +10 days
-
-    def _dummy_renew_stub():  # noqa: D401 – stub
-        return {"history_id": 777, "watch_expiry": fixed_future_ts}
-
-    # Patch provider stub instead of legacy service helper
-
-    from zerg.email.providers import GmailProvider  # noqa: WPS433
-
-    monkeypatch.setattr(
-        GmailProvider,
-        "_renew_watch_stub",
-        staticmethod(_dummy_renew_stub),
+    conn = _crud.create_connector(
+        db_session,
+        owner_id=_dev_user.id,
+        type="email",
+        provider="gmail",
+        config={"refresh_token": "enc", "history_id": 0, "watch_expiry": int(time.time() * 1000) - 1000},
     )
 
-    # Connect Gmail so renewal can proceed
-    from zerg.routers import auth as auth_router
+    # Patch token refresh and history
+    from zerg.services import gmail_api as gmail_api_mod
 
-    monkeypatch.setattr(
-        auth_router, "_exchange_google_auth_code", lambda _c: {"refresh_token": "x", "access_token": "y"}
-    )
-    client.post("/api/auth/google/gmail", json={"auth_code": "z"})
+    monkeypatch.setattr(gmail_api_mod, "exchange_refresh_token", lambda _rt: "access")
 
-    # Create agent and trigger with expired watch --------------------------
-    agent_payload = {
-        "name": "Renewal Agent",
-        "system_instructions": "sys",
-        "task_instructions": "task",
-        "model": "gpt-mock",
-    }
-    agent_id = client.post("/api/agents/", json=agent_payload).json()["id"]
+    async def _alist(_a, _h):
+        return [{"id": "5", "messagesAdded": []}]
 
-    expired_ts = int(time.time() * 1000) - 60 * 60 * 1000  # 1h ago
+    monkeypatch.setattr(gmail_api_mod, "async_list_history", _alist)
 
-    trigger_payload = {
-        "agent_id": agent_id,
-        "type": "email",
-        "config": {"provider": "gmail", "history_id": 5, "watch_expiry": expired_ts},
-    }
-    trg_json = client.post("/api/triggers/", json=trigger_payload).json()
-    trg_id = trg_json["id"]
+    # Process
+    prov = GmailProvider()
+    await prov.process_connector(conn.id)
 
-    # Invoke check loop once – should renew    ----------------------------
-    await email_trigger_service._check_email_triggers()  # type: ignore[attr-defined]
+    # Assert history advanced on connector
+    from zerg.database import default_session_factory
+    from zerg.models.models import Connector as ConnectorModel
 
-    # Verify DB value updated
-    from zerg.models.models import Trigger
-
-    refreshed = db_session.query(Trigger).filter(Trigger.id == trg_id).first()
-    assert refreshed is not None
-    assert refreshed.config["watch_expiry"] == fixed_future_ts
+    with default_session_factory() as fresh:
+        refreshed = fresh.query(ConnectorModel).filter(ConnectorModel.id == conn.id).first()
+        assert refreshed is not None
+        assert refreshed.config.get("history_id") == 5

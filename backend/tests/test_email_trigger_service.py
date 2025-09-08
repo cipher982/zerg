@@ -1,54 +1,42 @@
-"""Smoke-tests for the *Email Trigger* backend scaffolding.
+"""Basic smoke test for connector-centric email triggers.
 
-The service is still a stub – it does **not** connect to IMAP yet.  We only
-verify that:
-
-1. An *email* trigger can be created via the REST API and the returned JSON
-   contains the supplied configuration.
-2. The background helper ``EmailTriggerService._check_email_triggers`` runs
-   without error and (crucially) uses the **test database** session factory
-   that the tests patch in ``conftest.py``.  This prevents accidental
-   connections to the real development database file.
+Creates a Gmail connector, then an email trigger tied to it and verifies
+the API returns the expected config (including provider and connector id).
 """
 
-import pytest
-
-from zerg.services.email_trigger_service import email_trigger_service
-
-# ---------------------------------------------------------------------------
-# The main test coroutine ----------------------------------------------------
-# ---------------------------------------------------------------------------
+from __future__ import annotations
 
 
-@pytest.mark.asyncio
-async def test_create_email_trigger_and_stub_detection(client):
-    """End-to-end creation of an *email* trigger plus stub detection run."""
+def test_create_email_trigger_with_connector(client, db_session, _dev_user):
+    # 1) Create a Gmail connector
+    from zerg.crud import crud as _crud
 
-    # 1) Create an agent (minimal payload)
+    conn = _crud.create_connector(
+        db_session,
+        owner_id=_dev_user.id,
+        type="email",
+        provider="gmail",
+        config={"refresh_token": "enc:dummy"},
+    )
+
+    # 2) Create an agent
     agent_payload = {
         "name": "Email Trigger Agent",
         "system_instructions": "sys",
         "task_instructions": "task",
         "model": "gpt-mock",
     }
+    agent_id = client.post("/api/agents/", json=agent_payload).json()["id"]
 
-    resp = client.post("/api/agents/", json=agent_payload)
-    assert resp.status_code == 201, resp.text
-    agent_id = resp.json()["id"]
-
-    # 2) Create an *email* trigger with some config blob
+    # 3) Create an email trigger referencing the connector
     trigger_payload = {
         "agent_id": agent_id,
         "type": "email",
-        "config": {"imap_host": "imap.example.com", "username": "foo"},
+        "config": {"connector_id": conn.id},
     }
-
-    trg_resp = client.post("/api/triggers/", json=trigger_payload)
-    assert trg_resp.status_code == 201, trg_resp.text
-
-    trg_json = trg_resp.json()
-    assert trg_json["type"] == "email"
-    assert trg_json["config"] == trigger_payload["config"]
-
-    # 3) Run the stub checker – must complete without exceptions
-    await email_trigger_service._check_email_triggers()  # type: ignore[attr-defined]
+    resp = client.post("/api/triggers/", json=trigger_payload)
+    assert resp.status_code == 201, resp.text
+    data = resp.json()
+    assert data["type"] == "email"
+    assert data["config"]["connector_id"] == conn.id
+    assert data["config"]["provider"] == "gmail"
