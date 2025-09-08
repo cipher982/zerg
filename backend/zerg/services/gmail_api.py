@@ -80,7 +80,8 @@ def _post_json(url: str, access_token: str, payload: Dict[str, Any]) -> Dict[str
 def start_watch(
     *,
     access_token: str,
-    callback_url: str,
+    topic_name: str | None = None,
+    callback_url: str | None = None,
     label_ids: List[str] | None = None,
 ) -> Dict[str, Any]:  # noqa: D401 – helper
     """Register (or re-register) a Gmail *watch*.
@@ -103,11 +104,13 @@ def start_watch(
 
     url = "https://gmail.googleapis.com/gmail/v1/users/me/watch"
 
+    # Gmail requires a Pub/Sub topic for push notifications. In production,
+    # pass a fully-qualified topic name (projects/<id>/topics/<name>).
+    # For legacy/local test flows, some tests patch this function and use the
+    # older callback_url param; if topic_name is not provided, we fall back
+    # to using callback_url value for the field to keep tests/dev stubs simple.
     body = {
-        # *topicName* is mandatory even for HTTPS watches but is ignored by
-        # Google – any dummy value is accepted.  Using the callback URL keeps
-        # the JSON intuitive when inspecting network traces.
-        "topicName": callback_url,
+        "topicName": topic_name or (callback_url or ""),
         "labelFilterAction": "include",
         "labelIds": label_ids or ["INBOX"],
     }
