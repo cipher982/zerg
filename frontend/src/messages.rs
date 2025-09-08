@@ -443,6 +443,8 @@ pub enum Message {
     // -------------------------------------------------------------------
     /// OAuth flow succeeded – the backend confirmed refresh-token storage.
     GmailConnected,
+    /// OAuth flow succeeded and returned a connector id
+    GmailConnectedWithConnector { connector_id: u32 },
 
     /// Toggle between compact (first 5) and full run list for an agent row
     ToggleRunHistory {

@@ -135,10 +135,20 @@ pub fn initiate_gmail_connect() {
 
         // We need to perform an async fetch – spawn_local inside closure.
         wasm_bindgen_futures::spawn_local(async move {
-            match crate::network::api_client::ApiClient::gmail_exchange_auth_code(&auth_code).await
-            {
-                Ok(()) => {
-                    crate::state::dispatch_global_message(crate::messages::Message::GmailConnected);
+            match crate::network::api_client::ApiClient::gmail_exchange_auth_code(&auth_code).await {
+                Ok(body) => {
+                    // Parse connector_id from JSON body; fall back to boolean message.
+                    let connector_id_opt = serde_json::from_str::<serde_json::Value>(&body)
+                        .ok()
+                        .and_then(|v| v.get("connector_id").and_then(|id| id.as_u64()))
+                        .map(|n| n as u32);
+                    if let Some(cid) = connector_id_opt {
+                        crate::state::dispatch_global_message(
+                            crate::messages::Message::GmailConnectedWithConnector { connector_id: cid },
+                        );
+                    } else {
+                        crate::state::dispatch_global_message(crate::messages::Message::GmailConnected);
+                    }
                 }
                 Err(e) => {
                     web_sys::console::error_1(&e);
