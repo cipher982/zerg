@@ -379,10 +379,33 @@ def connect_gmail(
             from zerg.services import gmail_api
 
             access_token = gmail_api.exchange_refresh_token(refresh_token)
+
+            # Get user's email address for Pub/Sub mapping
+            try:
+                import httpx
+
+                headers = {"Authorization": f"Bearer {access_token}"}
+                resp = httpx.get(
+                    "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    email_address = resp.json().get("emailAddress")
+                else:
+                    email_address = None
+            except Exception:
+                email_address = None
+
             watch_info = gmail_api.start_watch(access_token=access_token, callback_url=final_callback)
 
             cfg = dict(conn.config or {})
-            cfg.update({"history_id": watch_info["history_id"], "watch_expiry": watch_info["watch_expiry"]})
+            cfg.update(
+                {
+                    "history_id": watch_info["history_id"],
+                    "watch_expiry": watch_info["watch_expiry"],
+                    "emailAddress": email_address,  # Store for Pub/Sub mapping
+                }
+            )
             crud.update_connector(db, conn.id, config=cfg)
     except Exception:  # pragma: no cover – best-effort; skip network failures
         pass
