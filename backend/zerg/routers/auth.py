@@ -396,7 +396,13 @@ def connect_gmail(
             except Exception:
                 email_address = None
 
-            watch_info = gmail_api.start_watch(access_token=access_token, callback_url=final_callback)
+            # Prefer Pub/Sub topic if configured; otherwise fall back to legacy
+            # callback param for local dev/tests (some tests patch start_watch).
+            topic = getattr(settings, "gmail_pubsub_topic", None)
+            if topic:
+                watch_info = gmail_api.start_watch(access_token=access_token, topic_name=topic)
+            else:
+                watch_info = gmail_api.start_watch(access_token=access_token, callback_url=final_callback)
 
             cfg = dict(conn.config or {})
             cfg.update(

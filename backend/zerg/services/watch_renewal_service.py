@@ -153,18 +153,24 @@ class WatchRenewalService:
             from zerg.config import get_settings
 
             settings = get_settings()
-            if settings.app_public_url:
-                # Prefer Pub/Sub endpoint in production
-                callback_url = f"{settings.app_public_url}/api/email/webhook/google/pubsub"
+            topic = getattr(settings, "gmail_pubsub_topic", None)
+            # Renew the watch (use sync version in async context); prefer Pub/Sub
+            if topic:
+                watch_info = gmail_api.start_watch(
+                    access_token=access_token,
+                    topic_name=topic,
+                )
             else:
-                # Fallback to direct webhook
-                callback_url = "https://zerg.example.com/api/email/webhook/google"
-
-            # Renew the watch (use sync version in async context)
-            watch_info = gmail_api.start_watch(
-                access_token=access_token,
-                callback_url=callback_url,
-            )
+                # Legacy/local fallback (not valid for real Gmail push, kept for tests)
+                callback_url = (
+                    f"{settings.app_public_url}/api/email/webhook/google"
+                    if settings.app_public_url
+                    else "https://localhost/api/email/webhook/google"
+                )
+                watch_info = gmail_api.start_watch(
+                    access_token=access_token,
+                    callback_url=callback_url,
+                )
 
             # Update connector with new watch info
             config["history_id"] = watch_info["history_id"]
