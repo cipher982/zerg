@@ -132,7 +132,12 @@ async def lifespan(app: FastAPI):
             await scheduler_service.start()
             ops_events_bridge.start()
 
-        logger.info("Background services initialised (scheduler + email triggers)")
+            # Start watch renewal service for Gmail connectors
+            from zerg.services.watch_renewal_service import watch_renewal_service
+
+            await watch_renewal_service.start()
+
+        logger.info("Background services initialised (scheduler + email triggers + watch renewal)")
     except Exception as e:
         logger.error(f"Error during startup: {e}")
 
@@ -144,6 +149,11 @@ async def lifespan(app: FastAPI):
         if not _settings.testing:
             await scheduler_service.stop()
             ops_events_bridge.stop()
+
+            # Stop watch renewal service
+            from zerg.services.watch_renewal_service import watch_renewal_service
+
+            await watch_renewal_service.stop()
 
         # Shutdown websocket manager
         from zerg.websocket.manager import topic_manager
