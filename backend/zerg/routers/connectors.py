@@ -62,9 +62,8 @@ def delete_connector(
     connector_id: int = Path(..., gt=0),
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user),
-) -> None:
+):
     conn = crud.get_connector(db, connector_id)
     if conn is None or conn.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="Connector not found")
     crud.delete_connector(db, connector_id)
-    return None

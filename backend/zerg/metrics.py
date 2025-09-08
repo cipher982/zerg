@@ -30,6 +30,11 @@ try:
         "Number of errors when interacting with the Gmail API",
     )
 
+    gmail_webhook_error_total = Counter(
+        "gmail_webhook_error_total",
+        "Number of errors in Gmail webhook background processing",
+    )
+
     external_api_retry_total = Counter(
         "external_api_retry_total",
         "Total retries executed against external providers",
@@ -66,6 +71,7 @@ except ModuleNotFoundError:  # pragma: no cover – metrics disabled when lib ab
     trigger_fired_total = _NoopCounter()  # type: ignore[assignment]
     gmail_watch_renew_total = _NoopCounter()  # type: ignore[assignment]
     gmail_api_error_total = _NoopCounter()  # type: ignore[assignment]
+    gmail_webhook_error_total = _NoopCounter()  # type: ignore[assignment]
     external_api_retry_total = _NoopCounter()  # type: ignore[assignment]
 
     # Provide *noop* Histogram so code can call ``observe`` without importing

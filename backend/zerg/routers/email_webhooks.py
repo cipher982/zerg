@@ -245,7 +245,16 @@ async def gmail_webhook(
         try:
             await gmail_provider.process_connector(connector_id)
         except Exception as exc:  # pragma: no cover – background guard
-            logger.exception("gmail-connector-process-failed: %s", exc)
+            logger.exception(
+                "gmail-connector-process-failed",
+                exc_info=exc,
+                connector_id=connector_id,
+                extra={"connector_id": connector_id, "error_type": type(exc).__name__},
+            )
+            # Increment error metric for monitoring
+            from zerg.metrics import gmail_webhook_error_total
+
+            gmail_webhook_error_total.inc()
 
     asyncio.create_task(_bg())
 
