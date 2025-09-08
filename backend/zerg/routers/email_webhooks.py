@@ -238,6 +238,16 @@ async def gmail_webhook(
         logger.error("Gmail provider missing from registry – cannot process connector %s", connector_id)
         return {"status": "accepted", "trigger_count": 0}
 
-    await gmail_provider.process_connector(connector_id)
+    # Offload connector processing to background to keep webhook fast.
+    import asyncio
 
-    return {"status": "accepted", "trigger_count": 1}
+    async def _bg() -> None:
+        try:
+            await gmail_provider.process_connector(connector_id)
+        except Exception as exc:  # pragma: no cover – background guard
+            logger.exception("gmail-connector-process-failed: %s", exc)
+
+    asyncio.create_task(_bg())
+
+    # Processing happens asynchronously; trigger_count is not known here.
+    return {"status": "accepted", "trigger_count": 0}
