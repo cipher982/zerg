@@ -333,14 +333,22 @@ def connect_gmail(
         conn = crud.update_connector(db, conn.id, config=cfg)  # type: ignore[assignment]
         connector_id = conn.id if conn else None
     else:
-        conn = crud.create_connector(
-            db,
-            owner_id=current_user.id,
-            type="email",
-            provider="gmail",
-            config={"refresh_token": enc},
-        )
-        connector_id = conn.id
+        try:
+            conn = crud.create_connector(
+                db,
+                owner_id=current_user.id,
+                type="email",
+                provider="gmail",
+                config={"refresh_token": enc},
+            )
+            connector_id = conn.id
+        except Exception:
+            # Handle potential uniqueness race: fetch existing and reuse
+            existing = crud.get_connectors(db, owner_id=current_user.id, type="email", provider="gmail")
+            if not existing:
+                raise
+            conn = existing[0]
+            connector_id = conn.id
 
     # Optionally start a Gmail watch immediately (best effort)
     try:
