@@ -95,6 +95,10 @@ async def create_trigger(trigger_in: TriggerCreate, db: Session = Depends(get_db
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
+    # Validate trigger type against allowlist
+    if trigger_in.type not in {"webhook", "email"}:
+        raise HTTPException(status_code=400, detail="Invalid trigger type")
+
     # Email triggers must reference a connector (validate before persist)
     new_config = trigger_in.config
     if trigger_in.type == "email":
