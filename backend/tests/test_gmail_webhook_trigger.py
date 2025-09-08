@@ -55,13 +55,20 @@ async def test_gmail_webhook_triggers_agent(client, db_session, _dev_user):
     # 2) Create Gmail connector + email trigger ------------------------
     from zerg.crud import crud as _crud
 
-    conn = _crud.create_connector(
-        db_session,
-        owner_id=_dev_user.id,
-        type="email",
-        provider="gmail",
-        config={"refresh_token": "enc", "history_id": 0},
-    )
+    # Check if connector already exists (from previous test runs)
+    existing = _crud.get_connectors(db_session, owner_id=_dev_user.id, type="email", provider="gmail")
+    if existing:
+        conn = existing[0]
+        # Update config to ensure clean state
+        _crud.update_connector(db_session, conn.id, config={"refresh_token": "enc", "history_id": 0})
+    else:
+        conn = _crud.create_connector(
+            db_session,
+            owner_id=_dev_user.id,
+            type="email",
+            provider="gmail",
+            config={"refresh_token": "enc", "history_id": 0},
+        )
     trg_resp = client.post(
         "/api/triggers/",
         json={"agent_id": agent_id, "type": "email", "config": {"connector_id": conn.id}},
@@ -107,8 +114,8 @@ async def test_gmail_webhook_triggers_agent(client, db_session, _dev_user):
         wh_resp = client.post("/api/email/webhook/google", headers=headers)
         assert wh_resp.status_code == 202, wh_resp.text
 
-        # Allow event-loop tasks a tiny slice
-        await asyncio.sleep(0)
+        # Allow event-loop tasks time to run (webhook is async now)
+        await asyncio.sleep(0.2)
 
         assert called["count"] == 1
         assert called["agent_id"] == agent_id
