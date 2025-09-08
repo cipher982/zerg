@@ -162,13 +162,12 @@ class GmailProvider:  # noqa: D101 – obvious from context
     # Public API (EmailProvider) ---------------------------------------
     # ------------------------------------------------------------------
 
-    async def process_trigger(self, trigger_id: int) -> None:  # noqa: D401 – see protocol docs
-        """Fetch unread Gmail messages for *one* trigger and fire events.
+    async def process_trigger(self, trigger_id: int) -> None:  # noqa: D401 – legacy helper (unused in connector-first mode)
+        """Legacy entrypoint retained for compatibility.
 
-        The logic mirrors the behaviour that previously lived in
-        ``EmailTriggerService._handle_gmail_trigger`` with only cosmetic
-        changes (use provider-level state instead of ``self`` from the
-        service).  No functional behaviour has been altered.
+        Looks up the trigger, extracts ``connector_id`` from its config and
+        delegates to :meth:`process_connector` so we only maintain one code
+        path. Triggers without a connector are ignored.
         """
 
         # ------------------------------------------------------------------
@@ -186,158 +185,19 @@ class GmailProvider:  # noqa: D101 – obvious from context
         # Re-load the trigger inside a fresh session so we can mutate JSON and
         # commit safely.
         from zerg.database import db_session  # local import to avoid cycles
-        from zerg.events import EventType  # noqa: WPS433 – runtime import
-        from zerg.events import event_bus  # noqa: WPS433
-        from zerg.metrics import gmail_api_error_total  # noqa: WPS433
         from zerg.models.models import Trigger  # noqa: WPS433
-        from zerg.models.models import User  # noqa: WPS433
-        from zerg.services import email_filtering  # noqa: WPS433
-        from zerg.services import gmail_api  # noqa: WPS433
-        from zerg.services.scheduler_service import scheduler_service  # noqa: WPS433
 
         with db_session() as session:
             trg: Trigger | None = session.query(Trigger).filter(Trigger.id == trigger_id).first()
-
-            if trg is None:
+            if not trg:
                 logger.warning("trigger-missing", trigger_id=trigger_id)
                 return
-
-            if (trg.config or {}).get("provider") != "gmail":
-                # Mis-configuration – guard against accidental calls.
-                logger.debug("provider-mismatch", trigger_id=trigger_id)
+            cfg = trg.config or {}
+            connector_id = cfg.get("connector_id")
+            if connector_id is None:
+                logger.debug("skip-no-connector", trigger_id=trigger_id)
                 return
-
-            # --------------------------------------------------------------
-            # Maybe renew Gmail watch (expires every 7 days) --------------
-            # --------------------------------------------------------------
-
-            await self._maybe_renew_watch(trg, session)
-
-            # ------------------------------------------------------------------
-            # OAuth – exchange *refresh* → *access* token (55-min cache)
-            # ------------------------------------------------------------------
-
-            user: User | None = session.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
-
-            if user is None:
-                logger.warning("no-gmail-user", trigger_id=trg.id)
-                return
-
-            refresh_token: str = user.gmail_refresh_token  # type: ignore[assignment]
-
-            now = _time_mod.time()
-            cached = self._token_cache.get(refresh_token)
-            if cached and cached[1] > now:
-                access_token = cached[0]
-            else:
-                try:
-                    access_token = await gmail_api.async_exchange_refresh_token(refresh_token)
-                except Exception as exc:  # pragma: no cover – network error
-                    logger.error("refresh-token-exchange-failed", trigger_id=trg.id, error=str(exc))
-                    gmail_api_error_total.inc()
-                    return
-
-                # cache for 55 minutes
-                self._token_cache[refresh_token] = (access_token, now + 55 * 60)
-
-            # ------------------------------------------------------------------
-            # History diff – ask Gmail API for changes since last stored HID
-            # ------------------------------------------------------------------
-
-            start_hid = int((trg.config or {}).get("history_id", 0))
-
-            history_records = await gmail_api.async_list_history(access_token, start_hid)
-
-            if not history_records:
-                logger.debug("history-empty", trigger_id=trg.id)
-                return  # nothing new
-
-            # Flatten message IDs + track max historyId encountered
-            message_ids: list[str] = []
-            max_hid = start_hid
-            for h in history_records:
-                try:
-                    hid_int = int(h["id"])
-                    max_hid = max(max_hid, hid_int)
-                except Exception:  # noqa: BLE001 – tolerant parsing
-                    pass
-
-                for added in h.get("messagesAdded", []):
-                    msg = added.get("message", {})
-                    mid = msg.get("id")
-                    if mid:
-                        message_ids.append(str(mid))
-
-            if not message_ids:
-                logger.debug("history-no-messages", trigger_id=trg.id)
-                # Still advance history id to avoid re-processing same empty diff
-                if max_hid > start_hid:
-                    (trg.config or {}).update({"history_id": max_hid})
-                    try:
-                        from sqlalchemy.orm.attributes import flag_modified  # type: ignore
-
-                        flag_modified(trg, "config")
-                    except ImportError:
-                        pass
-                    session.add(trg)
-                    session.commit()
-                return
-
-            # ------------------------------------------------------------------
-            # Inspect each message; apply filters; fire events & run agent
-            # ------------------------------------------------------------------
-
-            filters = (trg.config or {}).get("filters")
-            fired_any = False
-
-            for mid in message_ids:
-                meta = await gmail_api.async_get_message_metadata(access_token, mid)
-
-                if not meta:
-                    continue  # skip on error
-
-                if not email_filtering.matches(meta, filters):
-                    continue
-
-                # Fire the platform-level trigger-fired event and schedule run
-                await event_bus.publish(
-                    EventType.TRIGGER_FIRED,
-                    {
-                        "trigger_id": trg.id,
-                        "agent_id": trg.agent_id,
-                        "provider": "gmail",
-                        "message_id": mid,
-                    },
-                )
-
-                await scheduler_service.run_agent_task(trg.agent_id)  # type: ignore[arg-type]
-                fired_any = True
-
-            # ------------------------------------------------------------------
-            # Persist the updated history_id so we do not re-process
-            # ------------------------------------------------------------------
-
-            if max_hid > start_hid:
-                cfg = dict(trg.config or {})
-                cfg["history_id"] = max_hid
-                trg.config = cfg  # type: ignore[assignment]
-
-                try:
-                    from sqlalchemy.orm.attributes import flag_modified  # type: ignore
-
-                    flag_modified(trg, "config")
-                except ImportError:  # pragma: no cover
-                    pass
-
-                session.add(trg)
-                session.commit()
-
-            logger.info(
-                "trigger-processed",
-                trigger_id=trg.id,
-                message_count=len(message_ids),
-                fired=fired_any,
-            )
+        await self.process_connector(int(connector_id))
 
         # ------------------------------------------------------------------
         # Prometheus – record overall latency
@@ -349,6 +209,147 @@ class GmailProvider:  # noqa: D101 – obvious from context
             trigger_processing_seconds.observe(_time_mod.perf_counter() - start_ts)
         except Exception:  # pragma: no cover – metrics disabled or import fail
             pass
+
+    # ------------------------------------------------------------------
+    # New entrypoint – process all triggers for a connector
+    # ------------------------------------------------------------------
+
+    async def process_connector(self, connector_id: int) -> None:
+        """Fetch Gmail changes for a connector and apply all its triggers."""
+        import time as _time_mod
+
+        from sqlalchemy.orm.attributes import flag_modified  # type: ignore
+
+        from zerg.database import db_session
+        from zerg.events import EventType
+        from zerg.events import event_bus
+        from zerg.metrics import gmail_api_error_total
+        from zerg.models.models import Connector as ConnectorModel
+        from zerg.models.models import Trigger
+        from zerg.services import email_filtering
+        from zerg.services import gmail_api
+        from zerg.services.scheduler_service import scheduler_service
+        from zerg.utils import crypto
+
+        # keep perf counter available for potential future metrics
+        # (unused in current implementation)
+
+        with db_session() as session:
+            conn: ConnectorModel | None = (
+                session.query(ConnectorModel).filter(ConnectorModel.id == connector_id).first()
+            )
+            if not conn:
+                logger.warning("connector-missing", connector_id=connector_id)
+                return
+            if conn.provider != "gmail" or conn.type != "email":
+                logger.debug("connector-mismatch", connector_id=connector_id)
+                return
+
+            cfg = dict(conn.config or {})
+            enc_token = cfg.get("refresh_token")
+            if not enc_token:
+                logger.warning("no-refresh-token", connector_id=connector_id)
+                return
+
+            refresh_token = crypto.decrypt(enc_token)
+
+            # Access token with simple per-connector cache
+            now = _time_mod.time()
+            cached = self._token_cache.get(str(connector_id))
+            if cached and cached[1] > now:
+                access_token = cached[0]
+            else:
+                try:
+                    access_token = await gmail_api.async_exchange_refresh_token(refresh_token)
+                except Exception as exc:  # pragma: no cover
+                    logger.error("refresh-token-exchange-failed", connector_id=connector_id, error=str(exc))
+                    gmail_api_error_total.inc()
+                    return
+                self._token_cache[str(connector_id)] = (access_token, now + 55 * 60)
+
+            # History diff at connector level
+            start_hid = int(cfg.get("history_id", 0))
+            history_records = await gmail_api.async_list_history(access_token, start_hid)
+            if not history_records:
+                logger.debug("history-empty", connector_id=connector_id)
+                return
+
+            # Flatten
+            message_ids: list[str] = []
+            max_hid = start_hid
+            for h in history_records:
+                try:
+                    hid_int = int(h.get("id", 0))
+                    max_hid = max(max_hid, hid_int)
+                except Exception:
+                    pass
+                for added in h.get("messagesAdded", []):
+                    mid = (added.get("message") or {}).get("id")
+                    if mid:
+                        message_ids.append(str(mid))
+
+            if not message_ids:
+                logger.debug("history-no-messages", connector_id=connector_id)
+                if max_hid > start_hid:
+                    cfg["history_id"] = max_hid
+                    conn.config = cfg  # type: ignore[assignment]
+                    try:
+                        flag_modified(conn, "config")
+                    except Exception:
+                        pass
+                    session.add(conn)
+                    session.commit()
+                return
+
+            # Pre-fetch metadata per message once
+            meta_cache: dict[str, dict] = {}
+            for mid in message_ids:
+                meta = await gmail_api.async_get_message_metadata(access_token, mid)
+                if meta:
+                    meta_cache[mid] = meta
+
+            # Load triggers referencing this connector
+            triggers = [
+                trg
+                for trg in session.query(Trigger).filter(Trigger.type == "email").all()
+                if (trg.config or {}).get("connector_id") == connector_id
+            ]
+
+            fired_total = 0
+            for trg in triggers:
+                filters = (trg.config or {}).get("filters")
+                for mid, meta in meta_cache.items():
+                    if not email_filtering.matches(meta, filters):
+                        continue
+                    await event_bus.publish(
+                        EventType.TRIGGER_FIRED,
+                        {
+                            "trigger_id": trg.id,
+                            "agent_id": trg.agent_id,
+                            "provider": "gmail",
+                            "message_id": mid,
+                        },
+                    )
+                    await scheduler_service.run_agent_task(trg.agent_id)  # type: ignore[arg-type]
+                    fired_total += 1
+
+            # Update connector history id
+            if max_hid > start_hid:
+                cfg["history_id"] = max_hid
+                conn.config = cfg  # type: ignore[assignment]
+                try:
+                    flag_modified(conn, "config")
+                except Exception:
+                    pass
+                session.add(conn)
+                session.commit()
+
+            logger.info(
+                "connector-processed",
+                connector_id=connector_id,
+                messages=len(message_ids),
+                fired=fired_total,
+            )
 
 
 # ---------------------------------------------------------------------------

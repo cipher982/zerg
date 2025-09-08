@@ -71,7 +71,6 @@ from zerg.routers.workflows import router as workflows_router
 # unless they are stopped explicitly.  To make the entire test-suite
 # friction-free we skip service start-up when the environment variable
 # ``TESTING`` is truthy (set automatically by `backend/tests/conftest.py`).
-from zerg.services.email_trigger_service import email_trigger_service  # noqa: E402
 from zerg.services.ops_events import ops_events_bridge  # noqa: E402
 from zerg.services.scheduler_service import scheduler_service  # noqa: E402
 
@@ -129,7 +128,6 @@ async def lifespan(app: FastAPI):
         # Start core background services
         if not _settings.testing:
             await scheduler_service.start()
-            await email_trigger_service.start()
             ops_events_bridge.start()
 
         logger.info("Background services initialised (scheduler + email triggers)")
@@ -143,7 +141,6 @@ async def lifespan(app: FastAPI):
         # Stop background services
         if not _settings.testing:
             await scheduler_service.stop()
-            await email_trigger_service.stop()
             ops_events_bridge.stop()
 
         # Shutdown websocket manager

@@ -1,62 +1,40 @@
-"""Unit-test for Gmail *watch* initialisation on trigger creation.
+"""Unit-test for Gmail watch initialisation via connector.
 
-The router hook should invoke ``EmailTriggerService.initialize_gmail_trigger``
-which stores ``history_id`` and ``watch_expiry`` in the trigger's ``config``
-JSON.  We monkey-patch the private helper so no external network call is made.
+The Gmail connect endpoint creates a connector and, when provided a callback
+URL, registers a watch and stores ``history_id`` and ``watch_expiry`` in the
+connector's config.
 """
 
 from __future__ import annotations
 
 
-def test_gmail_trigger_initialises_watch(client, monkeypatch, db_session):
-    """Creating a gmail trigger should persist watch metadata."""
+def test_gmail_connector_initialises_watch(client, monkeypatch):
+    """Connecting Gmail with a callback should persist watch metadata on the connector."""
 
-    # ------------------------------------------------------------------
-    # Patch stub to deterministic values so assertion is simple
-    # ------------------------------------------------------------------
-    from zerg.services import email_trigger_service as svc_mod  # noqa: WPS433 – local import
-
-    def _dummy_start_watch():  # noqa: D401 – sync stub
-        return {"history_id": 42, "watch_expiry": 9999999999999}
-
-    monkeypatch.setattr(svc_mod.EmailTriggerService, "_start_gmail_watch_stub", staticmethod(_dummy_start_watch))
-
-    # ------------------------------------------------------------------
-    # Connect Gmail so a refresh_token exists on the dev user row
-    # ------------------------------------------------------------------
-    from zerg.routers import auth as auth_router  # patch token exchange
+    # Patch token exchange and watch start to deterministic values
+    from zerg.routers import auth as auth_router
+    from zerg.services import gmail_api as gmail_api_mod
 
     monkeypatch.setattr(
-        auth_router, "_exchange_google_auth_code", lambda _code: {"refresh_token": "dummy", "access_token": "ignore"}
+        auth_router, "_exchange_google_auth_code", lambda _c: {"refresh_token": "rt", "access_token": "at"}
+    )
+    monkeypatch.setattr(gmail_api_mod, "exchange_refresh_token", lambda _rt: "access")
+    monkeypatch.setattr(
+        gmail_api_mod,
+        "start_watch",
+        lambda *, access_token, callback_url, label_ids=None: {"history_id": 42, "watch_expiry": 9999999999999},
     )
 
-    connect_resp = client.post("/api/auth/google/gmail", json={"auth_code": "stub"})
-    assert connect_resp.status_code == 200, connect_resp.text
+    resp = client.post("/api/auth/google/gmail", json={"auth_code": "x", "callback_url": "https://cb"})
+    assert resp.status_code == 200
+    connector_id = resp.json()["connector_id"]
 
-    # ------------------------------------------------------------------
-    # Create agent & gmail trigger
-    # ------------------------------------------------------------------
-    agent_payload = {
-        "name": "Gmail Watch Agent",
-        "system_instructions": "sys",
-        "task_instructions": "task",
-        "model": "gpt-mock",
-    }
+    # Verify connector contains watch meta
+    from zerg.database import default_session_factory
+    from zerg.models.models import Connector
 
-    resp = client.post("/api/agents/", json=agent_payload)
-    agent_id = resp.json()["id"]
-
-    trigger_payload = {
-        "agent_id": agent_id,
-        "type": "email",
-        "config": {"provider": "gmail"},
-    }
-
-    trg_resp = client.post("/api/triggers/", json=trigger_payload)
-    assert trg_resp.status_code == 201, trg_resp.text
-
-    trg_json = trg_resp.json()
-
-    # config must now include history_id & watch_expiry
-    assert trg_json["config"].get("history_id") == 42
-    assert trg_json["config"].get("watch_expiry") == 9999999999999
+    with default_session_factory() as s:
+        conn = s.query(Connector).filter(Connector.id == connector_id).first()
+        assert conn is not None
+        assert conn.config.get("history_id") == 42
+        assert conn.config.get("watch_expiry") == 9999999999999

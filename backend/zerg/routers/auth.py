@@ -296,38 +296,65 @@ def connect_gmail(
     body: dict[str, str],
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user),
-) -> dict[str, str]:
-    """Store *offline* Gmail permissions for the **current** user.
+) -> dict[str, str | int]:
+    """Connect Gmail via OAuth and create/update a Gmail connector.
 
-    Expected body: ``{ "auth_code": "<code from OAuth consent window>" }``.
+    Expected body: { "auth_code": "...", "callback_url": "https://.../api/email/webhook/google" }
 
-    The frontend must request the following when launching the consent screen::
-
-        scope=https://www.googleapis.com/auth/gmail.readonly
-        access_type=offline
-        prompt=consent
-
-    The *refresh token* returned by Google is stored on the user row.  The
-    endpoint returns a simple JSON confirmation so the client knows the
-    account is connected.
+    - Stores the encrypted refresh token in a Connector (type="email", provider="gmail").
+    - Optionally attempts to register a Gmail watch if ``callback_url`` is provided.
+    - Returns the ``connector_id``.
     """
 
     auth_code = body.get("auth_code")
     if not auth_code:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="auth_code missing")
 
-    # 1. Exchange code for tokens (patched to stub out in unit-tests)
-    token_payload = _exchange_google_auth_code(auth_code)
+    callback_url = body.get("callback_url")
 
+    # Exchange code for tokens (patched to stub out in unit-tests)
+    token_payload = _exchange_google_auth_code(auth_code)
     refresh_token: str = token_payload["refresh_token"]
 
-    # 2. Persist on current user row
-    updated = crud.update_user(
-        db,
-        current_user.id,
-        gmail_refresh_token=refresh_token,
-    )
-    if updated is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    # Create or update connector for this user
+    from zerg.utils import crypto  # lazy import
 
-    return {"status": "connected"}
+    enc = crypto.encrypt(refresh_token)
+
+    # Try to find an existing Gmail connector for this owner
+    existing = crud.get_connectors(db, owner_id=current_user.id, type="email", provider="gmail")
+    if existing:
+        conn = existing[0]
+        cfg = dict(conn.config or {})
+        cfg["refresh_token"] = enc
+        # Clear watch meta; will be re-initialized below when possible
+        cfg.pop("history_id", None)
+        cfg.pop("watch_expiry", None)
+        conn = crud.update_connector(db, conn.id, config=cfg)  # type: ignore[assignment]
+        connector_id = conn.id if conn else None
+    else:
+        conn = crud.create_connector(
+            db,
+            owner_id=current_user.id,
+            type="email",
+            provider="gmail",
+            config={"refresh_token": enc},
+        )
+        connector_id = conn.id
+
+    # Optionally start a Gmail watch immediately (best effort)
+    try:
+        if callback_url:
+            # Exchange refresh->access token and start watch
+            from zerg.services import gmail_api
+
+            access_token = gmail_api.exchange_refresh_token(refresh_token)
+            watch_info = gmail_api.start_watch(access_token=access_token, callback_url=callback_url)
+
+            cfg = dict(conn.config or {})
+            cfg.update({"history_id": watch_info["history_id"], "watch_expiry": watch_info["watch_expiry"]})
+            crud.update_connector(db, conn.id, config=cfg)
+    except Exception:  # pragma: no cover – best-effort; skip network failures
+        pass
+
+    return {"status": "connected", "connector_id": int(connector_id)}

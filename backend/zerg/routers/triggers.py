@@ -8,7 +8,6 @@ and executes the associated agent immediately.
 # typing and forward-ref convenience
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import hmac
 import json
@@ -69,45 +68,16 @@ async def delete_trigger(
 ):
     """Delete a trigger.
 
-    Special handling for *email* provider **gmail**:
-
-    • Attempts to call Gmail *stop* endpoint so push notifications are
-      turned off immediately on user’s mailbox.  The call is best effort –
-      network/auth failures are logged but do not abort the deletion.
+    Connector-managed providers (like Gmail) are not affected by trigger
+    deletion (watch lifecycle is per-connector).
     """
 
-    # 1) Fetch the trigger (needed before deletion to inspect type/config)
     trg = crud.get_trigger(db, trigger_id)
     if trg is None:
         raise HTTPException(status_code=404, detail="Trigger not found")
 
-    # 2) Provider-specific cleanup --------------------------------------
-    if trg.type == "email" and (trg.config or {}).get("provider") == "gmail":
-        try:
-            from zerg.models.models import User  # local import to avoid cycles
-            from zerg.services import gmail_api  # local
-            from zerg.utils import crypto as _crypto  # lazy
-
-            # Pick any gmail-connected user (MVP logic)
-            user: Optional[User] = db.query(User).filter(User.gmail_refresh_token.isnot(None)).first()
-
-            if user is not None:
-                refresh_token = _crypto.decrypt(user.gmail_refresh_token)  # type: ignore[arg-type]
-
-                access_token = await asyncio.to_thread(  # type: ignore[attr-defined]
-                    gmail_api.exchange_refresh_token,
-                    refresh_token,
-                )
-
-                # Fire stop_watch in thread pool so we don’t block event loop
-                await asyncio.to_thread(gmail_api.stop_watch, access_token=access_token)  # type: ignore[attr-defined]
-        except Exception as exc:  # pragma: no cover – best-effort cleanup
-            logger.warning("Failed to stop Gmail watch for trigger %s: %s", trg.id, exc)
-
-    # 3) Finally delete ---------------------------------------------------
     crud.delete_trigger(db, trigger_id)
-
-    return None  # 204 no content
+    return None
 
 
 @router.post("/", response_model=TriggerSchema, status_code=status.HTTP_201_CREATED)
@@ -125,25 +95,29 @@ async def create_trigger(trigger_in: TriggerCreate, db: Session = Depends(get_db
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
+    # Email triggers must reference a connector (validate before persist)
+    new_config = trigger_in.config
+    if trigger_in.type == "email":
+        cfg = dict(new_config or {})
+        connector_id = cfg.get("connector_id")
+        if connector_id is None:
+            raise HTTPException(status_code=400, detail="Email triggers require connector_id in config")
+        from zerg.crud import crud as _crud  # local import
+
+        conn = _crud.get_connector(db, int(connector_id))
+        if conn is None:
+            raise HTTPException(status_code=404, detail="Connector not found")
+        # Normalise provider field to connector provider
+        cfg["provider"] = conn.provider
+        new_config = cfg
+
     # Persist trigger -----------------------------------------------------
     trg = crud.create_trigger(
         db,
         agent_id=trigger_in.agent_id,
         trigger_type=trigger_in.type,
-        config=trigger_in.config,
+        config=new_config,
     )
-
-    # ------------------------------------------------------------------
-    # Provider-specific post-create hooks
-    # ------------------------------------------------------------------
-    if trg.type == "email" and (trg.config or {}).get("provider") == "gmail":
-        # Defer heavy IO to the email trigger service
-        from zerg.services.email_trigger_service import email_trigger_service  # noqa: WPS433 lazy import
-
-        try:
-            await email_trigger_service.initialize_gmail_trigger(db, trg)
-        except Exception as exc:  # pragma: no cover – do not fail overall request
-            logger.exception("Failed to initialise Gmail trigger %s: %s", trg.id, exc)
 
     return trg
 
