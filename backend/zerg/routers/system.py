@@ -33,6 +33,8 @@ def system_info() -> Dict[str, Any]:
     return {
         "auth_disabled": _settings.auth_disabled,
         "google_client_id": _settings.google_client_id,
+        # Surface public URL so frontend can compute callback routes when needed
+        "app_public_url": _settings.app_public_url,
     }
 
 
