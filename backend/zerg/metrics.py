@@ -42,6 +42,29 @@ try:
     )
 
     # ------------------------------------------------------------------
+    # Gauges (current state) -------------------------------------------
+    # ------------------------------------------------------------------
+
+    from prometheus_client import Gauge  # type: ignore  # noqa: WPS433
+
+    gmail_connector_history_id = Gauge(
+        "gmail_connector_history_id",
+        "Current history_id for each Gmail connector",
+        labelnames=("connector_id", "owner_id"),
+    )
+
+    gmail_connector_watch_expiry = Gauge(
+        "gmail_connector_watch_expiry_seconds",
+        "Unix timestamp when Gmail watch expires",
+        labelnames=("connector_id", "owner_id"),
+    )
+
+    pubsub_webhook_processing = Gauge(
+        "pubsub_webhook_processing_total",
+        "Number of Pub/Sub webhooks currently being processed",
+    )
+
+    # ------------------------------------------------------------------
     # Histograms (latency) ---------------------------------------------
     # ------------------------------------------------------------------
 
@@ -73,6 +96,26 @@ except ModuleNotFoundError:  # pragma: no cover – metrics disabled when lib ab
     gmail_api_error_total = _NoopCounter()  # type: ignore[assignment]
     gmail_webhook_error_total = _NoopCounter()  # type: ignore[assignment]
     external_api_retry_total = _NoopCounter()  # type: ignore[assignment]
+
+    # Provide *noop* Gauge so code can call ``set`` without importing
+    # the optional dependency in minimal CI images.
+
+    class _NoopGauge:  # noqa: D401 – tiny helper
+        def set(self, _value: float):  # noqa: D401 – mimic prometheus
+            return None
+
+        def inc(self, _value: float = 1):  # noqa: D401 – mimic prometheus
+            return None
+
+        def dec(self, _value: float = 1):  # noqa: D401 – mimic prometheus
+            return None
+
+        def labels(self, *args, **kwargs):  # type: ignore
+            return self
+
+    gmail_connector_history_id = _NoopGauge()  # type: ignore[assignment]
+    gmail_connector_watch_expiry = _NoopGauge()  # type: ignore[assignment]
+    pubsub_webhook_processing = _NoopGauge()  # type: ignore[assignment]
 
     # Provide *noop* Histogram so code can call ``observe`` without importing
     # the optional dependency in minimal CI images.
