@@ -69,6 +69,7 @@ try:
     from zerg.models.models import AgentMessage  # noqa: F401
     from zerg.models.models import AgentRun  # noqa: F401
     from zerg.models.models import CanvasLayout  # noqa: F401
+    from zerg.models.models import Connector  # noqa: F401
     from zerg.models.models import NodeExecutionState  # noqa: F401
     from zerg.models.models import Thread  # noqa: F401
     from zerg.models.models import ThreadMessage  # noqa: F401
@@ -406,6 +407,7 @@ def initialize_database(engine: Engine = None) -> None:
     from zerg.models.models import AgentMessage  # noqa: F401
     from zerg.models.models import AgentRun  # noqa: F401
     from zerg.models.models import CanvasLayout  # noqa: F401
+    from zerg.models.models import Connector  # noqa: F401
     from zerg.models.models import NodeExecutionState  # noqa: F401
     from zerg.models.models import Thread  # noqa: F401
     from zerg.models.models import ThreadMessage  # noqa: F401

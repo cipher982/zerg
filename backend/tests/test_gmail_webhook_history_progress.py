@@ -1,8 +1,8 @@
-"""Regression tests for Gmail webhook → EmailTriggerService integration.
+"""Regression tests for Gmail webhook → connector-centric integration.
 
 Focus on *observable* behaviour rather than internal helper functions:
 
-1. After a webhook callback the trigger's ``history_id`` must advance to the
+1. After a webhook callback the connector's ``history_id`` must advance to the
    highest ``history.id`` value returned by the Gmail *history* diff.
 2. A *new* ``X-Goog-Message-Number`` should schedule an additional agent run
    (dedup logic only skips identical numbers).
@@ -39,7 +39,7 @@ def _stub_refresh_token(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_history_id_advancement_and_dedup(client, db_session, monkeypatch):
+async def test_history_id_advancement_and_dedup(client, db_session, _dev_user, monkeypatch):
     """Webhook should update history_id and fire again on *new* message numbers."""
 
     # --------------------------------- 1) Connect Gmail (store refresh token)
@@ -54,15 +54,15 @@ async def test_history_id_advancement_and_dedup(client, db_session, monkeypatch)
     client.post("/api/auth/google/gmail", json={"auth_code": "x"})
 
     # --------------------------------- 2) Patch *watch* stub → history_id = 0
-    from zerg.services import email_trigger_service as svc_mod  # noqa: WPS433
+    # Create connector explicitly and seed history
+    from zerg.crud import crud as _crud
 
-    def _init_stub():  # noqa: D401 – sync helper
-        return {"history_id": 0, "watch_expiry": 9_999_999_999_999}
-
-    monkeypatch.setattr(
-        svc_mod.EmailTriggerService,
-        "_start_gmail_watch_stub",
-        staticmethod(_init_stub),
+    conn = _crud.create_connector(
+        db_session,
+        owner_id=_dev_user.id,
+        type="email",
+        provider="gmail",
+        config={"refresh_token": "x", "history_id": 0},
     )
 
     # --------------------------------- 3) Prepare agent + gmail trigger
@@ -76,12 +76,10 @@ async def test_history_id_advancement_and_dedup(client, db_session, monkeypatch)
         },
     ).json()["id"]
 
-    trg_json = client.post(
+    client.post(
         "/api/triggers/",
-        json={"agent_id": agent_id, "type": "email", "config": {"provider": "gmail"}},
-    ).json()
-
-    trigger_id = trg_json["id"]
+        json={"agent_id": agent_id, "type": "email", "config": {"connector_id": conn.id}},
+    )
 
     # --------------------------------- 4) Stub list_history with *stateful* behaviour
 
@@ -121,7 +119,7 @@ async def test_history_id_advancement_and_dedup(client, db_session, monkeypatch)
         # -------------------------- first webhook (msg_no=1) – should run
         client.post(
             "/api/email/webhook/google",
-            headers={"X-Goog-Channel-Token": "t", "X-Goog-Message-Number": "1"},
+            headers={"X-Goog-Channel-Token": str(conn.id), "X-Goog-Message-Number": "1"},
         )
 
         await asyncio.sleep(0)
@@ -130,17 +128,17 @@ async def test_history_id_advancement_and_dedup(client, db_session, monkeypatch)
 
         # history_id must be 1001 now
         from zerg.database import default_session_factory
-        from zerg.models.models import Trigger
+        from zerg.models.models import Connector as ConnectorModel
 
         with default_session_factory() as fresh:
-            trg_after = fresh.query(Trigger).filter(Trigger.id == trigger_id).first()
-            assert trg_after is not None
-            assert trg_after.config.get("history_id") == 1001
+            conn_after = fresh.query(ConnectorModel).filter(ConnectorModel.id == conn.id).first()
+            assert conn_after is not None
+            assert conn_after.config.get("history_id") == 1001
 
         # -------------------------- second webhook (msg_no=2) – should run again
         client.post(
             "/api/email/webhook/google",
-            headers={"X-Goog-Channel-Token": "t", "X-Goog-Message-Number": "2"},
+            headers={"X-Goog-Channel-Token": str(conn.id), "X-Goog-Message-Number": "2"},
         )
 
         await asyncio.sleep(0)
@@ -149,9 +147,9 @@ async def test_history_id_advancement_and_dedup(client, db_session, monkeypatch)
 
         # history_id advanced again
         with default_session_factory() as fresh2:
-            trg_final = fresh2.query(Trigger).filter(Trigger.id == trigger_id).first()
-            assert trg_final is not None
-            assert trg_final.config.get("history_id") == 1002
+            conn_final = fresh2.query(ConnectorModel).filter(ConnectorModel.id == conn.id).first()
+            assert conn_final is not None
+            assert conn_final.config.get("history_id") == 1002
 
     finally:
         scheduler_service.run_agent_task = original_runner  # type: ignore[assignment]

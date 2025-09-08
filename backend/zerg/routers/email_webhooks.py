@@ -195,76 +195,49 @@ async def gmail_webhook(
         raise HTTPException(status_code=400, detail="Missing X-Goog-Channel-Token header")
 
     # ------------------------------------------------------------------
-    # Fire triggers (type "email" with provider "gmail")
+    # Connector-centric processing: token contains connector_id
     # ------------------------------------------------------------------
 
-    from zerg.models.models import Trigger  # local import to avoid cycles
+    try:
+        connector_id = int(x_goog_channel_token)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid X-Goog-Channel-Token")
 
-    # SQLite's JSON functions are limited in in-memory CI; perform filtering
-    # in Python for maximum compatibility.
-    triggers = [
-        trg
-        for trg in db.query(Trigger).filter(Trigger.type == "email").all()
-        if (trg.config or {}).get("provider") == "gmail"
-    ]
+    # Dedupe by message number at connector level
+    from sqlalchemy.orm.attributes import flag_modified
 
-    fired_count = 0
+    from zerg.models.models import Connector as ConnectorModel
 
-    # Use *X-Goog-Message-Number* as a quick dedup mechanism so we do not call
-    # the expensive Gmail *history* API multiple times for the same push.
+    conn = db.query(ConnectorModel).filter(ConnectorModel.id == connector_id).first()
+    if conn is None:
+        raise HTTPException(status_code=404, detail="Connector not found")
 
     msg_no_int: Optional[int] = None
     if x_goog_message_number and x_goog_message_number.isdigit():
         msg_no_int = int(x_goog_message_number)
 
-    from sqlalchemy.orm.attributes import flag_modified  # local import
+    cfg = dict(conn.config or {})
+    last_seen = int(cfg.get("last_msg_no", 0))
+    if msg_no_int is not None and msg_no_int <= last_seen:
+        return {"status": "accepted", "trigger_count": 0}
 
-    for trg in triggers:
-        cfg = trg.config or {}
-        last_seen = int(cfg.get("last_msg_no", 0))
-
-        # Deduplicate – if Google re-sends push with same message number we
-        # skip processing entirely.
-        if msg_no_int is not None and msg_no_int <= last_seen:
-            continue
-
-        # Persist new msg number immediately so concurrent callbacks are
-        # deduplicated even if the History diff processing takes a while.
-        if msg_no_int is not None:
-            cfg["last_msg_no"] = msg_no_int
-            trg.config = cfg  # type: ignore[assignment]
-            flag_modified(trg, "config")
-            db.add(trg)
-
-        # Commit *last_msg_no* so it is visible to the helper running in a
-        # separate DB session.  Committing inside the loop keeps webhook
-        # latency low and simplifies cross-session merge logic.
+    if msg_no_int is not None:
+        cfg["last_msg_no"] = msg_no_int
+        conn.config = cfg  # type: ignore[assignment]
+        try:
+            flag_modified(conn, "config")
+        except Exception:
+            pass
+        db.add(conn)
         db.commit()
 
-        fired_count += 1
+    from zerg.email.providers import get_provider
 
-        # Kick off full history diff so filtering & EventBus publishing happen
-        from zerg.email.providers import get_provider  # local import to avoid cycles
+    gmail_provider = get_provider("gmail")
+    if gmail_provider is None:
+        logger.error("Gmail provider missing from registry – cannot process connector %s", connector_id)
+        return {"status": "accepted", "trigger_count": 0}
 
-        gmail_provider = get_provider("gmail")
+    await gmail_provider.process_connector(connector_id)
 
-        if gmail_provider is None:
-            logger.error("Gmail provider missing from registry – cannot process trigger %s", trg.id)
-        else:
-            await gmail_provider.process_trigger(trg.id)
-
-        # ------------------------------------------------------------------
-        # Refresh *trg* on this session so we do not overwrite fields (like
-        # history_id) that may have been updated inside the helper which
-        # uses a *separate* database session.
-        # ------------------------------------------------------------------
-        # Refresh the instance so we see any updates performed by the helper
-        # (e.g. ``history_id`` advancement) **and** keep our ``last_msg_no``.
-        try:
-            db.refresh(trg)
-        except Exception:  # pragma: no cover
-            pass
-
-    db.commit()
-
-    return {"status": "accepted", "trigger_count": fired_count}
+    return {"status": "accepted", "trigger_count": 1}

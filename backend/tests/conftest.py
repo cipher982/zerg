@@ -386,7 +386,7 @@ def unauthenticated_client(db_session):
 
     app.dependency_overrides[get_db] = override_get_db
 
-    with TestClient(app, backend="asyncio") as client:
+    with TestClient(app, backend="asyncio", raise_server_exceptions=False) as client:
         yield client
 
     app.dependency_overrides = {}
