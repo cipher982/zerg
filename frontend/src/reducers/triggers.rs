@@ -80,9 +80,19 @@ pub fn update(state: &mut AppState, msg: &Message, commands: &mut Vec<Command>) 
             commands.push(Command::UpdateUI(Box::new(|| {
                 if let Some(win) = web_sys::window() {
                     if let Some(doc) = win.document() {
-                        let _ = crate::components::agent_config_modal::render_gmail_connect_status(
-                            &doc,
-                        );
+                        let _ = crate::components::agent_config_modal::render_gmail_connect_status(&doc);
+                    }
+                }
+            })));
+            true
+        }
+        Message::GmailConnectedWithConnector { connector_id } => {
+            state.gmail_connected = true;
+            state.gmail_connector_id = Some(*connector_id);
+            commands.push(Command::UpdateUI(Box::new(|| {
+                if let Some(win) = web_sys::window() {
+                    if let Some(doc) = win.document() {
+                        let _ = crate::components::agent_config_modal::render_gmail_connect_status(&doc);
                     }
                 }
             })));

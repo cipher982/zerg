@@ -477,15 +477,12 @@ impl ApiClient {
     // Gmail OAuth exchange (Phase C)
     // -------------------------------------------------------------------
 
-    /// Exchange the *authorization code* obtained from Google Identity
-    /// Services for a backend-stored refresh-token.  On success the backend
-    /// returns HTTP 200 with an empty body.
-    pub async fn gmail_exchange_auth_code(auth_code: &str) -> Result<(), JsValue> {
+    /// Exchange the *authorization code* for a backend-stored refresh-token.
+    /// Returns the backend response body so callers can capture `connector_id`.
+    pub async fn gmail_exchange_auth_code(auth_code: &str) -> Result<String, JsValue> {
         let url = format!("{}/api/auth/google/gmail", Self::api_base_url());
         let payload = format!("{{\"auth_code\": \"{}\"}}", auth_code);
-        Self::fetch_json(&url, "POST", Some(&payload))
-            .await
-            .map(|_| ())
+        Self::fetch_json(&url, "POST", Some(&payload)).await
     }
 
     // -------------------------------------------------------------------

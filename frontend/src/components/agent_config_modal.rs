@@ -145,7 +145,7 @@ impl AgentConfigModal {
                     opt1.set_inner_html("Webhook – send POST requests");
                     sel.append_child(&opt1)?;
                     let opt2 = document.create_element("option")?;
-                    opt2.set_attribute("value", "email:gmail")?;
+                    opt2.set_attribute("value", "email")?;
                     opt2.set_inner_html("Email (Gmail)");
                     // Disable until gmail_connected flag is true – we toggle
                     // dynamically in `render_gmail_connect_status`.
@@ -345,10 +345,10 @@ impl AgentConfigModal {
         opt_webhook.set_inner_html("Webhook – send POST requests");
         type_select.append_child(&opt_webhook)?;
 
-        // Option – email:gmail (disabled for now)
+        // Option – email (disabled until connected)
         let opt_gmail = document.create_element("option")?;
-        opt_gmail.set_attribute("value", "email:gmail")?;
-        opt_gmail.set_inner_html("Email (Gmail) – coming soon…");
+        opt_gmail.set_attribute("value", "email")?;
+        opt_gmail.set_inner_html("Email (Gmail)");
         opt_gmail.set_attribute("disabled", "true")?;
         type_select.append_child(&opt_gmail)?;
 
@@ -726,19 +726,31 @@ impl AgentConfigModal {
                         .map(|sel| sel.value())
                         .unwrap_or_else(|| "webhook".to_string());
 
-                    if type_value == "email:gmail" {
-                        let connected =
-                            crate::state::APP_STATE.with(|st| st.borrow().gmail_connected);
+                    let payload_json = if type_value == "email" {
+                        let (connected, connector_id) = crate::state::APP_STATE.with(|st| {
+                            let st = st.borrow();
+                            (st.gmail_connected, st.gmail_connector_id)
+                        });
                         if !connected {
-                            // Gmail not connected yet – ignore.
-                            return;
+                            return; // not connected
                         }
-                    }
-
-                    let payload_json = format!(
-                        "{{\"agent_id\": {}, \"type\": \"{}\"}}",
-                        agent_id, type_value
-                    );
+                        let cid = match connector_id {
+                            Some(v) => v,
+                            None => {
+                                // Connector id unknown – UI cannot proceed yet
+                                return;
+                            }
+                        };
+                        format!(
+                            "{{\"agent_id\": {}, \"type\": \"email\", \"config\": {{\"connector_id\": {}}}}}",
+                            agent_id, cid
+                        )
+                    } else {
+                        format!(
+                            "{{\"agent_id\": {}, \"type\": \"{}\"}}",
+                            agent_id, type_value
+                        )
+                    };
                     dispatch_global_message(crate::messages::Message::RequestCreateTrigger {
                         payload_json,
                     });

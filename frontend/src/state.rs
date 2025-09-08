@@ -439,6 +439,8 @@ pub struct AppState {
     /// True once the user connected Gmail via OAuth.  Controls whether the
     /// “Email (Gmail)” option in the *Add Trigger* wizard is clickable.
     pub gmail_connected: bool,
+    /// Connector id for the active Gmail connection (if known).
+    pub gmail_connector_id: Option<u32>,
 
     // Debug overlay moved to separate module to avoid circular dependencies
 
@@ -699,6 +701,7 @@ impl AppState {
 
             // Gmail yet to be connected.
             gmail_connected: false,
+            gmail_connector_id: None,
 
             running_runs: HashSet::new(),
 
