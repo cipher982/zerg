@@ -67,9 +67,17 @@ def validate_pubsub_token(authorization: str | None) -> bool:
             options={"verify_exp": True},
         )
 
-        # Verify email and email_verified claims
-        if decoded.get("email_verified") and decoded.get("email") == "gmail-push@system.gserviceaccount.com":
-            return True
+        # Verify service account email if configured; otherwise accept any
+        # service account principal (email ends with gserviceaccount.com).
+        sa_email_cfg = getattr(get_settings(), "pubsub_sa_email", None)
+        email_claim = decoded.get("email")
+        if sa_email_cfg:
+            if email_claim == sa_email_cfg:
+                return True
+        else:
+            # Best-effort heuristic: service account principals end with this domain
+            if isinstance(email_claim, str) and email_claim.endswith("gserviceaccount.com"):
+                return True
 
     except Exception as e:
         logger.warning("OIDC token validation failed", exc_info=e)
