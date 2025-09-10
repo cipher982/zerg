@@ -148,6 +148,7 @@ pub mod generated;
 mod messages;
 pub mod models;
 mod models_config;
+mod node_builder;
 pub mod network;
 mod pages;
 mod scheduling;
