@@ -167,21 +167,18 @@ fn try_load_layout_from_api() {
                                         }
                                         None => {
                                             // Insert a *stub* node so at least the layout is respected.
-                                            let config = crate::models::NodeConfig {
-                                                x: pos.x,
-                                                y: pos.y,
-                                                width: DEFAULT_NODE_WIDTH,
-                                                height: DEFAULT_NODE_HEIGHT,
-                                                color: NODE_COLOR_GENERIC.to_string(),
-                                                text: id.clone(),
-                                                ..Default::default()
-                                            };
-
                                             let mut node = WorkflowNode::new_with_type(
                                                 id.clone(),
                                                 &crate::models::NodeType::GenericNode,
                                             );
-                                            node.config = config;
+                                            node.apply_visual(
+                                                pos.x,
+                                                pos.y,
+                                                DEFAULT_NODE_WIDTH,
+                                                DEFAULT_NODE_HEIGHT,
+                                                NODE_COLOR_GENERIC,
+                                                &id,
+                                            );
                                             st.workflow_nodes.insert(id.clone(), node);
                                         }
                                     }
