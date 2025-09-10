@@ -29,6 +29,11 @@ use crate::utils as auth_utils;
 pub struct ApiClient;
 
 impl ApiClient {
+    // Re-export to keep older imports working while we centralize contract glue
+    #[allow(dead_code)]
+    pub(crate) fn map_node_type(frontend_type: &str) -> &str {
+        crate::network::generated_client::TypeSafeApiClient::map_node_type(frontend_type)
+    }
     // Get the base URL for API calls
     fn api_base_url() -> String {
         // Default to same-origin (empty string → relative "/api" paths)
