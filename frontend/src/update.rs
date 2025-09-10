@@ -774,7 +774,9 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             //    exist due to older saves.
             let mut seen_manual_trigger = false;
             let nodes = wf.get_nodes();
-            for node in nodes {
+            for mut node in nodes {
+                // Migration polish: reconstruct typed trigger meta from legacy props when absent
+                node.migrate_legacy_trigger_meta();
                 let is_dupe_manual = match node.get_semantic_type() {
                     crate::models::NodeType::Trigger { trigger_type, .. } => {
                         if matches!(trigger_type, crate::models::TriggerType::Manual) {
