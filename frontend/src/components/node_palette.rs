@@ -487,22 +487,12 @@ pub fn create_node_from_palette(state: &mut AppState, palette_node: &PaletteNode
     // Create the node directly in the state.workflow_nodes HashMap
     use crate::models::WorkflowNode;
 
-    let config = crate::models::NodeConfig {
-        x: world_x,
-        y: world_y,
-        width: 200.0,
-        height: 80.0,
-        color: "#f59e0b".to_string(),
-        text: name.clone(),
-        ..Default::default()
-    };
-
     let mut node = WorkflowNode::new_with_type(node_id.clone(), &node_type);
-    // Apply base visual config first
-    node.config = config;
+    // Apply base visual config without replacing the entire config
+    node.apply_visual(world_x, world_y, 200.0, 80.0, "#f59e0b", &name);
     // Re-apply semantic type so any trigger/tool metadata is persisted into
-    // the (now replaced) NodeConfig.dynamic_props. Without this, triggers
-    // would default to Manual because trigger_type gets lost.
+    // NodeConfig.trigger and mirrored legacy dynamic_props. Without this, triggers
+    // could default to Manual when visual fields are applied.
     node.set_semantic_type(&node_type);
     state.workflow_nodes.insert(node_id.clone(), node.clone());
     state
