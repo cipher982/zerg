@@ -65,4 +65,23 @@ class WorkflowData(BaseModel):
                 raise ValueError(f"Edge {e.from_node_id}->{e.to_node_id} references unknown node")
         return edges
 
+    @field_validator("nodes")
+    @classmethod
+    def _check_manual_trigger_unique(cls, nodes):
+        """Frontend invariant: at most one Manual trigger per workflow.
+        Enforce here for backend hygiene as well.
+        """
+        manual_count = 0
+        for n in nodes:
+            if n.type != "trigger":
+                continue
+            cfg = n.config or {}
+            # Accept both flattened key and (future) typed meta
+            ttype = (cfg.get("trigger_type") or cfg.get("trigger", {}).get("type") or "").lower()
+            if ttype == "manual":
+                manual_count += 1
+                if manual_count > 1:
+                    raise ValueError("Only one Manual trigger is allowed per workflow")
+        return nodes
+
     model_config = ConfigDict(extra="forbid")  # Reject unknown fields for security
