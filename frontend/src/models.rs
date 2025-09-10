@@ -144,6 +144,14 @@ pub struct TriggerConfig {
     pub filters: Vec<TriggerFilter>,
 }
 
+/// Typed trigger metadata stored in NodeConfig (single source of truth).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TriggerMeta {
+    #[serde(rename = "type")]
+    pub trigger_type: TriggerType,
+    pub config: TriggerConfig,
+}
+
 /// Filter conditions for triggers
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TriggerFilter {
@@ -209,6 +217,10 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_config: Option<serde_json::Value>,
 
+    /// Typed trigger semantics; prefer this over legacy `dynamic_props` keys.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trigger: Option<TriggerMeta>,
+
     // Dynamic properties for extensibility (trigger params, etc.)
     #[serde(flatten)]
     pub dynamic_props: std::collections::HashMap<String, serde_json::Value>,
@@ -242,6 +254,7 @@ impl Default for NodeConfig {
             tool_name: None,
             server_name: None,
             tool_config: None,
+            trigger: None,
             dynamic_props: std::collections::HashMap::new(),
         }
     }
@@ -278,6 +291,16 @@ impl NodeConfig {
             color: "#10b981".to_string(),
             ..Default::default()
         }
+    }
+
+    /// Update visual-only fields in-place (safe against dropping semantics).
+    pub fn apply_visual(&mut self, x: f64, y: f64, width: f64, height: f64, color: &str, text: &str) {
+        self.x = if x.is_finite() { x.clamp(-10000.0, 10000.0) } else { 0.0 };
+        self.y = if y.is_finite() { y.clamp(-10000.0, 10000.0) } else { 0.0 };
+        self.width = if width.is_finite() { width.clamp(1.0, 2000.0) } else { default_width() };
+        self.height = if height.is_finite() { height.clamp(1.0, 2000.0) } else { default_height() };
+        self.color = color.to_string();
+        self.text = text.to_string();
     }
 }
 
@@ -348,6 +371,11 @@ impl WorkflowNode {
         self.config.color = color;
     }
 
+    /// Apply visual-only updates without replacing the whole NodeConfig.
+    pub fn apply_visual(&mut self, x: f64, y: f64, width: f64, height: f64, color: &str, text: &str) {
+        self.config.apply_visual(x, y, width, height, color, text);
+    }
+
     pub fn get_agent_id(&self) -> Option<u32> {
         self.config.agent_id
     }
@@ -406,7 +434,15 @@ impl WorkflowNode {
                     visibility: crate::models::ToolVisibility::AlwaysExternal,
                 },
                 "Trigger" => {
-                    // Reconstruct TriggerType + TriggerConfig from flattened NodeConfig.dynamic_props
+                    // Prefer typed trigger metadata if present
+                    if let Some(meta) = &self.config.trigger {
+                        return NodeType::Trigger {
+                            trigger_type: meta.trigger_type.clone(),
+                            config: meta.config.clone(),
+                        };
+                    }
+
+                    // Back-compat: Reconstruct from flattened dynamic_props
                     let mut ttype = crate::models::TriggerType::Manual; // default
 
                     if let Some(tt) = self
@@ -535,7 +571,13 @@ impl WorkflowNode {
                 self.config.server_name = Some(server_name.clone());
             }
             NodeType::Trigger { trigger_type, config } => {
-                // Persist trigger subtype + config into flattened config map
+                // Update typed trigger meta first
+                self.config.trigger = Some(TriggerMeta {
+                    trigger_type: trigger_type.clone(),
+                    config: config.clone(),
+                });
+
+                // Mirror into flattened legacy map for compatibility
                 use serde_json::json;
                 let tt_str = match trigger_type {
                     TriggerType::Webhook => "webhook",

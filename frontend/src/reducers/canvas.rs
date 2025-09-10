@@ -26,19 +26,24 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
         }
         Message::UpdateTriggerNodeConfig { node_id, params } => {
             if let Some(node) = state.workflow_nodes.get_mut(node_id) {
-                if matches!(
-                    node.get_semantic_type(),
-                    crate::models::NodeType::Trigger { .. }
-                ) {
-                    // Update the params in the trigger config stored in node config
+                if let crate::models::NodeType::Trigger { trigger_type, config } =
+                    node.get_semantic_type()
+                {
+                    // Update typed trigger params first
+                    let mut new_cfg = config.clone();
                     if let serde_json::Value::Object(param_map) = params {
-                        // Store the trigger params in the node's config field
-                        for (key, value) in param_map {
-                            node.config
-                                .dynamic_props
-                                .insert(format!("trigger_{}", key), value.clone());
+                        for (k, v) in param_map {
+                            new_cfg.params.insert(k.clone(), v.clone());
                         }
                     }
+
+                    // Re-set semantic type to persist typed meta and mirror legacy props
+                    let new_semantic = crate::models::NodeType::Trigger {
+                        trigger_type,
+                        config: new_cfg,
+                    };
+                    node.set_semantic_type(&new_semantic);
+
                     state.state_modified = true;
                     state.mark_dirty();
                 }
