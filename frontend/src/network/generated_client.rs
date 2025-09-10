@@ -44,7 +44,7 @@ pub struct TypeSafeApiClient;
 
 impl TypeSafeApiClient {
     /// Maps frontend semantic types to backend contract types
-    fn map_node_type(frontend_type: &str) -> &str {
+    pub(crate) fn map_node_type(frontend_type: &str) -> &str {
         match frontend_type {
             "AgentIdentity" => "agent",
             "Tool" => "tool",
@@ -56,20 +56,8 @@ impl TypeSafeApiClient {
 
     /// Validates canvas data against contract before API call
     pub async fn update_workflow_canvas_data(canvas_data: serde_json::Value) -> Result<(), String> {
-        // First convert semantic types to backend contract types
-        let mut canvas_data = canvas_data.clone();
-        if let Some(nodes) = canvas_data.get_mut("nodes").and_then(|n| n.as_array_mut()) {
-            for node in nodes {
-                if let Some(node_type) = node.get("type").and_then(|t| t.as_str()) {
-                    let mapped_type = Self::map_node_type(node_type);
-                    node["type"] = serde_json::Value::String(mapped_type.to_string());
-                }
-            }
-        }
-
-        // Validate structure matches contract
-        let workflow_data: WorkflowDataContract = serde_json::from_value(canvas_data.clone())
-            .map_err(|e| format!("Canvas data doesn't match contract: {}", e))?;
+        // Normalize (map types, flatten trigger meta, remove typed field) and validate
+        let workflow_data: WorkflowDataContract = crate::network::contract_glue::normalize_canvas_for_api(canvas_data)?;
 
         // Validate edge fields use consistent naming
         for edge in &workflow_data.edges {
@@ -79,9 +67,7 @@ impl TypeSafeApiClient {
         }
 
         // Use existing WASM-compatible API client with validated data
-        let payload = serde_json::json!({
-            "canvas": canvas_data
-        });
+        let payload = serde_json::json!({ "canvas": serde_json::to_value(&workflow_data).unwrap_or_default() });
         let payload_str = payload.to_string();
 
         crate::network::ApiClient::patch_workflow_canvas_data(&payload_str)
