@@ -67,6 +67,19 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
             y,
             node_type,
         } => {
+            // Enforce invariant: only one Manual trigger per workflow
+            if let NodeType::Trigger { trigger_type, .. } = node_type {
+                if matches!(trigger_type, crate::models::TriggerType::Manual) {
+                    let already_has_manual = state
+                        .workflow_nodes
+                        .values()
+                        .any(|n| matches!(n.get_semantic_type(), NodeType::Trigger { trigger_type: crate::models::TriggerType::Manual, .. }));
+                    if already_has_manual {
+                        crate::toast::error("Only one Manual trigger allowed per workflow");
+                        return true;
+                    }
+                }
+            }
             if *node_type == NodeType::AgentIdentity && *x == 0.0 && *y == 0.0 {
                 let viewport_width = if state.canvas_width > 0.0 {
                     state.canvas_width

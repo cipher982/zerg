@@ -484,16 +484,29 @@ pub fn create_node_from_palette(state: &mut AppState, palette_node: &PaletteNode
     let node_type = palette_node.node_type.clone();
     let name = palette_node.name.clone();
 
-    // Create the node directly in the state.workflow_nodes HashMap
-    use crate::models::WorkflowNode;
+    // Enforce manual trigger invariant (defensive; palette currently doesn't offer manual)
+    if let NodeType::Trigger { trigger_type, .. } = &node_type {
+        if matches!(trigger_type, TriggerType::Manual) {
+            let already_has_manual = state
+                .workflow_nodes
+                .values()
+                .any(|n| matches!(n.get_semantic_type(), NodeType::Trigger { trigger_type: TriggerType::Manual, .. }));
+            if already_has_manual {
+                crate::toast::error("Only one Manual trigger allowed per workflow");
+                return;
+            }
+        }
+    }
 
-    let mut node = WorkflowNode::new_with_type(node_id.clone(), &node_type);
-    // Apply base visual config without replacing the entire config
-    node.apply_visual(world_x, world_y, 200.0, 80.0, "#f59e0b", &name);
-    // Re-apply semantic type so any trigger/tool metadata is persisted into
-    // NodeConfig.trigger and mirrored legacy dynamic_props. Without this, triggers
-    // could default to Manual when visual fields are applied.
-    node.set_semantic_type(&node_type);
+    // Create the node via builder to ensure semantics-first construction
+    use crate::node_builder::NodeBuilder;
+    let node = NodeBuilder::from_semantic(node_type.clone())
+        .id(node_id.clone())
+        .at(world_x, world_y)
+        .size(200.0, 80.0)
+        .color("#f59e0b")
+        .label(&name)
+        .build();
     state.workflow_nodes.insert(node_id.clone(), node.clone());
     state
         .ui_state
