@@ -770,7 +770,35 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             state.agent_id_to_node_id.clear();
 
             // 2. Rebuild canvas from workflow (single source of truth)
-            for node in &wf.get_nodes() {
+            //    Also deduplicate stray duplicate Manual triggers that may
+            //    exist due to older saves.
+            let mut seen_manual_trigger = false;
+            let nodes = wf.get_nodes();
+            for node in nodes {
+                let is_dupe_manual = match node.get_semantic_type() {
+                    crate::models::NodeType::Trigger { trigger_type, .. } => {
+                        if matches!(trigger_type, crate::models::TriggerType::Manual) {
+                            if seen_manual_trigger {
+                                true
+                            } else {
+                                seen_manual_trigger = true;
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false,
+                };
+
+                if is_dupe_manual {
+                    debug_log!(
+                        "⚠️ Skipping duplicate Manual trigger node {} during rebuild",
+                        node.node_id
+                    );
+                    continue;
+                }
+
                 state
                     .workflow_nodes
                     .insert(node.node_id.clone(), node.clone());

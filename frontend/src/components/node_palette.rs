@@ -498,7 +498,12 @@ pub fn create_node_from_palette(state: &mut AppState, palette_node: &PaletteNode
     };
 
     let mut node = WorkflowNode::new_with_type(node_id.clone(), &node_type);
+    // Apply base visual config first
     node.config = config;
+    // Re-apply semantic type so any trigger/tool metadata is persisted into
+    // the (now replaced) NodeConfig.dynamic_props. Without this, triggers
+    // would default to Manual because trigger_type gets lost.
+    node.set_semantic_type(&node_type);
     state.workflow_nodes.insert(node_id.clone(), node.clone());
     state
         .ui_state
