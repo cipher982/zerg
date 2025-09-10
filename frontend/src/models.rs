@@ -639,6 +639,23 @@ impl WorkflowNode {
         node.set_semantic_type(node_type);
         node
     }
+
+    /// One-time migration helper: if typed trigger meta is missing but legacy
+    /// dynamic_props contain trigger keys, reconstruct and store `config.trigger`.
+    pub fn migrate_legacy_trigger_meta(&mut self) {
+        // Only migrate when node is a Trigger and typed meta absent
+        if !matches!(self.get_semantic_type(), NodeType::Trigger { .. }) {
+            return;
+        }
+        if self.config.trigger.is_some() {
+            return; // already migrated
+        }
+
+        // Recompute semantics using existing fallback logic
+        if let NodeType::Trigger { trigger_type, config } = self.get_semantic_type() {
+            self.config.trigger = Some(TriggerMeta { trigger_type, config });
+        }
+    }
 }
 
 /// Cached layout information for performance
