@@ -57,7 +57,7 @@ use wasm_bindgen::JsValue;
 // Zoom is currently disabled – hard-lock to 100 %.
 pub const MIN_ZOOM: f64 = 1.0;
 pub const MAX_ZOOM: f64 = 1.0;
-// Bring legacy helper trait into scope (methods formerly on CanvasNode)
+// (legacy CanvasNode helper trait removed; state uses modern workflow models)
 
 // Lightweight ticker entry for Ops events rendered in the dashboard
 #[derive(Clone, Debug)]

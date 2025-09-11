@@ -26,14 +26,14 @@ def test_reserve_start_pattern():
     # Create workflow
     workflow_response = requests.post("http://localhost:8001/api/workflows/", json={
         "name": "Reserve Test Workflow",
-        "canvas_data": {
+        "description": "Reserve/start test",
+        "canvas": {
             "nodes": [
                 {
-                    "node_id": "trigger_1",
-                    "node_type": {"Trigger": {"trigger_type": "Manual", "config": {}}},
-                    "text": "▶ Start",
-                    "x": 100.0,
-                    "y": 100.0
+                    "id": "trigger_1",
+                    "type": "trigger",
+                    "position": {"x": 100.0, "y": 100.0},
+                    "config": {"trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}}
                 }
             ],
             "edges": []

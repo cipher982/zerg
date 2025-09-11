@@ -90,7 +90,7 @@ export class TestDataGenerator {
         id: 'trigger-1',
         type: 'trigger',
         position: { x: 50, y: 200 },
-        config: { trigger_type: 'manual' }
+        config: { trigger: { type: 'manual', config: { enabled: true, params: {}, filters: [] } } }
       },
       ...agents.slice(0, 3).map((agent, index) => ({
         id: `agent-${index + 1}`,

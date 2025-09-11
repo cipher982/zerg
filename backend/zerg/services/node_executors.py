@@ -236,14 +236,21 @@ class TriggerNodeExecutor(BaseNodeExecutor):
     async def _execute_node_logic(self, db, state):
         logger.info(f"[TriggerNode] Executing trigger node: {self.node_id}")
 
+        # Resolve typed trigger meta (strict, typed-only)
+        from zerg.schemas.workflow import resolve_trigger_meta
+
+        meta = resolve_trigger_meta(self.node)
+        ttype = meta.get("type", "manual")
+        tconf = meta.get("config", {})
+
         # Return envelope format only
         return self._create_envelope_output(
             value={"triggered": True},
             node_type="trigger",
             phase="finished",
             result="success",
-            trigger_type="manual",
-            trigger_config=self.node.config,
+            trigger_type=ttype,
+            trigger_config=tconf,
         )
 
 

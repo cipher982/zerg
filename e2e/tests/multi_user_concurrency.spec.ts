@@ -195,7 +195,7 @@ test.describe('Multi-User and Concurrency', () => {
                     id: 'trigger-1',
                     type: 'trigger',
                     position: { x: 50, y: 150 },
-                    config: { trigger_type: 'manual' }
+                    config: { trigger: { type: 'manual', config: { enabled: true, params: {}, filters: [] } } }
                   },
                   {
                     id: 'agent-1',

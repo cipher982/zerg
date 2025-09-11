@@ -29,6 +29,7 @@ gloo-timers = { version = "0.2", features = ["futures"] }
 # for const assertions used in our schemas.
 jsonschema = { version = "0.17", default-features = false, features = ["draft202012"] }
 
+
 [dependencies.web-sys]
 version = "0.3.64"
 features = [

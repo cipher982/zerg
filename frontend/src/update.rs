@@ -184,8 +184,7 @@ pub fn handle_agent_tab_switch(
     }
 }
 
-// Bring legacy helper trait into scope so its methods are usable on CanvasNode
-// Legacy helper trait no longer needed after decoupling cleanup.
+// Legacy helper trait fully removed; update.rs is decoupled and works with generated models.
 
 pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
     let mut needs_refresh = true; // We'll still track this internally for now
@@ -775,8 +774,6 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             let mut seen_manual_trigger = false;
             let nodes = wf.get_nodes();
             for mut node in nodes {
-                // Migration polish: reconstruct typed trigger meta from legacy props when absent
-                node.migrate_legacy_trigger_meta();
                 let is_dupe_manual = match node.get_semantic_type() {
                     crate::models::NodeType::Trigger { trigger_type, .. } => {
                         if matches!(trigger_type, crate::models::TriggerType::Manual) {

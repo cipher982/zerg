@@ -1,5 +1,5 @@
 # AUTO-GENERATED FILE - DO NOT EDIT
-# Generated from ws-protocol-asyncapi.yml at 2025-09-04T01:45:41.604051Z
+# Generated from ws-protocol-asyncapi.yml at 2025-09-11T21:23:53.186518Z
 # Using AsyncAPI 3.0 + Modern Python Code Generation
 #
 # This file contains strongly-typed WebSocket message definitions.
@@ -258,7 +258,7 @@ class OpsEventData(BaseModel):
         "agent_updated",
         "thread_message_created",
         "budget_denied",
-    ]  # noqa: E501
+    ]
     agent_id: Optional[int] = Field(default=None, ge=1, description="")
     run_id: Optional[int] = Field(default=None, ge=1, description="")
     thread_id: Optional[int] = Field(default=None, ge=1, description="")
