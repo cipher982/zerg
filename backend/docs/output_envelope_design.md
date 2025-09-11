@@ -176,7 +176,7 @@ This document defines the new standardized output structure for all workflow nod
 ```json
 {
   "status": "triggered",
-  "config": {"trigger_type": "manual"}
+  "config": {"trigger": {"type": "manual", "config": {"enabled": true, "params": {}, "filters": []}}}
 }
 ```
 
@@ -192,7 +192,7 @@ This document defines the new standardized output structure for all workflow nod
     "status": "completed",
     "execution_time_ms": 5, 
     "trigger_type": "manual",
-    "trigger_config": {"trigger_type": "manual"}
+    "trigger_config": {"enabled": true, "params": {}, "filters": []}
   }
 }
 ```

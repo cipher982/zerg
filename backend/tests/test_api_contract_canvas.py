@@ -21,7 +21,13 @@ class TestCanvasAPIContract:
                         "id": "test_node_1",
                         "type": "trigger",
                         "position": {"x": 100.0, "y": 100.0},
-                        "config": {"width": 200.0, "height": 80.0, "text": "Test Node", "color": "#10b981"},
+                        "config": {
+                            "width": 200.0,
+                            "height": 80.0,
+                            "text": "Test Node",
+                            "color": "#10b981",
+                            "trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}},
+                        },
                     }
                 ],
                 "edges": [],
@@ -84,7 +90,13 @@ class TestCanvasAPIContract:
                         "id": "persist_test_node",
                         "type": "trigger",
                         "position": {"x": 200.0, "y": 150.0},
-                        "config": {"width": 200.0, "height": 80.0, "text": "Persistence Test", "color": "#10b981"},
+                        "config": {
+                            "width": 200.0,
+                            "height": 80.0,
+                            "text": "Persistence Test",
+                            "color": "#10b981",
+                            "trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}},
+                        },
                     }
                 ],
                 "edges": [],

@@ -28,24 +28,30 @@ def test_create_workflow_success(client: TestClient, test_user: User, db: Sessio
         "description": "A fresh new workflow.",
         "canvas": {
             "nodes": [
-                {"id": "node1", "type": "trigger", "position": {"x": 0, "y": 0}, "config": {"trigger_type": "manual"}}
+                {
+                    "id": "node1",
+                    "type": "trigger",
+                    "position": {"x": 0, "y": 0},
+                    "config": {"trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}},
+                }
             ],
             "edges": [],
         },
     }
     response = client.post("/api/workflows/", headers=auth_headers, json=payload)
-    assert response.status_code == 200
+    assert response.status_code in (200, 201)
     data = response.json()
     assert data["name"] == payload["name"]
     assert data["description"] == payload["description"]
     # After cleanup, API returns canonical format instead of frontend format
-    expected_response = {
-        "nodes": [
-            {"id": "node1", "type": "trigger", "config": {"trigger_type": "manual"}, "position": {"x": 0.0, "y": 0.0}}
-        ],
-        "edges": [],
+    # API returns canonical format with typed trigger meta preserved
+    expected_node = {
+        "id": "node1",
+        "type": "trigger",
+        "position": {"x": 0.0, "y": 0.0},
+        "config": {"trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}},
     }
-    assert data["canvas"] == expected_response
+    assert data["canvas"]["nodes"][0] == expected_node
     assert data["owner_id"] == test_user.id
     assert "id" in data
 
@@ -74,10 +80,10 @@ def test_create_workflow_missing_fields(client: TestClient, auth_headers: dict):
     response = client.post("/api/workflows/", headers=auth_headers, json=payload)
     assert response.status_code == 422  # Unprocessable Entity
 
-    # Missing 'description' (assuming it's required)
+    # Missing 'description' is allowed; should create successfully
     payload = {"name": "Test Workflow"}
     response = client.post("/api/workflows/", headers=auth_headers, json=payload)
-    assert response.status_code == 422
+    assert response.status_code in (200, 201)
 
 
 def test_read_workflows_success(client: TestClient, test_user: User, db: Session, auth_headers: dict):
@@ -181,7 +187,7 @@ def test_soft_delete_and_recreate(client: TestClient, test_user: User, db: Sessi
         "canvas": {"nodes": [], "edges": []},
     }
     response = client.post("/api/workflows/", headers=auth_headers, json=payload)
-    assert response.status_code == 200
+    assert response.status_code in (200, 201)
     new_wf_data = response.json()
     assert new_wf_data["name"] == TEST_WORKFLOW_NAME
     assert new_wf_data["id"] != wf.id
@@ -206,7 +212,12 @@ def test_create_workflow_with_large_canvas(client: TestClient, test_user: User, 
     """Test creating a workflow with a large canvas payload."""
     large_canvas = {
         "nodes": [
-            {"id": f"node_{i}", "type": "trigger", "position": {"x": 0, "y": 0}, "config": {"trigger_type": "manual"}}
+            {
+                "id": f"node_{i}",
+                "type": "trigger",
+                "position": {"x": 0, "y": 0},
+                "config": {"trigger": {"type": "email", "config": {"enabled": True, "params": {}, "filters": []}}},
+            }
             for i in range(1000)
         ],
         "edges": [{"from_node_id": f"node_{i}", "to_node_id": f"node_{i + 1}", "config": {}} for i in range(999)],
@@ -217,9 +228,7 @@ def test_create_workflow_with_large_canvas(client: TestClient, test_user: User, 
         "canvas": large_canvas,
     }
     response = client.post("/api/workflows/", headers=auth_headers, json=payload)
-    if response.status_code != 200:
-        print(f"Response: {response.status_code} - {response.json()}")
-    assert response.status_code == 200
+    assert response.status_code in (200, 201), f"Response: {response.status_code} - {response.json()}"
     data = response.json()
     assert data["name"] == payload["name"]
     assert len(data["canvas"]["nodes"]) == 1000

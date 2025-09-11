@@ -119,7 +119,10 @@ class TestWorkflowEngineScheduling:
                     {
                         "id": "trigger1",
                         "type": "trigger",
-                        "trigger_type": "schedule",
+                        "trigger": {
+                            "type": "schedule",
+                            "config": {"enabled": True, "params": {"cron": "0 9 * * *"}, "filters": []},
+                        },
                         "schedule_type": "workflow",
                         "cron_expression": "0 9 * * *",
                     }

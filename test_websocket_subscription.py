@@ -28,26 +28,24 @@ async def test_websocket_subscription():
     # Create workflow
     workflow_response = requests.post("http://localhost:8001/api/workflows/", json={
         "name": "WS Test Workflow",
-        "canvas_data": {
+        "description": "WebSocket test",
+        "canvas": {
             "nodes": [
                 {
-                    "node_id": "trigger_1",
-                    "node_type": {"Trigger": {"trigger_type": "Manual", "config": {}}},
-                    "text": "▶ Start",
-                    "x": 100.0,
-                    "y": 100.0
+                    "id": "trigger_1",
+                    "type": "trigger",
+                    "position": {"x": 100.0, "y": 100.0},
+                    "config": {"trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}}
                 },
                 {
-                    "node_id": "agent_1",
-                    "node_type": "AgentIdentity", 
-                    "agent_id": agent_id,
-                    "text": "Test Agent",
-                    "x": 300.0,
-                    "y": 100.0
+                    "id": "agent_1",
+                    "type": "agent",
+                    "position": {"x": 300.0, "y": 100.0},
+                    "config": {"agent_id": agent_id}
                 }
             ],
             "edges": [
-                {"from_node_id": "trigger_1", "to_node_id": "agent_1", "id": "edge_1"}
+                {"from_node_id": "trigger_1", "to_node_id": "agent_1", "config": {}}
             ]
         }
     })

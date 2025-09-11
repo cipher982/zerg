@@ -80,7 +80,7 @@ pub fn draw_nodes(state: &mut AppState) {
 
 #[allow(dead_code)]
 fn draw_connections(state: &AppState, context: &CanvasRenderingContext2d) {
-    // Draw legacy parent-child connections
+    // Draw parent-child connections (visual grouping)
     for (_, node) in &state.workflow_nodes {
         if let Some(parent_id) = &node.config.parent_id {
             if let Some(parent) = state.workflow_nodes.get(parent_id) {

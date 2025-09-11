@@ -322,7 +322,7 @@ pub enum NodeType {
         config: ToolConfig 
     },
     Trigger { 
-        trigger_type: TriggerType,
+        // Removed legacy: trigger_type. Use typed config.trigger in NodeConfig.
         config: TriggerConfig 
     },
     // Future: Condition, Loop, etc.
@@ -454,8 +454,8 @@ class WorkflowExecution(Base):
     
     id = Column(String, primary_key=True)  # UUID
     workflow_id = Column(Integer, ForeignKey("workflows.id"))
-    trigger_type = Column(String)
-    trigger_data = Column(JSON)
+    # Removed legacy flattened columns. Triggers are encoded in workflow.canvas JSON
+    # as typed config.trigger for trigger nodes.
     status = Column(Enum(ExecutionStatus))
     node_states = Column(JSON)
     execution_log = Column(JSON)

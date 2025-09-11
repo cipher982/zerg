@@ -122,3 +122,25 @@ repos:
         entry: scripts/validate_prod_frontend_config.py
         pass_filenames: false
         files: ^frontend/(build-only\.sh|build-debug\.sh)$
+
+      - id: forbid-legacy-trigger-keys
+        name: "Forbid legacy trigger keys in source"
+        language: system
+        entry: scripts/check_legacy_triggers.sh
+        pass_filenames: false
+        files: ^frontend/src/
+
+      - id: forbid-direct-node-config-assignment
+        name: "Forbid direct node.config = … outside constructors"
+        language: system
+        entry: >-
+          bash -c '
+          echo "🔍 Checking for direct node.config assignment…";
+          if rg -n --color never "node\\.config\\s*=" frontend/src | rg -v "models\\.rs|node_builder\\.rs|generated"; then
+            echo "❌ Direct assignment to node.config detected. Update specific fields or use constructors.";
+            exit 1;
+          fi;
+          echo "✅ No forbidden node.config assignments found";
+          '
+        pass_filenames: false
+        files: ^frontend/src/

@@ -126,6 +126,7 @@ pub enum ToolVisibility {
 
 /// Types of triggers that can start workflows
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TriggerType {
     Webhook,
     Schedule,
@@ -434,110 +435,16 @@ impl WorkflowNode {
                     visibility: crate::models::ToolVisibility::AlwaysExternal,
                 },
                 "Trigger" => {
-                    // Prefer typed trigger metadata if present
+                    // Strict: typed trigger meta must be present
                     if let Some(meta) = &self.config.trigger {
                         return NodeType::Trigger {
                             trigger_type: meta.trigger_type.clone(),
                             config: meta.config.clone(),
                         };
                     }
-
-                    // Back-compat: Reconstruct from flattened dynamic_props
-                    let mut ttype = crate::models::TriggerType::Manual; // default
-
-                    if let Some(tt) = self
-                        .config
-                        .dynamic_props
-                        .get("trigger_type")
-                        .and_then(|v| v.as_str())
-                    {
-                        match tt.to_ascii_lowercase().as_str() {
-                            "webhook" => ttype = crate::models::TriggerType::Webhook,
-                            "schedule" => ttype = crate::models::TriggerType::Schedule,
-                            "email" => ttype = crate::models::TriggerType::Email,
-                            "manual" => ttype = crate::models::TriggerType::Manual,
-                            _ => {}
-                        }
-                    }
-
-                    // Build TriggerConfig from dynamic_props if present
-                    let mut params: std::collections::HashMap<String, serde_json::Value> =
-                        std::collections::HashMap::new();
-                    if let Some(p) = self
-                        .config
-                        .dynamic_props
-                        .get("params")
-                        .and_then(|v| v.as_object())
-                    {
-                        params = p.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-                    } else {
-                        // Backward-compat: collect legacy flattened keys like "trigger_sender" → { sender: ... }
-                        for (k, v) in &self.config.dynamic_props {
-                            if let Some(rest) = k.strip_prefix("trigger_") {
-                                params.insert(rest.to_string(), v.clone());
-                            }
-                        }
-                    }
-
-                    let mut enabled = true;
-                    if let Some(e) = self
-                        .config
-                        .dynamic_props
-                        .get("enabled")
-                        .and_then(|v| v.as_bool())
-                    {
-                        enabled = e;
-                    }
-
-                    // Parse filters array if present
-                    let mut filters: Vec<TriggerFilter> = Vec::new();
-                    if let Some(arr) = self
-                        .config
-                        .dynamic_props
-                        .get("filters")
-                        .and_then(|v| v.as_array())
-                    {
-                        for item in arr {
-                            if let Some(obj) = item.as_object() {
-                                let field = obj
-                                    .get("field")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-                                let value = obj
-                                    .get("value")
-                                    .cloned()
-                                    .unwrap_or(serde_json::Value::Null);
-                                let op = obj
-                                    .get("operator")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("equals")
-                                    .to_ascii_lowercase();
-                                let operator = match op.as_str() {
-                                    "equals" => FilterOperator::Equals,
-                                    "contains" => FilterOperator::Contains,
-                                    "startswith" | "starts_with" => FilterOperator::StartsWith,
-                                    "endswith" | "ends_with" => FilterOperator::EndsWith,
-                                    "greaterthan" | "greater_than" | ">" => FilterOperator::GreaterThan,
-                                    "lessthan" | "less_than" | "<" => FilterOperator::LessThan,
-                                    "regex" => FilterOperator::Regex,
-                                    _ => FilterOperator::Equals,
-                                };
-                                if !field.is_empty() {
-                                    filters.push(TriggerFilter { field, operator, value });
-                                }
-                            }
-                        }
-                    }
-
-                    NodeType::Trigger {
-                        trigger_type: ttype,
-                        config: TriggerConfig {
-                            params,
-                            enabled,
-                            filters,
-                        },
-                    }
+                    // Fail-fast path (strict): treat as Generic for rendering; upstream validation should reject
+                    crate::debug_log!("Trigger node missing config.trigger; treating as GenericNode");
+                    NodeType::GenericNode
                 }
                 _ => NodeType::GenericNode,
             },
@@ -571,58 +478,11 @@ impl WorkflowNode {
                 self.config.server_name = Some(server_name.clone());
             }
             NodeType::Trigger { trigger_type, config } => {
-                // Update typed trigger meta first
+                // Update typed trigger meta only (canonical). No legacy mirroring.
                 self.config.trigger = Some(TriggerMeta {
                     trigger_type: trigger_type.clone(),
                     config: config.clone(),
                 });
-
-                // Mirror into flattened legacy map for compatibility
-                use serde_json::json;
-                let tt_str = match trigger_type {
-                    TriggerType::Webhook => "webhook",
-                    TriggerType::Schedule => "schedule",
-                    TriggerType::Email => "email",
-                    TriggerType::Manual => "manual",
-                };
-                self.config
-                    .dynamic_props
-                    .insert("trigger_type".to_string(), json!(tt_str));
-
-                // Enabled flag
-                self.config
-                    .dynamic_props
-                    .insert("enabled".to_string(), json!(config.enabled));
-
-                // Params map
-                self.config
-                    .dynamic_props
-                    .insert("params".to_string(), json!(config.params));
-
-                // Filters array
-                let filters_json: Vec<serde_json::Value> = config
-                    .filters
-                    .iter()
-                    .map(|f| {
-                        let op_str = match f.operator {
-                            FilterOperator::Equals => "equals",
-                            FilterOperator::Contains => "contains",
-                            FilterOperator::StartsWith => "startsWith",
-                            FilterOperator::EndsWith => "endsWith",
-                            FilterOperator::GreaterThan => "greaterThan",
-                            FilterOperator::LessThan => "lessThan",
-                            FilterOperator::Regex => "regex",
-                        };
-                        serde_json::json!({
-                            "field": f.field,
-                            "operator": op_str,
-                            "value": f.value,
-                        })
-                    })
-                    .collect();
-                self.config
-                    .dynamic_props
-                    .insert("filters".to_string(), serde_json::Value::Array(filters_json));
             }
             _ => {}
         }
@@ -640,22 +500,7 @@ impl WorkflowNode {
         node
     }
 
-    /// One-time migration helper: if typed trigger meta is missing but legacy
-    /// dynamic_props contain trigger keys, reconstruct and store `config.trigger`.
-    pub fn migrate_legacy_trigger_meta(&mut self) {
-        // Only migrate when node is a Trigger and typed meta absent
-        if !matches!(self.get_semantic_type(), NodeType::Trigger { .. }) {
-            return;
-        }
-        if self.config.trigger.is_some() {
-            return; // already migrated
-        }
-
-        // Recompute semantics using existing fallback logic
-        if let NodeType::Trigger { trigger_type, config } = self.get_semantic_type() {
-            self.config.trigger = Some(TriggerMeta { trigger_type, config });
-        }
-    }
+    // No migration helpers – strict, typed-only semantics
 }
 
 /// Cached layout information for performance

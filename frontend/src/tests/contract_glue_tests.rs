@@ -5,7 +5,7 @@ use serde_json::json;
 wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
-fn contract_glue_flattens_typed_trigger_meta() {
+fn contract_glue_preserves_typed_trigger_meta() {
     let canvas = json!({
         "nodes": [
             {
@@ -31,8 +31,15 @@ fn contract_glue_flattens_typed_trigger_meta() {
     assert_eq!(node.get("type").and_then(|v| v.as_str()), Some("trigger"));
 
     let cfg = node.get("config").unwrap();
-    assert!(cfg.get("trigger").is_none(), "typed trigger meta removed");
-    assert_eq!(cfg.get("trigger_type").and_then(|v| v.as_str()), Some("email"));
-    assert_eq!(cfg.get("params").unwrap().get("foo").and_then(|v| v.as_str()), Some("bar"));
+    // Typed trigger meta is preserved
+    let trig = cfg.get("trigger").and_then(|v| v.as_object()).expect("config.trigger present");
+    assert_eq!(trig.get("type").and_then(|v| v.as_str()), Some("email"));
+    let tcfg = trig.get("config").and_then(|v| v.as_object()).expect("trigger.config present");
+    assert_eq!(tcfg.get("enabled").and_then(|v| v.as_bool()), Some(true));
+    assert_eq!(tcfg.get("params").and_then(|v| v.get("foo")).and_then(|v| v.as_str()), Some("bar"));
+    // Legacy flattened keys are not added
+    assert!(cfg.get("trigger_type").is_none());
+    assert!(cfg.get("params").is_none());
+    assert!(cfg.get("filters").is_none());
+    assert!(cfg.get("enabled").is_none());
 }
-

@@ -87,7 +87,14 @@ pub fn save_canvas_data_typed(canvas_data: serde_json::Value) {
                 debug_log!("✅ Canvas data saved via type-safe client");
             }
             Err(e) => {
-                web_sys::console::error_1(&format!("❌ Type-safe API call failed: {}", e).into());
+                // Surface a user-facing toast for preflight/normalization errors to keep UX consistent
+                let msg = if e.contains("Only one Manual trigger allowed per workflow") {
+                    "Only one Manual trigger allowed per workflow".to_string()
+                } else {
+                    format!("Canvas validation failed: {}", e)
+                };
+                crate::toast::error(&msg);
+                web_sys::console::error_1(&format!("❌ Type-safe API call failed: {}", msg).into());
             }
         }
     });
