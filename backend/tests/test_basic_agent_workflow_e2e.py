@@ -30,7 +30,7 @@ def create_basic_agent_workflow(agent_id: int) -> WorkflowData:
                 id="trigger-start",
                 type="trigger",
                 position=Position(x=100, y=100),
-                config={"trigger_type": "manual"},
+                config={"trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}},
             ),
             # Agent node
             WorkflowNode(

@@ -66,7 +66,9 @@ async def test_envelope_format_all_node_types(db, test_user, sample_agent):
                         id="trigger-1",
                         type="trigger",
                         position=Position(x=50, y=100),
-                        config={"trigger_type": "manual"},
+                        config={
+                            "trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}
+                        },
                     ),
                     # Tool node
                     WorkflowNode(

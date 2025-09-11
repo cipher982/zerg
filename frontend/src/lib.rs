@@ -99,7 +99,7 @@ pub fn remove_global_shortcuts(document: &web_sys::Document) {
 //---------------------------------------------------------------------------
 //
 // The CI pipeline now enforces `cargo clippy -D warnings`.  A handful of
-// legacy modules still trigger non-critical lints (redundant imports, dead
+// modules still trigger non-critical lints (redundant imports, dead
 // code in stubs, etc.).  We allow those at the crate root so that the build
 // remains green while we refactor incrementally.  **Do not** add new allows
 // without a ticket – instead, fix the underlying issue.

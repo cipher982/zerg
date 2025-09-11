@@ -37,7 +37,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                         }
                     }
 
-                    // Re-set semantic type to persist typed meta and mirror legacy props
+                    // Re-set semantic type to persist typed meta (canonical only)
                     let new_semantic = crate::models::NodeType::Trigger {
                         trigger_type,
                         config: new_cfg,
@@ -557,7 +557,7 @@ pub fn update(state: &mut AppState, msg: &Message, cmds: &mut Vec<Command>) -> b
                 }
             }
 
-            // Handle legacy parent-child connections
+            // Handle parent-child connections (visual grouping)
             // Find all child nodes of this node
             let child_connections: Vec<_> = state
                 .workflow_nodes

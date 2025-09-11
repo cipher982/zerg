@@ -48,7 +48,9 @@ async def test_direct_workflow_execution(db, test_user, sample_agent):
                         "id": "trigger-1",
                         "type": "trigger",
                         "position": {"x": 50, "y": 100},
-                        "config": {"trigger_type": "manual"},
+                        "config": {
+                            "trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}
+                        },
                     },
                     {
                         "id": "tool-1",

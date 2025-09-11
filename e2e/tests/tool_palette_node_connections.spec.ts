@@ -353,7 +353,7 @@ test.describe('Tool Palette and Node Connections', () => {
                 id: 'trigger-1',
                 type: 'trigger',
                 position: { x: 50, y: 200 },
-                config: { trigger_type: 'manual' }
+                config: { trigger: { type: 'manual', config: { enabled: true, params: {}, filters: [] } } }
               },
               // Agent nodes
               ...agents.map((agent, index) => ({

@@ -170,7 +170,21 @@ async def test_complex_workflow():
     canvas_data = {
         "retries": {"default": 1, "backoff": "exponential"},
         "nodes": [
-            {"id": "webhook_trigger", "type": "trigger", "trigger_type": "webhook", "config": {}},
+            {
+                "id": "webhook_trigger",
+                "type": "trigger",
+                "position": {"x": 0, "y": 0},
+                "config": {
+                    "trigger": {
+                        "type": "webhook",
+                        "config": {
+                            "enabled": True,
+                            "params": {},
+                            "filters": [],
+                        },
+                    }
+                },
+            },
             {"id": "data_processor", "type": "placeholder", "data": {"task": "process_data"}},
             {"id": "result_formatter", "type": "placeholder", "data": {"task": "format_results"}},
         ],

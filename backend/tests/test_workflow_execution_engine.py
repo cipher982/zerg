@@ -9,18 +9,32 @@ from sqlalchemy.orm import Session
 
 
 def _create_linear_workflow(db: Session, crud_module, owner_id: int, num_nodes: int = 3):
-    """Create a dummy linear workflow with *num_nodes* trigger nodes."""
+    """Create a dummy linear workflow: 1 trigger + (num_nodes-1) conditionals."""
 
-    canvas = {
-        "nodes": [
+    nodes = []
+    # First node: manual trigger (typed)
+    nodes.append(
+        {
+            "id": "node_0",
+            "type": "trigger",
+            "position": {"x": 0, "y": 100},
+            "config": {"trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}},
+        }
+    )
+
+    # Next nodes: simple conditional nodes that always evaluate to true
+    for i in range(1, num_nodes):
+        nodes.append(
             {
                 "id": f"node_{i}",
-                "type": "trigger",
+                "type": "conditional",
                 "position": {"x": i * 100, "y": 100},
-                "config": {"trigger_type": "manual"},
+                "config": {"condition": "1 == 1", "condition_type": "expression"},
             }
-            for i in range(num_nodes)
-        ],
+        )
+
+    canvas = {
+        "nodes": nodes,
         "edges": [
             {"from_node_id": f"node_{i}", "to_node_id": f"node_{i + 1}", "config": {}} for i in range(num_nodes - 1)
         ],

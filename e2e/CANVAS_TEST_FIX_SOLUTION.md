@@ -40,8 +40,8 @@ async def system_info():
 @app.get("/api/models")  
 async def models():
     return [
-        {"id": "gpt-4", "name": "GPT-4", "provider": "openai", "enabled": True},
-        {"id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo", "provider": "openai", "enabled": True}
+        {"id": "gpt-4", "name": "GPT-4", "provider": "openai", "enabled": true},
+        {"id": "gpt-3.5-turbo", "name": "GPT-3.5 Turbo", "provider": "openai", "enabled": true}
     ]
 ```
 

@@ -43,34 +43,24 @@ def create_test_workflow():
     
     workflow_data = {
         "name": "Debug Test Workflow",
-        "canvas_data": {
+        "description": "Manual trigger + agent",
+        "canvas": {
             "nodes": [
                 {
-                    "node_id": "trigger_1",
-                    "node_type": {"Trigger": {"trigger_type": "Manual", "config": {}}},
-                    "text": "▶ Start",
-                    "x": 100.0,
-                    "y": 100.0,
-                    "width": 200.0,
-                    "height": 80.0
+                    "id": "trigger_1",
+                    "type": "trigger",
+                    "position": {"x": 100.0, "y": 100.0},
+                    "config": {"trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}}
                 },
                 {
-                    "node_id": "agent_1",
-                    "node_type": "AgentIdentity", 
-                    "agent_id": 1,
-                    "text": "Test Agent",
-                    "x": 300.0,
-                    "y": 100.0,
-                    "width": 200.0,
-                    "height": 80.0
+                    "id": "agent_1",
+                    "type": "agent",
+                    "position": {"x": 300.0, "y": 100.0},
+                    "config": {"agent_id": 1}
                 }
             ],
             "edges": [
-                {
-                    "from_node_id": "trigger_1",
-                    "to_node_id": "agent_1",
-                    "id": "edge_1"
-                }
+                {"from_node_id": "trigger_1", "to_node_id": "agent_1", "config": {}}
             ]
         }
     }

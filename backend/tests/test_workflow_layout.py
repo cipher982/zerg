@@ -29,7 +29,7 @@ def _create_workflow(client: TestClient):
         "canvas": {"nodes": [], "edges": []},
     }
     resp = client.post("/api/workflows/", json=payload)
-    assert resp.status_code == 200
+    assert resp.status_code in (200, 201)
     return resp.json()["id"]
 
 

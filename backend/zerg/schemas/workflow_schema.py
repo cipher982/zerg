@@ -181,7 +181,7 @@ class AgentNodeType(BaseModel):
 class TriggerNodeType(BaseModel):
     """Trigger node type configuration."""
 
-    trigger_type: str = Field("webhook", description="Type of trigger")
+    trigger_type: str = Field("webhook", description="Type of trigger (deprecated; use config.trigger in WorkflowData)")
     config: Dict[str, Any] = Field(default_factory=dict, description="Trigger configuration")
 
 

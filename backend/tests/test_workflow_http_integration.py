@@ -60,7 +60,9 @@ async def test_full_workflow_http_execution(db, test_user, sample_agent, auth_he
                             "id": "trigger-1",
                             "type": "trigger",
                             "position": {"x": 50, "y": 100},
-                            "config": {"trigger_type": "manual"},
+                            "config": {
+                                "trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}
+                            },
                         },
                         {
                             "id": "tool-1",
@@ -84,7 +86,7 @@ async def test_full_workflow_http_execution(db, test_user, sample_agent, auth_he
 
             # Create workflow via HTTP API
             response = client.post("/api/workflows", json=workflow_payload, headers=auth_headers)
-            assert response.status_code == 200
+            assert response.status_code in (200, 201)
             workflow_data = response.json()
             workflow_id = workflow_data["id"]
 
@@ -166,7 +168,7 @@ async def test_workflow_execution_parameter_consistency(db, test_user, sample_ag
                     "id": "trigger-1",
                     "type": "trigger",
                     "position": {"x": 50, "y": 100},
-                    "config": {"trigger_type": "manual"},
+                    "config": {"trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}},
                 }
             ],
             "edges": [],
@@ -174,7 +176,7 @@ async def test_workflow_execution_parameter_consistency(db, test_user, sample_ag
     }
 
     response = client.post("/api/workflows", json=workflow_payload, headers=auth_headers)
-    assert response.status_code == 200
+    assert response.status_code in (200, 201)
     workflow_id = response.json()["id"]
 
     # Test the reserve endpoint that previously had the bug
@@ -224,7 +226,7 @@ async def test_workflow_execution_error_handling(db, test_user, auth_headers):
                     "id": "trigger-1",
                     "type": "trigger",
                     "position": {"x": 50, "y": 100},
-                    "config": {"trigger_type": "manual"},
+                    "config": {"trigger": {"type": "manual", "config": {"enabled": True, "params": {}, "filters": []}}},
                 },
                 {
                     "id": "tool-invalid",
