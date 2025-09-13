@@ -10,6 +10,7 @@ mkdir -p /app/static
 
 echo "=== Migration Log $(date) ===" > "$MIGRATION_LOG"
 
+# Output to both console and log file
 {
     echo "🔄 Running database migrations..."
     echo "Working directory: $(pwd)"
@@ -27,7 +28,10 @@ echo "=== Migration Log $(date) ===" > "$MIGRATION_LOG"
     }
     
     echo "✅ Migration process complete"
-} | tee -a "$MIGRATION_LOG"
+} 2>&1 | tee "$MIGRATION_LOG"
+
+# Also output to stderr so it appears in Docker logs
+cat "$MIGRATION_LOG" >&2
 
 echo "Starting server..."
 exec python -m uvicorn zerg.main:app --host 0.0.0.0 --port 8000
