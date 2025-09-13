@@ -337,6 +337,24 @@ async def read_root():
     return {"message": "Agent Platform API is running"}
 
 
+@app.get("/health")
+async def health_check():
+    """Health check endpoint with migration status."""
+    from pathlib import Path
+
+    migration_log_file = Path("/app/static/migration.log")
+    migration_status = {"log_exists": migration_log_file.exists(), "log_content": None}
+
+    if migration_log_file.exists():
+        try:
+            with open(migration_log_file, "r") as f:
+                migration_status["log_content"] = f.read()
+        except Exception as e:
+            migration_status["log_error"] = str(e)
+
+    return {"status": "healthy", "message": "Agent Platform API is running", "migration": migration_status}
+
+
 # Favicon endpoint is no longer needed since we use static file in the frontend
 # Browsers will go directly to the frontend server for favicon.ico
 
