@@ -142,6 +142,20 @@ async def reset_database():
 _legacy_router = _AR(prefix="/admin")
 
 
+@router.get("/migration-log")
+async def get_migration_log():
+    """Get the migration log from container startup."""
+    from pathlib import Path
+
+    log_file = Path("/app/static/migration.log")
+    if log_file.exists():
+        with open(log_file, "r") as f:
+            content = f.read()
+        return {"log": content, "exists": True}
+    else:
+        return {"log": "Migration log not found", "exists": False}
+
+
 @_legacy_router.post("/reset-database")
 async def _legacy_reset_database():  # noqa: D401 – thin wrapper
     return await reset_database()  # noqa: WPS110 – re-use logic
