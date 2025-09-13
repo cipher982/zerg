@@ -156,6 +156,87 @@ async def get_migration_log():
         return {"log": "Migration log not found", "exists": False}
 
 
+@router.post("/fix-database-schema")
+async def fix_database_schema():
+    """Directly fix the missing updated_at column issue."""
+    # Check if we're in development mode
+    settings = get_settings()
+    if not settings.testing and (settings.environment or "") != "development":
+        logger.warning("Attempted to fix database schema in non-development environment")
+        raise HTTPException(status_code=403, detail="Database schema fix is only available in development environment")
+
+    try:
+        import sqlalchemy as sa
+        from sqlalchemy import text
+
+        session_factory = get_session_factory()
+
+        with session_factory() as session:
+            engine = session.get_bind()
+
+            # Check if updated_at column exists
+            inspector = sa.inspect(engine)
+            if not inspector.has_table("connectors"):
+                return {"message": "Connectors table does not exist"}
+
+            columns = [col["name"] for col in inspector.get_columns("connectors")]
+
+            if "updated_at" in columns:
+                return {"message": "updated_at column already exists"}
+
+            # Add the missing column
+            logger.info("Adding missing updated_at column to connectors table")
+
+            if engine.dialect.name == "postgresql":
+                # PostgreSQL approach
+                session.execute(
+                    text("""
+                    ALTER TABLE connectors 
+                    ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                """)
+                )
+
+                session.execute(
+                    text("""
+                    UPDATE connectors 
+                    SET updated_at = created_at 
+                    WHERE updated_at IS NULL
+                """)
+                )
+
+                session.execute(
+                    text("""
+                    ALTER TABLE connectors 
+                    ALTER COLUMN updated_at SET NOT NULL
+                """)
+                )
+
+            elif engine.dialect.name == "sqlite":
+                # SQLite approach
+                session.execute(
+                    text("""
+                    ALTER TABLE connectors 
+                    ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                """)
+                )
+
+                session.execute(
+                    text("""
+                    UPDATE connectors 
+                    SET updated_at = created_at 
+                    WHERE updated_at IS NULL
+                """)
+                )
+
+            session.commit()
+
+        return {"message": "Database schema fixed - added updated_at column to connectors table"}
+
+    except Exception as e:
+        logger.error(f"Error fixing database schema: {str(e)}")
+        return JSONResponse(status_code=500, content={"detail": f"Failed to fix database schema: {str(e)}"})
+
+
 @_legacy_router.post("/reset-database")
 async def _legacy_reset_database():  # noqa: D401 – thin wrapper
     return await reset_database()  # noqa: WPS110 – re-use logic
