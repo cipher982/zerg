@@ -36,6 +36,7 @@ dependencies = [
     "psycopg2-binary>=2.9.0",
     "google-auth>=2.40.3",
     "PyJWT[crypto]>=2.8.0",
+    "alembic>=1.13.0",
 ]
 
 [build-system]
