@@ -12,7 +12,7 @@ F_PORT ?= $(FRONTEND_PORT)
 B_PORT ?= 8001
 F_PORT ?= 8002
 
-.PHONY: help start stop test test-backend test-frontend test-e2e generate validate-contracts
+.PHONY: help start stop test test-backend test-frontend test-e2e generate validate-contracts validate-deploy
 
 # ---------------------------------------------------------------------------
 # Help – `make` or `make help`
@@ -32,6 +32,9 @@ help:
 	@echo "  make test-backend  Run backend unit tests only (~10 sec)"
 	@echo "  make test-frontend Run frontend WASM tests only (~30 sec)"
 	@echo "  make test-e2e      Run e2e integration tests only (~2 min)"
+	@echo ""
+	@echo "Deployment:"
+	@echo "  make validate-deploy    Validate environment for deployment (required vars, DB connectivity)"
 	@echo ""
 
 # ---------------------------------------------------------------------------
@@ -95,3 +98,10 @@ generate:
 validate-contracts:
 	@echo "🔍 Running API contract validation..."
 	./scripts/fast-contract-check.sh
+
+# ---------------------------------------------------------------------------
+# Deployment validation (checks environment and connectivity)
+# ---------------------------------------------------------------------------
+validate-deploy:
+	@echo "🔍 Validating deployment configuration..."
+	cd backend && uv run python ../scripts/validate-deployment.py
