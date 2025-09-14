@@ -28,6 +28,15 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 BUILD_ENV="${BUILD_ENV:-debug}"
+
+# Determine build mode based on BUILD_ENV
+if [[ "${BUILD_ENV}" == "production" ]]; then
+  WASM_PACK_MODE="--release"
+  WASM_PACK_DESC="release"
+else
+  WASM_PACK_MODE="--dev"
+  WASM_PACK_DESC="debug"
+fi
 # Configure ports from .env with fallback defaults
 BACKEND_PORT="${BACKEND_PORT:-8001}"
 
@@ -48,7 +57,7 @@ fi
 # *after* we ensure a writable TMPDIR below.  Keeping the banner here avoids
 # altering the original log order while preventing an accidental line-continuation
 # without a command (which would cause a syntax error in `bash`).
-echo "[build-only] 🏗  wasm-pack build …" >&2
+echo "[build-only] 🏗  wasm-pack build (${WASM_PACK_DESC}) …" >&2
 
 # Ensure a writable TMPDIR for systems with restricted /var directories (e.g. sandboxed CI)
 TMPDIR_OVERRIDDEN="${TMPDIR:-}"
@@ -58,7 +67,7 @@ if [[ -z "$TMPDIR_OVERRIDDEN" || ! -w "$TMPDIR_OVERRIDDEN" ]]; then
 fi
 
 RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\" -C debuginfo=2" \
-  wasm-pack build --dev --target web --out-dir pkg
+  wasm-pack build ${WASM_PACK_MODE} --target web --out-dir pkg
 
 # Copy the generated files to www directory
 echo "[build-only] 📦 copying WASM artifacts to www..." >&2
