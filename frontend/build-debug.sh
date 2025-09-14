@@ -13,7 +13,7 @@ if [ -f "$ENV_FILE" ]; then
   set +a
 fi
 
-echo "[build-debug] HELLO compiling WASM (debug)..."
+echo "[build-debug] HELLO compiling WASM (${WASM_PACK_DESC})..."
 
 # Ensure a writable TMPDIR – some sandboxed CI runners mount the default
 # /var/folders/... macOS location read-only which breaks Cargo during
@@ -25,10 +25,19 @@ if [[ -z "${TMPDIR:-}" || ! -w "${TMPDIR}" ]]; then
   mkdir -p "$TMPDIR"
 fi
 
-# Configure ports from .env with fallback defaults  
+# Configure ports from .env with fallback defaults
 BACKEND_PORT="${BACKEND_PORT:-8001}"
 FRONTEND_PORT="${FRONTEND_PORT:-8002}"
 BUILD_ENV="${BUILD_ENV:-debug}"
+
+# Determine build mode based on BUILD_ENV
+if [[ "${BUILD_ENV}" == "production" ]]; then
+  WASM_PACK_MODE="--release"
+  WASM_PACK_DESC="release"
+else
+  WASM_PACK_MODE="--dev"
+  WASM_PACK_DESC="debug"
+fi
 
 # Ensure compile-time API_BASE_URL does not force cross-origin during dev –
 # we will set it at runtime via config.js so CSP stays aligned with localhost.
@@ -45,7 +54,7 @@ fi
 # -------------------------------------------------------------
 
 RUSTFLAGS="--cfg getrandom_backend=\"wasm_js\" -C debuginfo=2" \
-  wasm-pack build --dev --target web --out-dir pkg
+  wasm-pack build ${WASM_PACK_MODE} --target web --out-dir pkg
 
 # Copy the generated files to www directory
 echo "[build-debug] copying WASM artifacts to www..."

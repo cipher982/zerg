@@ -265,6 +265,7 @@ macro_rules! debug_log {
 #[macro_export]
 macro_rules! info_log {
     ($($t:tt)*) => {{
+        #[cfg(debug_assertions)]
         web_sys::console::log_1(&format!($($t)*).into());
     }};
 }
