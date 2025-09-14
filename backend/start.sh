@@ -4,6 +4,14 @@ set -e
 # Ensure we're in the right directory for alembic
 cd /app
 
+# Master runtime validation - fail fast if environment is broken
+echo "🔍 Running master runtime validation..."
+python validate-runtime.py || {
+    echo "❌ CRITICAL: Runtime validation failed!"
+    echo "❌ Container startup blocked - check environment configuration"
+    exit 1
+}
+
 # Create migration log file accessible via web
 MIGRATION_LOG="/app/static/migration.log"
 mkdir -p /app/static
@@ -18,8 +26,7 @@ echo "=== Migration Log $(date) ===" > "$MIGRATION_LOG"
     echo "Python path: $(which python)"
     echo "Alembic module check:"
     python -c 'import alembic; print(f"Alembic version: {alembic.__version__}")' 2>&1 || echo 'ALEMBIC NOT FOUND'
-    echo "Database URL check:"
-    python -c 'from zerg.config import get_settings; s=get_settings(); print(f"DB URL: {s.database_url[:30]}...")' 2>&1 || echo 'CONFIG ERROR'
+    echo "✅ Runtime validation completed"
     
     echo "Running alembic upgrade head..."
     python -m alembic upgrade head 2>&1 || {

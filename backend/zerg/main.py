@@ -339,9 +339,55 @@ async def read_root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint with migration status."""
+    """Health check endpoint with comprehensive system validation."""
     from pathlib import Path
 
+    from sqlalchemy import text
+
+    health_status = {"status": "healthy", "message": "Agent Platform API is running"}
+    checks = {}
+
+    # 1. Environment validation
+    try:
+        settings = get_settings()
+        env_issues = []
+
+        if not settings.openai_api_key:
+            env_issues.append("OPENAI_API_KEY missing")
+        if not settings.database_url:
+            env_issues.append("DATABASE_URL missing")
+        if not settings.auth_disabled and (not settings.jwt_secret or len(settings.jwt_secret) < 16):
+            env_issues.append("JWT_SECRET invalid")
+
+        checks["environment"] = {
+            "status": "pass" if not env_issues else "fail",
+            "issues": env_issues,
+            "database_configured": bool(settings.database_url),
+            "auth_enabled": not settings.auth_disabled,
+        }
+    except Exception as e:
+        checks["environment"] = {"status": "fail", "error": str(e)}
+        health_status["status"] = "unhealthy"
+
+    # 2. Database connectivity
+    try:
+        from zerg.database import default_engine
+
+        with default_engine.connect() as conn:
+            result = conn.execute(text("SELECT 1"))
+            row = result.fetchone()
+            checks["database"] = {
+                "status": "pass" if row and row[0] == 1 else "fail",
+                "connection": "ok",
+                "url": str(default_engine.url).replace(default_engine.url.password or "", "***")
+                if default_engine.url.password
+                else str(default_engine.url),
+            }
+    except Exception as e:
+        checks["database"] = {"status": "fail", "error": str(e)}
+        health_status["status"] = "unhealthy"
+
+    # 3. Migration status
     migration_log_file = Path("/app/static/migration.log")
     migration_status = {"log_exists": migration_log_file.exists(), "log_content": None}
 
@@ -352,7 +398,10 @@ async def health_check():
         except Exception as e:
             migration_status["log_error"] = str(e)
 
-    return {"status": "healthy", "message": "Agent Platform API is running", "migration": migration_status}
+    checks["migration"] = migration_status
+
+    health_status["checks"] = checks
+    return health_status
 
 
 # Favicon endpoint is no longer needed since we use static file in the frontend

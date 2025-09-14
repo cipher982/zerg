@@ -196,21 +196,41 @@ def _validate_required(settings: Settings) -> None:  # noqa: D401 – helper
     if settings.testing:  # Unit-/integration tests run with stubbed LLMs
         return
 
-    if not settings.openai_api_key:
-        raise RuntimeError(
-            "OPENAI_API_KEY is not set.  Provide it via the .env file at the "
-            "repository root or export the variable in the shell before "
-            "starting the application.  Refusing to continue with an empty "
-            "key to avoid hard-to-debug runtime failures.",
-        )
+    # Critical configuration validation - fail fast on missing required vars
+    missing_vars = []
 
-    # Harden JWT secret when auth is enabled – avoid weak/default secrets
+    # Core application requirements
+    if not settings.openai_api_key:
+        missing_vars.append("OPENAI_API_KEY")
+
+    if not settings.database_url:
+        missing_vars.append("DATABASE_URL")
+
+    # Encryption requirements
+    if not settings.fernet_secret:
+        missing_vars.append("FERNET_SECRET")
+
+    # Authentication requirements
     if not settings.auth_disabled:
         weak = settings.jwt_secret.strip() in {"", "dev-secret"} or len(settings.jwt_secret) < 16
         if weak:
-            raise RuntimeError(
-                "JWT_SECRET is too weak or unset. Set a strong secret (>=16 chars) when AUTH is enabled."
-            )
+            missing_vars.append("JWT_SECRET (must be >=16 chars, not 'dev-secret')")
+
+        if not settings.google_client_id:
+            missing_vars.append("GOOGLE_CLIENT_ID (required when auth enabled)")
+
+        if not settings.google_client_secret:
+            missing_vars.append("GOOGLE_CLIENT_SECRET (required when auth enabled)")
+
+    if missing_vars:
+        error_msg = (
+            f"CRITICAL: Missing required environment variables: {', '.join(missing_vars)}\n"
+            f"Set these in your .env file or deployment environment.\n"
+            f"Current DATABASE_URL: '{settings.database_url}'\n"
+            f"Current OPENAI_API_KEY: '{'SET' if settings.openai_api_key else 'MISSING'}'\n"
+            f"Deployment will fail without these variables."
+        )
+        raise RuntimeError(error_msg)
 
 
 def get_settings() -> Settings:  # noqa: D401 – public accessor
