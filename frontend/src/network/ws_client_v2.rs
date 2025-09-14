@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::{MessageEvent, WebSocket};
-use crate::debug_log;
+use crate::{debug_log, warn_log};
 
 use super::messages::builders;
 
@@ -252,7 +252,7 @@ impl WsClientV2 {
 
         // Set up open handler
         let onopen_closure = Closure::wrap(Box::new(move |_: web_sys::Event| {
-            web_sys::console::log_1(&"WebSocket connected".into());
+            debug_log!("WebSocket connected");
             *state_clone.borrow_mut() = ConnectionState::Connected;
             *reconnect_attempt_clone.borrow_mut() = 0; // Reset counter
 
@@ -291,7 +291,7 @@ impl WsClientV2 {
                 }
             }
 
-            web_sys::console::log_1(&"WebSocket closed".into());
+            debug_log!("WebSocket closed");
             *state_clone.borrow_mut() = ConnectionState::Disconnected;
 
             // Cancel watchdog interval (if set) to avoid leaks when the
@@ -317,7 +317,7 @@ impl WsClientV2 {
                 // Use the client clone to call schedule_reconnect
                 client_clone_for_reconnect.schedule_reconnect();
             } else {
-                web_sys::console::log_1(&"Max reconnection attempts reached".into());
+                warn_log!("Max reconnection attempts reached");
                 // Potentially update state to a permanent error state if needed
             }
         }) as Box<dyn FnMut(web_sys::Event)>);
