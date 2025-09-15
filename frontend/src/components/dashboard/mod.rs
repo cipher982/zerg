@@ -207,6 +207,9 @@ pub fn setup_dashboard(document: &Document) -> Result<(), JsValue> {
         }
     }
 
+    // Check super admin status and conditionally create reset button once during setup
+    check_and_create_reset_button_once(document)?;
+
     // Now render the dashboard content
     render_dashboard(document)?;
 
@@ -360,9 +363,6 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     create_btn.set_onclick(Some(create_callback.as_ref().unchecked_ref()));
     create_callback.forget();
 
-    // Check super admin status and conditionally create reset button
-    check_and_create_reset_button(document, &button_container)?;
-
     button_container.append_child(&create_button)?;
 
     // Attach button container last so it aligns to the right via flexbox CSS.
@@ -371,10 +371,23 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     Ok(header)
 }
 
-/// Check super admin status and conditionally create the reset database button
-fn check_and_create_reset_button(_document: &Document, _button_container: &Element) -> Result<(), JsValue> {
+/// Check super admin status once during setup and create reset button if needed
+fn check_and_create_reset_button_once(document: &Document) -> Result<(), JsValue> {
     use crate::network::ApiClient;
     use wasm_bindgen_futures::spawn_local;
+
+    // Only perform the check once by storing the result in the DOM
+    if document.get_element_by_id("admin-check-completed").is_some() {
+        return Ok(());
+    }
+
+    // Mark that we've started the admin check
+    let marker = document.create_element("div")?;
+    marker.set_id("admin-check-completed");
+    marker.set_attribute("style", "display: none;")?;
+    if let Some(body) = document.body() {
+        body.append_child(&marker)?;
+    }
 
     // Spawn an async task to check super admin status
     spawn_local(async move {
@@ -412,10 +425,6 @@ fn create_reset_button(document: &Document, requires_password: bool) -> Result<(
     use crate::ui_components::{create_danger_button, set_button_loading};
     use crate::constants::ATTR_DATA_TESTID;
 
-    // Check if reset button already exists to prevent duplicates
-    if document.get_element_by_id("reset-db-btn").is_some() {
-        return Ok(());
-    }
 
     // Find the button container by class since ID lookup might fail
     let elements = document.get_elements_by_class_name("button-container");
