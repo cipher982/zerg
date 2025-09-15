@@ -125,7 +125,25 @@ async def lifespan(app: FastAPI):
     try:
         # Create DB tables if they don't exist
         initialize_database()
+
+        # Enforce PostgreSQL-only runtime for simplicity and correctness
+        try:
+            from zerg.database import default_engine
+
+            if default_engine.dialect.name != "postgresql":  # pragma: no cover - caught in tests via conftest
+                raise RuntimeError("PostgreSQL is required to run the backend (advisory locks, concurrency).")
+        except Exception as _e:
+            logger.error(str(_e))
+            raise
         logger.info("Database tables initialized")
+
+        # Initialize agent state recovery system
+        if not _settings.testing:
+            from zerg.services.agent_state_recovery import initialize_agent_state_system
+
+            recovery_result = await initialize_agent_state_system()
+            if recovery_result["recovered_agents"]:
+                logger.info(f"Recovered {len(recovery_result['recovered_agents'])} stuck agents during startup")
 
         # Start core background services
         if not _settings.testing:
