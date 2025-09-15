@@ -531,6 +531,12 @@ pub enum Message {
     /// The authenticated user's profile has been fetched from `/api/users/me`.
     CurrentUserLoaded(crate::models::CurrentUser),
 
+    /// Admin status has been checked for the current user
+    AdminStatusLoaded {
+        is_super_admin: bool,
+        requires_password: bool,
+    },
+
     // Model management
     SetAvailableModels {
         models: Vec<(String, String)>,

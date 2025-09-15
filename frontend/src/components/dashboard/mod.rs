@@ -13,7 +13,7 @@ use crate::constants::{
 };
 use crate::state::APP_STATE;
 use crate::toast;
-use crate::ui_components::{create_button, create_danger_button, set_button_loading, ButtonConfig};
+use crate::ui_components::{create_button, ButtonConfig};
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -163,9 +163,6 @@ pub fn refresh_dashboard(document: &Document) -> Result<(), JsValue> {
         container.append_child(&dashboard)?;
     }
 
-    // Check super admin status and conditionally create reset button once
-    check_and_create_reset_button_once(document)?;
-
     // Now render the dashboard content
     render_dashboard(document)?;
     Ok(())
@@ -209,9 +206,6 @@ pub fn setup_dashboard(document: &Document) -> Result<(), JsValue> {
             container.append_child(&dashboard)?;
         }
     }
-
-    // Check super admin status and conditionally create reset button once during setup
-    check_and_create_reset_button_once(document)?;
 
     // Now render the dashboard content
     render_dashboard(document)?;
@@ -368,73 +362,28 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
 
     button_container.append_child(&create_button)?;
 
+    // Create reset button synchronously if user is super admin
+    let admin_status = APP_STATE.with(|state| {
+        let state = state.borrow();
+        (state.is_super_admin, state.admin_requires_password)
+    });
+
+    if admin_status.0 {
+        let reset_btn = create_reset_button_sync(document, admin_status.1)?;
+        button_container.append_child(&reset_btn)?;
+    }
+
     // Attach button container last so it aligns to the right via flexbox CSS.
     header.append_child(&button_container)?;
 
     Ok(header)
 }
 
-/// Check super admin status once during setup and create reset button if needed
-fn check_and_create_reset_button_once(document: &Document) -> Result<(), JsValue> {
-    use crate::network::ApiClient;
-    use wasm_bindgen_futures::spawn_local;
 
-    // Only perform the check once by storing the result in the DOM
-    if document.get_element_by_id("admin-check-completed").is_some() {
-        return Ok(());
-    }
-
-    // Mark that we've started the admin check
-    let marker = document.create_element("div")?;
-    marker.set_id("admin-check-completed");
-    marker.set_attribute("style", "display: none;")?;
-    if let Some(body) = document.body() {
-        body.append_child(&marker)?;
-    }
-
-    // Spawn an async task to check super admin status
-    spawn_local(async move {
-        match ApiClient::get_super_admin_status().await {
-            Ok(response_json) => {
-                match serde_json::from_str::<crate::models::SuperAdminStatus>(&response_json) {
-                    Ok(status) => {
-                        if status.is_super_admin {
-                            // User is super admin, create the reset button
-                            if let Some(window) = web_sys::window() {
-                                if let Some(doc) = window.document() {
-                                    let _ = create_reset_button(&doc, status.requires_password);
-                                }
-                            }
-                        }
-                        // If not super admin, don't show button at all
-                    }
-                    Err(e) => {
-                        web_sys::console::warn_1(&format!("Failed to parse super admin status: {:?}", e).into());
-                    }
-                }
-            }
-            Err(e) => {
-                // Likely not an admin at all - don't show button
-                web_sys::console::log_1(&format!("Super admin check failed (likely not admin): {:?}", e).into());
-            }
-        }
-    });
-
-    Ok(())
-}
-
-/// Create the reset database button with appropriate security handling
-fn create_reset_button(document: &Document, requires_password: bool) -> Result<(), JsValue> {
+/// Create the reset database button synchronously and return it
+fn create_reset_button_sync(document: &Document, requires_password: bool) -> Result<Element, JsValue> {
     use crate::ui_components::{create_danger_button, set_button_loading};
     use crate::constants::ATTR_DATA_TESTID;
-
-
-    // Find the button container by class since ID lookup might fail
-    let elements = document.get_elements_by_class_name("button-container");
-    if elements.length() == 0 {
-        return Ok(());
-    }
-    let container = elements.item(0).unwrap();
 
     // Create reset database button
     let reset_btn = create_danger_button(document, "🗑️ Reset DB", Some("reset-db-btn"))?;
@@ -546,10 +495,7 @@ fn create_reset_button(document: &Document, requires_password: bool) -> Result<(
     reset_btn_elem.set_onclick(Some(reset_callback.as_ref().unchecked_ref()));
     reset_callback.forget();
 
-    // Append the button to the container
-    container.append_child(&reset_btn)?;
-
-    Ok(())
+    Ok(reset_btn)
 }
 
 // Create the agents table structure
