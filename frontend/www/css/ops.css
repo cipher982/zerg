@@ -77,6 +77,14 @@
 .ops-dashboard .spark .label { color: var(--text-secondary); font-size: 12px; margin-bottom: 6px; }
 .ops-dashboard .spark svg { display: block; }
 
+/* Admin controls */
+.ops-dashboard .admin-card { margin-top: var(--spacing-sm); background: var(--dark-lighter); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 12px 14px; box-shadow: var(--shadow-sm); }
+.ops-dashboard .admin-card .label { color: var(--text-secondary); font-size: 12px; margin-bottom: 8px; font-weight: 600; }
+.ops-dashboard .admin-card .admin-row { display: grid; grid-template-columns: max-content 1fr; gap: var(--spacing-sm); align-items: start; }
+.ops-dashboard .admin-card .btn-danger { background: var(--error); color: white; border: none; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+.ops-dashboard .admin-card .btn-danger[aria-busy="true"] { opacity: 0.7; pointer-events: none; }
+.ops-dashboard .ops-reset-summary, .ops-dashboard pre.ops-reset-summary { background: var(--bg-dark); border: 1px dashed var(--border-color); border-radius: 6px; padding: 8px; margin: 0; white-space: pre-wrap; color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+
 /* Top agents table */
 .ops-dashboard table.top-agents { width: 100%; border-collapse: collapse; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden; }
 .ops-dashboard table.top-agents th,
