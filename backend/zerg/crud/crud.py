@@ -60,23 +60,6 @@ def _validate_cron_or_raise(expr: Optional[str]):
 # Agent CRUD operations
 
 
-def acquire_run_lock(db: Session, agent_id: int) -> bool:
-    """Atomically acquire a run lock for an agent.
-
-    Sets the agent status to 'running' only if it's not already running.
-    Returns True if the lock was acquired, False if already running.
-
-    This prevents concurrent runs of the same agent.
-    """
-    updated_rows = (
-        db.query(Agent)
-        .filter(Agent.id == agent_id, Agent.status != "running")
-        .update({"status": "running", "updated_at": utc_now_naive()})
-    )
-    db.commit()
-    return updated_rows > 0
-
-
 def get_agents(
     db: Session,
     *,

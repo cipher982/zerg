@@ -86,167 +86,191 @@ async def execute_agent_task(db: Session, agent: AgentModel, *, thread_type: str
         raise ValueError("Agent has no task_instructions defined")
 
     # ------------------------------------------------------------------
-    # Acquire run lock atomically - prevents concurrent runs
+    # Acquire run lock – prefer PostgreSQL advisory locks; fallback preserves
+    # legacy status-based guard for non-Postgres engines.
     # ------------------------------------------------------------------
-    if not crud.acquire_run_lock(db, agent.id):
-        raise ValueError("Agent already running")
+    use_advisory = bool(getattr(db.bind, "dialect", None) and db.bind.dialect.name == "postgresql")
 
-    await event_bus.publish(EventType.AGENT_UPDATED, {"id": agent.id, "status": "running"})
+    if use_advisory:
+        from zerg.services.agent_locks import AgentLockManager
 
-    # ------------------------------------------------------------------
-    # Create the new thread + seed messages.
-    # ------------------------------------------------------------------
-    timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
-    title = f"Task Run – {timestamp_str}"
+        # Hold the advisory lock for the entire run window.
+        with AgentLockManager.agent_lock(db, agent.id) as acquired:
+            if not acquired:
+                raise ValueError("Agent already running")
 
-    thread = ThreadService.create_thread_with_system_message(
-        db,
-        agent,
-        title=title,
-        thread_type=thread_type,
-        active=False,  # task runs are not the *active* chat thread
-    )
+            # Persist status for UI/telemetry while the advisory lock enforces exclusivity
+            crud.update_agent(db, agent.id, status="running")
+            db.commit()
+            await event_bus.publish(
+                EventType.AGENT_UPDATED,
+                {"event_type": "agent_updated", "id": agent.id, "status": "running"},
+            )
 
-    # Insert the user *task* prompt (unprocessed)
-    crud.create_thread_message(
-        db=db,
-        thread_id=thread.id,
-        role="user",
-        content=agent.task_instructions,
-        processed=False,
-    )
+            # Proceed with execution inside the lock scope
+            # ------------------------------------------------------------------
+            # Create the new thread + seed messages.
+            # ------------------------------------------------------------------
+            timestamp_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            title = f"Task Run – {timestamp_str}"
 
-    # ------------------------------------------------------------------
-    # Persist an *AgentRun* row so dashboards can display progress.
-    # ------------------------------------------------------------------
-    run_row = crud.create_run(
-        db,
-        agent_id=agent.id,
-        thread_id=thread.id,
-        trigger=thread_type if thread_type in {"manual", "schedule"} else "api",
-        status="queued",
-    )
+            thread = ThreadService.create_thread_with_system_message(
+                db,
+                agent,
+                title=title,
+                thread_type=thread_type,
+                active=False,  # task runs are not the *active* chat thread
+            )
 
-    await event_bus.publish(
-        EventType.RUN_CREATED,
-        {
-            "event_type": "run_created",
-            "agent_id": agent.id,
-            "run_id": run_row.id,
-            "status": "queued",
-        },
-    )
+            # Insert the user *task* prompt (unprocessed)
+            crud.create_thread_message(
+                db=db,
+                thread_id=thread.id,
+                role="user",
+                content=agent.task_instructions,
+                processed=False,
+            )
 
-    # Immediately mark as running (no async queue yet)
-    start_ts = datetime.now(timezone.utc)
-    crud.mark_running(db, run_row.id, started_at=start_ts)
-    await event_bus.publish(
-        EventType.RUN_UPDATED,
-        {
-            "event_type": "run_updated",
-            "agent_id": agent.id,
-            "run_id": run_row.id,
-            "status": "running",
-            "started_at": start_ts.isoformat(),
-        },
-    )
+            # ------------------------------------------------------------------
+            # Persist an *AgentRun* row so dashboards can display progress.
+            # ------------------------------------------------------------------
+            run_row = crud.create_run(
+                db,
+                agent_id=agent.id,
+                thread_id=thread.id,
+                trigger=thread_type if thread_type in {"manual", "schedule"} else "api",
+                status="queued",
+            )
 
-    # ------------------------------------------------------------------
-    # Delegate to AgentRunner (no token stream) and capture duration.
-    # ------------------------------------------------------------------
-    runner = AgentRunner(agent)
+            await event_bus.publish(
+                EventType.RUN_CREATED,
+                {
+                    "event_type": "run_created",
+                    "agent_id": agent.id,
+                    "run_id": run_row.id,
+                    "status": "queued",
+                },
+            )
 
-    try:
-        await runner.run_thread(db, thread)
+            # Immediately mark as running (no async queue yet)
+            start_ts = datetime.now(timezone.utc)
+            crud.mark_running(db, run_row.id, started_at=start_ts)
+            await event_bus.publish(
+                EventType.RUN_UPDATED,
+                {
+                    "event_type": "run_updated",
+                    "agent_id": agent.id,
+                    "run_id": run_row.id,
+                    "status": "running",
+                    "started_at": start_ts.isoformat(),
+                },
+            )
 
-    except Exception as exc:
-        # Persist run failure first
-        end_ts = datetime.now(timezone.utc)
-        duration_ms = int((end_ts - start_ts).total_seconds() * 1000)
-        crud.mark_failed(db, run_row.id, finished_at=end_ts, duration_ms=duration_ms, error=str(exc))
+            # ------------------------------------------------------------------
+            # Delegate to AgentRunner (no token stream) and capture duration.
+            # ------------------------------------------------------------------
+            runner = AgentRunner(agent)
 
-        await event_bus.publish(
-            EventType.RUN_UPDATED,
-            {
-                "event_type": "run_updated",
-                "agent_id": agent.id,
-                "run_id": run_row.id,
-                "status": "failed",
-                "finished_at": end_ts.isoformat(),
-                "duration_ms": duration_ms,
-                "error": str(exc),
-            },
-        )
+            try:
+                await runner.run_thread(db, thread)
 
-        # Persist agent error state & broadcast so dashboards refresh
-        crud.update_agent(db, agent.id, status="error", last_error=str(exc))
-        db.commit()
+            except Exception as exc:
+                # Persist run failure first
+                end_ts = datetime.now(timezone.utc)
+                duration_ms = int((end_ts - start_ts).total_seconds() * 1000)
+                crud.mark_failed(db, run_row.id, finished_at=end_ts, duration_ms=duration_ms, error=str(exc))
 
-        await event_bus.publish(
-            EventType.AGENT_UPDATED,
-            {"id": agent.id, "status": "error", "last_error": str(exc)},
-        )
+                await event_bus.publish(
+                    EventType.RUN_UPDATED,
+                    {
+                        "event_type": "run_updated",
+                        "agent_id": agent.id,
+                        "run_id": run_row.id,
+                        "status": "failed",
+                        "finished_at": end_ts.isoformat(),
+                        "duration_ms": duration_ms,
+                        "error": str(exc),
+                    },
+                )
 
-        logger.exception("Task run failed for agent %s", agent.id)
-        raise
+                # Persist agent error state & broadcast so dashboards refresh
+                crud.update_agent(db, agent.id, status="error", last_error=str(exc))
+                db.commit()
 
-    # ------------------------------------------------------------------
-    # Success – update run + flip agent back to idle.
-    # ------------------------------------------------------------------
-    end_ts = datetime.now(timezone.utc)
-    duration_ms = int((end_ts - start_ts).total_seconds() * 1000)
+                await event_bus.publish(
+                    EventType.AGENT_UPDATED,
+                    {
+                        "event_type": "agent_updated",
+                        "id": agent.id,
+                        "status": "error",
+                        "last_error": str(exc),
+                    },
+                )
 
-    # Persist usage + cost if available
-    total_tokens = runner.usage_total_tokens
-    total_cost_usd = None
-    if runner.usage_prompt_tokens is not None and runner.usage_completion_tokens is not None:
-        # Compute cost only when pricing known
-        from zerg.pricing import get_usd_prices_per_1k
+                logger.exception("Task run failed for agent %s", agent.id)
+                raise
 
-        prices = get_usd_prices_per_1k(agent.model)
-        if prices is not None:
-            in_price, out_price = prices
-            total_cost_usd = (
-                (runner.usage_prompt_tokens * in_price) + (runner.usage_completion_tokens * out_price)
-            ) / 1000.0
+            # ------------------------------------------------------------------
+            # Success – update run + flip agent back to idle.
+            # ------------------------------------------------------------------
+            end_ts = datetime.now(timezone.utc)
+            duration_ms = int((end_ts - start_ts).total_seconds() * 1000)
 
-    crud.mark_finished(
-        db,
-        run_row.id,
-        finished_at=end_ts,
-        duration_ms=duration_ms,
-        total_tokens=total_tokens,
-        total_cost_usd=total_cost_usd,
-    )
+            # Persist usage + cost if available
+            total_tokens = runner.usage_total_tokens
+            total_cost_usd = None
+            if runner.usage_prompt_tokens is not None and runner.usage_completion_tokens is not None:
+                # Compute cost only when pricing known
+                from zerg.pricing import get_usd_prices_per_1k
 
-    await event_bus.publish(
-        EventType.RUN_UPDATED,
-        {
-            "event_type": "run_updated",
-            "agent_id": agent.id,
-            "run_id": run_row.id,
-            "status": "success",
-            "finished_at": end_ts.isoformat(),
-            "duration_ms": duration_ms,
-        },
-    )
+                prices = get_usd_prices_per_1k(agent.model)
+                if prices is not None:
+                    in_price, out_price = prices
+                    total_cost_usd = (
+                        (runner.usage_prompt_tokens * in_price) + (runner.usage_completion_tokens * out_price)
+                    ) / 1000.0
 
-    # For scheduled agents, revert to "scheduled" status instead of "idle"
-    # thread_type "schedule" corresponds to scheduled runs
-    new_status = "scheduled" if thread_type == "schedule" else "idle"
+            crud.mark_finished(
+                db,
+                run_row.id,
+                finished_at=end_ts,
+                duration_ms=duration_ms,
+                total_tokens=total_tokens,
+                total_cost_usd=total_cost_usd,
+            )
 
-    crud.update_agent(db, agent.id, status=new_status, last_run_at=end_ts, last_error=None)
-    db.commit()
+            await event_bus.publish(
+                EventType.RUN_UPDATED,
+                {
+                    "event_type": "run_updated",
+                    "agent_id": agent.id,
+                    "run_id": run_row.id,
+                    "status": "success",
+                    "finished_at": end_ts.isoformat(),
+                    "duration_ms": duration_ms,
+                },
+            )
 
-    await event_bus.publish(
-        EventType.AGENT_UPDATED,
-        {
-            "id": agent.id,
-            "status": new_status,
-            "last_run_at": end_ts.isoformat(),
-            "thread_id": thread.id,
-            "last_error": None,
-        },
-    )
+            # For scheduled agents, revert to idle (status enum only supports idle/running/error/processing)
+            new_status = "idle"
 
-    return thread
+            crud.update_agent(db, agent.id, status=new_status, last_run_at=end_ts, last_error=None)
+            db.commit()
+
+            await event_bus.publish(
+                EventType.AGENT_UPDATED,
+                {
+                    "event_type": "agent_updated",
+                    "id": agent.id,
+                    "status": new_status,
+                    "last_run_at": end_ts.isoformat(),
+                    "thread_id": thread.id,
+                    "last_error": None,
+                },
+            )
+
+            return thread
+
+    # If we are here, the database is not PostgreSQL; this app requires
+    # PostgreSQL for advisory locks. Simplify by failing fast.
+    raise ValueError("PostgreSQL is required for agent execution (advisory locks)")
