@@ -11,9 +11,9 @@ from typing import List
 from sqlalchemy import text
 
 from zerg.database import get_session_factory
+from zerg.models.enums import RunStatus
 from zerg.models.models import Agent
 from zerg.models.models import AgentRun
-from zerg.schemas.schemas import RunStatus
 
 logger = logging.getLogger(__name__)
 

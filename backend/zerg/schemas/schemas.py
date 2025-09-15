@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 
 from zerg.models.enums import AgentStatus
+from zerg.models.enums import RunStatus
 from zerg.schemas.workflow import WorkflowData
 
 
@@ -246,18 +247,7 @@ class Trigger(TriggerBase):
 # ------------------------------------------------------------
 
 
-class RunStatus(str, Enum):
-    """Enum-like convenience class for runtime validation.
-
-    Using a plain ``str`` subclass keeps the dependency footprint minimal
-    (avoids importing ``enum.Enum`` repeatedly in pydantic JSON serialisation
-    hot-paths) while still providing a canonical list of allowed values.
-    """
-
-    queued = "queued"
-    running = "running"
-    success = "success"
-    failed = "failed"
+# RunStatus moved to models.enums for single source of truth
 
 
 class RunTrigger(str, Enum):
