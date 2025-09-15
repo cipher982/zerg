@@ -109,7 +109,7 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
         )
 
     try:
-        logger.warning("Resetting database - dropping all tables")
+        logger.warning("Resetting database - dropping and recreating all tables")
         # Obtain the *current* engine – respects Playwright worker isolation
         session_factory = get_session_factory()
 
@@ -123,29 +123,63 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
             raise RuntimeError("Session factory returned no bound engine")
 
         # For PostgreSQL in production, we need to handle connections more carefully
-        # to avoid hanging on drop operations due to active connections
+        # to avoid hanging on drop operations due to active or idle-in-transaction connections.
+        # Collect diagnostics for response
+        diagnostics: dict[str, object] = {
+            "environment": (settings.environment or "") or "development",
+            "dialect": getattr(engine.dialect, "name", "unknown"),
+        }
+
         if engine.dialect.name == "postgresql" and is_production:
-            logger.info("Production PostgreSQL detected - using connection termination approach")
+            logger.info("Production PostgreSQL detected - terminating all other DB connections and applying timeouts")
 
-            # First, terminate all other active connections to the database
+            from sqlalchemy import text
+
+            # Terminate any other connections to the current database (regardless of state)
+            # and apply conservative timeouts to avoid indefinite blocking on locks.
             with engine.connect() as conn:
-                # Get the database name
-                db_name_result = conn.execute(__import__("sqlalchemy").text("SELECT current_database()"))
-                db_name = db_name_result.scalar()
+                db_name = conn.execute(text("SELECT current_database()")).scalar()
 
-                logger.info(f"Terminating active connections to database: {db_name}")
-                # Terminate all other connections to this database
-                conn.execute(
-                    __import__("sqlalchemy").text("""
+                # Set timeouts for all subsequent statements on this session
+                # - lock_timeout: how long to wait to acquire DDL locks
+                # - statement_timeout: overall guardrail for the drop/create operations
+                conn.execute(text("SET lock_timeout = '3s'"))
+                conn.execute(text("SET statement_timeout = '30s'"))
+                conn.execute(text("SET client_min_messages = WARNING"))
+
+                # Count other connections before termination for diagnostics
+                pre_count = (
+                    conn.execute(
+                        text(
+                            """
+                        SELECT COUNT(*)
+                        FROM pg_stat_activity
+                        WHERE datname = :db_name AND pid <> pg_backend_pid()
+                        """
+                        ),
+                        {"db_name": db_name},
+                    ).scalar()
+                    or 0
+                )
+
+                logger.info(f"Terminating other connections to database: {db_name} (pre={pre_count})")
+                result = conn.execute(
+                    text(
+                        """
                         SELECT pg_terminate_backend(pid)
                         FROM pg_stat_activity
                         WHERE datname = :db_name
-                        AND pid <> pg_backend_pid()
-                        AND state = 'active'
-                    """),
+                          AND pid <> pg_backend_pid()
+                        """
+                    ),
                     {"db_name": db_name},
                 )
                 conn.commit()
+                try:
+                    terminated = result.rowcount if result.rowcount is not None else pre_count
+                except Exception:
+                    terminated = pre_count
+                diagnostics["terminated_connections"] = int(terminated)
 
         # Safer + faster for SQLite: disable FK checks, truncate every table,
         # then re-enable.  Avoids losing autoincrement counters that some
@@ -178,11 +212,98 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
         # than DELETE-rows because SQLite cannot ALTER TABLE with multiple
         # columns easily.
 
-        logger.info("Dropping all tables …")
-        Base.metadata.drop_all(bind=engine)
+        # Execute drop/create with a short retry loop in Postgres to ride out
+        # late-arriving connections (e.g. healthchecks) that might momentarily
+        # contend for locks. SQLite path is unchanged.
+        import time
 
-        logger.info("Re-creating all tables …")
-        Base.metadata.create_all(bind=engine)
+        start_counts_ts = time.perf_counter()
+
+        # Capture row counts before reset for a few key tables (best-effort)
+        def _safe_count(table: str) -> int:
+            try:
+                with engine.connect() as conn:
+                    from sqlalchemy import text as _t
+
+                    res = conn.execute(_t(f'SELECT COUNT(*) FROM "{table}"'))
+                    return int(res.scalar() or 0)
+            except Exception:
+                return 0
+
+        key_tables = [
+            "users",
+            "agents",
+            "agent_messages",
+            "agent_threads",
+            "thread_messages",
+            "workflows",
+            "workflow_templates",
+            "workflow_executions",
+            "canvas_layouts",
+            "connectors",
+            "triggers",
+            "agent_runs",
+            "node_execution_states",
+        ]
+        tables_before: dict[str, int] = {t: _safe_count(t) for t in key_tables}
+        total_before = sum(tables_before.values())
+        diagnostics["tables_before_counts"] = tables_before
+        diagnostics["total_rows_before"] = total_before
+        diagnostics["pre_count_ms"] = int((time.perf_counter() - start_counts_ts) * 1000)
+
+        start_reset_ts = time.perf_counter()
+        max_attempts = 3 if engine.dialect.name == "postgresql" else 1
+        last_err: Exception | None = None
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                logger.info(f"Dropping all tables … (attempt {attempt}/{max_attempts})")
+                # Execute DDL on a single connection so session-level timeouts apply
+                if engine.dialect.name == "postgresql":
+                    from sqlalchemy import text as _t
+
+                    with engine.connect() as ddl_conn:
+                        ddl_conn.execute(_t("SET lock_timeout = '3s'"))
+                        ddl_conn.execute(_t("SET statement_timeout = '30s'"))
+                        Base.metadata.drop_all(bind=ddl_conn)
+
+                        logger.info("Re-creating all tables …")
+                        Base.metadata.create_all(bind=ddl_conn)
+                else:
+                    Base.metadata.drop_all(bind=engine)
+
+                    logger.info("Re-creating all tables …")
+                    Base.metadata.create_all(bind=engine)
+                last_err = None
+                break
+            except Exception as e:  # pragma: no cover – operational guardrail
+                last_err = e
+                logger.warning(f"Drop/create failed on attempt {attempt}: {e!s}")
+                # Small backoff before retry; try to clear straggler connections
+                time.sleep(1.0)
+                if engine.dialect.name == "postgresql":
+                    from sqlalchemy import text
+
+                    with engine.connect() as conn:
+                        db_name = conn.execute(text("SELECT current_database()")).scalar()
+                        conn.execute(
+                            text(
+                                """
+                                SELECT pg_terminate_backend(pid)
+                                FROM pg_stat_activity
+                                WHERE datname = :db_name AND pid <> pg_backend_pid()
+                                """
+                            ),
+                            {"db_name": db_name},
+                        )
+                        conn.commit()
+
+        reset_ms = int((time.perf_counter() - start_reset_ts) * 1000)
+        diagnostics["drop_create_ms"] = reset_ms
+        diagnostics["attempts_used"] = attempt  # last attempt number executed
+
+        if last_err is not None:
+            raise last_err
 
         # Create test user for foreign key constraints in test environment
         if settings.testing or os.getenv("NODE_ENV") == "test":
@@ -195,16 +316,29 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
                     logger.info("Creating test user for foreign key constraints...")
                     conn.execute(
                         text("""
-                        INSERT INTO users (id, email, role, is_active, provider, provider_user_id, 
+                        INSERT INTO users (id, email, role, is_active, provider, provider_user_id,
                                           display_name, created_at, updated_at)
-                        VALUES (1, 'test@example.com', 'ADMIN', 1, 'dev', 'test-user-1', 
-                               'Test User', datetime('now'), datetime('now'))
+                        VALUES (1, 'test@example.com', 'ADMIN', 1, 'dev', 'test-user-1',
+                                'Test User', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                         """)
                     )
                     conn.commit()
                     logger.info("Test user created")
 
-        logger.info("Database schema reset (drop+create) complete")
+        # Post-reset counts (should be zero for most tables in fresh schema)
+        start_post_ts = time.perf_counter()
+        tables_after: dict[str, int] = {t: _safe_count(t) for t in key_tables}
+        total_after = sum(tables_after.values())
+        diagnostics["tables_after_counts"] = tables_after
+        diagnostics["total_rows_after"] = total_after
+        diagnostics["post_count_ms"] = int((time.perf_counter() - start_post_ts) * 1000)
+
+        logger.info(
+            "Database schema reset complete | before=%s after=%s drop_create_ms=%s",
+            total_before,
+            total_after,
+            reset_ms,
+        )
 
         # Dispose again after recreation to release references held by
         # background threads.  However, **skip** this step when the backend
@@ -218,7 +352,11 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
         if not settings.testing:  # avoid invalidating live connections in tests
             engine.dispose()
 
-        return {"message": "Database reset successfully"}
+        # Include diagnostics in API response for UI/console display
+        return {
+            "message": "Database reset successfully",
+            **diagnostics,
+        }
     except Exception as e:
         logger.error(f"Error resetting database: {str(e)}")
         # Still return success if it's a user constraint error

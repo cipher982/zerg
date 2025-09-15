@@ -2,6 +2,10 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, HtmlElement};
 
+use crate::toast;
+use crate::debug_log;
+use crate::ui_components::{create_danger_button, set_button_loading};
+
 use crate::models::{OpsSeriesPoint, OpsSummary, OpsTopAgent};
 use crate::state::APP_STATE;
 
@@ -366,6 +370,12 @@ fn build_ops_dashboard_ui(
     charts.append_child(&sparkline(document, &format!("Cost ({})", window_label), cost_series)?.into())?;
     root.append_child(&charts)?;
 
+    // Admin controls ---------------------------------------------------
+    if crate::state::APP_STATE.with(|s| s.borrow().is_super_admin) {
+        let admin = build_admin_controls(document)?;
+        root.append_child(&admin)?;
+    }
+
     // Top agents table -----------------------------------------------
     let table = document.create_element("table")?;
     table.set_class_name("top-agents");
@@ -398,6 +408,121 @@ fn build_ops_dashboard_ui(
     render_ticker(document)?;
 
     Ok(())
+}
+
+/// Build the Super Admin controls panel, including the Reset Database action
+fn build_admin_controls(document: &Document) -> Result<Element, JsValue> {
+    let card = document.create_element("div")?;
+    card.set_class_name("card admin-card");
+
+    // Title
+    let title = document.create_element("div")?;
+    title.set_class_name("label");
+    title.set_inner_html("Super Admin Tools");
+    card.append_child(&title)?;
+
+    // Content row: button + summary area
+    let row = document.create_element("div")?;
+    row.set_class_name("admin-row");
+
+    // Reset DB button
+    let button = create_danger_button(document, "🗑️ Reset Database", Some("ops-reset-db-btn"))?;
+    button.set_class_name("btn-danger");
+    row.append_child(&button)?;
+
+    // Summary area
+    let summary = document.create_element("pre")?;
+    summary.set_id("ops-reset-summary");
+    summary.set_class_name("ops-reset-summary");
+    summary.set_inner_html("Click to reset database. A summary will appear here.");
+    row.append_child(&summary)?;
+
+    card.append_child(&row)?;
+
+    // Click handler (confirm + optional password prompt)
+    let requires_password = crate::state::APP_STATE.with(|s| s.borrow().admin_requires_password);
+    let click_cb = Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
+        debug_log!("Ops: Reset DB clicked");
+        if let Some(win) = web_sys::window() {
+            if !win
+                .confirm_with_message("WARNING: This will delete ALL agents and data. Cannot be undone. Proceed?")
+                .unwrap_or(false)
+            {
+                return;
+            }
+
+            let pwd_opt = if requires_password {
+                match win.prompt_with_message("Enter database reset password:") {
+                    Ok(Some(p)) if !p.is_empty() => Some(p),
+                    _ => {
+                        toast::error("Database reset password is required in production");
+                        return;
+                    }
+                }
+            } else { None };
+
+            use crate::network::ApiClient;
+            use wasm_bindgen_futures::spawn_local;
+            spawn_local(async move {
+                if let Some(el) = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.get_element_by_id("ops-reset-db-btn"))
+                { set_button_loading(&el, true); }
+
+                let res = if let Some(pwd) = pwd_opt { ApiClient::reset_database_with_password(&pwd).await } else { ApiClient::reset_database().await };
+
+                match res {
+                    Ok(resp) => {
+                        web_sys::console::log_1(&format!("Ops reset raw response: {}", resp).into());
+                        let mut toast_done = false;
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&resp) {
+                            let before = json.get("total_rows_before").and_then(|v| v.as_i64()).unwrap_or(-1);
+                            let after = json.get("total_rows_after").and_then(|v| v.as_i64()).unwrap_or(-1);
+                            let ms = json.get("drop_create_ms").and_then(|v| v.as_i64()).unwrap_or(-1);
+                            let attempts = json.get("attempts_used").and_then(|v| v.as_i64()).unwrap_or(1);
+                            let terminated = json.get("terminated_connections").and_then(|v| v.as_i64()).unwrap_or(0);
+                            toast::success(&format!("Database reset: rows {} -> {}, attempts {}, {} ms (terminated {} conns)", before, after, attempts, ms, terminated));
+                            toast_done = true;
+                            // Pretty summary in pre element
+                            if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                                if let Some(pre) = doc.get_element_by_id("ops-reset-summary") {
+                                    let pretty = serde_json::to_string_pretty(&json).unwrap_or(resp);
+                                    pre.set_inner_html(&pretty);
+                                }
+                            }
+                        }
+                        if !toast_done { toast::success("Database reset successfully"); }
+
+                        // Trigger UI refresh then reload to ensure clean state
+                        crate::state::dispatch_global_message(crate::messages::Message::ResetDatabase);
+                        if let Some(win) = web_sys::window() {
+                            let cb = Closure::<dyn FnMut()>::wrap(Box::new(move || {
+                                if let Some(w) = web_sys::window() { let _ = w.location().reload(); }
+                            }));
+                            let _ = win.set_timeout_with_callback_and_timeout_and_arguments(cb.as_ref().unchecked_ref(), 150, &js_sys::Array::new());
+                            cb.forget();
+                        }
+                    }
+                    Err(e) => {
+                        let em = format!("{:?}", e);
+                        if em.contains("Incorrect confirmation password") { toast::error("Incorrect database reset password"); }
+                        else if em.contains("Super admin privileges required") { toast::error("Access denied: Super admin privileges required"); }
+                        else { toast::error(&format!("Failed to reset database: {:?}", e)); }
+                        web_sys::console::error_1(&format!("Ops reset error: {:?}", e).into());
+                    }
+                }
+
+                if let Some(el) = web_sys::window()
+                    .and_then(|w| w.document())
+                    .and_then(|d| d.get_element_by_id("ops-reset-db-btn"))
+                { set_button_loading(&el, false); }
+            });
+        }
+    }));
+    if let Some(btn_el) = button.dyn_ref::<HtmlElement>() { let _ = btn_el.add_event_listener_with_callback("click", click_cb.as_ref().unchecked_ref()); }
+    click_cb.forget();
+
+    Ok(card)
 }
 
 fn html_escape(s: &str) -> String {
