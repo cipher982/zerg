@@ -247,6 +247,29 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
             // call.
             state.gmail_connected = user.gmail_connected;
 
+            // Trigger admin status check asynchronously
+            wasm_bindgen_futures::spawn_local(async move {
+                use crate::network::ApiClient;
+                match ApiClient::get_super_admin_status().await {
+                    Ok(response_json) => {
+                        match serde_json::from_str::<crate::models::SuperAdminStatus>(&response_json) {
+                            Ok(status) => {
+                                dispatch_global_message(Message::AdminStatusLoaded {
+                                    is_super_admin: status.is_super_admin,
+                                    requires_password: status.requires_password,
+                                });
+                            }
+                            Err(e) => {
+                                web_sys::console::warn_1(&format!("Failed to parse admin status: {:?}", e).into());
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // Not an admin or error - keep defaults (false)
+                    }
+                }
+            });
+
             let user_for_ui = user.clone();
             // Mount / refresh user menu asynchronously after borrow ends.
             commands.push(Command::UpdateUI(Box::new(move || {
@@ -308,6 +331,20 @@ pub fn update(state: &mut AppState, msg: Message) -> Vec<Command> {
                     }
                 })));
             }
+        }
+
+        Message::AdminStatusLoaded { is_super_admin, requires_password } => {
+            state.is_super_admin = is_super_admin;
+            state.admin_requires_password = requires_password;
+
+            // Refresh dashboard to show/hide reset button based on admin status
+            commands.push(Command::UpdateUI(Box::new(move || {
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        let _ = crate::components::dashboard::refresh_dashboard(&document);
+                    }
+                }
+            })));
         }
 
         Message::ToggleView(view) => {

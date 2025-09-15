@@ -478,6 +478,10 @@ pub struct AppState {
     /// the profile fetch succeeds (or the session is unauthenticated).
     pub current_user: Option<crate::models::CurrentUser>,
 
+    /// Admin status loaded when user profile is fetched
+    pub is_super_admin: bool,
+    pub admin_requires_password: bool,
+
     /// Track whether agents have been loaded from the API at least once
     pub agents_loaded: bool,
 
@@ -730,6 +734,10 @@ impl AppState {
             // successfully calls `/api/users/me` after a login or page
             // refresh.
             current_user: None,
+
+            // Admin status - initially false until checked
+            is_super_admin: false,
+            admin_requires_password: false,
 
             google_client_id: None,
 
