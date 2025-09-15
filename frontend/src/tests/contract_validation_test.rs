@@ -11,6 +11,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 use crate::generated::workflow::*;
 use crate::network::generated_client::*;
 use crate::models::*;
+use crate::generated::api_contracts::{Agent, AgentStatus};
 
 /// CRITICAL BUILD-TIME TEST: This test ensures ALL data serialization
 /// matches API contracts. If this test fails, the contracts are broken
@@ -81,6 +82,49 @@ fn test_comprehensive_workflow_canvas_contract_validation() {
 
         println!("✅ WorkflowCanvas contract validation PASSED");
     }
+
+/// CRITICAL: Test AgentStatus enum serialization matches backend API
+#[wasm_bindgen_test]
+fn test_agent_status_enum_contract_validation() {
+    // Test all valid AgentStatus values serialize correctly
+    let statuses = vec![
+        AgentStatus::Idle,
+        AgentStatus::Running,
+        AgentStatus::Error,
+        AgentStatus::Processing,
+    ];
+
+    for status in statuses {
+        let serialized = serde_json::to_value(&status)
+            .expect("AgentStatus should serialize without errors");
+
+        // Must deserialize back to the same enum variant
+        let deserialized: AgentStatus = serde_json::from_value(serialized.clone())
+            .expect("CRITICAL: AgentStatus serialization contract broken! This will cause agent API failures.");
+
+        assert_eq!(status, deserialized, "AgentStatus round-trip must be consistent");
+    }
+
+    // Test Agent with status field
+    let agent = Agent {
+        id: 123,
+        name: "Test Agent".to_string(),
+        status: AgentStatus::Running,
+        system_instructions: "Test".to_string(),
+        task_instructions: Some("Task".to_string()),
+        model: Some("gpt-4".to_string()),
+        created_at: None,
+        updated_at: None,
+    };
+
+    let serialized = serde_json::to_value(&agent)
+        .expect("Agent should serialize without errors");
+
+    // Validate status field is correctly serialized
+    assert_eq!(serialized["status"], "running", "Agent.status must serialize to correct string");
+
+    println!("✅ AgentStatus contract validation PASSED");
+}
 
 /// This test catches field name mismatches that cause contract validation to fail
 #[wasm_bindgen_test]
