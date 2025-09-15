@@ -163,6 +163,9 @@ pub fn refresh_dashboard(document: &Document) -> Result<(), JsValue> {
         container.append_child(&dashboard)?;
     }
 
+    // Check super admin status and conditionally create reset button once
+    check_and_create_reset_button_once(document)?;
+
     // Now render the dashboard content
     render_dashboard(document)?;
     Ok(())
