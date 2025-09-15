@@ -360,30 +360,99 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     create_btn.set_onclick(Some(create_callback.as_ref().unchecked_ref()));
     create_callback.forget();
 
-    // Create reset database button (development only) using ui_components helper
+    // Check super admin status and conditionally create reset button
+    check_and_create_reset_button(document, &button_container)?;
+
+    button_container.append_child(&create_button)?;
+
+    // Attach button container last so it aligns to the right via flexbox CSS.
+    header.append_child(&button_container)?;
+
+    Ok(header)
+}
+
+/// Check super admin status and conditionally create the reset database button
+fn check_and_create_reset_button(_document: &Document, _button_container: &Element) -> Result<(), JsValue> {
+    use crate::network::ApiClient;
+    use wasm_bindgen_futures::spawn_local;
+
+    // Spawn an async task to check super admin status
+    spawn_local(async move {
+        match ApiClient::get_super_admin_status().await {
+            Ok(response_json) => {
+                match serde_json::from_str::<crate::models::SuperAdminStatus>(&response_json) {
+                    Ok(status) => {
+                        if status.is_super_admin {
+                            // User is super admin, create the reset button
+                            if let Some(window) = web_sys::window() {
+                                if let Some(doc) = window.document() {
+                                    let _ = create_reset_button(&doc, status.requires_password);
+                                }
+                            }
+                        }
+                        // If not super admin, don't show button at all
+                    }
+                    Err(e) => {
+                        web_sys::console::warn_1(&format!("Failed to parse super admin status: {:?}", e).into());
+                    }
+                }
+            }
+            Err(e) => {
+                // Likely not an admin at all - don't show button
+                web_sys::console::log_1(&format!("Super admin check failed (likely not admin): {:?}", e).into());
+            }
+        }
+    });
+
+    Ok(())
+}
+
+/// Create the reset database button with appropriate security handling
+fn create_reset_button(document: &Document, requires_password: bool) -> Result<(), JsValue> {
+    use crate::ui_components::{create_danger_button, set_button_loading};
+    use crate::constants::ATTR_DATA_TESTID;
+
+    // Find the button container by class since ID lookup might fail
+    let elements = document.get_elements_by_class_name("button-container");
+    if elements.length() == 0 {
+        return Ok(());
+    }
+    let container = elements.item(0).unwrap();
+
+    // Create reset database button
     let reset_btn = create_danger_button(document, "🗑️ Reset DB", Some("reset-db-btn"))?;
     reset_btn.set_attribute(ATTR_DATA_TESTID, "reset-db-btn")?;
-    // Add the reset-db-btn class to get the red background styling
     reset_btn.set_class_name("btn-danger reset-db-btn");
 
-    // Reset button click handler
-    // we'll fetch the button by id when toggling loading
-
+    // Create the click handler with password logic
     let reset_callback = Closure::wrap(Box::new(move |_event: web_sys::MouseEvent| {
         debug_log!("Reset database requested");
 
         if let Some(window) = web_sys::window() {
-            // Confirm dialog before proceeding
+            // First confirmation dialog
             if !window.confirm_with_message("WARNING: This will delete ALL agents and data. This action cannot be undone. Proceed?").unwrap_or(false) {
                 return;
             }
+
+            // Get password if required
+            let password = if requires_password {
+                match window.prompt_with_message("Enter database reset password:") {
+                    Ok(Some(pwd)) if !pwd.is_empty() => Some(pwd),
+                    _ => {
+                        toast::error("Database reset password is required in production");
+                        return;
+                    }
+                }
+            } else {
+                None
+            };
 
             // Use wasm_bindgen_futures to handle the async API call
             use crate::network::ApiClient;
             use wasm_bindgen_futures::spawn_local;
 
             spawn_local(async move {
-                // show spinner
+                // Show spinner
                 if let Some(el) = web_sys::window()
                     .and_then(|w| w.document())
                     .and_then(|d| d.get_element_by_id("reset-db-btn"))
@@ -391,7 +460,14 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                     set_button_loading(&el, true);
                 }
 
-                match ApiClient::reset_database().await {
+                // Call appropriate API method
+                let result = if let Some(pwd) = password {
+                    ApiClient::reset_database_with_password(&pwd).await
+                } else {
+                    ApiClient::reset_database().await
+                };
+
+                match result {
                     Ok(response) => {
                         debug_log!("Database reset successful: {}", response);
 
@@ -409,39 +485,34 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
                             let _ = render_dashboard(&document);
 
                             // Then force a page reload to ensure everything is fresh
-                            // Use a timeout to allow the UI to update first
                             let reload_callback = Closure::wrap(Box::new(move || {
-                                // Force a hard refresh using the native Location API
                                 if let Some(win) = web_sys::window() {
                                     let _ = win.location().reload();
                                 }
-                            })
-                                as Box<dyn FnMut()>);
+                            }) as Box<dyn FnMut()>);
 
                             let _ = window.set_timeout_with_callback_and_timeout_and_arguments(
                                 reload_callback.as_ref().unchecked_ref(),
-                                100, // Short delay to ensure message is seen but not requiring interaction
+                                100,
                                 &js_sys::Array::new(),
                             );
                             reload_callback.forget();
-
-                            if let Some(el) = web_sys::window()
-                                .and_then(|w| w.document())
-                                .and_then(|d| d.get_element_by_id("reset-db-btn"))
-                            {
-                                set_button_loading(&el, false);
-                            }
                         }
                     }
                     Err(e) => {
-                        toast::error(&format!("Failed to reset database: {:?}", e));
-                        web_sys::console::error_1(
-                            &format!("Error resetting database: {:?}", e).into(),
-                        );
+                        let error_msg = format!("{:?}", e);
+                        if error_msg.contains("Incorrect confirmation password") {
+                            toast::error("Incorrect database reset password");
+                        } else if error_msg.contains("Super admin privileges required") {
+                            toast::error("Access denied: Super admin privileges required");
+                        } else {
+                            toast::error(&format!("Failed to reset database: {:?}", e));
+                        }
+                        web_sys::console::error_1(&format!("Error resetting database: {:?}", e).into());
                     }
                 }
 
-                // restore button
+                // Restore button
                 if let Some(el) = web_sys::window()
                     .and_then(|w| w.document())
                     .and_then(|d| d.get_element_by_id("reset-db-btn"))
@@ -458,13 +529,10 @@ fn create_dashboard_header(document: &Document) -> Result<Element, JsValue> {
     reset_btn_elem.set_onclick(Some(reset_callback.as_ref().unchecked_ref()));
     reset_callback.forget();
 
-    button_container.append_child(&create_button)?;
-    button_container.append_child(&reset_btn)?;
+    // Append the button to the container
+    container.append_child(&reset_btn)?;
 
-    // Attach button container last so it aligns to the right via flexbox CSS.
-    header.append_child(&button_container)?;
-
-    Ok(header)
+    Ok(())
 }
 
 // Create the agents table structure

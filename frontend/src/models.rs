@@ -1363,3 +1363,10 @@ pub struct TemplateDeployRequest {
     pub name: Option<String>,
     pub description: Option<String>,
 }
+
+/// Response model for super admin status check
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuperAdminStatus {
+    pub is_super_admin: bool,
+    pub requires_password: bool,
+}
