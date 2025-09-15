@@ -32,7 +32,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zerg-backend"
-dynamic = ["version"]
+version = "0.1.0"
 description = "Zerg Agent Platform Backend"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -63,12 +63,15 @@ dev = [
     "pre-commit",
 ]
 
-# Build hooks for automatic WebSocket type generation
-[tool.hatch.build.hooks.custom]
-path = "build_hooks.py"
+# Build hooks disabled for now - dependency sync issue
+# [tool.hatch.build.hooks.custom]
+# path = "build_hooks.py"
 
-[tool.hatch.build.targets.wheel.hooks.custom]
-path = "build_hooks.py"
+[tool.hatch.build.targets.wheel]
+packages = ["backend/zerg"]
+
+# [tool.hatch.build.targets.wheel.hooks.custom]
+# path = "build_hooks.py"
 
 [tool.pytest.ini_options]
 # Tell pytest where to find tests when run from the root
