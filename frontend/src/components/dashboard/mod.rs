@@ -40,20 +40,8 @@ fn format_datetime_short(iso: &str) -> String {
     format!("{} {}", date, time_short)
 }
 
-// Agent status for displaying in the dashboard
-#[derive(Clone, Debug, PartialEq)]
-pub enum AgentStatus {
-    // Agent is currently busy with a task
-    Running,
-    // Agent exists but isn't processing anything right now
-    Idle,
-    // Agent is in an error state
-    Error,
-    // Agent's next run is set for a future time
-    Scheduled,
-    // Agent is created but intentionally blocked from running
-    Paused,
-}
+// Use generated AgentStatus from API contracts
+use crate::generated::api_contracts::AgentStatus;
 
 // Agent data structure for the dashboard
 #[derive(Clone, Debug)]
@@ -471,20 +459,13 @@ fn get_agents_from_app_state() -> Vec<Agent> {
             .filter_map(|api_agent| {
                 // Only include agents that have a valid u32 ID
                 api_agent.id.map(|id| {
-                    // Map ApiAgent status to local AgentStatus
-                    let mut status = match api_agent.status.as_deref() {
-                        Some("running") | Some("processing") => AgentStatus::Running,
-                        Some("idle") | Some("complete") => AgentStatus::Idle,
+                    // Map ApiAgent.status (Option<String>) to AgentStatus enum
+                    let status = match api_agent.status.as_deref() {
+                        Some("running") => AgentStatus::Running,
+                        Some("processing") => AgentStatus::Processing,
                         Some("error") => AgentStatus::Error,
-                        Some("scheduled") => AgentStatus::Scheduled,
-                        Some("paused") => AgentStatus::Paused,
-                        _ => AgentStatus::Idle, // Default to Idle if status is None or unknown
+                        Some("idle") | _ => AgentStatus::Idle, // Default to Idle
                     };
-
-                    // Determine scheduled state solely from present `schedule` field
-                    if api_agent.is_scheduled() && matches!(status, AgentStatus::Idle) {
-                        status = AgentStatus::Scheduled;
-                    }
 
                     // Determine scheduling metadata strings (truncate seconds for compact display)
                     let last_run_fmt = api_agent
@@ -532,17 +513,15 @@ fn get_agents_from_app_state() -> Vec<Agent> {
                 Status => {
                     let ord_a = match a.status {
                         AgentStatus::Running => 0,
-                        AgentStatus::Scheduled => 1,
+                        AgentStatus::Processing => 1,
                         AgentStatus::Idle => 2,
-                        AgentStatus::Paused => 3,
-                        AgentStatus::Error => 4,
+                        AgentStatus::Error => 3,
                     };
                     let ord_b = match b.status {
                         AgentStatus::Running => 0,
-                        AgentStatus::Scheduled => 1,
+                        AgentStatus::Processing => 1,
                         AgentStatus::Idle => 2,
-                        AgentStatus::Paused => 3,
-                        AgentStatus::Error => 4,
+                        AgentStatus::Error => 3,
                     };
                     ord_a.cmp(&ord_b)
                 }
@@ -712,10 +691,9 @@ fn create_agent_row(document: &Document, agent: &Agent) -> Result<Element, JsVal
 
     let status_text = match agent.status {
         AgentStatus::Running => "● Running",
+        AgentStatus::Processing => "⏳ Processing",
         AgentStatus::Idle => "○ Idle",
         AgentStatus::Error => "⚠ Error",
-        AgentStatus::Scheduled => "⏱ Scheduled",
-        AgentStatus::Paused => "⏸ Paused",
     };
 
     status_indicator.set_inner_html(status_text);

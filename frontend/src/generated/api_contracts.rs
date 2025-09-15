@@ -41,10 +41,23 @@ pub struct Workflow {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum AgentStatus {
+    #[serde(rename = "idle")]
+    Idle,
+    #[serde(rename = "running")]
+    Running,
+    #[serde(rename = "error")]
+    Error,
+    #[serde(rename = "processing")]
+    Processing,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Agent {
     pub id: i32,
     pub name: String,
+    pub status: AgentStatus,
     pub system_instructions: String,
     pub task_instructions: Option<String>,
     pub model: Option<String>,
