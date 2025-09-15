@@ -55,15 +55,42 @@ def test_admin_route_requires_admin(monkeypatch, client: TestClient):
     resp = client.post(
         "/api/admin/reset-database",
         headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_password": None},
     )
 
     assert resp.status_code == 403
 
 
-def test_admin_route_allows_admin(monkeypatch, client: TestClient, db_session):
-    """An *ADMIN* user should be allowed (returns 200)."""
+def test_admin_route_requires_super_admin(monkeypatch, client: TestClient, db_session):
+    """A regular *ADMIN* (not in ADMIN_EMAILS) must receive 403."""
 
     monkeypatch.setattr(auth_dep, "AUTH_DISABLED", False)
+    # Don't set ADMIN_EMAILS so alice is not a super admin
+
+    token = _google_login(client, monkeypatch, "alice@example.com")
+
+    user = crud.get_user_by_email(db_session, "alice@example.com")
+    assert user is not None
+    user.role = "ADMIN"  # type: ignore[attr-defined]
+    db_session.commit()
+
+    resp = client.post(
+        "/api/admin/reset-database",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_password": None},
+    )
+
+    assert resp.status_code == 403
+    assert "Super admin privileges required" in resp.json()["detail"]
+
+
+def test_admin_route_allows_admin(monkeypatch, client: TestClient, db_session):
+    """A *SUPER ADMIN* user should be allowed (returns 200)."""
+
+    monkeypatch.setattr(auth_dep, "AUTH_DISABLED", False)
+
+    # Set alice as super admin in ADMIN_EMAILS
+    monkeypatch.setenv("ADMIN_EMAILS", "alice@example.com")
 
     # Log in as alice and then promote her to ADMIN in the database.
     token = _google_login(client, monkeypatch, "alice@example.com")
@@ -81,6 +108,7 @@ def test_admin_route_allows_admin(monkeypatch, client: TestClient, db_session):
     resp = client.post(
         "/api/admin/reset-database",
         headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_password": None},
     )
 
     assert resp.status_code == 200

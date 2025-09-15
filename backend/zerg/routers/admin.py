@@ -8,6 +8,7 @@ from fastapi import Depends
 from fastapi import FastAPI as _FastAPI
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 # Centralised settings
 from zerg.config import get_settings
@@ -19,6 +20,7 @@ from zerg.database import get_session_factory
 # Auth dependency
 from zerg.dependencies.auth import get_current_user
 from zerg.dependencies.auth import require_admin
+from zerg.dependencies.auth import require_super_admin
 
 router = APIRouter(
     prefix="/admin",
@@ -29,14 +31,82 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 
-@router.post("/reset-database")
-async def reset_database():
-    """Reset the database by dropping all tables and recreating them. For development only."""
-    # Check if we're in development mode
+class DatabaseResetRequest(BaseModel):
+    """Request model for database reset with optional password confirmation."""
+
+    confirmation_password: str | None = None
+
+
+class SuperAdminStatusResponse(BaseModel):
+    """Response model for super admin status check."""
+
+    is_super_admin: bool
+    requires_password: bool
+
+
+@router.get("/super-admin-status")
+async def get_super_admin_status(current_user=Depends(get_current_user)) -> SuperAdminStatusResponse:
+    """Check if the current user is a super admin and if password confirmation is required."""
     settings = get_settings()
-    if not settings.testing and (settings.environment or "") != "development":
-        logger.warning("Attempted to reset database in non-development environment")
-        raise HTTPException(status_code=403, detail="Database reset is only available in development environment")
+
+    # Check if user is admin first
+    is_admin = getattr(current_user, "role", "USER") == "ADMIN"
+    if not is_admin:
+        return SuperAdminStatusResponse(is_super_admin=False, requires_password=False)
+
+    # Check if they're a super admin (in ADMIN_EMAILS)
+    admin_emails = {e.strip().lower() for e in (settings.admin_emails or "").split(",") if e.strip()}
+    user_email = getattr(current_user, "email", "").lower()
+    is_super_admin = user_email in admin_emails
+
+    # Check if password confirmation is required (production environment)
+    is_production = settings.environment and settings.environment.lower() == "production"
+
+    return SuperAdminStatusResponse(is_super_admin=is_super_admin, requires_password=is_production)
+
+
+@router.post("/reset-database")
+async def reset_database(request: DatabaseResetRequest, current_user=Depends(require_super_admin)):
+    """Reset the database by dropping all tables and recreating them.
+
+    Requires super admin privileges (user must be in ADMIN_EMAILS).
+    In production environments, requires additional password confirmation.
+    """
+    settings = get_settings()
+
+    # Log the reset attempt for audit purposes
+    logger.warning(
+        f"Database reset requested by {getattr(current_user, 'email', 'unknown')} "
+        f"in environment: {settings.environment or 'development'}"
+    )
+
+    # Check if we're in production and require password confirmation
+    is_production = settings.environment and settings.environment.lower() == "production"
+    if is_production:
+        # Require password confirmation in production
+        if not settings.db_reset_password:
+            logger.error("DB_RESET_PASSWORD not configured for production environment")
+            raise HTTPException(
+                status_code=500, detail="Database reset not properly configured for production environment"
+            )
+
+        if not request.confirmation_password:
+            raise HTTPException(
+                status_code=400, detail="Password confirmation required for database reset in production"
+            )
+
+        if request.confirmation_password != settings.db_reset_password:
+            logger.warning(
+                f"Failed database reset attempt by {getattr(current_user, 'email', 'unknown')} " f"- incorrect password"
+            )
+            raise HTTPException(status_code=403, detail="Incorrect confirmation password")
+
+    # Allow in development/testing environments without password
+    if not settings.testing and not is_production and (settings.environment or "") not in ["development", ""]:
+        logger.warning("Attempted to reset database in unsupported environment")
+        raise HTTPException(
+            status_code=403, detail="Database reset is only available in development and production environments"
+        )
 
     try:
         logger.warning("Resetting database - dropping all tables")
@@ -238,8 +308,8 @@ async def fix_database_schema():
 
 
 @_legacy_router.post("/reset-database")
-async def _legacy_reset_database():  # noqa: D401 – thin wrapper
-    return await reset_database()  # noqa: WPS110 – re-use logic
+async def _legacy_reset_database(request: DatabaseResetRequest, current_user=Depends(require_super_admin)):  # noqa: D401 – thin wrapper
+    return await reset_database(request, current_user)  # noqa: WPS110 – re-use logic
 
 
 # mount the legacy router without the global /api prefix

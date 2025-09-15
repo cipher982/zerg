@@ -95,6 +95,24 @@ def require_admin(current_user=Depends(get_current_user)):
     return current_user
 
 
+def require_super_admin(current_user=Depends(get_current_user)):
+    """FastAPI dependency that ensures the user is in ADMIN_EMAILS list (super admin)."""
+
+    # First check if they're an admin
+    if getattr(current_user, "role", "USER") != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
+
+    # Then check if they're a super admin (in ADMIN_EMAILS)
+    settings = get_settings()
+    admin_emails = {e.strip().lower() for e in (settings.admin_emails or "").split(",") if e.strip()}
+    user_email = getattr(current_user, "email", "").lower()
+
+    if user_email not in admin_emails:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin privileges required")
+
+    return current_user
+
+
 # ---------------------------------------------------------------------------
 # WebSocket authentication helper
 # ---------------------------------------------------------------------------
@@ -117,6 +135,7 @@ _strategy = _get_strategy
 __all__ = [
     "get_current_user",
     "require_admin",
+    "require_super_admin",
     "validate_ws_jwt",
     "_strategy",  # exported for test monkey-patching
 ]

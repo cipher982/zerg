@@ -86,6 +86,9 @@ class Settings:  # noqa: D401 – simple data container
     discord_enable_alerts: bool
     discord_daily_digest_cron: str
 
+    # Database reset security
+    db_reset_password: str | None
+
     # Dynamic guards (evaluated at runtime) -----------------------------
     @property
     def llm_disabled(self) -> bool:  # noqa: D401
@@ -175,6 +178,7 @@ def _load_settings() -> Settings:  # noqa: D401 – helper
         discord_webhook_url=os.getenv("DISCORD_WEBHOOK_URL"),
         discord_enable_alerts=_truthy(os.getenv("DISCORD_ENABLE_ALERTS")),
         discord_daily_digest_cron=os.getenv("DISCORD_DAILY_DIGEST_CRON", "0 8 * * *"),
+        db_reset_password=os.getenv("DB_RESET_PASSWORD"),
     )
 
 

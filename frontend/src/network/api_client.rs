@@ -352,10 +352,24 @@ impl ApiClient {
         Self::fetch_json(&url, "GET", None).await
     }
 
-    // Reset the database (development only)
+    // Check super admin status for reset button
+    pub async fn get_super_admin_status() -> Result<String, JsValue> {
+        let url = format!("{}/api/admin/super-admin-status", Self::api_base_url());
+        Self::fetch_json(&url, "GET", None).await
+    }
+
+    // Reset the database with optional password confirmation
     pub async fn reset_database() -> Result<String, JsValue> {
         let url = format!("{}/api/admin/reset-database", Self::api_base_url());
-        Self::fetch_json(&url, "POST", None).await
+        let body = r#"{"confirmation_password": null}"#;
+        Self::fetch_json(&url, "POST", Some(body)).await
+    }
+
+    // Reset the database with password confirmation
+    pub async fn reset_database_with_password(password: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/admin/reset-database", Self::api_base_url());
+        let body = format!(r#"{{"confirmation_password": "{}"}}"#, password);
+        Self::fetch_json(&url, "POST", Some(&body)).await
     }
 
     // -------------------------------------------------------------------
