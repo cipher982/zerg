@@ -122,6 +122,31 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
         if engine is None:  # pragma: no cover – safety guard
             raise RuntimeError("Session factory returned no bound engine")
 
+        # For PostgreSQL in production, we need to handle connections more carefully
+        # to avoid hanging on drop operations due to active connections
+        if engine.dialect.name == "postgresql" and is_production:
+            logger.info("Production PostgreSQL detected - using connection termination approach")
+
+            # First, terminate all other active connections to the database
+            with engine.connect() as conn:
+                # Get the database name
+                db_name_result = conn.execute(__import__("sqlalchemy").text("SELECT current_database()"))
+                db_name = db_name_result.scalar()
+
+                logger.info(f"Terminating active connections to database: {db_name}")
+                # Terminate all other connections to this database
+                conn.execute(
+                    __import__("sqlalchemy").text("""
+                        SELECT pg_terminate_backend(pid)
+                        FROM pg_stat_activity
+                        WHERE datname = :db_name
+                        AND pid <> pg_backend_pid()
+                        AND state = 'active'
+                    """),
+                    {"db_name": db_name},
+                )
+                conn.commit()
+
         # Safer + faster for SQLite: disable FK checks, truncate every table,
         # then re-enable.  Avoids losing autoincrement counters that some
         # tests rely on for deterministic IDs.
@@ -140,7 +165,7 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
         # *own* SQLite engine (handled by WorkerDBMiddleware &
         # zerg.database) it is safe – and *necessary* – to avoid closing
         # foreign Sessions.  Instead we:
-        #   1. Dispose the *current* worker’s engine after we are done.  This
+        #   1. Dispose the *current* worker's engine after we are done.  This
         #      releases connections that *belong to this engine only*.
         #   2. Rely on the fact that every incoming HTTP request obtains a
         #      **fresh** Session, so no stale identity maps can leak across
