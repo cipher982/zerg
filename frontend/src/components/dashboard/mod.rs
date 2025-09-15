@@ -412,6 +412,11 @@ fn create_reset_button(document: &Document, requires_password: bool) -> Result<(
     use crate::ui_components::{create_danger_button, set_button_loading};
     use crate::constants::ATTR_DATA_TESTID;
 
+    // Check if reset button already exists to prevent duplicates
+    if document.get_element_by_id("reset-db-btn").is_some() {
+        return Ok(());
+    }
+
     // Find the button container by class since ID lookup might fail
     let elements = document.get_elements_by_class_name("button-container");
     if elements.length() == 0 {
