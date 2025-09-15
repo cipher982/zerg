@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 # Cron validation helper
 from apscheduler.triggers.cron import CronTrigger
+from zerg.models.enums import RunStatus
 from zerg.models.models import Agent
 from zerg.models.models import AgentMessage
 from zerg.models.models import AgentRun
@@ -34,7 +35,6 @@ from zerg.models.models import Trigger
 # Python 3.13.  Using the classic ``Optional[User]`` sidesteps the issue
 # without requiring ``from __future__ import annotations``.
 from zerg.models.models import User
-from zerg.schemas.schemas import RunStatus
 from zerg.schemas.schemas import RunTrigger
 from zerg.utils.time import utc_now_naive
 
