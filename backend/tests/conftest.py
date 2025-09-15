@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 # Set *before* any project imports so backend skips background services
 os.environ["TESTING"] = "1"
@@ -11,7 +12,6 @@ from unittest.mock import patch
 import dotenv
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.pool import StaticPool
 
 import zerg.database as _db_mod
 import zerg.routers.websocket as _ws_router
@@ -85,29 +85,52 @@ sys.modules["langsmith.client"] = MagicMock()
 dotenv.load_dotenv()
 
 
-# Create a test database - using in-memory SQLite for tests
-SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+# Ensure docker-py can reach Docker Desktop on macOS where the socket lives
+# under ~/.docker/run/docker.sock when /var/run/docker.sock is absent.
+if not os.environ.get("DOCKER_HOST"):
+    _sock = Path.home() / ".docker/run/docker.sock"
+    if _sock.exists():
+        os.environ["DOCKER_HOST"] = f"unix://{_sock}"
 
-# Create test engine and session factory
+# Create a test database - always use ephemeral PostgreSQL via Testcontainers
+from docker import from_env as _docker_from_env
+from testcontainers.postgres import PostgresContainer
+
+# Start a single Postgres container for the entire test session early so
+# subsequent imports (e.g. routers) see the correct session factory.
+try:
+    _docker_from_env().ping()
+except Exception as _e:
+    raise RuntimeError(
+        "Docker is required to run tests against PostgreSQL. Please install and start Docker Desktop (or provide a running Docker daemon)."
+    ) from _e
+
+_pg_container = PostgresContainer("postgres:16-alpine")
+_pg_container.start()
+
+# Prefer psycopg v3 driver in SQLAlchemy URL
+SQLALCHEMY_DATABASE_URL = _pg_container.get_connection_url().replace("psycopg2", "psycopg")
+
+# Create test engine and session factory bound to Postgres
+from sqlalchemy.pool import NullPool
+
 test_engine = make_engine(
     SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,  # Use StaticPool for in-memory database
+    pool_pre_ping=True,
+    poolclass=NullPool,
 )
 
 TestingSessionLocal = make_sessionmaker(test_engine)
 
-# Override default_session_factory to use test sessions for WebSocket
-_db_mod.default_session_factory = TestingSessionLocal
-# Ensure websocket router uses the in-memory DB
-_ws_router.get_session_factory = lambda: TestingSessionLocal  # type: ignore[attr-defined]
+# Override default engine/factory so all app code uses Postgres in tests
 _db_mod.default_engine = test_engine
-# Ensure helper *get_session_factory()* returns the test sessionmaker so any
-# late-resolving imports (e.g. GmailProvider) use the in-memory SQLite
-# connection rather than creating a brand new on-disk engine.
-
+_db_mod.default_session_factory = TestingSessionLocal
 _db_mod.get_session_factory = lambda: TestingSessionLocal  # type: ignore[assignment]
-# Ensure *EmailTriggerService* uses the same in-memory session factory
+
+# Ensure websocket router uses the same Postgres session factory
+_ws_router.get_session_factory = lambda: TestingSessionLocal  # type: ignore[attr-defined]
+
+# Ensure *EmailTriggerService* uses the same Postgres session factory
 try:
     from zerg.services.email_trigger_service import email_trigger_service as _ets  # noqa: WPS433 – test-time import
 
@@ -249,6 +272,16 @@ if _zr_module is not None:  # pragma: no cover – depends on import order
 from zerg.main import app  # noqa: E402
 
 
+# Stop the Postgres container after the entire test session completes
+@pytest.fixture(scope="session", autouse=True)
+def _shutdown_pg_container():
+    yield
+    try:
+        _pg_container.stop()
+    except Exception:
+        pass
+
+
 @pytest.fixture(scope="session", autouse=True)
 def disable_langsmith_tracing():
     """
@@ -343,6 +376,17 @@ def db_session():
 
     # Create a session
     db = TestingSessionLocal()
+    # Seed a deterministic user with id=1 to satisfy FK constraints in tests
+    try:
+        from zerg.models.models import User
+
+        if db.query(User).filter(User.id == 1).count() == 0:
+            dev = User(id=1, email="dev@local")
+            db.add(dev)
+            db.commit()
+    except Exception:
+        # If seeding fails, continue; individual tests may create their own users
+        db.rollback()
     try:
         yield db
     finally:

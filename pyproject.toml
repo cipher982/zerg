@@ -53,6 +53,9 @@ dev = [
     "hypothesis",
     "hypothesis-jsonschema",
     "pre-commit",
+    "psycopg[binary]",
+    "testcontainers",
+    "docker",
 ]
 
 [dependency-groups]
