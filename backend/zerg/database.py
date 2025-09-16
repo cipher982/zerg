@@ -329,7 +329,12 @@ def get_db(session_factory: Any = None) -> Iterator[Session]:
     try:
         yield db
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            # Ignore errors during session close, such as when the database
+            # connection has been terminated unexpectedly (e.g., during reset operations)
+            pass
 
 
 # ============================================================================
