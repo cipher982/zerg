@@ -265,10 +265,32 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
                     with engine.connect() as ddl_conn:
                         ddl_conn.execute(_t("SET lock_timeout = '3s'"))
                         ddl_conn.execute(_t("SET statement_timeout = '30s'"))
+
+                        # Log tables before drop
+                        tables_before_drop = ddl_conn.execute(
+                            _t("""
+                            SELECT tablename FROM pg_tables
+                            WHERE schemaname = 'public' AND tablename NOT LIKE 'pg_%'
+                        """)
+                        ).fetchall()
+                        logger.info(f"Tables before drop: {[t[0] for t in tables_before_drop]}")
+
                         Base.metadata.drop_all(bind=ddl_conn)
+
+                        # Log tables after drop
+                        tables_after_drop = ddl_conn.execute(
+                            _t("""
+                            SELECT tablename FROM pg_tables
+                            WHERE schemaname = 'public' AND tablename NOT LIKE 'pg_%'
+                        """)
+                        ).fetchall()
+                        logger.info(f"Tables after drop: {[t[0] for t in tables_after_drop]}")
 
                         logger.info("Re-creating all tables …")
                         Base.metadata.create_all(bind=ddl_conn)
+
+                        # Explicitly commit the DDL operations
+                        ddl_conn.commit()
 
                         # Count tables immediately after recreation (should be 0)
                         def _safe_count_immediate(table: str) -> int:
