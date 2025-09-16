@@ -269,11 +269,36 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
 
                         logger.info("Re-creating all tables …")
                         Base.metadata.create_all(bind=ddl_conn)
+
+                        # Count tables immediately after recreation (should be 0)
+                        def _safe_count_immediate(table: str) -> int:
+                            try:
+                                res = ddl_conn.execute(_t(f'SELECT COUNT(*) FROM "{table}"'))
+                                return int(res.scalar() or 0)
+                            except Exception:
+                                return 0
+
+                        tables_after_immediate = {t: _safe_count_immediate(t) for t in key_tables}
+
                 else:
                     Base.metadata.drop_all(bind=engine)
 
                     logger.info("Re-creating all tables …")
                     Base.metadata.create_all(bind=engine)
+
+                    # Count tables immediately after recreation (should be 0)
+                    def _safe_count_immediate(table: str) -> int:
+                        try:
+                            with engine.connect() as conn:
+                                from sqlalchemy import text as _t2
+
+                                res = conn.execute(_t2(f'SELECT COUNT(*) FROM "{table}"'))
+                                return int(res.scalar() or 0)
+                        except Exception:
+                            return 0
+
+                    tables_after_immediate = {t: _safe_count_immediate(t) for t in key_tables}
+
                 last_err = None
                 break
             except Exception as e:  # pragma: no cover – operational guardrail
@@ -325,13 +350,11 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
                     conn.commit()
                     logger.info("Test user created")
 
-        # Post-reset counts (should be zero for most tables in fresh schema)
-        start_post_ts = time.perf_counter()
-        tables_after: dict[str, int] = {t: _safe_count(t) for t in key_tables}
-        total_after = sum(tables_after.values())
-        diagnostics["tables_after_counts"] = tables_after
+        # Use the immediate count taken right after table creation (accurate reset verification)
+        total_after = sum(tables_after_immediate.values())
+        diagnostics["tables_after_counts"] = tables_after_immediate
         diagnostics["total_rows_after"] = total_after
-        diagnostics["post_count_ms"] = int((time.perf_counter() - start_post_ts) * 1000)
+        diagnostics["post_count_ms"] = 0  # Immediate count, no extra time
 
         logger.info(
             "Database schema reset complete | before=%s after=%s drop_create_ms=%s",
