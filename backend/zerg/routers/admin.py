@@ -109,7 +109,6 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
         )
 
     try:
-        logger.warning("Resetting database - dropping and recreating all tables")
         # Obtain the *current* engine – respects Playwright worker isolation
         session_factory = get_session_factory()
 
