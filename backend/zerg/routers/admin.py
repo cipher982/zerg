@@ -1,5 +1,6 @@
 import logging
 import os
+from enum import Enum
 
 # FastAPI helpers
 from fastapi import APIRouter
@@ -31,10 +32,18 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 
+class ResetType(str, Enum):
+    """Database reset operation types."""
+
+    CLEAR_DATA = "clear_data"
+    FULL_REBUILD = "full_rebuild"
+
+
 class DatabaseResetRequest(BaseModel):
     """Request model for database reset with optional password confirmation."""
 
     confirmation_password: str | None = None
+    reset_type: ResetType = ResetType.CLEAR_DATA
 
 
 class SuperAdminStatusResponse(BaseModel):
@@ -65,6 +74,90 @@ async def get_super_admin_status(current_user=Depends(get_current_user)) -> Supe
     return SuperAdminStatusResponse(is_super_admin=is_super_admin, requires_password=is_production)
 
 
+def clear_user_data(engine) -> dict[str, any]:
+    """Clear user-generated data while preserving infrastructure.
+
+    Uses schema discovery to find tables to clear, avoiding hardcoded lists.
+
+    Args:
+        engine: SQLAlchemy engine
+
+    Returns:
+        Dictionary with operation results
+    """
+    import time
+
+    from sqlalchemy import text
+
+    # Discover all tables from SQLAlchemy metadata
+    all_tables = set(Base.metadata.tables.keys())
+
+    # Tables to preserve (infrastructure/auth)
+    preserve_tables = {"users", "alembic_version"}
+
+    # Tables to clear (user-generated content)
+    clear_tables = all_tables - preserve_tables
+
+    if not clear_tables:
+        return {"message": "No user data tables found to clear", "tables_cleared": [], "rows_cleared": 0}
+
+    start_time = time.perf_counter()
+
+    with engine.connect() as conn:
+        # Count rows before clearing
+        total_before = 0
+        for table in clear_tables:
+            try:
+                count = conn.execute(text(f'SELECT COUNT(*) FROM "{table}"')).scalar() or 0
+                total_before += count
+            except Exception:
+                pass
+
+        if engine.dialect.name == "postgresql":
+            # PostgreSQL: Use TRUNCATE CASCADE for efficiency
+            if clear_tables:
+                tables_list = ", ".join(f'"{table}"' for table in sorted(clear_tables))
+                conn.execute(text(f"TRUNCATE TABLE {tables_list} RESTART IDENTITY CASCADE"))
+        else:
+            # SQLite: Disable FK checks and DELETE
+            conn.execute(text("PRAGMA foreign_keys = OFF"))
+            for table in sorted(clear_tables):
+                try:
+                    conn.execute(text(f'DELETE FROM "{table}"'))
+                except Exception as e:
+                    logger.warning(f"Failed to clear table {table}: {e}")
+            conn.execute(text("PRAGMA foreign_keys = ON"))
+
+        conn.commit()
+
+    duration_ms = int((time.perf_counter() - start_time) * 1000)
+
+    return {
+        "message": "User data cleared successfully",
+        "operation": "clear_data",
+        "tables_cleared": sorted(list(clear_tables)),
+        "rows_cleared": total_before,
+        "duration_ms": duration_ms,
+    }
+
+
+def full_schema_rebuild(engine, settings, is_production, diagnostics) -> dict[str, any]:
+    """Perform full schema rebuild (existing full reset logic).
+
+    Args:
+        engine: SQLAlchemy engine
+        settings: Application settings
+        is_production: Whether running in production
+        diagnostics: Diagnostics dictionary to populate
+
+    Returns:
+        Dictionary with operation results
+    """
+    # This encapsulates the existing full reset logic
+    # (I'll move the existing logic here in the next step)
+    pass
+
+
 @router.post("/reset-database")
 async def reset_database(request: DatabaseResetRequest, current_user=Depends(require_super_admin)):
     """Reset the database by dropping all tables and recreating them.
@@ -76,7 +169,7 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
 
     # Log the reset attempt for audit purposes
     logger.warning(
-        f"Database reset requested by {getattr(current_user, 'email', 'unknown')} "
+        f"Database reset ({request.reset_type.value}) requested by {getattr(current_user, 'email', 'unknown')} "
         f"in environment: {settings.environment or 'development'}"
     )
 
@@ -121,9 +214,13 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
         if engine is None:  # pragma: no cover – safety guard
             raise RuntimeError("Session factory returned no bound engine")
 
-        # For PostgreSQL in production, we need to handle connections more carefully
-        # to avoid hanging on drop operations due to active or idle-in-transaction connections.
-        # Collect diagnostics for response
+        # Dispatch to the appropriate reset operation
+        if request.reset_type == ResetType.CLEAR_DATA:
+            # Simple user data clearing - no connection management needed
+            result = clear_user_data(engine)
+            return result
+
+        # Full schema rebuild - requires careful connection management
         diagnostics: dict[str, object] = {
             "environment": (settings.environment or "") or "development",
             "dialect": getattr(engine.dialect, "name", "unknown"),
@@ -229,21 +326,8 @@ async def reset_database(request: DatabaseResetRequest, current_user=Depends(req
             except Exception:
                 return 0
 
-        key_tables = [
-            "users",
-            "agents",
-            "agent_messages",
-            "agent_threads",
-            "thread_messages",
-            "workflows",
-            "workflow_templates",
-            "workflow_executions",
-            "canvas_layouts",
-            "connectors",
-            "triggers",
-            "agent_runs",
-            "node_execution_states",
-        ]
+        # Use schema discovery instead of hardcoded table list
+        key_tables = list(Base.metadata.tables.keys())
         tables_before: dict[str, int] = {t: _safe_count(t) for t in key_tables}
         total_before = sum(tables_before.values())
         diagnostics["tables_before_counts"] = tables_before

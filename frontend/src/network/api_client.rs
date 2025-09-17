@@ -358,17 +358,31 @@ impl ApiClient {
         Self::fetch_json(&url, "GET", None).await
     }
 
-    // Reset the database with optional password confirmation
-    pub async fn reset_database() -> Result<String, JsValue> {
+    // Clear user data (keeps users logged in)
+    pub async fn clear_user_data() -> Result<String, JsValue> {
         let url = format!("{}/api/admin/reset-database", Self::api_base_url());
-        let body = r#"{"confirmation_password": null}"#;
+        let body = r#"{"confirmation_password": null, "reset_type": "clear_data"}"#;
         Self::fetch_json(&url, "POST", Some(body)).await
     }
 
-    // Reset the database with password confirmation
-    pub async fn reset_database_with_password(password: &str) -> Result<String, JsValue> {
+    // Clear user data with password confirmation
+    pub async fn clear_user_data_with_password(password: &str) -> Result<String, JsValue> {
         let url = format!("{}/api/admin/reset-database", Self::api_base_url());
-        let body = format!(r#"{{"confirmation_password": "{}"}}"#, password);
+        let body = format!(r#"{{"confirmation_password": "{}", "reset_type": "clear_data"}}"#, password);
+        Self::fetch_json(&url, "POST", Some(&body)).await
+    }
+
+    // Full schema rebuild (logs out all users)
+    pub async fn reset_database_full() -> Result<String, JsValue> {
+        let url = format!("{}/api/admin/reset-database", Self::api_base_url());
+        let body = r#"{"confirmation_password": null, "reset_type": "full_rebuild"}"#;
+        Self::fetch_json(&url, "POST", Some(body)).await
+    }
+
+    // Full schema rebuild with password confirmation
+    pub async fn reset_database_full_with_password(password: &str) -> Result<String, JsValue> {
+        let url = format!("{}/api/admin/reset-database", Self::api_base_url());
+        let body = format!(r#"{{"confirmation_password": "{}", "reset_type": "full_rebuild"}}"#, password);
         Self::fetch_json(&url, "POST", Some(&body)).await
     }
 
