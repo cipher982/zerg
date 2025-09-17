@@ -421,49 +421,81 @@ fn build_admin_controls(document: &Document) -> Result<Element, JsValue> {
     title.set_inner_html("Super Admin Tools");
     card.append_child(&title)?;
 
-    // Primary action card - Clear Data (most common)
-    let primary_card = document.create_element("div")?;
-    primary_card.set_class_name("reset-primary");
-    primary_card.set_inner_html(r#"
-        <div class="reset-header">
-            <h4>🧹 Clear Development Data</h4>
-            <span class="reset-badge safe">Keeps you logged in</span>
-        </div>
-        <p class="reset-description">
-            Remove agents, workflows, chat history, and test data.
-            Your account and settings remain intact.
-        </p>
-        <div class="reset-actions">
-            <button id="ops-clear-data-btn" class="btn btn-primary">Clear Data</button>
-        </div>
-    "#);
-    card.append_child(&primary_card)?;
+    // Description text
+    let desc = document.create_element("p")?;
+    desc.set_inner_html("Choose your reset approach:");
+    card.append_child(&desc)?;
 
-    // Advanced section - Full Reset (dangerous)
-    let advanced_section = document.create_element("details")?;
-    advanced_section.set_class_name("reset-advanced");
-    advanced_section.set_inner_html(r#"
-        <summary class="reset-advanced-toggle">
-            <span>⚠️ Advanced: Full Schema Rebuild</span>
-            <span class="reset-badge danger">Logs you out</span>
-        </summary>
-        <div class="reset-advanced-content">
-            <p class="reset-description danger">
-                <strong>⚠️ WARNING:</strong> This completely destroys the database schema and recreates it.
-                You will lose your login session and all data.
-            </p>
-            <div class="reset-actions">
-                <button id="ops-full-reset-btn" class="btn btn-danger">Full Schema Rebuild</button>
-            </div>
-        </div>
-    "#);
-    card.append_child(&advanced_section)?;
+    // Button row with clear hierarchy
+    let button_row = document.create_element("div")?;
+    button_row.set_class_name("admin-button-row");
+    button_row.set_attribute("style", "display: flex; gap: 1rem; align-items: center; margin: 1rem 0;")?;
+
+    // PRIMARY: Clear Data button (prominent, blue)
+    let clear_btn = document.create_element("button")?;
+    clear_btn.set_id("ops-clear-data-btn");
+    clear_btn.set_class_name("btn");
+    clear_btn.set_attribute("style", "
+        background: #3b82f6;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.5rem;
+        border: none;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+    ")?;
+    clear_btn.set_inner_html("🧹 Clear Data");
+    clear_btn.set_attribute("title", "Remove agents & workflows (keeps you logged in)")?;
+    button_row.append_child(&clear_btn)?;
+
+    // Helper text for primary action
+    let clear_help = document.create_element("div")?;
+    clear_help.set_attribute("style", "color: #10b981; font-size: 0.875rem;")?;
+    clear_help.set_inner_html("← Removes test data, keeps you logged in");
+    button_row.append_child(&clear_help)?;
+
+    card.append_child(&button_row)?;
+
+    // Spacer
+    let spacer = document.create_element("div")?;
+    spacer.set_attribute("style", "height: 1rem; border-top: 1px solid #374151; margin: 1rem 0;")?;
+    card.append_child(&spacer)?;
+
+    // SECONDARY: Full Reset (smaller, outline style)
+    let full_row = document.create_element("div")?;
+    full_row.set_attribute("style", "display: flex; gap: 1rem; align-items: center;")?;
+
+    let full_btn = document.create_element("button")?;
+    full_btn.set_id("ops-full-reset-btn");
+    full_btn.set_class_name("btn");
+    full_btn.set_attribute("style", "
+        background: transparent;
+        color: #ef4444;
+        padding: 0.5rem 1rem;
+        border: 2px solid #ef4444;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        cursor: pointer;
+    ")?;
+    full_btn.set_inner_html("🗑️ Full Reset");
+    full_btn.set_attribute("title", "Delete everything including your account (logs you out)")?;
+    full_row.append_child(&full_btn)?;
+
+    // Helper text for secondary action
+    let full_help = document.create_element("div")?;
+    full_help.set_attribute("style", "color: #ef4444; font-size: 0.875rem;")?;
+    full_help.set_inner_html("Destroys everything, logs you out");
+    full_row.append_child(&full_help)?;
+
+    card.append_child(&full_row)?;
 
     // Results area
-    let summary = document.create_element("div")?;
+    let summary = document.create_element("pre")?;
     summary.set_id("ops-reset-summary");
     summary.set_class_name("ops-reset-summary");
-    summary.set_inner_html("<div class=\"reset-hint\">Operation results will appear here after reset.</div>");
+    summary.set_attribute("style", "margin-top: 1rem; padding: 1rem; background: #1f2937; border-radius: 0.5rem; font-size: 0.75rem; color: #9ca3af;")?;
+    summary.set_inner_html("Operation results will appear here.");
     card.append_child(&summary)?;
 
     // Click handlers for both buttons
@@ -625,16 +657,12 @@ fn build_admin_controls(document: &Document) -> Result<Element, JsValue> {
         }))
     };
 
-    // Attach event listeners to buttons (find by ID since they're created with innerHTML)
-    if let Some(clear_el) = document.get_element_by_id("ops-clear-data-btn") {
-        if let Some(btn_el) = clear_el.dyn_ref::<HtmlElement>() {
-            let _ = btn_el.add_event_listener_with_callback("click", clear_cb.as_ref().unchecked_ref());
-        }
+    // Attach event listeners to buttons
+    if let Some(btn_el) = clear_btn.dyn_ref::<HtmlElement>() {
+        let _ = btn_el.add_event_listener_with_callback("click", clear_cb.as_ref().unchecked_ref());
     }
-    if let Some(reset_el) = document.get_element_by_id("ops-full-reset-btn") {
-        if let Some(btn_el) = reset_el.dyn_ref::<HtmlElement>() {
-            let _ = btn_el.add_event_listener_with_callback("click", reset_cb.as_ref().unchecked_ref());
-        }
+    if let Some(btn_el) = full_btn.dyn_ref::<HtmlElement>() {
+        let _ = btn_el.add_event_listener_with_callback("click", reset_cb.as_ref().unchecked_ref());
     }
 
     clear_cb.forget();
