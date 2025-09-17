@@ -4,7 +4,7 @@ use web_sys::{Document, Element, HtmlElement};
 
 use crate::toast;
 use crate::debug_log;
-use crate::ui_components::{create_danger_button, set_button_loading};
+use crate::ui_components::set_button_loading;
 
 use crate::models::{OpsSeriesPoint, OpsSummary, OpsTopAgent};
 use crate::state::APP_STATE;
@@ -421,36 +421,50 @@ fn build_admin_controls(document: &Document) -> Result<Element, JsValue> {
     title.set_inner_html("Super Admin Tools");
     card.append_child(&title)?;
 
-    // Content row: buttons + summary area
-    let row = document.create_element("div")?;
-    row.set_class_name("admin-row");
+    // Primary action card - Clear Data (most common)
+    let primary_card = document.create_element("div")?;
+    primary_card.set_class_name("reset-primary");
+    primary_card.set_inner_html(r#"
+        <div class="reset-header">
+            <h4>🧹 Clear Development Data</h4>
+            <span class="reset-badge safe">Keeps you logged in</span>
+        </div>
+        <p class="reset-description">
+            Remove agents, workflows, chat history, and test data.
+            Your account and settings remain intact.
+        </p>
+        <div class="reset-actions">
+            <button id="ops-clear-data-btn" class="btn btn-primary">Clear Data</button>
+        </div>
+    "#);
+    card.append_child(&primary_card)?;
 
-    // Button container
-    let buttons = document.create_element("div")?;
-    buttons.set_class_name("admin-buttons");
+    // Advanced section - Full Reset (dangerous)
+    let advanced_section = document.create_element("details")?;
+    advanced_section.set_class_name("reset-advanced");
+    advanced_section.set_inner_html(r#"
+        <summary class="reset-advanced-toggle">
+            <span>⚠️ Advanced: Full Schema Rebuild</span>
+            <span class="reset-badge danger">Logs you out</span>
+        </summary>
+        <div class="reset-advanced-content">
+            <p class="reset-description danger">
+                <strong>⚠️ WARNING:</strong> This completely destroys the database schema and recreates it.
+                You will lose your login session and all data.
+            </p>
+            <div class="reset-actions">
+                <button id="ops-full-reset-btn" class="btn btn-danger">Full Schema Rebuild</button>
+            </div>
+        </div>
+    "#);
+    card.append_child(&advanced_section)?;
 
-    // Clear Data button (gentle)
-    let clear_btn = create_danger_button(document, "🧹 Clear Data", Some("ops-clear-data-btn"))?;
-    clear_btn.set_class_name("btn-warning");
-    clear_btn.set_attribute("title", "Clear user data (keeps accounts)")?;
-    buttons.append_child(&clear_btn)?;
-
-    // Full Reset button (nuclear)
-    let reset_btn = create_danger_button(document, "🗑️ Full Reset", Some("ops-full-reset-btn"))?;
-    reset_btn.set_class_name("btn-danger");
-    reset_btn.set_attribute("title", "Delete everything (logs out users)")?;
-    buttons.append_child(&reset_btn)?;
-
-    row.append_child(&buttons)?;
-
-    // Summary area
-    let summary = document.create_element("pre")?;
+    // Results area
+    let summary = document.create_element("div")?;
     summary.set_id("ops-reset-summary");
     summary.set_class_name("ops-reset-summary");
-    summary.set_inner_html("Click to reset database. A summary will appear here.");
-    row.append_child(&summary)?;
-
-    card.append_child(&row)?;
+    summary.set_inner_html("<div class=\"reset-hint\">Operation results will appear here after reset.</div>");
+    card.append_child(&summary)?;
 
     // Click handlers for both buttons
     let requires_password = crate::state::APP_STATE.with(|s| s.borrow().admin_requires_password);
@@ -611,12 +625,16 @@ fn build_admin_controls(document: &Document) -> Result<Element, JsValue> {
         }))
     };
 
-    // Attach event listeners to buttons
-    if let Some(btn_el) = clear_btn.dyn_ref::<HtmlElement>() {
-        let _ = btn_el.add_event_listener_with_callback("click", clear_cb.as_ref().unchecked_ref());
+    // Attach event listeners to buttons (find by ID since they're created with innerHTML)
+    if let Some(clear_el) = document.get_element_by_id("ops-clear-data-btn") {
+        if let Some(btn_el) = clear_el.dyn_ref::<HtmlElement>() {
+            let _ = btn_el.add_event_listener_with_callback("click", clear_cb.as_ref().unchecked_ref());
+        }
     }
-    if let Some(btn_el) = reset_btn.dyn_ref::<HtmlElement>() {
-        let _ = btn_el.add_event_listener_with_callback("click", reset_cb.as_ref().unchecked_ref());
+    if let Some(reset_el) = document.get_element_by_id("ops-full-reset-btn") {
+        if let Some(btn_el) = reset_el.dyn_ref::<HtmlElement>() {
+            let _ = btn_el.add_event_listener_with_callback("click", reset_cb.as_ref().unchecked_ref());
+        }
     }
 
     clear_cb.forget();
