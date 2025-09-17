@@ -421,140 +421,101 @@ fn build_admin_controls(document: &Document) -> Result<Element, JsValue> {
     title.set_inner_html("Super Admin Tools");
     card.append_child(&title)?;
 
-    // Two option cards - unified design system
-    let options_grid = document.create_element("div")?;
-    options_grid.set_attribute("style", "display: grid; gap: 1rem; margin: 1rem 0;")?;
-
-    // OPTION 1: Clear Data (Primary choice)
-    let clear_card = document.create_element("div")?;
-    clear_card.set_attribute("style", "
-        background: #1f2937;
-        border: 2px solid #3b82f6;
-        border-radius: 0.75rem;
-        padding: 1.5rem;
-        transition: all 0.2s ease;
-        position: relative;
+    // Simple button row - no complex styling
+    let button_container = document.create_element("div")?;
+    button_container.set_attribute("style", "
+        display: flex;
+        gap: 12px;
+        margin: 16px 0;
+        align-items: flex-start;
     ")?;
-    clear_card.set_inner_html(r#"
-        <div style="display: flex; align-items: start; gap: 1rem;">
-            <div style="
-                background: #3b82f6;
-                color: white;
-                width: 2.5rem;
-                height: 2.5rem;
-                border-radius: 0.5rem;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 1.25rem;
-                flex-shrink: 0;
-            ">🧹</div>
-            <div style="flex: 1;">
-                <h3 style="margin: 0 0 0.5rem 0; color: white; font-size: 1.125rem; font-weight: 600;">
-                    Clear Development Data
-                </h3>
-                <p style="margin: 0 0 1rem 0; color: #9ca3af; font-size: 0.875rem; line-height: 1.4;">
-                    Removes agents, workflows, and chat history. Your account stays intact.
-                </p>
-                <div style="display: flex; align-items: center; gap: 0.5rem; color: #10b981; font-size: 0.75rem; font-weight: 500;">
-                    <span>✓</span> Keeps you logged in
-                </div>
-            </div>
-        </div>
-    "#);
 
+    // Clear Data button (primary, normal size)
     let clear_btn = document.create_element("button")?;
     clear_btn.set_id("ops-clear-data-btn");
     clear_btn.set_attribute("style", "
-        background: #3b82f6;
+        background: #2563eb;
         color: white;
         border: none;
-        padding: 0.75rem 1.5rem;
-        border-radius: 0.5rem;
-        font-size: 0.875rem;
-        font-weight: 600;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
         cursor: pointer;
-        margin-top: 1rem;
-        width: 100%;
-        transition: all 0.2s ease;
+        min-width: 120px;
     ")?;
-    clear_btn.set_inner_html("Clear Data");
-    clear_card.append_child(&clear_btn)?;
-    options_grid.append_child(&clear_card)?;
+    clear_btn.set_inner_html("🧹 Clear Data");
+    button_container.append_child(&clear_btn)?;
 
-    // OPTION 2: Full Reset (Secondary choice)
-    let reset_card = document.create_element("div")?;
-    reset_card.set_attribute("style", "
-        background: #1f2937;
-        border: 2px solid #374151;
-        border-radius: 0.75rem;
-        padding: 1.5rem;
-        transition: all 0.2s ease;
-        position: relative;
-        opacity: 0.8;
+    // Description for clear data
+    let clear_desc = document.create_element("div")?;
+    clear_desc.set_attribute("style", "
+        color: #9ca3af;
+        font-size: 13px;
+        line-height: 1.4;
+        flex: 1;
+        padding-top: 2px;
     ")?;
-    reset_card.set_inner_html(r#"
-        <div style="display: flex; align-items: start; gap: 1rem;">
-            <div style="
-                background: #ef4444;
-                color: white;
-                width: 2.5rem;
-                height: 2.5rem;
-                border-radius: 0.5rem;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 1.25rem;
-                flex-shrink: 0;
-            ">⚠️</div>
-            <div style="flex: 1;">
-                <h3 style="margin: 0 0 0.5rem 0; color: #ef4444; font-size: 1.125rem; font-weight: 600;">
-                    Full Schema Rebuild
-                </h3>
-                <p style="margin: 0 0 1rem 0; color: #9ca3af; font-size: 0.875rem; line-height: 1.4;">
-                    Completely destroys and recreates the database schema.
-                </p>
-                <div style="display: flex; align-items: center; gap: 0.5rem; color: #ef4444; font-size: 0.75rem; font-weight: 500;">
-                    <span>⚠</span> Logs you out
-                </div>
-            </div>
-        </div>
-    "#);
+    clear_desc.set_inner_html("Removes agents & workflows. Keeps you logged in.");
+    button_container.append_child(&clear_desc)?;
 
+    card.append_child(&button_container)?;
+
+    // Full Reset section (separate row)
+    let reset_container = document.create_element("div")?;
+    reset_container.set_attribute("style", "
+        display: flex;
+        gap: 12px;
+        margin: 12px 0;
+        align-items: flex-start;
+        padding-top: 12px;
+        border-top: 1px solid #374151;
+    ")?;
+
+    // Full Reset button (secondary, normal size)
     let reset_btn = document.create_element("button")?;
     reset_btn.set_id("ops-full-reset-btn");
     reset_btn.set_attribute("style", "
         background: transparent;
-        color: #ef4444;
-        border: 2px solid #ef4444;
-        padding: 0.75rem 1.5rem;
-        border-radius: 0.5rem;
-        font-size: 0.875rem;
-        font-weight: 600;
+        color: #dc2626;
+        border: 1px solid #dc2626;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
         cursor: pointer;
-        margin-top: 1rem;
-        width: 100%;
-        transition: all 0.2s ease;
+        min-width: 120px;
     ")?;
-    reset_btn.set_inner_html("Full Reset");
-    reset_card.append_child(&reset_btn)?;
-    options_grid.append_child(&reset_card)?;
+    reset_btn.set_inner_html("⚠️ Full Reset");
+    reset_container.append_child(&reset_btn)?;
 
-    card.append_child(&options_grid)?;
+    // Description for full reset
+    let reset_desc = document.create_element("div")?;
+    reset_desc.set_attribute("style", "
+        color: #9ca3af;
+        font-size: 13px;
+        line-height: 1.4;
+        flex: 1;
+        padding-top: 2px;
+    ")?;
+    reset_desc.set_inner_html("Destroys everything, logs you out. Only use for major schema changes.");
+    reset_container.append_child(&reset_desc)?;
 
-    // Results area
-    let summary = document.create_element("div")?;
+    card.append_child(&reset_container)?;
+
+    // Simple results area
+    let summary = document.create_element("pre")?;
     summary.set_id("ops-reset-summary");
     summary.set_attribute("style", "
-        margin-top: 1.5rem;
-        padding: 1rem;
-        background: #111827;
+        margin-top: 16px;
+        padding: 12px;
+        background: #1f2937;
         border: 1px solid #374151;
-        border-radius: 0.5rem;
-        font-family: monospace;
-        font-size: 0.8rem;
+        border-radius: 6px;
+        font-size: 12px;
         color: #9ca3af;
-        min-height: 3rem;
+        white-space: pre-wrap;
+        overflow-x: auto;
     ")?;
     summary.set_inner_html("Operation results will appear here.");
     card.append_child(&summary)?;
