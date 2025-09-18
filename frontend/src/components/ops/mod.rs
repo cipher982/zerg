@@ -598,7 +598,7 @@ fn build_admin_controls(document: &Document) -> Result<Element, JsValue> {
 
     // Full Reset button handler (nuclear)
     let reset_cb = {
-        let requires_password = requires_password; // Clone for second closure
+        let requires_password_flag = requires_password; // Clone for second closure
         Closure::<dyn FnMut(_)>::wrap(Box::new(move |_e: web_sys::MouseEvent| {
             debug_log!("Ops: Full Reset clicked");
             if let Some(win) = web_sys::window() {
@@ -609,7 +609,7 @@ fn build_admin_controls(document: &Document) -> Result<Element, JsValue> {
                     return;
                 }
 
-                let pwd_opt = if requires_password {
+                let pwd_opt = if requires_password_flag {
                     match win.prompt_with_message("Enter database reset password:") {
                         Ok(Some(p)) if !p.is_empty() => Some(p),
                         _ => {
