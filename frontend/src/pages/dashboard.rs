@@ -9,6 +9,21 @@ use web_sys::{Document, Element};
 /// Mount the dashboard view by creating necessary DOM elements
 /// This function is called when switching to the dashboard view
 pub fn mount_dashboard(document: &Document) -> Result<(), JsValue> {
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            if let Ok(flag) = storage.get_item("zerg_use_react_dashboard") {
+                if flag.as_deref() == Some("1") {
+                    if let Ok(Some(target_url)) = storage.get_item("zerg_react_dashboard_url") {
+                        let _ = window.location().set_href(&target_url);
+                        return Ok(());
+                    } else {
+                        web_sys::console::warn_1(&"React dashboard flag enabled but no target URL configured".into());
+                    }
+                }
+            }
+        }
+    }
+
     // Get app container for adding dashboard
     let app_container = document
         .get_element_by_id("app-container")

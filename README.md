@@ -138,6 +138,13 @@ changed – there is now just one canonical entry-point.
 *   `TopicManager` – subscribe/unsubscribe, dispatches messages to closures.
 *   `state.rs` – single RefCell holding `AppState`; message reducer pattern.
 
+### React Pilot (TypeScript)
+
+*   Lives in `frontend-web/` with Vite + React + TanStack Query.
+*   Goal: progressively replace the Rust dashboard via a strangler toggle
+    (`localStorage.zerg_use_react_dashboard`).
+*   Shares REST and WebSocket contracts; see `docs/react_dashboard_migration.md`.
+
 ### Pre-render (optional)
 
 Node + Playwright snapshot → `prerender/dist/index.html`; Express server serves

@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "description": "Development tools for the Zerg monorepo.",
   "private": true,
+  "workspaces": [
+    "frontend-web",
+    "prerender"
+  ],
+  "scripts": {
+    "start": "make start"
+  },
   "devDependencies": {
     "@asyncapi/cli": "^3.1.0",
     "@asyncapi/modelina": "^5.3.1",
