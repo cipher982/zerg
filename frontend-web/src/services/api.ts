@@ -2,6 +2,33 @@ export type AgentSummary = {
   id: number;
   name: string;
   status: string;
+  system_instructions?: string;
+  task_instructions?: string;
+};
+
+export type Agent = AgentSummary & {
+  created_at: string;
+  updated_at: string;
+  model: string;
+};
+
+export type Thread = {
+  id: number;
+  agent_id: number;
+  title: string;
+  active: boolean;
+  thread_type: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ThreadMessage = {
+  id: number;
+  thread_id: number;
+  role: "assistant" | "user" | "system" | "tool";
+  content: string;
+  created_at: string;
+  processed: boolean;
 };
 
 const API_BASE = "/api";
@@ -29,6 +56,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function fetchAgents(): Promise<AgentSummary[]> {
-  const data = await request<{ items: AgentSummary[] }>("/agents");
-  return data.items;
+  return request<AgentSummary[]>("/agents?scope=my");
+}
+
+export async function fetchAgent(agentId: number): Promise<Agent> {
+  return request<Agent>(`/agents/${agentId}`);
+}
+
+export async function fetchThreads(agentId: number): Promise<Thread[]> {
+  return request<Thread[]>(`/threads?agent_id=${agentId}`);
+}
+
+export async function fetchThreadMessages(threadId: number): Promise<ThreadMessage[]> {
+  return request<ThreadMessage[]>(`/threads/${threadId}/messages`);
+}
+
+export async function createThread(agentId: number, title: string): Promise<Thread> {
+  return request<Thread>(`/threads`, {
+    method: "POST",
+    body: JSON.stringify({ agent_id: agentId, title, thread_type: "chat" }),
+  });
+}
+
+export async function postThreadMessage(threadId: number, content: string): Promise<ThreadMessage> {
+  return request<ThreadMessage>(`/threads/${threadId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ role: "user", content }),
+  });
+}
+
+export async function runThread(threadId: number): Promise<void> {
+  await request(`/threads/${threadId}/run`, {
+    method: "POST",
+  });
 }

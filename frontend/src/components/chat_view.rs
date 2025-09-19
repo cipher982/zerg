@@ -12,6 +12,53 @@ use crate::state::dispatch_global_message;
 
 // Main function to setup the chat view
 pub fn setup_chat_view(document: &Document) -> Result<(), JsValue> {
+    if let Some(window) = web_sys::window() {
+        if let Ok(Some(storage)) = window.local_storage() {
+            if let Ok(flag) = storage.get_item("zerg_use_react_chat") {
+                if flag.as_deref() == Some("1") {
+                    let base_url = storage
+                        .get_item("zerg_react_chat_base")
+                        .ok()
+                        .flatten()
+                        .or_else(|| window.location().origin().ok().map(|origin| format!("{origin}/chat")));
+
+                    if let Some(mut target) = base_url {
+                        let (agent_id, thread_id) = crate::state::APP_STATE.with(|state_cell| {
+                            let state = state_cell.borrow();
+                            let agent_id = state.current_agent_id;
+                            let thread_id = agent_id.and_then(|id| {
+                                state
+                                    .agent_states
+                                    .get(&id)
+                                    .and_then(|agent_state| agent_state.current_thread_id)
+                            });
+                            (agent_id, thread_id)
+                        });
+
+                        if let Some(agent_id_val) = agent_id {
+                            if !target.ends_with('/') {
+                                target.push('/');
+                            }
+                            target.push_str(&agent_id_val.to_string());
+
+                            if let Some(thread_id_val) = thread_id {
+                                target.push('/');
+                                target.push_str(&thread_id_val.to_string());
+                            }
+                        }
+
+                        if let Err(err) = window.location().set_href(&target) {
+                            web_sys::console::warn_1(&format!("Failed to redirect to React chat: {:?}", err).into());
+                        }
+                        return Ok(());
+                    } else {
+                        web_sys::console::warn_1(&"React chat flag enabled but no base URL configured".into());
+                    }
+                }
+            }
+        }
+    }
+
     // Create the chat view container if it doesn't exist
     if document.get_element_by_id("chat-view-container").is_none() {
         let chat_container = document.create_element("div")?;
