@@ -141,8 +141,8 @@ changed – there is now just one canonical entry-point.
 ### React Pilot (TypeScript)
 
 *   Lives in `frontend-web/` with Vite + React + TanStack Query.
-*   Goal: progressively replace the Rust dashboard via a strangler toggle
-    (`localStorage.zerg_use_react_dashboard`).
+*   Goal: progressively replace the Rust dashboard and chat views via strangler toggles
+    (`localStorage.zerg_use_react_dashboard`, `localStorage.zerg_use_react_chat`).
 *   Shares REST and WebSocket contracts; see `docs/react_dashboard_migration.md`.
 
 ### Pre-render (optional)
