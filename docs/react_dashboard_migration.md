@@ -1,6 +1,6 @@
-# React Dashboard Migration Pilot
+# React Frontend Migration Pilots
 
-This document tracks the first phase of moving the dashboard view from the Rust/WASM frontend to a React + TypeScript stack located in `frontend-web/`.
+This document tracks the pilot migrations from the Rust/WASM frontend to a React + TypeScript stack located in `frontend-web/`.
 
 ## Local Development
 
@@ -35,8 +35,19 @@ This document tracks the first phase of moving the dashboard view from the Rust/
    localStorage.removeItem("zerg_react_dashboard_url");
    ```
 
+## React Chat Pilot
+
+To test the chat experience in React, toggle the chat-specific flag:
+
+```javascript
+localStorage.setItem("zerg_use_react_chat", "1");
+localStorage.setItem("zerg_react_chat_base", "http://localhost:3000/chat");
+```
+
+When the legacy SPA navigates to the chat view it will redirect to `/chat/<agentId>/<threadId?>` at the provided base URL. Remove the keys to return to the Rust implementation.
+
 ## Next Steps
 
 - Flesh out the React dashboard feature set, replicating the current agent list, actions, and live updates.
 - Add automated tests (Vitest + Playwright) targeting the new stack and wire them into CI.
-- Expand strangler routing to other pages once the dashboard reaches parity.
+- Expand strangler routing to other pages (chat, canvas) once each reaches parity.
