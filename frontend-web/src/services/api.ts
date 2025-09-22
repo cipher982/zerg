@@ -59,6 +59,20 @@ export async function fetchAgents(): Promise<AgentSummary[]> {
   return request<AgentSummary[]>("/agents?scope=my");
 }
 
+type CreateAgentPayload = {
+  name: string;
+  system_instructions: string;
+  task_instructions: string;
+  model: string;
+};
+
+export async function createAgent(payload: CreateAgentPayload): Promise<Agent> {
+  return request<Agent>(`/agents`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function fetchAgent(agentId: number): Promise<Agent> {
   return request<Agent>(`/agents/${agentId}`);
 }
