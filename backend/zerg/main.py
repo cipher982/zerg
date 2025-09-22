@@ -130,7 +130,9 @@ async def lifespan(app: FastAPI):
         try:
             from zerg.database import default_engine
 
-            if default_engine.dialect.name != "postgresql":  # pragma: no cover - caught in tests via conftest
+            if (
+                not _settings.testing and default_engine.dialect.name != "postgresql"
+            ):  # pragma: no cover - caught in tests via conftest
                 raise RuntimeError("PostgreSQL is required to run the backend (advisory locks, concurrency).")
         except Exception as _e:
             logger.error(str(_e))
