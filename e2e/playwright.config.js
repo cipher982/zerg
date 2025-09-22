@@ -20,14 +20,35 @@ if (fs.existsSync(envPath)) {
 BACKEND_PORT = process.env.BACKEND_PORT ? parseInt(process.env.BACKEND_PORT) : BACKEND_PORT;
 FRONTEND_PORT = process.env.FRONTEND_PORT ? parseInt(process.env.FRONTEND_PORT) : FRONTEND_PORT;
 
+const useRustUi = process.env.PLAYWRIGHT_USE_RUST_UI === '1';
+const frontendBaseUrl = `http://localhost:${FRONTEND_PORT}`;
+process.env.PLAYWRIGHT_FRONTEND_BASE = frontendBaseUrl;
+
 // Define workers count first so we can use it later
 const workers = process.env.CI ? 4 : 2;
+
+const frontendServer = useRustUi
+  ? {
+      // Legacy Rust/WASM SPA server
+      command: `cd ../frontend && ./build-only.sh && cd ../e2e && FRONTEND_PORT=${FRONTEND_PORT} node wasm-server.js`,
+      port: FRONTEND_PORT,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+    }
+  : {
+      // React dev server for Playwright runs
+      command: `npm run dev -- --host 127.0.0.1 --port ${FRONTEND_PORT}`,
+      port: FRONTEND_PORT,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+      cwd: path.resolve(__dirname, '../frontend-web'),
+    };
 
 const config = {
   testDir: './tests',
 
   use: {
-    baseURL: `http://localhost:${FRONTEND_PORT}`,
+    baseURL: frontendBaseUrl,
     headless: true,
     viewport: { width: 1280, height: 800 },
     
@@ -60,13 +81,7 @@ const config = {
   ],
 
   webServer: [
-    {
-      // Start the frontend server (static WASM assets)
-      command: `cd ../frontend && ./build-only.sh && cd ../e2e && FRONTEND_PORT=${FRONTEND_PORT} node wasm-server.js`,
-      port: FRONTEND_PORT,
-      reuseExistingServer: !process.env.CI, // Reuse in dev, fresh in CI
-      timeout: 180_000,
-    },
+    frontendServer,
     {
       // Start a single backend server; DB isolation happens via X-Test-Worker header
       command: `BACKEND_PORT=${BACKEND_PORT} node spawn-test-backend.js`,

@@ -49,7 +49,7 @@ if (workerId) {
 }
 
 // Spawn the test backend with E2E configuration
-const backend = spawn('uv', ['run', 'python', '-m', 'uvicorn', 'zerg.main:app', `--port=${port}`, '--log-level=warning'], {
+const backend = spawn('uv', ['run', 'python', '-m', 'uvicorn', 'zerg.main:app', `--host=127.0.0.1`, `--port=${port}`, '--log-level=warning'], {
     env: {
         ...process.env,
         ENVIRONMENT: 'test:e2e',  // Use E2E test config for real models
