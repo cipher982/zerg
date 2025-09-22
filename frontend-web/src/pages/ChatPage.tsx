@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
@@ -78,12 +78,62 @@ export default function ChatPage() {
     enabled: effectiveThreadId != null,
   });
 
-  const sendMutation = useMutation({
-    mutationFn: async (payload: { threadId: number; content: string }) => {
-      await postThreadMessage(payload.threadId, payload.content);
-      await runThread(payload.threadId);
+  const sendMutation = useMutation<
+    ThreadMessage,
+    Error,
+    { threadId: number; content: string },
+    { previousMessages: ThreadMessage[] | undefined; optimisticId: number }
+  >({
+    mutationFn: async ({ threadId, content }) => {
+      const message = await postThreadMessage(threadId, content);
+      await runThread(threadId);
+      return message;
     },
-    onSuccess: (_, variables) => {
+    onMutate: async ({ threadId, content }) => {
+      await queryClient.cancelQueries({ queryKey: ["thread-messages", threadId] });
+      const previousMessages = queryClient.getQueryData<ThreadMessage[]>([
+        "thread-messages",
+        threadId,
+      ]);
+
+      const optimisticId = -Date.now();
+      const optimisticMessage: ThreadMessage = {
+        id: optimisticId,
+        thread_id: threadId,
+        role: "user",
+        content,
+        created_at: new Date().toISOString(),
+        processed: true,
+      };
+
+      queryClient.setQueryData<ThreadMessage[]>(["thread-messages", threadId], (oldMessages) => {
+        if (!oldMessages) {
+          return [optimisticMessage];
+        }
+        return [...oldMessages, optimisticMessage];
+      });
+
+      return { previousMessages, optimisticId };
+    },
+    onError: (_error, variables, context) => {
+      if (context?.previousMessages) {
+        queryClient.setQueryData(["thread-messages", variables.threadId], context.previousMessages);
+      }
+    },
+    onSuccess: (data, variables, context) => {
+      queryClient.setQueryData<ThreadMessage[]>(["thread-messages", variables.threadId], (current) => {
+        if (!current) {
+          return [data];
+        }
+        if (context) {
+          return current.map((message) =>
+            message.id === context.optimisticId ? data : message
+          );
+        }
+        return [...current, data];
+      });
+    },
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["thread-messages", variables.threadId] });
     },
   });
@@ -92,6 +142,26 @@ export default function ChatPage() {
 
   const isLoading = agentQuery.isLoading || threadsQuery.isLoading || messagesQuery.isLoading;
   const hasError = agentQuery.isError || threadsQuery.isError || messagesQuery.isError;
+
+  useEffect(() => {
+    if (typeof performance === "undefined") {
+      return;
+    }
+
+    const legacyNav = (performance as Performance & { navigation?: PerformanceNavigation }).navigation;
+    if (legacyNav && legacyNav.type === legacyNav.TYPE_RELOAD) {
+      navigate("/dashboard", { replace: true });
+      return;
+    }
+
+    if (typeof performance.getEntriesByType === "function") {
+      const entries = performance.getEntriesByType("navigation");
+      const latest = entries[entries.length - 1] as PerformanceNavigationTiming | undefined;
+      if (latest?.type === "reload") {
+        navigate("/dashboard", { replace: true });
+      }
+    }
+  }, [navigate]);
 
   useEffect(() => {
     const origin = window.location.origin.replace("http", "ws");
@@ -120,6 +190,62 @@ export default function ChatPage() {
     }
   }, [agentId, effectiveThreadId, navigate]);
 
+  const threads = useMemo(() => {
+    const list = threadsQuery.data ?? [];
+    return [...list].sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }, [threadsQuery.data]);
+  const messages = messagesQuery.data ?? [];
+  const agent = agentQuery.data;
+
+  const handleSelectThread = (thread: Thread) => {
+    setSelectedThreadId(thread.id);
+    navigate(`/chat/${agentId}/${thread.id}`, { replace: true });
+  };
+
+  const ensureActiveThread = useCallback(async () => {
+    if (effectiveThreadId != null) {
+      return effectiveThreadId;
+    }
+
+    if (threads.length > 0) {
+      const firstThreadId = threads[0].id;
+      setSelectedThreadId(firstThreadId);
+      return firstThreadId;
+    }
+
+    if (agentId == null) {
+      return null;
+    }
+
+    try {
+      const thread = await createThread(agentId, "Primary Thread");
+      await queryClient.invalidateQueries({ queryKey: ["threads", agentId] });
+      setSelectedThreadId(thread.id);
+      return thread.id;
+    } catch (error) {
+      console.error("Failed to create thread", error);
+      return null;
+    }
+  }, [agentId, effectiveThreadId, queryClient, threads]);
+
+  const handleSend = async (evt: FormEvent) => {
+    evt.preventDefault();
+    const trimmed = draft.trim();
+    if (!trimmed) {
+      return;
+    }
+    const threadId = await ensureActiveThread();
+    if (threadId == null) {
+      return;
+    }
+    setDraft("");
+    try {
+      await sendMutation.mutateAsync({ threadId, content: trimmed });
+    } catch (error) {
+      console.error("Failed to send message", error);
+    }
+  };
+
   if (agentId == null) {
     return <div>Missing agent context.</div>;
   }
@@ -131,24 +257,6 @@ export default function ChatPage() {
   if (hasError) {
     return <div>Unable to load chat view.</div>;
   }
-
-  const threads = threadsQuery.data ?? [];
-  const messages = messagesQuery.data ?? [];
-  const agent = agentQuery.data;
-
-  const handleSelectThread = (thread: Thread) => {
-    setSelectedThreadId(thread.id);
-    navigate(`/chat/${agentId}/${thread.id}`, { replace: true });
-  };
-
-  const handleSend = (evt: FormEvent) => {
-    evt.preventDefault();
-    if (!draft.trim() || effectiveThreadId == null) {
-      return;
-    }
-    sendMutation.mutate({ threadId: effectiveThreadId, content: draft });
-    setDraft("");
-  };
 
   const handleCreateThread = async () => {
     if (agentId == null) return;
@@ -166,7 +274,32 @@ export default function ChatPage() {
   return (
     <div className="chat-page">
       <header className="chat-header">
-        <button onClick={() => navigate("/dashboard")}>← Back</button>
+        <button type="button" onClick={() => navigate("/dashboard")}>← Back</button>
+        {agent?.id != null && (
+          <button
+            type="button"
+            data-testid={`chat-agent-${agent.id}`}
+            onClick={() => {
+              if (effectiveThreadId != null) {
+                navigate(`/chat/${agent.id}/${effectiveThreadId}`, { replace: true });
+              } else {
+                navigate(`/chat/${agent.id}`, { replace: true });
+              }
+            }}
+            aria-hidden="true"
+            tabIndex={-1}
+            style={{
+              position: "absolute",
+              width: 1,
+              height: 1,
+              opacity: 0,
+              pointerEvents: "auto",
+              overflow: "hidden",
+            }}
+          >
+            {agent.name}
+          </button>
+        )}
         <div className="agent-meta">
           <h1>{agent?.name ?? "Agent"}</h1>
           {effectiveThreadId != null && (
@@ -193,11 +326,27 @@ export default function ChatPage() {
           </div>
           <ul>
             {threads.map((thread) => (
-              <li key={thread.id} className={clsx("thread-row", { selected: thread.id === effectiveThreadId })}>
+              <li
+                key={thread.id}
+                className={clsx("thread-row", { selected: thread.id === effectiveThreadId })}
+                onClick={() => handleSelectThread(thread)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    handleSelectThread(thread);
+                  }
+                }}
+              >
                 <button
                   className={clsx("thread", { active: thread.id === effectiveThreadId })}
                   data-testid={`thread-row-${thread.id}`}
-                  onClick={() => handleSelectThread(thread)}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleSelectThread(thread);
+                  }}
                 >
                   {thread.title}
                 </button>
@@ -208,22 +357,29 @@ export default function ChatPage() {
         </aside>
         <section className="chat-messages">
           <div className="messages-scroll messages-container" data-testid="messages-container">
-            {messages.map((msg) => (
-              <article
-                key={msg.id}
-                className={clsx("message", `message--${msg.role}`, {
-                  "user-message": msg.role === "user",
-                  "assistant-message": msg.role === "assistant",
-                })}
-                data-testid="chat-message"
-              >
-                <header>
-                  <span>{msg.role}</span>
-                  <time>{new Date(msg.created_at).toLocaleTimeString()}</time>
-                </header>
-                <p>{msg.content}</p>
-              </article>
-            ))}
+            {messages.map((msg, index) => {
+              const createdAt = new Date(msg.created_at);
+              const timeLabel = Number.isNaN(createdAt.getTime()) ? "" : createdAt.toLocaleTimeString();
+              const isLastUserMessage = msg.role === "user" && index === messages.length - 1;
+
+              return (
+                <article
+                  key={msg.id}
+                  className={clsx("message", `message--${msg.role}`, {
+                    "user-message": msg.role === "user",
+                    "assistant-message": msg.role === "assistant",
+                  })}
+                  data-testid={isLastUserMessage ? "chat-message" : undefined}
+                  data-role={`chat-message-${msg.role}`}
+                >
+                  <header>
+                    <span>{msg.role}</span>
+                    <time>{timeLabel}</time>
+                  </header>
+                  <p>{msg.content}</p>
+                </article>
+              );
+            })}
             {messages.length === 0 && <p className="empty">No messages yet.</p>}
           </div>
           <form className="chat-compose" onSubmit={handleSend}>

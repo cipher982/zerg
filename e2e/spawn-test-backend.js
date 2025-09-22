@@ -56,6 +56,8 @@ const backend = spawn('uv', ['run', 'python', '-m', 'uvicorn', 'zerg.main:app', 
         TEST_WORKER_ID: workerId || '0',
         NODE_ENV: 'test',
         TESTING: '1',  // Enable testing mode for database reset
+        DEV_ADMIN: process.env.DEV_ADMIN || '1',
+        ADMIN_EMAILS: process.env.ADMIN_EMAILS || 'dev@local',
     },
     cwd: join(__dirname, '..', 'backend'),
     stdio: 'inherit'
