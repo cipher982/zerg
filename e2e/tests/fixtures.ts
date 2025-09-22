@@ -44,7 +44,7 @@ type TestFixtures = {
 export const test = base.extend<TestFixtures>({
   backendUrl: async ({}, use) => {
     const basePort = getBackendPort();
-    await use(`http://localhost:${basePort}`);
+    await use(`http://127.0.0.1:${basePort}`);
   },
   
   request: async ({ playwright, backendUrl }, use, testInfo) => {
@@ -67,6 +67,35 @@ export const test = base.extend<TestFixtures>({
         'X-Test-Worker': workerId,
       },
     });
+
+    const useRustUi = process.env.PLAYWRIGHT_USE_RUST_UI === '1';
+    const reactBaseUrl = process.env.PLAYWRIGHT_FRONTEND_BASE || 'http://localhost:3000';
+
+    if (!useRustUi) {
+      await context.addInitScript((config: { baseUrl: string }) => {
+        try {
+          const normalized = config.baseUrl.replace(/\/$/, '');
+          window.localStorage.setItem('zerg_use_react_dashboard', '1');
+          window.localStorage.setItem('zerg_use_react_chat', '1');
+          window.localStorage.setItem('zerg_react_dashboard_url', `${normalized}/dashboard`);
+          window.localStorage.setItem('zerg_react_chat_base', `${normalized}/chat`);
+        } catch (error) {
+          // If localStorage is unavailable (unlikely), continue without failing tests.
+          console.warn('Playwright init: unable to seed React flags', error);
+        }
+      }, { baseUrl: reactBaseUrl });
+    } else {
+      await context.addInitScript(() => {
+        try {
+          window.localStorage.removeItem('zerg_use_react_dashboard');
+          window.localStorage.removeItem('zerg_react_dashboard_url');
+          window.localStorage.removeItem('zerg_use_react_chat');
+          window.localStorage.removeItem('zerg_react_chat_base');
+        } catch (error) {
+          console.warn('Playwright init: unable to clear React flags', error);
+        }
+      });
+    }
 
     // -------------------------------------------------------------------
     // Monkey-patch *browser.newContext* so ad-hoc contexts created **inside**

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import clsx from "clsx";
 import {
   createThread,
   fetchAgent,
@@ -151,11 +152,12 @@ export default function ChatPage() {
 
   const handleCreateThread = async () => {
     if (agentId == null) return;
-    const title = window.prompt("Thread title", "Untitled Thread");
-    if (!title) {
+    const title = window.prompt("Thread title", "Untitled Thread") ?? "Untitled Thread";
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) {
       return;
     }
-    const thread = await createThread(agentId, title);
+    const thread = await createThread(agentId, trimmedTitle);
     queryClient.invalidateQueries({ queryKey: ["threads", agentId] });
     setSelectedThreadId(thread.id);
     navigate(`/chat/${agentId}/${thread.id}`, { replace: true });
@@ -180,14 +182,21 @@ export default function ChatPage() {
             <h2>Threads</h2>
             <div className="thread-list__actions">
               <button onClick={() => threadsQuery.refetch()}>Refresh</button>
-              <button onClick={handleCreateThread}>New Thread</button>
+              <button
+                className="new-thread-btn"
+                data-testid="new-thread-btn"
+                onClick={handleCreateThread}
+              >
+                New Thread
+              </button>
             </div>
           </div>
           <ul>
             {threads.map((thread) => (
-              <li key={thread.id}>
+              <li key={thread.id} className={clsx("thread-row", { selected: thread.id === effectiveThreadId })}>
                 <button
-                  className={thread.id === effectiveThreadId ? "thread active" : "thread"}
+                  className={clsx("thread", { active: thread.id === effectiveThreadId })}
+                  data-testid={`thread-row-${thread.id}`}
                   onClick={() => handleSelectThread(thread)}
                 >
                   {thread.title}
@@ -198,9 +207,16 @@ export default function ChatPage() {
           </ul>
         </aside>
         <section className="chat-messages">
-          <div className="messages-scroll" data-testid="messages-container">
+          <div className="messages-scroll messages-container" data-testid="messages-container">
             {messages.map((msg) => (
-              <article key={msg.id} className={`message message--${msg.role}`}>
+              <article
+                key={msg.id}
+                className={clsx("message", `message--${msg.role}`, {
+                  "user-message": msg.role === "user",
+                  "assistant-message": msg.role === "assistant",
+                })}
+                data-testid="chat-message"
+              >
                 <header>
                   <span>{msg.role}</span>
                   <time>{new Date(msg.created_at).toLocaleTimeString()}</time>
@@ -216,9 +232,15 @@ export default function ChatPage() {
               value={draft}
               onChange={(evt) => setDraft(evt.target.value)}
               placeholder="Type your message…"
+              className="chat-input"
               data-testid="chat-input"
             />
-            <button type="submit" disabled={sendMutation.isPending || !draft.trim()} data-testid="send-message-btn">
+            <button
+              type="submit"
+              className="send-button"
+              disabled={sendMutation.isPending || !draft.trim()}
+              data-testid="send-message-btn"
+            >
               {sendMutation.isPending ? "Sending…" : "Send"}
             </button>
           </form>
