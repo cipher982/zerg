@@ -72,18 +72,21 @@ export const test = base.extend<TestFixtures>({
     const reactBaseUrl = process.env.PLAYWRIGHT_FRONTEND_BASE || 'http://localhost:3000';
 
     if (!useRustUi) {
-      await context.addInitScript((config: { baseUrl: string }) => {
+      await context.addInitScript((config: { baseUrl: string, workerId: string }) => {
         try {
           const normalized = config.baseUrl.replace(/\/$/, '');
           window.localStorage.setItem('zerg_use_react_dashboard', '1');
           window.localStorage.setItem('zerg_use_react_chat', '1');
           window.localStorage.setItem('zerg_react_dashboard_url', `${normalized}/dashboard`);
           window.localStorage.setItem('zerg_react_chat_base', `${normalized}/chat`);
+
+          // Inject test worker ID for API request headers
+          (window as any).__TEST_WORKER_ID__ = config.workerId;
         } catch (error) {
           // If localStorage is unavailable (unlikely), continue without failing tests.
           console.warn('Playwright init: unable to seed React flags', error);
         }
-      }, { baseUrl: reactBaseUrl });
+      }, { baseUrl: reactBaseUrl, workerId });
     } else {
       await context.addInitScript(() => {
         try {
