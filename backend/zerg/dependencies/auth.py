@@ -102,8 +102,12 @@ def require_super_admin(current_user=Depends(get_current_user)):
     if getattr(current_user, "role", "USER") != "ADMIN":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
 
-    # Then check if they're a super admin (in ADMIN_EMAILS)
+    # In test/dev environments with auth disabled, any admin user is considered super admin
     settings = get_settings()
+    if settings.auth_disabled or settings.testing:
+        return current_user
+
+    # Then check if they're a super admin (in ADMIN_EMAILS)
     admin_emails = {e.strip().lower() for e in (settings.admin_emails or "").split(",") if e.strip()}
     user_email = getattr(current_user, "email", "").lower()
 

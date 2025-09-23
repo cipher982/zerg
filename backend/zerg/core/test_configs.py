@@ -56,6 +56,7 @@ class UnitTestConfig(BaseTestConfig):
 
     def create_database(self) -> Database:
         """Create isolated in-memory database for unit tests."""
+        # For unit tests, keep using IsolatedSQLiteDatabase since they don't use the middleware
         return IsolatedSQLiteDatabase(self.worker_id, ":memory:")
 
     def create_model_registry(self) -> ModelRegistry:
@@ -80,7 +81,11 @@ class IntegrationTestConfig(BaseTestConfig):
 
     def create_database(self) -> Database:
         """Create real file-based database for integration tests."""
-        return IsolatedSQLiteDatabase(self.worker_id, self.db_path)
+        # Use SQLAlchemyDatabase which will use get_session_factory()
+        # This picks up the worker context from the middleware dynamically
+        from zerg.core.implementations import SQLAlchemyDatabase
+
+        return SQLAlchemyDatabase()
 
     def create_model_registry(self) -> ModelRegistry:
         """Create mock model registry to avoid external API calls."""
@@ -106,7 +111,11 @@ class E2ETestConfig(BaseTestConfig):
 
     def create_database(self) -> Database:
         """Create isolated database for E2E tests."""
-        return IsolatedSQLiteDatabase(self.worker_id, self.db_path)
+        # Use SQLAlchemyDatabase which will use get_session_factory()
+        # This picks up the worker context from the middleware dynamically
+        from zerg.core.implementations import SQLAlchemyDatabase
+
+        return SQLAlchemyDatabase()
 
     def create_model_registry(self) -> ModelRegistry:
         """Create real model registry for E2E tests."""
