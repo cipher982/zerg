@@ -8,10 +8,13 @@ export default function DashboardPage() {
   const queryClient = useQueryClient();
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["agents"],
-    queryFn: fetchAgents
+    queryFn: fetchAgents,
+    refetchInterval: 2000, // Poll every 2 seconds for test environments
   });
 
-  const agents: AgentSummary[] = useMemo(() => data ?? [], [data]);
+  const agents: AgentSummary[] = useMemo(() => {
+    return data ?? [];
+  }, [data]);
 
   const createAgentMutation = useMutation({
     mutationFn: async () => {
@@ -30,7 +33,14 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
-    const ws = new WebSocket(`${window.location.origin.replace("http", "ws")}/api/ws`);
+    // Add test worker header to WebSocket URL for E2E test isolation
+    const testWorkerHeader = (window as any).__TEST_WORKER_ID__;
+    let wsUrl = `${window.location.origin.replace("http", "ws")}/api/ws`;
+    if (testWorkerHeader !== undefined) {
+      wsUrl += `?worker=${testWorkerHeader}`;
+    }
+
+    const ws = new WebSocket(wsUrl);
     ws.onmessage = () => {
       // TODO: hydrate from typed events.
       refetch();
