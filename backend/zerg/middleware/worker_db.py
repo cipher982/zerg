@@ -37,16 +37,6 @@ class WorkerDBMiddleware:  # noqa: D401 – ASGI middleware
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:  # noqa: D401 – ASGI
         scope_type = scope.get("type")
-
-        # Debug: Log middleware invocation
-        import os
-
-        if os.getenv("NODE_ENV") == "test":
-            print(f"[DEBUG] Worker middleware invoked: scope_type={scope_type}, path={scope.get('path', 'unknown')}")
-            import sys
-
-            sys.stdout.flush()
-
         worker_id: str | None = None
 
         # ------------------------------------------------------------------
@@ -82,20 +72,6 @@ class WorkerDBMiddleware:  # noqa: D401 – ASGI middleware
         token = None
         if worker_id is not None:
             token = current_worker_id.set(worker_id)
-
-        # Debug logging for test environment
-        import os
-
-        if os.getenv("NODE_ENV") == "test":
-            headers_dict = {name.decode(): value.decode() for name, value in scope.get("headers", [])}
-            print(
-                f"[DEBUG] Worker middleware: worker_id={worker_id}, path={scope.get('path', 'unknown')}, "
-                f"headers={headers_dict}"
-            )
-            # Force flush output to ensure we see the debug message
-            import sys
-
-            sys.stdout.flush()
 
         try:
             await self.app(scope, receive, send)
