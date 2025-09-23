@@ -23,7 +23,6 @@ from zerg.core.test_configs import E2ETestConfig
 from zerg.core.test_configs import IntegrationTestConfig
 from zerg.core.test_configs import UnitTestConfig
 from zerg.core.test_implementations import InMemoryEventBus
-from zerg.core.test_implementations import IsolatedSQLiteDatabase
 from zerg.core.test_implementations import MockModelRegistry
 from zerg.core.test_implementations import TestAuthProvider
 
@@ -87,7 +86,11 @@ class TestConfig(AppConfig):
 
     def create_database(self) -> Database:
         """Create isolated test database."""
-        return IsolatedSQLiteDatabase(self.worker_id, self.db_path)
+        # Use SQLAlchemyDatabase which will use get_session_factory()
+        # This picks up the worker context from the middleware dynamically
+        from zerg.core.implementations import SQLAlchemyDatabase
+
+        return SQLAlchemyDatabase()
 
     def create_auth_provider(self) -> AuthProvider:
         """Create test authentication provider."""
