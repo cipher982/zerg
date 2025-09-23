@@ -41,6 +41,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
+  // Add test worker header for E2E test isolation
+  // This should match the worker ID that Playwright uses
+  const testWorkerHeader = (window as any).__TEST_WORKER_ID__;
+  if (testWorkerHeader !== undefined) {
+    headers.set("X-Test-Worker", String(testWorkerHeader));
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers,
