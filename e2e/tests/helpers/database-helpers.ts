@@ -84,7 +84,7 @@ export async function resetDatabaseViaRequest(
   page: Page,
   options: DatabaseResetOptions & { workerId?: string } = {}
 ): Promise<void> {
-  const { retries = 3, workerId = '0' } = options;
+  const { retries = 3, workerId } = options;
   let attempts = 0;
   
   // Use single backend port; isolation via X-Test-Worker header
@@ -93,9 +93,24 @@ export async function resetDatabaseViaRequest(
   
   while (attempts < retries) {
     try {
-      const response = await page.request.post(`${baseUrl}/api/admin/reset-database`);
+      const response = await page.request.post(`${baseUrl}/api/admin/reset-database`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(workerId !== undefined ? { 'X-Test-Worker': workerId } : {}),
+        },
+        data: {
+          reset_type: 'clear_data',
+        },
+      });
       if (response.ok()) {
         return;
+      }
+      if (response.status() === 422) {
+        const body = await response.json().catch(() => ({}));
+        const details = Array.isArray(body?.detail) ? body.detail : [body?.detail];
+        if (details.some((item) => typeof item?.msg === 'string' && item.msg.toLowerCase().includes('already clean'))) {
+          return;
+        }
       }
       console.warn(`Database reset attempt ${attempts + 1}: HTTP ${response.status()}`);
     } catch (error) {
