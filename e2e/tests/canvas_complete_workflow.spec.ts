@@ -14,7 +14,7 @@ import { test, expect } from './fixtures';
  */
 
 test.describe('Complete Canvas Workflow', () => {
-  test('End-to-end canvas workflow with agent and tool execution', async ({ page, backendUrl }, testInfo) => {
+  test('End-to-end canvas workflow with agent and tool execution', async ({ page, request }, testInfo) => {
     console.log('🚀 Starting complete canvas workflow test...');
     
     const workerId = String(testInfo.workerIndex);
@@ -22,7 +22,7 @@ test.describe('Complete Canvas Workflow', () => {
     
     // Step 1: Create Agent via API first to ensure it exists
     console.log('📊 Step 1: Creating test agent...');
-    const agentResponse = await page.request.post(`${backendUrl}/api/agents`, {
+    const agentResponse = await request.post('/api/agents', {
       data: {
         name: `Canvas Test Agent ${workerId}`,
         system_instructions: 'You are a test agent for canvas workflow testing',
@@ -46,7 +46,18 @@ test.describe('Complete Canvas Workflow', () => {
     await expect(page.getByTestId('global-dashboard-tab')).toBeVisible({ timeout: 15000 });
     await page.getByTestId('global-dashboard-tab').click();
     await page.waitForTimeout(1000);
-    
+
+    // Wait for the specific agent to appear with polling (React updates via polling)
+    console.log(`📊 Waiting for agent "${createdAgent.name}" to appear...`);
+    await page.waitForFunction(
+      (agentName) => {
+        const elements = Array.from(document.querySelectorAll('td'));
+        return elements.some((el) => el.textContent === agentName);
+      },
+      createdAgent.name,
+      { timeout: 10000, polling: 500 }
+    );
+
     // Check if agent is visible in dashboard
     const agentInDashboard = await page.locator(`text=${createdAgent.name}`).isVisible();
     console.log('📊 Agent visible in dashboard:', agentInDashboard);
