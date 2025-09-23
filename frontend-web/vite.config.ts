@@ -1,20 +1,33 @@
-import { defineConfig } from "vite";
+import path from "node:path";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 3000,
-    proxy: {
-      "/api": "http://127.0.0.1:8001"
-    }
-  },
-  build: {
-    sourcemap: true,
-    outDir: "dist"
-  },
-  test: {
-    environment: "jsdom",
-    setupFiles: "./src/test/setup.ts"
-  }
+export default defineConfig(({ mode }) => {
+  const rootEnv = loadEnv(mode, path.resolve(__dirname, ".."), "");
+
+  const backendHost = rootEnv.BACKEND_HOST || "127.0.0.1";
+  const backendPort = Number(rootEnv.BACKEND_PORT || 8001);
+  const frontendPort = Number(rootEnv.FRONTEND_PORT || 3000);
+
+  return {
+    plugins: [react()],
+    server: {
+      host: "127.0.0.1",
+      port: frontendPort,
+      proxy: {
+        "/api": {
+          target: `http://${backendHost}:${backendPort}`,
+          changeOrigin: true,
+        },
+      },
+    },
+    build: {
+      sourcemap: true,
+      outDir: "dist",
+    },
+    test: {
+      environment: "jsdom",
+      setupFiles: "./src/test/setup.ts",
+    },
+  };
 });
