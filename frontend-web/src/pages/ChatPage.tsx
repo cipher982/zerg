@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import {
+  Agent,
   createThread,
   fetchAgent,
   fetchThreadMessages,
@@ -17,6 +18,16 @@ function useRequiredNumber(param?: string): number | null {
   if (!param) return null;
   const parsed = Number(param);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function resolveWsBase(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return (
+    (window as typeof window & { WS_BASE_URL?: string }).WS_BASE_URL ||
+    window.location.origin.replace("http", "ws")
+  );
 }
 
 export default function ChatPage() {
@@ -34,7 +45,7 @@ export default function ChatPage() {
     }
   }, [threadIdParam, selectedThreadId]);
 
-  const agentQuery = useQuery({
+  const agentQuery = useQuery<Agent>({
     queryKey: ["agent", agentId],
     queryFn: () => {
       if (agentId == null) {
@@ -45,7 +56,7 @@ export default function ChatPage() {
     enabled: agentId != null,
   });
 
-  const threadsQuery = useQuery({
+  const threadsQuery = useQuery<Thread[]>({
     queryKey: ["threads", agentId],
     queryFn: () => {
       if (agentId == null) {
@@ -67,7 +78,7 @@ export default function ChatPage() {
     return null;
   }, [selectedThreadId, threadsQuery.data]);
 
-  const messagesQuery = useQuery({
+  const messagesQuery = useQuery<ThreadMessage[]>({
     queryKey: ["thread-messages", effectiveThreadId],
     queryFn: () => {
       if (effectiveThreadId == null) {
@@ -164,11 +175,15 @@ export default function ChatPage() {
   }, [navigate]);
 
   useEffect(() => {
-    const origin = window.location.origin.replace("http", "ws");
-    const url = new URL("/api/ws", origin);
+    const base = resolveWsBase();
+    const url = new URL("/api/ws", base);
     const token = localStorage.getItem("zerg_jwt");
     if (token) {
       url.searchParams.set("token", token);
+    }
+    const workerId = (window as any).__TEST_WORKER_ID__;
+    if (workerId !== undefined) {
+      url.searchParams.set("worker", String(workerId));
     }
     const ws = new WebSocket(url.toString());
     ws.onmessage = () => {
@@ -272,9 +287,15 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="chat-page">
+    <div id="chat-view-container" className="chat-view-container">
       <header className="chat-header">
-        <button type="button" onClick={() => navigate("/dashboard")}>← Back</button>
+        <button
+          type="button"
+          className="back-button"
+          onClick={() => navigate("/dashboard")}
+        >
+          ←
+        </button>
         {agent?.id != null && (
           <button
             type="button"
@@ -300,38 +321,38 @@ export default function ChatPage() {
             {agent.name}
           </button>
         )}
-        <div className="agent-meta">
-          <h1>{agent?.name ?? "Agent"}</h1>
-          {effectiveThreadId != null && (
-            <span>
-              Thread {effectiveThreadId} ({messages.length} messages)
+        <div className="agent-info">
+          <div className="agent-name">{agent?.name ?? "Agent"}</div>
+          <div>
+            <span className="thread-title-label">Thread: </span>
+            <span className="thread-title-text">
+              {effectiveThreadId != null ? `#${effectiveThreadId}` : "None"}
             </span>
-          )}
+          </div>
         </div>
       </header>
-      <main className="chat-layout">
-        <aside className="thread-list">
-          <div className="thread-list__header">
-            <h2>Threads</h2>
-            <div className="thread-list__actions">
-              <button onClick={() => threadsQuery.refetch()}>Refresh</button>
-              <button
-                className="new-thread-btn"
-                data-testid="new-thread-btn"
-                onClick={handleCreateThread}
-              >
-                New Thread
-              </button>
-            </div>
+
+      <div className="chat-body">
+        <aside className="thread-sidebar">
+          <div className="sidebar-header">
+            <h3>Threads</h3>
+            <button
+              className="new-thread-btn"
+              data-testid="new-thread-btn"
+              onClick={handleCreateThread}
+            >
+              New Thread
+            </button>
           </div>
-          <ul>
+          <div className="thread-list">
             {threads.map((thread) => (
-              <li
+              <div
                 key={thread.id}
-                className={clsx("thread-row", { selected: thread.id === effectiveThreadId })}
-                onClick={() => handleSelectThread(thread)}
+                className={clsx("thread-item", { selected: thread.id === effectiveThreadId })}
+                data-testid={`thread-row-${thread.id}`}
                 role="button"
                 tabIndex={0}
+                onClick={() => handleSelectThread(thread)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
@@ -339,69 +360,69 @@ export default function ChatPage() {
                   }
                 }}
               >
-                <button
-                  className={clsx("thread", { active: thread.id === effectiveThreadId })}
-                  data-testid={`thread-row-${thread.id}`}
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleSelectThread(thread);
-                  }}
-                >
-                  {thread.title}
-                </button>
-              </li>
+                <div className="thread-item-title">{thread.title}</div>
+                <div className="thread-item-time">
+                  {new Date(thread.created_at).toLocaleString()}
+                </div>
+              </div>
             ))}
-            {threads.length === 0 && <li>No threads yet.</li>}
-          </ul>
+            {threads.length === 0 && (
+              <div className="thread-list-empty">No threads yet.</div>
+            )}
+          </div>
         </aside>
-        <section className="chat-messages">
-          <div className="messages-scroll messages-container" data-testid="messages-container">
+
+        <section className="conversation-area">
+          <div className="messages-container" data-testid="messages-container">
             {messages.map((msg, index) => {
               const createdAt = new Date(msg.created_at);
-              const timeLabel = Number.isNaN(createdAt.getTime()) ? "" : createdAt.toLocaleTimeString();
+              const timeLabel = Number.isNaN(createdAt.getTime())
+                ? ""
+                : createdAt.toLocaleTimeString();
               const isLastUserMessage = msg.role === "user" && index === messages.length - 1;
 
               return (
-                <article
-                  key={msg.id}
-                  className={clsx("message", `message--${msg.role}`, {
-                    "user-message": msg.role === "user",
-                    "assistant-message": msg.role === "assistant",
-                  })}
-                  data-testid={isLastUserMessage ? "chat-message" : undefined}
-                  data-role={`chat-message-${msg.role}`}
-                >
-                  <header>
-                    <span>{msg.role}</span>
-                    <time>{timeLabel}</time>
-                  </header>
-                  <p>{msg.content}</p>
-                </article>
+                <div key={msg.id} className="chat-row">
+                  <article
+                    className={clsx("message", {
+                      "user-message": msg.role === "user",
+                      "assistant-message": msg.role === "assistant",
+                      "tool-message": msg.role === "tool",
+                    })}
+                    data-testid={isLastUserMessage ? "chat-message" : undefined}
+                    data-role={`chat-message-${msg.role}`}
+                  >
+                    <div className="message-content">{msg.content}</div>
+                    <div className="message-time">{timeLabel}</div>
+                  </article>
+                </div>
               );
             })}
-            {messages.length === 0 && <p className="empty">No messages yet.</p>}
+            {messages.length === 0 && (
+              <p className="thread-list-empty">No messages yet.</p>
+            )}
           </div>
-          <form className="chat-compose" onSubmit={handleSend}>
-            <input
-              type="text"
-              value={draft}
-              onChange={(evt) => setDraft(evt.target.value)}
-              placeholder="Type your message…"
-              className="chat-input"
-              data-testid="chat-input"
-            />
-            <button
-              type="submit"
-              className="send-button"
-              disabled={sendMutation.isPending || !draft.trim()}
-              data-testid="send-message-btn"
-            >
-              {sendMutation.isPending ? "Sending…" : "Send"}
-            </button>
-          </form>
         </section>
-      </main>
+      </div>
+
+      <form className="chat-input-area" onSubmit={handleSend}>
+        <input
+          type="text"
+          value={draft}
+          onChange={(evt) => setDraft(evt.target.value)}
+          placeholder="Type your message…"
+          className="chat-input"
+          data-testid="chat-input"
+        />
+        <button
+          type="submit"
+          className="send-button"
+          disabled={sendMutation.isPending || !draft.trim()}
+          data-testid="send-message-btn"
+        >
+          {sendMutation.isPending ? "Sending…" : "Send"}
+        </button>
+      </form>
     </div>
   );
 }

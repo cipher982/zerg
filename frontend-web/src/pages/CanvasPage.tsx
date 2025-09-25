@@ -1,9 +1,9 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { fetchAgents, type AgentSummary } from '../services/api';
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { fetchAgents, type AgentSummary } from "../services/api";
 
 export default function CanvasPage() {
-  const { data: agents = [] } = useQuery({
+  const { data: agents = [] } = useQuery<AgentSummary[]>({
     queryKey: ["agents"],
     queryFn: fetchAgents,
     refetchInterval: 2000, // Poll every 2 seconds
