@@ -124,8 +124,26 @@ else
 window.__APP_CONFIG__ = window.__APP_CONFIG__ || {};
 window.__APP_CONFIG__.BUILD = '${BUILD_ENV}';
 // Dev: point to local backend for convenience
-window.API_BASE_URL = 'http://localhost:${BACKEND_PORT}';
+window.API_BASE_URL = 'http://localhost:${BACKEND_PORT}/api';
+window.WS_BASE_URL = 'ws://localhost:${BACKEND_PORT}';
 EOF
+fi
+
+# ---------------------------------------------------------------------------
+# React prototype bundle (served alongside Rust UI)
+# ---------------------------------------------------------------------------
+
+REACT_DIR="${ROOT_DIR}/frontend-web"
+REACT_DIST="${REACT_DIR}/dist"
+
+if [ -d "${REACT_DIR}" ]; then
+  echo "[build-debug] building React prototype via Vite …"
+  (cd "${REACT_DIR}" && npm run build >/dev/null)
+  echo "[build-debug] copying React dist -> www/react …"
+  rm -rf www/react
+  mkdir -p www/react
+  cp -R "${REACT_DIST}/"* www/react/
+  echo "[build-debug] React bundle ready at /react/index.html"
 fi
 
 # If BUILD_ONLY environment variable is set, exit here without starting dev server
@@ -158,5 +176,11 @@ with socketserver.TCPServer(("", PORT), CacheControlHandler) as httpd:
     print(f"Serving at http://localhost:{PORT}")
     httpd.serve_forever()
 EOF
+
+if command -v open >/dev/null 2>&1; then
+  (sleep 2 && open "http://localhost:${FRONTEND_PORT}/ui-switch.html") >/dev/null 2>&1 &
+elif command -v xdg-open >/dev/null 2>&1; then
+  (sleep 2 && xdg-open "http://localhost:${FRONTEND_PORT}/ui-switch.html") >/dev/null 2>&1 &
+fi
 
 python3 server.py ${FRONTEND_PORT}

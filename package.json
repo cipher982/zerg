@@ -14,5 +14,9 @@
     "@asyncapi/cli": "^3.1.0",
     "@asyncapi/modelina": "^5.3.1",
     "asyncapi-rust-ws-template": "^0.3.2"
+  },
+  "overrides": {
+    "@types/react": "18.3.24",
+    "@types/react-dom": "18.3.7"
   }
 }
