@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { useRoutes } from "react-router-dom";
 import Layout from "../components/Layout";
 import DashboardPage from "../pages/DashboardPage";
 import ChatPage from "../pages/ChatPage";
@@ -13,14 +13,12 @@ export default function App() {
     }
   }, []);
 
-  return (
-    <Layout>
-      <Routes>
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/canvas" element={<CanvasPage />} />
-        <Route path="/chat/:agentId?/:threadId?" element={<ChatPage />} />
-        <Route path="*" element={<DashboardPage />} />
-      </Routes>
-    </Layout>
-  );
+  const routes = useRoutes([
+    { path: "/dashboard", element: <DashboardPage /> },
+    { path: "/canvas", element: <CanvasPage /> },
+    { path: "/chat/:agentId?/:threadId?", element: <ChatPage /> },
+    { path: "*", element: <DashboardPage /> },
+  ]);
+
+  return <Layout>{routes}</Layout>;
 }

@@ -31,7 +31,22 @@ export type ThreadMessage = {
   processed: boolean;
 };
 
-const API_BASE = "/api";
+const apiBaseOverride = (() => {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+  return (window as typeof window & { API_BASE_URL?: string }).API_BASE_URL;
+})();
+
+const API_BASE = apiBaseOverride ?? "/api";
+
+function buildUrl(path: string): string {
+  if (API_BASE.startsWith("http")) {
+    const base = API_BASE.endsWith("/") ? API_BASE : `${API_BASE}/`;
+    return new URL(path.replace(/^\//, ""), base).toString();
+  }
+  return `${API_BASE}${path}`;
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem("zerg_jwt");
@@ -48,7 +63,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set("X-Test-Worker", String(testWorkerHeader));
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const url = buildUrl(path);
+  const res = await fetch(url, {
     ...init,
     headers,
     credentials: "include"

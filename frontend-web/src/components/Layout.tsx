@@ -1,43 +1,47 @@
-import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import '../styles/layout.css';
+import clsx from "clsx";
+import type { PropsWithChildren } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import "../styles/layout.css";
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
-
-export default function Layout({ children }: LayoutProps) {
+export default function Layout({ children }: PropsWithChildren) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isCanvasPage = location.pathname.startsWith('/canvas');
-  const isDashboardPage = location.pathname === '/' || location.pathname.startsWith('/dashboard');
+  const isDashboardRoute =
+    location.pathname === "/" || location.pathname.startsWith("/dashboard");
+  const isCanvasRoute = location.pathname.startsWith("/canvas");
 
   const handleTabClick = (path: string) => {
     navigate(path);
   };
 
   return (
-    <div className="app-layout">
-      <nav className="global-nav">
-        <div className="nav-tabs">
-          <button
-            data-testid="global-dashboard-tab"
-            className={`nav-tab ${isDashboardPage ? 'active' : ''}`}
-            onClick={() => handleTabClick('/dashboard')}
-          >
-            Agent Dashboard
-          </button>
-          <button
-            data-testid="global-canvas-tab"
-            className={`nav-tab ${isCanvasPage ? 'active' : ''}`}
-            onClick={() => handleTabClick('/canvas')}
-          >
-            Canvas
-          </button>
-        </div>
+    <div
+      id="app-container"
+      className={clsx({ "canvas-view": isCanvasRoute })}
+      data-testid="app-container"
+    >
+      <nav id="global-tabs-container" className="tabs-container">
+        <button
+          id="global-dashboard-tab"
+          type="button"
+          data-testid="global-dashboard-tab"
+          className={clsx("tab-button", { active: isDashboardRoute })}
+          onClick={() => handleTabClick("/dashboard")}
+        >
+          Agent Dashboard
+        </button>
+        <button
+          id="global-canvas-tab"
+          type="button"
+          data-testid="global-canvas-tab"
+          className={clsx("tab-button", { active: isCanvasRoute })}
+          onClick={() => handleTabClick("/canvas")}
+        >
+          Canvas Editor
+        </button>
       </nav>
-      <main className="main-content">
+      <main id="main-content" className="main-content-area">
         {children}
       </main>
     </div>
