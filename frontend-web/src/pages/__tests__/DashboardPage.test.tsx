@@ -28,6 +28,31 @@ type MockWebSocketInstance = {
   close: () => void;
 };
 
+function buildAgent(
+  overrides: Partial<AgentSummary> & Pick<AgentSummary, "id" | "name" | "status" | "owner_id">
+): AgentSummary {
+  const now = new Date().toISOString();
+  return {
+    id: overrides.id,
+    name: overrides.name,
+    status: overrides.status,
+    owner_id: overrides.owner_id,
+    owner: overrides.owner ?? null,
+    system_instructions: overrides.system_instructions ?? "",
+    task_instructions: overrides.task_instructions ?? "",
+    model: overrides.model ?? "gpt-4o",
+    schedule: overrides.schedule ?? null,
+    config: overrides.config ?? null,
+    last_error: overrides.last_error ?? null,
+    allowed_tools: overrides.allowed_tools ?? [],
+    created_at: overrides.created_at ?? now,
+    updated_at: overrides.updated_at ?? now,
+    messages: overrides.messages ?? [],
+    next_run_at: overrides.next_run_at ?? null,
+    last_run_at: overrides.last_run_at ?? null,
+  };
+}
+
 describe("DashboardPage", () => {
   const fetchAgentsMock = fetchAgents as unknown as vi.MockedFunction<typeof fetchAgents>;
   const createAgentMock = createAgent as unknown as vi.MockedFunction<typeof createAgent>;
@@ -90,30 +115,25 @@ describe("DashboardPage", () => {
 
   test("renders agents, metrics, and dashboard stats", async () => {
     const agents: AgentSummary[] = [
-      {
+      buildAgent({
         id: 1,
         name: "Alpha",
         status: "running",
         owner_id: 7,
-        owner: { id: 7, email: "alpha@example.com", display_name: "Ada" },
+        owner: { id: 7, email: "alpha@example.com", display_name: "Ada", is_active: true, created_at: new Date().toISOString(), avatar_url: null, prefs: {} },
         last_run_at: "2025-09-24T10:00:00.000Z",
         next_run_at: "2025-09-24T12:00:00.000Z",
-        last_error: null,
-        system_instructions: "",
-        task_instructions: "",
-      },
-      {
+      }),
+      buildAgent({
         id: 2,
         name: "Beta",
         status: "error",
         owner_id: 9,
-        owner: { id: 9, email: "beta@example.com", display_name: null },
+        owner: { id: 9, email: "beta@example.com", display_name: null, is_active: true, created_at: new Date().toISOString(), avatar_url: null, prefs: {} },
         last_run_at: null,
         next_run_at: null,
         last_error: "Failed to execute",
-        system_instructions: "",
-        task_instructions: "",
-      },
+      }),
     ];
 
     const runsByAgent: Record<number, AgentRun[]> = {
@@ -197,18 +217,13 @@ describe("DashboardPage", () => {
 
   test("toggling scope requests all agents", async () => {
     const agents: AgentSummary[] = [
-      {
+      buildAgent({
         id: 1,
         name: "Alpha",
         status: "running",
         owner_id: 7,
-        owner: { id: 7, email: "alpha@example.com", display_name: "Ada" },
-        last_run_at: null,
-        next_run_at: null,
-        last_error: null,
-        system_instructions: "",
-        task_instructions: "",
-      },
+        owner: { id: 7, email: "alpha@example.com", display_name: "Ada", is_active: true, created_at: new Date().toISOString(), avatar_url: null, prefs: {} },
+      }),
     ];
 
     renderDashboard(agents);
