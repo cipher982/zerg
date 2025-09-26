@@ -4,8 +4,8 @@ import { fetchAgents, type AgentSummary } from "../services/api";
 
 export default function CanvasPage() {
   const { data: agents = [] } = useQuery<AgentSummary[]>({
-    queryKey: ["agents"],
-    queryFn: fetchAgents,
+    queryKey: ["agents", { scope: "my" }],
+    queryFn: () => fetchAgents({ scope: "my" }),
     refetchInterval: 2000, // Poll every 2 seconds
   });
 

@@ -181,7 +181,7 @@ export default function ChatPage() {
     if (token) {
       url.searchParams.set("token", token);
     }
-    const workerId = (window as any).__TEST_WORKER_ID__;
+    const workerId = window.__TEST_WORKER_ID__;
     if (workerId !== undefined) {
       url.searchParams.set("worker", String(workerId));
     }

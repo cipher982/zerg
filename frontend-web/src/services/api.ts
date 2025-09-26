@@ -1,7 +1,19 @@
+export type AgentOwner = {
+  id: number;
+  email: string;
+  display_name?: string | null;
+  avatar_url?: string | null;
+};
+
 export type AgentSummary = {
   id: number;
   name: string;
   status: string;
+  owner_id: number;
+  owner?: AgentOwner | null;
+  last_run_at?: string | null;
+  next_run_at?: string | null;
+  last_error?: string | null;
   system_instructions?: string;
   task_instructions?: string;
 };
@@ -10,6 +22,20 @@ export type Agent = AgentSummary & {
   created_at: string;
   updated_at: string;
   model: string;
+};
+
+export type AgentRun = {
+  id: number;
+  agent_id: number;
+  thread_id: number;
+  status: "queued" | "running" | "success" | "failed";
+  trigger: "manual" | "schedule" | "api";
+  started_at?: string | null;
+  finished_at?: string | null;
+  duration_ms?: number | null;
+  total_tokens?: number | null;
+  total_cost_usd?: number | null;
+  error?: string | null;
 };
 
 export type Thread = {
@@ -58,7 +84,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   // Add test worker header for E2E test isolation
   // This should match the worker ID that Playwright uses
-  const testWorkerHeader = (window as any).__TEST_WORKER_ID__;
+  const testWorkerHeader = window.__TEST_WORKER_ID__;
   if (testWorkerHeader !== undefined) {
     headers.set("X-Test-Worker", String(testWorkerHeader));
   }
@@ -78,8 +104,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function fetchAgents(): Promise<AgentSummary[]> {
-  return request<AgentSummary[]>("/agents?scope=my");
+type FetchAgentsParams = {
+  scope?: "my" | "all";
+  limit?: number;
+  skip?: number;
+};
+
+export async function fetchAgents(params: FetchAgentsParams = {}): Promise<AgentSummary[]> {
+  const scope = params.scope ?? "my";
+  const limit = params.limit ?? 100;
+  const skip = params.skip ?? 0;
+  const searchParams = new URLSearchParams({
+    scope,
+    limit: String(limit),
+    skip: String(skip),
+  });
+
+  return request<AgentSummary[]>(`/agents?${searchParams.toString()}`);
 }
 
 type CreateAgentPayload = {
@@ -124,6 +165,38 @@ export async function postThreadMessage(threadId: number, content: string): Prom
 
 export async function runThread(threadId: number): Promise<void> {
   await request(`/threads/${threadId}/run`, {
+    method: "POST",
+  });
+}
+
+export async function fetchAgentRuns(agentId: number, limit = 20): Promise<AgentRun[]> {
+  return request<AgentRun[]>(`/agents/${agentId}/runs?limit=${limit}`);
+}
+
+type AgentUpdatePayload = Partial<{
+  name: string;
+  system_instructions: string;
+  task_instructions: string;
+  model: string;
+  status: "idle" | "running" | "error" | "processing";
+  schedule: string | null;
+  config: Record<string, unknown> | null;
+  last_error: string | null;
+}>;
+
+export async function updateAgent(agentId: number, payload: AgentUpdatePayload): Promise<Agent> {
+  return request<Agent>(`/agents/${agentId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function resetAgent(agentId: number): Promise<Agent> {
+  return updateAgent(agentId, { status: "idle", last_error: "" });
+}
+
+export async function runAgent(agentId: number): Promise<void> {
+  await request(`/agents/${agentId}/task`, {
     method: "POST",
   });
 }
