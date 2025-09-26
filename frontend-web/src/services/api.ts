@@ -1,76 +1,72 @@
-export type AgentOwner = {
-  id: number;
-  email: string;
-  display_name?: string | null;
-  avatar_url?: string | null;
-};
+import type { components, operations } from "../generated/openapi-types";
 
-export type AgentSummary = {
-  id: number;
-  name: string;
-  status: string;
-  owner_id: number;
-  owner?: AgentOwner | null;
-  last_run_at?: string | null;
-  next_run_at?: string | null;
-  last_error?: string | null;
-  system_instructions?: string;
-  task_instructions?: string;
-};
+export class ApiError extends Error {
+  readonly status: number;
+  readonly url: string;
+  readonly body: unknown;
 
-export type Agent = AgentSummary & {
-  created_at: string;
-  updated_at: string;
-  model: string;
-};
-
-export type AgentRun = {
-  id: number;
-  agent_id: number;
-  thread_id: number;
-  status: "queued" | "running" | "success" | "failed";
-  trigger: "manual" | "schedule" | "api";
-  started_at?: string | null;
-  finished_at?: string | null;
-  duration_ms?: number | null;
-  total_tokens?: number | null;
-  total_cost_usd?: number | null;
-  error?: string | null;
-};
-
-export type Thread = {
-  id: number;
-  agent_id: number;
-  title: string;
-  active: boolean;
-  thread_type: string;
-  created_at: string;
-  updated_at: string;
-};
-
-export type ThreadMessage = {
-  id: number;
-  thread_id: number;
-  role: "assistant" | "user" | "system" | "tool";
-  content: string;
-  created_at: string;
-  processed: boolean;
-};
-
-const apiBaseOverride = (() => {
-  if (typeof window === "undefined") {
-    return undefined;
+  constructor({ url, status, body }: { url: string; status: number; body: unknown }) {
+    super(`Request to ${url} failed with status ${status}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.url = url;
+    this.body = body;
   }
-  return (window as typeof window & { API_BASE_URL?: string }).API_BASE_URL;
-})();
+}
+
+type Schemas = components["schemas"];
+type Operations = operations;
+
+type JsonResponse<Op extends { responses: Record<number | string, unknown> }, Code extends keyof Op["responses"]> =
+  Op["responses"][Code] extends { content: { "application/json": infer Result } }
+    ? Result
+    : never;
+
+export type Agent = Schemas["Agent"];
+export type AgentSummary = Agent;
+export type AgentRun = Schemas["AgentRunOut"];
+export type Thread = Schemas["Thread"];
+export type ThreadMessage = Schemas["ThreadMessageResponse"] & { created_at?: string };
+
+type AgentCreate = Schemas["AgentCreate"];
+type AgentUpdate = Schemas["AgentUpdate"];
+type ThreadCreate = Schemas["ThreadCreate"];
+type ThreadMessageCreate = Schemas["ThreadMessageCreate"];
+
+export type AgentCreatePayload = Pick<AgentCreate, "name" | "system_instructions" | "task_instructions" | "model"> &
+  Partial<Omit<AgentCreate, "name" | "system_instructions" | "task_instructions" | "model">>;
+
+export type AgentUpdatePayload = AgentUpdate;
+
+type AgentsResponse = JsonResponse<Operations["read_agents_api_agents_get"], 200>;
+type AgentResponse = JsonResponse<Operations["read_agent_api_agents__agent_id__get"], 200>;
+type ThreadsResponse = JsonResponse<Operations["read_threads_api_threads_get"], 200>;
+type ThreadMessagesResponse = JsonResponse<Operations["read_thread_messages_api_threads__thread_id__messages_get"], 200>;
+type AgentRunsListResponse = JsonResponse<Operations["list_agent_runs_api_agents__agent_id__runs_get"], 200>;
+type CreatedThreadResponse = JsonResponse<Operations["create_thread_api_threads_post"], 201>;
+type CreatedThreadMessageResponse = JsonResponse<Operations["create_thread_message_api_threads__thread_id__messages_post"], 201>;
+type CreatedAgentResponse = JsonResponse<Operations["create_agent_api_agents_post"], 201>;
+type UpdatedAgentResponse = JsonResponse<Operations["update_agent_api_agents__agent_id__put"], 200>;
+
+type FetchAgentsParams = {
+  scope?: "my" | "all";
+  limit?: number;
+  skip?: number;
+};
+
 type ApiBaseConfig = {
   absolute?: string;
   relative: string;
 };
 
+const apiBaseOverride =
+  typeof window !== "undefined"
+    ? (window as typeof window & { API_BASE_URL?: string }).API_BASE_URL
+    : undefined;
+
 function normalizePathname(pathname: string): string {
   const trimmed = pathname.replace(/\/+$/, "");
-  if (!trimmed || trimmed === "") {
+  if (!trimmed) {
     return "/api";
   }
   if (/\/api(\/|$)/.test(trimmed)) {
@@ -79,11 +75,11 @@ function normalizePathname(pathname: string): string {
   return `${trimmed}/api`.replace(/\/+/g, "/");
 }
 
-function normalizeRelativeBase(input: string): string {
-  const trimmed = input.trim();
-  const withLeading = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-  const withoutTrailing = withLeading.replace(/\/+$/, "");
-  if (!withoutTrailing || withoutTrailing === "") {
+function normalizeRelativeBase(path: string): string {
+  const trimmed = path.trim();
+  const prefixed = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const withoutTrailing = prefixed.replace(/\/+$/, "");
+  if (!withoutTrailing) {
     return "/api";
   }
   if (/\/api(\/|$)/.test(withoutTrailing)) {
@@ -129,41 +125,57 @@ function buildUrl(path: string): string {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = localStorage.getItem("zerg_jwt");
+  const url = buildUrl(path);
   const headers = new Headers(init?.headers);
-  headers.set("Content-Type", "application/json");
+
+  if (!headers.has("Content-Type") && init?.body && !(init.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const token = typeof window !== "undefined" ? window.localStorage.getItem("zerg_jwt") : null;
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  // Add test worker header for E2E test isolation
-  // This should match the worker ID that Playwright uses
-  const testWorkerHeader = window.__TEST_WORKER_ID__;
+  const testWorkerHeader = typeof window !== "undefined" ? window.__TEST_WORKER_ID__ : undefined;
   if (testWorkerHeader !== undefined) {
     headers.set("X-Test-Worker", String(testWorkerHeader));
   }
 
-  const url = buildUrl(path);
-  const res = await fetch(url, {
+  const response = await fetch(url, {
     ...init,
-    headers
+    headers,
   });
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Request failed (${res.status}): ${body}`);
+  const hasBody = response.status !== 204 && response.status !== 205;
+  const contentType = response.headers.get("content-type") ?? "";
+  const expectsJson = contentType.includes("application/json");
+  let data: unknown = undefined;
+
+  if (hasBody) {
+    try {
+      if (expectsJson) {
+        data = await response.json();
+      } else {
+        const text = await response.text();
+        data = text.length > 0 ? text : undefined;
+      }
+    } catch (error) {
+      if (!response.ok) {
+        throw new ApiError({ url, status: response.status, body: data });
+      }
+      throw error instanceof Error ? error : new Error("Failed to parse response body");
+    }
   }
 
-  return res.json() as Promise<T>;
+  if (!response.ok) {
+    throw new ApiError({ url, status: response.status, body: data });
+  }
+
+  return data as T;
 }
 
-type FetchAgentsParams = {
-  scope?: "my" | "all";
-  limit?: number;
-  skip?: number;
-};
-
-export async function fetchAgents(params: FetchAgentsParams = {}): Promise<AgentSummary[]> {
+export async function fetchAgents(params: FetchAgentsParams = {}): Promise<AgentsResponse> {
   const scope = params.scope ?? "my";
   const limit = params.limit ?? 100;
   const skip = params.skip ?? 0;
@@ -173,83 +185,76 @@ export async function fetchAgents(params: FetchAgentsParams = {}): Promise<Agent
     skip: String(skip),
   });
 
-  return request<AgentSummary[]>(`/agents?${searchParams.toString()}`);
+  return request<AgentsResponse>(`/agents?${searchParams.toString()}`);
 }
 
-type CreateAgentPayload = {
-  name: string;
-  system_instructions: string;
-  task_instructions: string;
-  model: string;
-};
-
-export async function createAgent(payload: CreateAgentPayload): Promise<Agent> {
-  return request<Agent>(`/agents`, {
+export async function createAgent(payload: AgentCreatePayload): Promise<CreatedAgentResponse> {
+  return request<CreatedAgentResponse>(`/agents`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export async function fetchAgent(agentId: number): Promise<Agent> {
-  return request<Agent>(`/agents/${agentId}`);
+export async function fetchAgent(agentId: number): Promise<AgentResponse> {
+  return request<AgentResponse>(`/agents/${agentId}`);
 }
 
-export async function fetchThreads(agentId: number): Promise<Thread[]> {
-  return request<Thread[]>(`/threads?agent_id=${agentId}`);
+export async function fetchThreads(agentId: number): Promise<ThreadsResponse> {
+  return request<ThreadsResponse>(`/threads?agent_id=${agentId}`);
 }
 
-export async function fetchThreadMessages(threadId: number): Promise<ThreadMessage[]> {
-  return request<ThreadMessage[]>(`/threads/${threadId}/messages`);
+export async function fetchThreadMessages(threadId: number): Promise<ThreadMessagesResponse> {
+  return request<ThreadMessagesResponse>(`/threads/${threadId}/messages`);
 }
 
-export async function createThread(agentId: number, title: string): Promise<Thread> {
-  return request<Thread>(`/threads`, {
+export async function createThread(agentId: number, title: string): Promise<CreatedThreadResponse> {
+  const payload: ThreadCreate = {
+    agent_id: agentId,
+    title,
+    thread_type: "chat",
+    memory_strategy: "buffer",
+    active: true,
+  };
+  return request<CreatedThreadResponse>(`/threads`, {
     method: "POST",
-    body: JSON.stringify({ agent_id: agentId, title, thread_type: "chat" }),
+    body: JSON.stringify(payload),
   });
 }
 
-export async function postThreadMessage(threadId: number, content: string): Promise<ThreadMessage> {
-  return request<ThreadMessage>(`/threads/${threadId}/messages`, {
+export async function postThreadMessage(threadId: number, content: string): Promise<CreatedThreadMessageResponse> {
+  const payload: ThreadMessageCreate = {
+    role: "user",
+    content,
+  };
+  return request<CreatedThreadMessageResponse>(`/threads/${threadId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ role: "user", content }),
+    body: JSON.stringify(payload),
   });
 }
 
 export async function runThread(threadId: number): Promise<void> {
-  await request(`/threads/${threadId}/run`, {
+  await request<void>(`/threads/${threadId}/run`, {
     method: "POST",
   });
 }
 
-export async function fetchAgentRuns(agentId: number, limit = 20): Promise<AgentRun[]> {
-  return request<AgentRun[]>(`/agents/${agentId}/runs?limit=${limit}`);
+export async function fetchAgentRuns(agentId: number, limit = 20): Promise<AgentRunsListResponse> {
+  return request<AgentRunsListResponse>(`/agents/${agentId}/runs?limit=${limit}`);
 }
 
-type AgentUpdatePayload = Partial<{
-  name: string;
-  system_instructions: string;
-  task_instructions: string;
-  model: string;
-  status: "idle" | "running" | "error" | "processing";
-  schedule: string | null;
-  config: Record<string, unknown> | null;
-  last_error: string | null;
-}>;
-
-export async function updateAgent(agentId: number, payload: AgentUpdatePayload): Promise<Agent> {
-  return request<Agent>(`/agents/${agentId}`, {
+export async function updateAgent(agentId: number, payload: AgentUpdatePayload): Promise<UpdatedAgentResponse> {
+  return request<UpdatedAgentResponse>(`/agents/${agentId}`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });
 }
 
-export async function resetAgent(agentId: number): Promise<Agent> {
+export async function resetAgent(agentId: number): Promise<UpdatedAgentResponse> {
   return updateAgent(agentId, { status: "idle", last_error: "" });
 }
 
 export async function runAgent(agentId: number): Promise<void> {
-  await request(`/agents/${agentId}/task`, {
+  await request<void>(`/agents/${agentId}/task`, {
     method: "POST",
   });
 }

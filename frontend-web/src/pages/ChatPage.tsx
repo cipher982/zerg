@@ -108,12 +108,14 @@ export default function ChatPage() {
       ]);
 
       const optimisticId = -Date.now();
+      const now = new Date().toISOString();
       const optimisticMessage: ThreadMessage = {
         id: optimisticId,
         thread_id: threadId,
         role: "user",
         content,
-        created_at: new Date().toISOString(),
+        timestamp: now,
+        created_at: now,
         processed: true,
       };
 
@@ -375,7 +377,7 @@ export default function ChatPage() {
         <section className="conversation-area">
           <div className="messages-container" data-testid="messages-container">
             {messages.map((msg, index) => {
-              const createdAt = new Date(msg.created_at);
+              const createdAt = new Date(msg.timestamp ?? msg.created_at ?? 0);
               const timeLabel = Number.isNaN(createdAt.getTime())
                 ? ""
                 : createdAt.toLocaleTimeString();

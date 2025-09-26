@@ -54,29 +54,41 @@ describe("ChatPage", () => {
       id: 42,
       agent_id: 1,
       title: "Primary",
+      agent_state: null,
+      memory_strategy: "buffer",
       active: true,
       thread_type: "chat",
       created_at: now,
       updated_at: now,
+      messages: [],
     };
     const message: ThreadMessage = {
       id: 99,
       thread_id: 42,
       role: "user",
       content: "Hello from storage",
-      created_at: now,
+      timestamp: now,
       processed: true,
     };
 
     mockFetchAgent.mockResolvedValue({
       id: 1,
+      owner_id: 10,
+      owner: null,
       name: "Demo Agent",
-      status: "ready",
+      status: "running",
       created_at: now,
       updated_at: now,
       model: "gpt-4o",
       system_instructions: "",
       task_instructions: "",
+      schedule: null,
+      config: null,
+      last_error: null,
+      allowed_tools: [],
+      messages: [],
+      next_run_at: null,
+      last_run_at: null,
     });
     mockFetchThreads.mockResolvedValue([thread]);
     mockFetchThreadMessages.mockResolvedValue([message]);

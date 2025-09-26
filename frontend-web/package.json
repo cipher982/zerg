@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "vitest"
+    "test": "node ./scripts/run-vitest.mjs",
+    "generate:api": "openapi-typescript ../openapi.json --output src/generated/openapi-types.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.7",
@@ -33,6 +34,7 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.8",
     "globals": "^16.4.0",
+    "openapi-typescript": "^7.9.1",
     "typescript": "^5.5.4",
     "vite": "^5.4.1",
     "vitest": "^2.1.1"
