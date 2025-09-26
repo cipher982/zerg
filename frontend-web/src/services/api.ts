@@ -63,15 +63,69 @@ const apiBaseOverride = (() => {
   }
   return (window as typeof window & { API_BASE_URL?: string }).API_BASE_URL;
 })();
+type ApiBaseConfig = {
+  absolute?: string;
+  relative: string;
+};
 
-const API_BASE = apiBaseOverride ?? "/api";
+function normalizePathname(pathname: string): string {
+  const trimmed = pathname.replace(/\/+$/, "");
+  if (!trimmed || trimmed === "") {
+    return "/api";
+  }
+  if (/\/api(\/|$)/.test(trimmed)) {
+    return trimmed;
+  }
+  return `${trimmed}/api`.replace(/\/+/g, "/");
+}
+
+function normalizeRelativeBase(input: string): string {
+  const trimmed = input.trim();
+  const withLeading = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const withoutTrailing = withLeading.replace(/\/+$/, "");
+  if (!withoutTrailing || withoutTrailing === "") {
+    return "/api";
+  }
+  if (/\/api(\/|$)/.test(withoutTrailing)) {
+    return withoutTrailing;
+  }
+  return `${withoutTrailing}/api`.replace(/\/+/g, "/");
+}
+
+function computeApiBase(override?: string): ApiBaseConfig {
+  if (!override) {
+    return { relative: "/api" };
+  }
+
+  if (!override.startsWith("http")) {
+    return { relative: normalizeRelativeBase(override) };
+  }
+
+  try {
+    const url = new URL(override);
+    const normalizedPath = normalizePathname(url.pathname || "/");
+    const absolute = `${url.origin}${normalizedPath.endsWith("/") ? normalizedPath : `${normalizedPath}/`}`;
+    return {
+      absolute,
+      relative: normalizedPath,
+    };
+  } catch (error) {
+    console.error("Failed to parse API_BASE_URL", error);
+    return { relative: "/api" };
+  }
+}
+
+const API_BASE = computeApiBase(apiBaseOverride);
 
 function buildUrl(path: string): string {
-  if (API_BASE.startsWith("http")) {
-    const base = API_BASE.endsWith("/") ? API_BASE : `${API_BASE}/`;
-    return new URL(path.replace(/^\//, ""), base).toString();
+  const normalizedPath = path.startsWith("/") ? path.slice(1) : path;
+
+  if (API_BASE.absolute) {
+    return new URL(normalizedPath, API_BASE.absolute).toString();
   }
-  return `${API_BASE}${path}`;
+
+  const prefix = API_BASE.relative.endsWith("/") ? API_BASE.relative.slice(0, -1) : API_BASE.relative;
+  return `${prefix}/${normalizedPath}`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
