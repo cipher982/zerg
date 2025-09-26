@@ -146,8 +146,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const url = buildUrl(path);
   const res = await fetch(url, {
     ...init,
-    headers,
-    credentials: "include"
+    headers
   });
 
   if (!res.ok) {

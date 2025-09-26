@@ -124,7 +124,7 @@ else
 window.__APP_CONFIG__ = window.__APP_CONFIG__ || {};
 window.__APP_CONFIG__.BUILD = '${BUILD_ENV}';
 // Dev: point to local backend for convenience
-window.API_BASE_URL = 'http://localhost:${BACKEND_PORT}/api';
+window.API_BASE_URL = 'http://localhost:${BACKEND_PORT}';
 window.WS_BASE_URL = 'ws://localhost:${BACKEND_PORT}';
 EOF
 fi
