@@ -1,4 +1,4 @@
-# additional status colours in tables
+/* additional status colours in tables */
 .status-idle    { color: var(--color-neutral); }
 .status-error   { color: var(--error); }
 .status-running { color: var(--success); }
