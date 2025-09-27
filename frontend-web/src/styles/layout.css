@@ -3,7 +3,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  background: linear-gradient(90deg, #00c6ff 0%, #0072ff 100%);
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
   color: #ffffff;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -42,10 +42,10 @@
 }
 
 .user-avatar {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -57,7 +57,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #0a0d16;
+  background: var(--dark);
 }
 
 .canvas-view {
@@ -66,35 +66,32 @@
 
 .tabs-container {
   display: flex;
-  gap: 4px;
-  padding: 12px 24px 0;
-  background: linear-gradient(90deg, rgba(0, 198, 255, 0.85) 0%, rgba(0, 114, 255, 0.85) 100%);
-  backdrop-filter: blur(6px);
+  padding: 0 24px;
+  background: linear-gradient(135deg, var(--secondary), var(--primary));
 }
 
 .tab-button {
   border: none;
-  border-radius: 999px;
-  padding: 10px 20px;
+  padding: 12px 20px;
   font-size: 14px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.82);
-  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  border-bottom: 3px solid transparent;
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, border-bottom-color 0.2s ease;
 }
 
 .tab-button:hover,
 .tab-button:focus-visible {
   color: #ffffff;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
   outline: none;
 }
 
 .tab-button.active {
-  color: #0a0d16;
-  background: #ffffff;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  color: #ffffff;
+  border-bottom-color: #ffffff;
 }
 
 .main-content-area {
@@ -107,8 +104,8 @@
   padding: 10px 24px;
   text-align: center;
   color: #ffffff;
-  background: linear-gradient(90deg, #00c6ff 0%, #0072ff 100%);
-  font-size: 14px;
+  background: linear-gradient(135deg, var(--secondary), var(--primary));
+  font-size: 13px;
   letter-spacing: 0.02em;
 }
 
