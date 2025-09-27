@@ -53,3 +53,66 @@
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #0a0d16;
+}
+
+.canvas-view {
+  background: #05070d;
+}
+
+.tabs-container {
+  display: flex;
+  gap: 4px;
+  padding: 12px 24px 0;
+  background: linear-gradient(90deg, rgba(0, 198, 255, 0.85) 0%, rgba(0, 114, 255, 0.85) 100%);
+  backdrop-filter: blur(6px);
+}
+
+.tab-button {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.tab-button:hover,
+.tab-button:focus-visible {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
+  outline: none;
+}
+
+.tab-button.active {
+  color: #0a0d16;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.main-content-area {
+  flex: 1;
+  padding: 24px;
+}
+
+.status-footer {
+  margin-top: auto;
+  padding: 10px 24px;
+  text-align: center;
+  color: #ffffff;
+  background: linear-gradient(90deg, #00c6ff 0%, #0072ff 100%);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.status-footer-label {
+  font-weight: 600;
+  margin-right: 4px;
+}
