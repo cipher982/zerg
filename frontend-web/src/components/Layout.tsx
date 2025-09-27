@@ -30,6 +30,14 @@ function WelcomeHeader() {
   );
 }
 
+function StatusFooter() {
+  return (
+    <footer className="status-footer" data-testid="status-footer" aria-live="polite">
+      <span className="status-footer-label">Status:</span> Connected
+    </footer>
+  );
+}
+
 export default function Layout({ children }: PropsWithChildren) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -45,7 +53,7 @@ export default function Layout({ children }: PropsWithChildren) {
   return (
     <div
       id="app-container"
-      className={clsx({ "canvas-view": isCanvasRoute })}
+      className={clsx("app-shell", { "canvas-view": isCanvasRoute })}
       data-testid="app-container"
     >
       <WelcomeHeader />
@@ -72,6 +80,7 @@ export default function Layout({ children }: PropsWithChildren) {
       <main id="main-content" className="main-content-area">
         {children}
       </main>
+      <StatusFooter />
     </div>
   );
 }
