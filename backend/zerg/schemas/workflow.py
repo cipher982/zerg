@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import field_validator
+from pydantic import model_validator
 
 
 class Position(BaseModel):
@@ -32,6 +33,65 @@ class WorkflowNode(BaseModel):
     type: Literal["agent", "tool", "trigger", "conditional"]
     position: Position
     config: Dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _upgrade_trigger_config(cls, data: Any):
+        """Upgrade legacy trigger config to typed shape to preserve old workflows.
+
+        - Accept payloads that still use legacy keys (trigger_type, enabled, params, filters)
+        - Fill in a default manual trigger when no semantic trigger metadata exists yet
+        """
+
+        if not isinstance(data, dict) or data.get("type") != "trigger":
+            return data
+
+        raw_config = data.get("config")
+        config = raw_config if isinstance(raw_config, dict) else {}
+
+        trigger_meta = config.get("trigger") if isinstance(config.get("trigger"), dict) else None
+        if trigger_meta is not None:
+            # Already in new shape – ensure legacy keys are stripped if present.
+            cleaned_config = {
+                key: value
+                for key, value in config.items()
+                if key not in {"trigger_type", "enabled", "params", "filters"}
+            }
+            cleaned_config["trigger"] = trigger_meta
+            return {**data, "config": cleaned_config}
+
+        legacy_type = config.get("trigger_type")
+        inferred_type = legacy_type.lower() if isinstance(legacy_type, str) else None
+
+        if inferred_type is None:
+            # Attempt to infer from visual title; fall back to manual trigger.
+            label = str(config.get("text", "")).lower()
+            if "email" in label:
+                inferred_type = "email"
+            elif "schedule" in label or "cron" in label:
+                inferred_type = "schedule"
+            elif "webhook" in label:
+                inferred_type = "webhook"
+            else:
+                inferred_type = "manual"
+
+        legacy_params = config.get("params") if isinstance(config.get("params"), dict) else {}
+        legacy_filters = config.get("filters") if isinstance(config.get("filters"), list) else []
+        legacy_enabled = config.get("enabled") if isinstance(config.get("enabled"), bool) else True
+
+        upgraded = {
+            key: value for key, value in config.items() if key not in {"trigger_type", "enabled", "params", "filters"}
+        }
+        upgraded["trigger"] = {
+            "type": inferred_type,
+            "config": {
+                "enabled": legacy_enabled,
+                "params": legacy_params,
+                "filters": legacy_filters,
+            },
+        }
+
+        return {**data, "config": upgraded}
 
 
 class WorkflowEdge(BaseModel):
