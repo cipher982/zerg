@@ -2,8 +2,8 @@
   /* --------------------------------------------------------- */
   /* Brand colour palette (taken from branding drafts)         */
   /* --------------------------------------------------------- */
-  --primary: #64ffda;      /* Teal */
-  --secondary: #7c4dff;    /* Purple */
+  --primary: #00c6ff;      /* Cyan */
+  --secondary: #0072ff;    /* Deep blue */
   --accent: #ff6b6b;       /* Coral */
 
   --success: #4caf50;
@@ -30,7 +30,7 @@
   --text-secondary: var(--text-secondary); /* already defined, but keep alias */
 
   /* Table helpers */
-  --table-cell-padding: var(--spacing-md) var(--spacing-lg);
+  --table-cell-padding: 10px 14px;
   --actions-column-width: 7.5rem;
 
   /* Text colours */
