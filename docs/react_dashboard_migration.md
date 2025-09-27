@@ -97,7 +97,20 @@ Below is the high-level plan for finishing the React transition. Each bullet can
 
 ---
 
-## 4. Historical Notes (Legacy Instructions)
+## 4. Dashboard Parity Contract
+
+Use this checklist whenever the React dashboard changes. The goal is to keep the React markup, styles, and baseline visuals aligned with the Rust/WASM implementation until the redesign phase officially begins.
+
+- **DOM structure:** `#dashboard-container > #dashboard > .dashboard-header + #agents-table` must match the legacy hierarchy. Keep legacy IDs/classes (`dashboard-header`, `button-container`, `agents-table`, `status-indicator`, etc.) so the shared CSS bundle continues to apply.
+- **Feature gating:** Hide scope toggles, stats decks, bulk selection panels, and bespoke React adornments unless the same feature ships in Rust. When we re-introduce them, wrap behind a feature flag and update this section.
+- **Styling:** Do not reintroduce `frontend-web/src/styles/dashboard.css`. The React bundle should pull styling exclusively from `src/styles/legacy.css`, adding component-specific styles only when scoped and unavoidable.
+- **Markup parity test:** Run `pnpm --filter frontend-web test`. The Vitest suite snapshots `#dashboard-container` against `src/pages/__tests__/__fixtures__/legacy-dashboard.html`. Update the fixture only when the Rust markup intentionally changes.
+- **Visual diff guard:** Run `pnpm --filter e2e test -- --grep "React dashboard matches legacy visual baseline"`. The Playwright spec compares the React screenshot against `e2e/visual-baseline/dashboard-legacy.png`. Refresh the baseline by loading the Rust dashboard, taking a screenshot of `#dashboard-container`, and overwriting that PNG (commit the diff alongside code changes).
+- **Custom events:** React action buttons emit `dashboard:event` custom events (`run`, `edit`, `debug`, `delete`, `run-actions`) so the host shell can wire them to legacy behaviours. Maintain those event names when adding new handlers.
+
+If any checklist item needs to change, update this contract, the Vitest fixture, and the Playwright baseline in the same pull request so reviewers can reason about the delta.
+
+## 5. Historical Notes (Legacy Instructions)
 The original strangler instructions (React dev server on port 3000, manual localStorage flags) are retained below for reference. They are no longer required for day-to-day work but remain useful for debugging Playwright or legacy workflows.
 
 ### Local Development (Legacy Approach)
