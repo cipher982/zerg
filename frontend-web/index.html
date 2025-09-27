@@ -9,5 +9,14 @@
   <body>
     <div id="react-root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Feather icons – lightweight SVG set -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        if (window.feather && typeof window.feather.replace === "function") {
+          window.feather.replace({ "stroke-width": 1.5 });
+        }
+      });
+    </script>
   </body>
 </html>
