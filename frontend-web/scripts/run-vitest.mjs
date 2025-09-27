@@ -2,11 +2,7 @@
 
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import { dirname, resolve } from "node:path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { resolve, dirname } from "node:path";
 
 const rawArgs = process.argv.slice(2);
 const vitestArgs = [];
