@@ -26,6 +26,16 @@ type LegacyAgentRow = {
   nextRunDisplay: string;
 };
 
+type Feather = {
+  replace: (options?: Record<string, unknown>) => void;
+};
+
+declare global {
+  interface Window {
+    feather?: Feather;
+  }
+}
+
 const STATUS_ORDER: Record<string, number> = {
   running: 0,
   processing: 1,
@@ -151,6 +161,13 @@ export default function DashboardPage() {
       nextRunDisplay: formatDateTimeShort(agent.next_run_at ?? null),
     }));
   }, [agents, runsByAgent, sortConfig]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.feather || typeof window.feather.replace !== "function") {
+      return;
+    }
+    window.feather.replace({ "stroke-width": 1.5 });
+  }, [sortedRows, expandedAgentId, expandedRunHistory]);
 
   if (isLoading) {
     return (
