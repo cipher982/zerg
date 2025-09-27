@@ -1,6 +1,11 @@
 // Simple, clean Playwright configuration - just read ports from .env
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { devices } from '@playwright/test';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load .env file from repo root
 const envPath = path.resolve(__dirname, '../.env');
@@ -51,22 +56,22 @@ const config = {
     baseURL: frontendBaseUrl,
     headless: true,
     viewport: { width: 1280, height: 800 },
-    
+
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    
+
     navigationTimeout: 30_000,
     actionTimeout: 10_000,
   },
 
-  globalSetup: require.resolve('./test-setup.js'),
-  globalTeardown: require.resolve('./test-teardown.js'),
+  globalSetup: './test-setup.js',
+  globalTeardown: './test-teardown.js',
 
   fullyParallel: true,
   workers: workers,
   retries: process.env.CI ? 2 : 1,
-  
+
   reporter: [
     ['list'],
     ['html', { open: 'never' }],
@@ -76,7 +81,7 @@ const config = {
   projects: [
     {
       name: 'chromium',
-      use: { ...require('@playwright/test').devices['Desktop Chrome'] },
+      use: { ...devices['Desktop Chrome'] },
     }
   ],
 
@@ -93,4 +98,4 @@ const config = {
   ],
 };
 
-module.exports = config;
+export default config;

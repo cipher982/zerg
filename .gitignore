@@ -215,3 +215,9 @@ frontend/www/bootstrap.js
 frontend/www/config.js
 frontend/www/index.html
 frontend/www/react/
+
+# Visual testing outputs
+e2e/visual-reports/
+e2e/visual-baseline/*.png
+e2e/*-visual-test*.js
+e2e/enhanced-analysis.js
