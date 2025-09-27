@@ -92,8 +92,11 @@ avoids the port-clash & “what was that command again?” issues.
 ### 2. Manual steps (if you prefer)
 
 ```bash
+# configuration (run once)
+cp .env.example .env                  # repo root; add OPENAI_API_KEY, JWT_SECRET, etc.
+
 # backend
-cd backend && cp .env.example .env   # add OPENAI_API_KEY here
+cd backend
 uv run python -m uvicorn zerg.main:app --reload --port 8001
 
 # frontend (new terminal tab)
@@ -101,6 +104,10 @@ cd frontend && ./build-debug.sh      # dev build + server on :8002
 
 # visit http://localhost:8002
 ```
+
+> **Tip (zsh users):** to expose the values in `.env` to child processes like
+> Playwright or vitest, run `set -a; source .env; set +a` once in any shell
+> where you need them.
 
 ### 3. Running tests
 
@@ -179,8 +186,10 @@ dataclass-based helper that replaces the heavier Pydantic dependency.
 Search order (first match wins):
 
 1. Variables already in the process environment (Docker, CI, etc.)
-2. `<repo-root>/.env`   (current canonical location)
-3. `<repo-root>/backend/.env`   (legacy path kept for backwards-compat)
+2. `<repo-root>/.env`
+
+As of September 2025 the old `backend/.env` fallback was removed—keep a single
+`.env` at the repository root (generated from `.env.example`) to avoid drift.
 
 ### Required secrets (production)
 
@@ -484,12 +493,13 @@ A simplified overview of notable top-level files and folders:
 ## Setup & Running
 
 ### Backend Setup
-1. cd backend  
-2. Copy the environment file and edit it:  
+1. From the repo root copy the template and populate secrets:  
    » cp .env.example .env  
-   (Add your `OPENAI_API_KEY` so the backend can call OpenAI.)  
-4. Run the server:  
-   » uv run python -m uvicorn zerg.main:app --reload --port 8001 
+   (Set at least `OPENAI_API_KEY`, `JWT_SECRET`, and any auth values you need.)  
+2. Export the variables in the shell where you’ll launch processes (zsh example):  
+   » set -a; source .env; set +a  
+3. Start the API:  
+   » cd backend && uv run python -m uvicorn zerg.main:app --reload --port 8001 
 
 ### Frontend Setup
 1. Ensure you have Rust, cargo, and wasm-pack installed.  
