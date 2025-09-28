@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import "./styles/legacy.css";
+import "./styles/chat.css";
 import App from "./routes/App";
 
 const container = document.getElementById("react-root");
