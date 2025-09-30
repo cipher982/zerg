@@ -464,4 +464,128 @@ export const STANDARD_VIEWPORTS = [
   { width: 375, height: 667, name: 'mobile-standard' }
 ];
 
+/**
+ * Simplified function for multi-page comparison analysis
+ * Used by comprehensive-visual-test.ts
+ */
+export async function analyzeMultiPageComparison(
+  rustScreenshot: Buffer,
+  reactScreenshot: Buffer,
+  context: {
+    pageName: string;
+    description: string;
+    testInfo?: any;
+  }
+): Promise<string> {
+
+  if (!openai) {
+    throw new Error('OpenAI API key not configured');
+  }
+
+  console.log(`🤖 Analyzing ${context.pageName} UI differences...`);
+
+  const comparisonPrompt = `
+You are a UI/UX expert analyzing two screenshots of the same page implemented in different frameworks.
+
+**Context**:
+- Page: ${context.pageName}
+- Description: ${context.description}
+- Image 1: Rust/WASM UI (LEGACY - this is the target design to match)
+- Image 2: React UI (NEW - this needs to be updated to match the legacy design)
+
+**Analysis Required**:
+1. **Layout Differences**: Compare overall structure, spacing, alignment
+2. **Visual Consistency**: Colors, fonts, component styling
+3. **Interactive Elements**: Buttons, forms, hover states
+4. **Missing/Extra Features**: Elements present in one but not the other
+5. **Priority Assessment**: Critical vs. cosmetic differences
+
+**Output Format**:
+### ${context.pageName} Analysis
+
+#### Critical Issues (Must Fix)
+- [List issues that break functionality or brand consistency]
+
+#### Styling Inconsistencies (Should Fix)
+- [List visual differences that affect user experience]
+
+#### Minor Improvements (Nice to Have)
+- [List polish items and optimizations]
+
+#### Implementation Recommendations
+- [Specific CSS/code changes needed]
+
+Be specific and actionable. Provide exact measurements and CSS suggestions where possible.
+`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: comparisonPrompt
+            },
+            {
+              type: "text",
+              text: `RUST UI (Legacy - Target Design for ${context.pageName}):`
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/png;base64,${rustScreenshot.toString('base64')}`,
+                detail: "high"
+              }
+            },
+            {
+              type: "text",
+              text: `REACT UI (New - Needs Updates for ${context.pageName}):`
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/png;base64,${reactScreenshot.toString('base64')}`,
+                detail: "high"
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 2000,
+      temperature: 0.1
+    });
+
+    const analysis = response.choices[0].message.content || 'Analysis failed to generate content.';
+
+    // Save detailed report if testInfo provided
+    if (context.testInfo) {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const reportDir = path.join(__dirname, '..', 'visual-reports');
+
+      if (!fs.existsSync(reportDir)) {
+        fs.mkdirSync(reportDir, { recursive: true });
+      }
+
+      const reportPath = path.join(reportDir, `${context.pageName}-analysis-${timestamp}.md`);
+      const fullReport = `# ${context.pageName} UI Analysis Report\n\n`;
+      const reportContent = fullReport +
+                           `**Generated**: ${new Date().toISOString()}\n\n` +
+                           `**Page Description**: ${context.description}\n\n` +
+                           analysis;
+
+      fs.writeFileSync(reportPath, reportContent);
+      console.log(`📄 Analysis report saved: ${reportPath}`);
+    }
+
+    return analysis;
+
+  } catch (error) {
+    console.error(`❌ AI analysis failed for ${context.pageName}:`, error);
+    return `Analysis failed for ${context.pageName}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+  }
+}
+
 export default AIVisualAnalyzer;
