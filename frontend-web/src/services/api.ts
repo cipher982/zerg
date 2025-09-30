@@ -28,11 +28,18 @@ export type AgentRun = Schemas["AgentRunOut"];
 export type Thread = Schemas["Thread"];
 export type ThreadMessage = Schemas["ThreadMessageResponse"] & { created_at?: string };
 export type ThreadUpdatePayload = Schemas["ThreadUpdate"];
+export type Workflow = Schemas["Workflow"];
+export type WorkflowData = Schemas["WorkflowData-Output"];
+export type WorkflowDataInput = Schemas["WorkflowData-Input"];
+export type WorkflowNode = Schemas["WorkflowNode"];
+export type WorkflowEdge = Schemas["WorkflowEdge"];
 
 type AgentCreate = Schemas["AgentCreate"];
 type AgentUpdate = Schemas["AgentUpdate"];
 type ThreadCreate = Schemas["ThreadCreate"];
 type ThreadMessageCreate = Schemas["ThreadMessageCreate"];
+type WorkflowCreate = Schemas["WorkflowCreate"];
+type CanvasUpdate = Schemas["CanvasUpdate"];
 
 export type AgentCreatePayload = Pick<AgentCreate, "name" | "system_instructions" | "task_instructions" | "model"> &
   Partial<Omit<AgentCreate, "name" | "system_instructions" | "task_instructions" | "model">>;
@@ -48,6 +55,10 @@ type CreatedThreadResponse = JsonResponse<Operations["create_thread_api_threads_
 type CreatedThreadMessageResponse = JsonResponse<Operations["create_thread_message_api_threads__thread_id__messages_post"], 201>;
 type CreatedAgentResponse = JsonResponse<Operations["create_agent_api_agents_post"], 201>;
 type UpdatedAgentResponse = JsonResponse<Operations["update_agent_api_agents__agent_id__put"], 200>;
+type WorkflowsResponse = JsonResponse<Operations["read_workflows_api_workflows__get"], 200>;
+type WorkflowResponse = JsonResponse<Operations["get_current_workflow_api_workflows_current_get"], 200>;
+type CreatedWorkflowResponse = JsonResponse<Operations["create_workflow_api_workflows__post"], 200>;
+type UpdatedWorkflowCanvasResponse = JsonResponse<Operations["update_current_workflow_canvas_api_workflows_current_canvas_patch"], 200>;
 
 type FetchAgentsParams = {
   scope?: "my" | "all";
@@ -264,5 +275,36 @@ export async function resetAgent(agentId: number): Promise<UpdatedAgentResponse>
 export async function runAgent(agentId: number): Promise<void> {
   await request<void>(`/agents/${agentId}/task`, {
     method: "POST",
+  });
+}
+
+// Workflow API functions
+export async function fetchWorkflows(): Promise<WorkflowsResponse> {
+  return request<WorkflowsResponse>(`/workflows`);
+}
+
+export async function fetchCurrentWorkflow(): Promise<WorkflowResponse> {
+  return request<WorkflowResponse>(`/workflows/current`);
+}
+
+export async function createWorkflow(name: string, description?: string, canvas?: WorkflowDataInput): Promise<CreatedWorkflowResponse> {
+  const payload: WorkflowCreate = {
+    name,
+    description: description || "",
+    canvas: canvas || { nodes: [], edges: [] },
+  };
+  return request<CreatedWorkflowResponse>(`/workflows`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateWorkflowCanvas(canvas: WorkflowDataInput): Promise<UpdatedWorkflowCanvasResponse> {
+  const payload: CanvasUpdate = {
+    canvas,
+  };
+  return request<UpdatedWorkflowCanvasResponse>(`/workflows/current/canvas`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
   });
 }
