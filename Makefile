@@ -12,7 +12,7 @@ F_PORT ?= $(FRONTEND_PORT)
 B_PORT ?= 8001
 F_PORT ?= 8002
 
-.PHONY: help start stop test test-backend test-frontend test-e2e generate validate-contracts validate-deploy
+.PHONY: help start stop test test-backend test-frontend test-e2e test-auto test-ci generate validate-contracts validate-deploy
 
 # ---------------------------------------------------------------------------
 # Help – `make` or `make help`
@@ -32,6 +32,8 @@ help:
 	@echo "  make test-backend  Run backend unit tests only (~10 sec)"
 	@echo "  make test-frontend Run frontend WASM tests only (~30 sec)"
 	@echo "  make test-e2e      Run e2e integration tests only (~2 min)"
+	@echo "  make test-auto     🤖 Automated UI parity testing (zero human interaction)"
+	@echo "  make test-ci       🚀 CI-ready test suite (unit tests + builds + contracts)"
 	@echo ""
 	@echo "Deployment:"
 	@echo "  make validate-deploy    Validate environment for deployment (required vars, DB connectivity)"
@@ -77,6 +79,14 @@ test-frontend:
 test-e2e:
 	@echo "🧪 Running E2E integration tests..."
 	cd e2e && ./run_e2e_tests.sh --mode=basic
+
+test-auto:
+	@echo "🤖 Running automated UI parity tests (zero human interaction)..."
+	./run-automated-tests.sh
+
+test-ci:
+	@echo "🚀 Running CI-ready test suite (unit tests + builds + contracts)..."
+	./run-ci-tests.sh
 
 # ---------------------------------------------------------------------------
 # Code generation (run when schemas change)
