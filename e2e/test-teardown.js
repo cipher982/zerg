@@ -3,17 +3,17 @@
  * Modern testing practices 2025: Automatic cleanup of test artifacts
  */
 
+import { spawn, execSync } from 'child_process';
+import path from 'path';
+
 async function globalTeardown(config) {
   console.log('🧹 Starting test environment cleanup...');
-  
-  const { spawn } = require('child_process');
-  const path = require('path');
   
   try {
     // Resolve a Python interpreter ('python' or 'python3')
     const pythonCmd = (() => {
-      try { require('child_process').execSync('python --version', { stdio: 'ignore' }); return 'python'; } catch {}
-      try { require('child_process').execSync('python3 --version', { stdio: 'ignore' }); return 'python3'; } catch {}
+      try { execSync('python --version', { stdio: 'ignore' }); return 'python'; } catch {}
+      try { execSync('python3 --version', { stdio: 'ignore' }); return 'python3'; } catch {}
       return null;
     })();
 
@@ -52,4 +52,4 @@ print("✅ Test database cleanup completed")
   }
 }
 
-module.exports = globalTeardown;
+export default globalTeardown;

@@ -5,9 +5,13 @@
  * Runs E2E tests against both Rust/WASM and React UIs and compares results
  */
 
-const { spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ANSI color codes for terminal output
 const colors = {
@@ -333,8 +337,8 @@ async function main() {
 }
 
 // Run if executed directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch(console.error);
 }
 
-module.exports = { runTest, TEST_SCENARIOS };
+export { runTest, TEST_SCENARIOS };

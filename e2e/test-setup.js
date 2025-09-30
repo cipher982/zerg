@@ -3,22 +3,23 @@
  * Modern testing practices 2025: Proper test environment initialization
  */
 
+import { spawn, execSync } from 'child_process';
+import path from 'path';
+
 async function globalSetup(config) {
   console.log('🚀 Setting up test environment...');
-  
+
   // Set environment variables for test isolation
   process.env.NODE_ENV = 'test';
   process.env.TESTING = '1';
-  
+
   // Clean up any leftover database files from previous runs
-  const { spawn } = require('child_process');
-  const path = require('path');
   
   try {
     // Resolve a Python interpreter ('python' or 'python3')
     const pythonCmd = (() => {
-      try { require('child_process').execSync('python --version', { stdio: 'ignore' }); return 'python'; } catch {}
-      try { require('child_process').execSync('python3 --version', { stdio: 'ignore' }); return 'python3'; } catch {}
+      try { execSync('python --version', { stdio: 'ignore' }); return 'python'; } catch {}
+      try { execSync('python3 --version', { stdio: 'ignore' }); return 'python3'; } catch {}
       return null;
     })();
 
@@ -55,4 +56,4 @@ print("✅ Pre-test cleanup completed")
   console.log('✅ Test environment setup completed');
 }
 
-module.exports = globalSetup;
+export default globalSetup;
