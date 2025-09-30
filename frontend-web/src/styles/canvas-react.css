@@ -1,0 +1,288 @@
+/* React Flow Canvas Styles - matching Rust implementation */
+
+/* Override React Flow default styles to match Rust canvas */
+.react-flow {
+  background: #33334a !important;
+}
+
+.react-flow__background {
+  background: #33334a !important;
+}
+
+/* Canvas workspace container - match Rust styling */
+.canvas-workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  background: var(--dark-lighter);
+  position: relative;
+  padding: 0;
+}
+
+/* Agent Shelf Items - match Rust styling */
+.agent-shelf-item {
+  cursor: grab;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #2e2e3e 0%, #2a2a3a 100%);
+  border: 1px solid #3d3d5c;
+  border-radius: var(--radius-lg, 8px);
+  font-size: 14px;
+  color: #e0e0e0;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  user-select: none;
+}
+
+.agent-shelf-item:hover {
+  background: linear-gradient(135deg, #3a3a4a 0%, #363646 100%);
+  border-color: #4d4d6c;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.agent-shelf-item .agent-icon {
+  font-size: 16px;
+  margin-right: 8px;
+  opacity: 0.7;
+}
+
+.agent-shelf-item .agent-name {
+  flex: 1;
+}
+
+/* Tool Palette Items - match Rust styling */
+.tool-palette-item {
+  cursor: grab;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1e293b;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  user-select: none;
+}
+
+.tool-palette-item:hover {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tool-palette-item .tool-icon {
+  font-size: 16px;
+  margin-right: 8px;
+}
+
+.tool-palette-item .tool-name {
+  flex: 1;
+}
+
+/* Custom Node Styles to match Rust implementation */
+.agent-node {
+  background: linear-gradient(135deg, #2e2e3e 0%, #2a2a3a 100%);
+  border: 1px solid #3d3d5c;
+  border-radius: var(--radius-lg, 8px);
+  padding: 12px 14px;
+  color: #e0e0e0;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 120px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.agent-node:hover {
+  background: linear-gradient(135deg, #3a3a4a 0%, #363646 100%);
+  border-color: #4d4d6c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.agent-node .agent-icon {
+  font-size: 16px;
+  margin-right: 8px;
+  opacity: 0.7;
+}
+
+.tool-node {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 120px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.tool-node:hover {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.tool-node .tool-icon {
+  font-size: 16px;
+  margin-right: 8px;
+}
+
+.trigger-node {
+  background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%);
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: #92400e;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 120px;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.2);
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.trigger-node:hover {
+  background: #fef3c7;
+  border-color: #d97706;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(245, 158, 11, 0.3);
+}
+
+.trigger-node .trigger-icon {
+  font-size: 16px;
+  margin-right: 8px;
+}
+
+/* React Flow Controls styling */
+.react-flow__controls {
+  background: var(--dark-card, #2a2a3a);
+  border: 1px solid var(--border-color, #3d3d5c);
+  border-radius: var(--radius-sm, 4px);
+}
+
+.react-flow__controls-button {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #e0e0e0);
+  transition: all 0.2s ease;
+}
+
+.react-flow__controls-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text, #ffffff);
+}
+
+/* React Flow MiniMap styling */
+.react-flow__minimap {
+  background: var(--dark-card, #2a2a3a);
+  border: 1px solid var(--border-color, #3d3d5c);
+  border-radius: var(--radius-sm, 4px);
+}
+
+/* Saving indicator */
+.saving-indicator {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: var(--dark-card, #2a2a3a);
+  color: var(--text, #ffffff);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--border-color, #3d3d5c);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Canvas container adjustments for React Flow */
+.canvas-container {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  background: var(--dark-lighter, #33334a);
+}
+
+/* Agent shelf and tool palette layout */
+#agent-shelf,
+#tool-palette {
+  z-index: 10; /* Ensure they appear above React Flow */
+}
+
+/* Override React Flow edge styles */
+.react-flow__edge-path {
+  stroke: #64748b;
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--primary, #64ffda);
+  stroke-width: 3;
+}
+
+/* Handle styles for connections */
+.react-flow__handle {
+  background: var(--primary, #64ffda);
+  border: 2px solid #ffffff;
+  width: 8px;
+  height: 8px;
+}
+
+.react-flow__handle.connecting {
+  background: var(--secondary, #ff6b6b);
+}
+
+.react-flow__handle.valid {
+  background: var(--success, #4ecdc4);
+}
+
+/* Tool palette styling to match agent shelf */
+#tool-palette {
+  width: 260px;
+  flex-shrink: 0;
+  background: linear-gradient(to bottom, #2a2a3a, #252535);
+  border-left: 1px solid #3d3d5c;
+  padding: 16px;
+  box-sizing: border-box;
+  display: block;
+  overflow-y: auto;
+  height: 100%;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+}
+
+#tool-palette h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #F0F0F0;
+  margin: 0 0 16px 0;
+}
+
+.tool-palette-content {
+  display: flex;
+  flex-direction: column;
+}
