@@ -2,15 +2,19 @@
 
 /**
  * Spawn isolated test backend for E2E tests
- * 
+ *
  * This script spawns a dedicated backend server for each Playwright worker,
  * ensuring complete test isolation without shared state.
  */
 
-const { spawn } = require('child_process');
-const { join } = require('path');
-const fs = require('fs');
-const path = require('path');
+import { spawn } from 'child_process';
+import { join } from 'path';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load dynamic port from .env file  
 function getPortsFromEnv() {
