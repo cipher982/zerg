@@ -206,6 +206,8 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
+    border: none;
+    background: transparent;
 }
 
 .thread-item:hover .thread-edit-button {
@@ -215,6 +217,11 @@
 .thread-edit-button:hover {
     background-color: var(--bg-hover);
     color: var(--text-primary);
+}
+
+.thread-edit-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 .thread-item-time {

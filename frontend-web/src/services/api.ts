@@ -27,6 +27,7 @@ export type AgentSummary = Agent;
 export type AgentRun = Schemas["AgentRunOut"];
 export type Thread = Schemas["Thread"];
 export type ThreadMessage = Schemas["ThreadMessageResponse"] & { created_at?: string };
+export type ThreadUpdatePayload = Schemas["ThreadUpdate"];
 
 type AgentCreate = Schemas["AgentCreate"];
 type AgentUpdate = Schemas["AgentUpdate"];
@@ -235,6 +236,13 @@ export async function postThreadMessage(threadId: number, content: string): Prom
 export async function runThread(threadId: number): Promise<void> {
   await request<void>(`/threads/${threadId}/run`, {
     method: "POST",
+  });
+}
+
+export async function updateThread(threadId: number, payload: ThreadUpdatePayload): Promise<Thread> {
+  return request<Thread>(`/threads/${threadId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
   });
 }
 

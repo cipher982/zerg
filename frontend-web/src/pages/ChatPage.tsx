@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "react-hot-toast";
 import clsx from "clsx";
 import {
   Agent,
@@ -12,6 +13,7 @@ import {
   runThread,
   Thread,
   ThreadMessage,
+  updateThread,
 } from "../services/api";
 
 function useRequiredNumber(param?: string): number | null {
@@ -182,10 +184,13 @@ export default function ChatPage() {
 
       return { previousMessages, optimisticId };
     },
-    onError: (_error, variables, context) => {
+    onError: (error, variables, context) => {
       if (context?.previousMessages) {
         queryClient.setQueryData(["thread-messages", variables.threadId], context.previousMessages);
       }
+      toast.error("Failed to send message", {
+        duration: 6000,
+      });
     },
     onSuccess: (data, variables, context) => {
       queryClient.setQueryData<ThreadMessage[]>(["thread-messages", variables.threadId], (current) => {
@@ -206,6 +211,55 @@ export default function ChatPage() {
   });
 
   const [draft, setDraft] = useState("");
+
+  const renameThreadMutation = useMutation<
+    Thread,
+    Error,
+    { threadId: number; title: string },
+    { previousThreads?: Thread[] }
+  >({
+    mutationFn: ({ threadId, title }) => updateThread(threadId, { title }),
+    onMutate: async ({ threadId, title }) => {
+      if (agentId == null) {
+        return {};
+      }
+      const queryKey = ["threads", agentId] as const;
+      await queryClient.cancelQueries({ queryKey });
+      const previousThreads = queryClient.getQueryData<Thread[]>(queryKey);
+      queryClient.setQueryData<Thread[]>(queryKey, (old) =>
+        old ? old.map((thread) => (thread.id === threadId ? { ...thread, title } : thread)) : old
+      );
+      return { previousThreads };
+    },
+    onError: (error, _variables, context) => {
+      if (agentId == null) {
+        return;
+      }
+      if (context?.previousThreads) {
+        queryClient.setQueryData(["threads", agentId], context.previousThreads);
+      }
+      toast.error("Failed to rename thread", {
+        duration: 6000,
+      });
+    },
+    onSuccess: (updatedThread) => {
+      if (agentId != null) {
+        queryClient.setQueryData<Thread[]>(["threads", agentId], (old) =>
+          old ? old.map((thread) => (thread.id === updatedThread.id ? updatedThread : thread)) : old
+        );
+      }
+      setEditingThreadId(null);
+      setEditingTitle("");
+    },
+    onSettled: (_data, _error, variables) => {
+      if (agentId != null) {
+        queryClient.invalidateQueries({ queryKey: ["threads", agentId] });
+      }
+      if (variables) {
+        queryClient.invalidateQueries({ queryKey: ["thread-messages", variables.threadId] });
+      }
+    },
+  });
 
   const isLoading = agentQuery.isLoading || threadsQuery.isLoading || messagesQuery.isLoading;
   const hasError = agentQuery.isError || threadsQuery.isError || messagesQuery.isError;
@@ -309,19 +363,27 @@ export default function ChatPage() {
   };
 
   const handleSaveThreadTitle = async (threadId: number) => {
-    if (!editingTitle.trim()) {
-      setEditingThreadId(null);
+    const trimmedTitle = editingTitle.trim();
+    if (!trimmedTitle) {
+      handleCancelEdit();
       return;
     }
 
-    // TODO: Call API to update thread title
-    // For now, just update locally
-    queryClient.setQueryData<Thread[]>(["threads", agentId], (old) => {
-      if (!old) return old;
-      return old.map(t => t.id === threadId ? { ...t, title: editingTitle } : t);
-    });
+    const existingThread = threads.find((thread) => thread.id === threadId);
+    if (existingThread && existingThread.title === trimmedTitle) {
+      handleCancelEdit();
+      return;
+    }
 
-    setEditingThreadId(null);
+    if (agentId == null) {
+      return;
+    }
+
+    try {
+      await renameThreadMutation.mutateAsync({ threadId, title: trimmedTitle });
+    } catch (error) {
+      // Error handling is now done in the mutation's onError callback
+    }
   };
 
   const handleCancelEdit = () => {
@@ -350,7 +412,9 @@ export default function ChatPage() {
       setSelectedThreadId(thread.id);
       return thread.id;
     } catch (error) {
-      console.error("Failed to create thread", error);
+      toast.error("Failed to create thread", {
+        duration: 6000,
+      });
       return null;
     }
   }, [agentId, effectiveThreadId, queryClient, threads]);
@@ -369,7 +433,7 @@ export default function ChatPage() {
     try {
       await sendMutation.mutateAsync({ threadId, content: trimmed });
     } catch (error) {
-      console.error("Failed to send message", error);
+      // Error handling is now done in the mutation's onError callback
     }
   };
 
@@ -456,6 +520,7 @@ export default function ChatPage() {
           <div className="sidebar-header">
             <h3>Threads</h3>
             <button
+              type="button"
               className="new-thread-btn"
               data-testid="new-thread-btn"
               onClick={handleCreateThread}
@@ -503,6 +568,7 @@ export default function ChatPage() {
                         }}
                         autoFocus
                         className="thread-title-input"
+                        disabled={renameThreadMutation.isPending}
                       />
                     </div>
                   ) : (
@@ -511,13 +577,17 @@ export default function ChatPage() {
                       <div className="thread-item-time">
                         {formatTimestamp(thread.updated_at || thread.created_at)}
                       </div>
-                      <div
+                      <button
+                        type="button"
                         className="thread-edit-button"
+                        data-testid={`edit-thread-${thread.id}`}
                         onClick={(e) => handleEditThreadTitle(thread, e)}
                         aria-label="Edit thread title"
+                        title="Edit thread title"
+                        disabled={renameThreadMutation.isPending}
                       >
                         ✎
-                      </div>
+                      </button>
                       <div className="thread-item-preview">{messagePreview}</div>
                     </>
                   )}
