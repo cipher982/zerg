@@ -73,7 +73,7 @@ Implemented Jarvis integration router with authentication and basic endpoints:
 - Registered jarvis router in main.py
 - Updated `.env.example.swarm` with Jarvis variables
 
-### Phase 2: Dispatch & SSE (Commit: 5710d73)
+### Phase 2: Dispatch & SSE (Commit: 5710d73, fixed in cb65be8)
 
 Implemented agent task dispatch and real-time event streaming:
 
@@ -101,6 +101,14 @@ Implemented agent task dispatch and real-time event streaming:
   - Stores brief summary for Jarvis Task Inbox
   - Nullable Text field
   - ⚠️ **Note**: DB migration needed for production
+
+**Bug Fixes (cb65be8)**:
+- Fixed auth endpoint to create real Jarvis user instead of user_id=0
+- Fixed NameError in auth response (token_expiry → token_expiry_seconds)
+- Fixed AgentRun imports (direct import instead of crud.models)
+- Fixed SSE event handler to be async (prevents TypeError)
+- Added sse-starlette>=1.6.5 dependency
+- Better event payload structure with ISO timestamps
 
 ## 🔧 What's Working
 
@@ -259,11 +267,7 @@ DATABASE_URL="sqlite:///./app.db"
 ```
 
 ### SSE Dependencies
-The SSE endpoint requires `sse-starlette`. Ensure it's in the backend dependencies:
-```bash
-cd apps/zerg/backend
-uv add sse-starlette  # If not already present
-```
+✅ **Already added**: `sse-starlette>=1.6.5` is now in pyproject.toml
 
 ## 🔍 Code Locations
 
