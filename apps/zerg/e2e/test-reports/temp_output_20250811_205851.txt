@@ -1,0 +1,922 @@
+[1A[2K[2m[WebServer] [22m[build-only] 🔧 building frontend (debug)…
+
+[1A[2K[2m[WebServer] [22m[build-only] 🏗  wasm-pack build …
+
+[1A[2K[2m[WebServer] [22m[INFO]: 🎯  Checking for the Wasm target...
+
+[1A[2K[2m[WebServer] [22m[INFO]: 🌀  Compiling to Wasm...
+
+[1A[2K[2m[WebServer] [22mwarning: agent-platform-frontend@0.1.0: WebSocket types generated successfully
+
+[1A[2K[2m[WebServer] [22m   Compiling agent-platform-frontend v0.1.0 (/Users/davidrose/git/zerg/frontend)
+
+[1A[2K[2m[WebServer] [22m    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.67s
+
+[1A[2K[2m[WebServer] [22m[INFO]: ⬇️  Installing wasm-bindgen...
+
+[1A[2K[2m[WebServer] [22m[INFO]: Optional fields missing from Cargo.toml: 'description', 'repository', and 'license'. These are not necessary, but recommended
+
+[1A[2K[2m[WebServer] [22m[INFO]: ✨   Done in 1.94s
+[2m[WebServer] [22m[INFO]: 📦   Your wasm pkg is ready to publish at /Users/davidrose/git/zerg/frontend/pkg.
+
+[1A[2K[2m[WebServer] [22m[build-only] 📦 copying WASM artifacts to www...
+
+[1A[2K[2m[WebServer] [22m[build-only] ✍️  writing bootstrap.js …
+
+[1A[2K[2m[WebServer] [22m[build-only] 🔐 updating CSP for backend port 8001 …
+
+[1A[2K[2m[WebServer] [22m[build-only] ✍️  writing config.js …
+
+[1A[2K[2m[WebServer] [22m[build-only] ✅ build complete (output in frontend/www/)
+
+🚀 Setting up test environment...
+✅ Pre-test cleanup completed
+✅ Test environment setup completed
+
+Running 6 tests using 2 workers
+
+[1A[2K[1/6] [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+[1A[2K[2/6] [chromium] › tests/canvas_api_contract.spec.ts:13:7 › Canvas API Contract Tests › Canvas endpoint exists and does not return 404
+[1A[2K[chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+🔍 Starting complete agent creation test...
+
+[1A[2K📊 Worker ID: 0
+
+[1A[2K📊 Step 0: Resetting database...
+
+[1A[2K[3/6] [chromium] › tests/canvas_api_contract.spec.ts:42:7 › Canvas API Contract Tests › Wrong canvas-data endpoint returns 404
+[1A[2KDatabase reset attempt 1 failed: apiRequestContext.post: connect ECONNREFUSED ::1:8000
+Call log:
+[2m  - → POST http://localhost:8000/api/admin/reset-database[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 0[22m
+
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:71:43[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:36 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@9'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts'[39m,
+      line: [33m71[39m,
+      column: [33m43[39m,
+      function: [32m'resetDatabaseViaRequest'[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.post(http://localhost:8000/api/admin/reset-database)'[39m,
+    apiName: [32m'apiRequestContext.post'[39m,
+    params: {
+      url: [32m'http://localhost:8000/api/admin/reset-database'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'POST'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@9'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1754913535852[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 0\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 0\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'    at resetDatabaseViaRequest (/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts:71:43)\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:25:36'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2K[4/6] [chromium] › tests/canvas_api_contract.spec.ts:42:7 › Canvas API Contract Tests › Wrong canvas-data endpoint returns 404 (retry #1)
+[1A[2K  1) [chromium] › tests/canvas_api_contract.spec.ts:42:7 › Canvas API Contract Tests › Wrong canvas-data endpoint returns 404 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m404[39m
+    Received: [31m0[39m
+
+      64 |
+      65 |     // This SHOULD return 404 to confirm the wrong endpoint doesn't exist
+    > 66 |     expect(response.status).toBe(404);
+         |                             ^
+      67 |   });
+      68 |
+      69 |   test('Canvas tab loads without network errors', async ({ page }) => {
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:66:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-52b50-s-data-endpoint-returns-404-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-52b50-s-data-endpoint-returns-404-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-52b50-s-data-endpoint-returns-404-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-52b50-s-data-endpoint-returns-404-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBe[2m([22m[32mexpected[39m[2m) // Object.is equality[22m
+
+    Expected: [32m404[39m
+    Received: [31m0[39m
+
+      64 |
+      65 |     // This SHOULD return 404 to confirm the wrong endpoint doesn't exist
+    > 66 |     expect(response.status).toBe(404);
+         |                             ^
+      67 |   });
+      68 |
+      69 |   test('Canvas tab loads without network errors', async ({ page }) => {
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:66:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-52b50-s-data-endpoint-returns-404-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-52b50-s-data-endpoint-returns-404-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-52b50-s-data-endpoint-returns-404-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-52b50-s-data-endpoint-returns-404-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[5/6] [chromium] › tests/canvas_api_contract.spec.ts:69:7 › Canvas API Contract Tests › Canvas tab loads without network errors
+[1A[2K[6/6] [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution
+[1A[2K[chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution
+🚀 Starting complete canvas workflow test...
+
+[1A[2K📊 Worker ID: 3
+
+[1A[2K📊 Step 1: Creating test agent...
+
+[1A[2K[chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+Database reset attempt 2 failed: apiRequestContext.post: connect ECONNREFUSED ::1:8000
+Call log:
+[2m  - → POST http://localhost:8000/api/admin/reset-database[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 0[22m
+
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:71:43[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:7 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@10'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts'[39m,
+      line: [33m71[39m,
+      column: [33m43[39m,
+      function: [32m'resetDatabaseViaRequest'[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.post(http://localhost:8000/api/admin/reset-database)'[39m,
+    apiName: [32m'apiRequestContext.post'[39m,
+    params: {
+      url: [32m'http://localhost:8000/api/admin/reset-database'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'POST'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@10'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1754913537159[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 0\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 0\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'    at resetDatabaseViaRequest (/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts:71:43)\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:25:7'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2K[7/6] (retries) [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution (retry #1)
+[1A[2K[chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution
+🚀 Starting complete canvas workflow test...
+
+[1A[2K📊 Worker ID: 4
+
+[1A[2K📊 Step 1: Creating test agent...
+
+[1A[2K  2) [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution 
+
+    Error: apiRequestContext.post: connect ECONNREFUSED ::1:8001
+    Call log:
+    [2m  - → POST http://localhost:8001/api/agents[22m
+    [2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+    [2m    - accept: */*[22m
+    [2m    - accept-encoding: gzip,deflate,br[22m
+    [2m    - X-Test-Worker: 3[22m
+    [2m    - content-type: application/json[22m
+    [2m    - content-length: 188[22m
+
+        at apiRequestContext.post: connect ECONNREFUSED ::1:8001
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_complete_workflow.spec.ts:25:46
+
+    Error: ENOENT: no such file or directory, open 'apiRequestContext.post: connect ECONNREFUSED :'
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: apiRequestContext.post: connect ECONNREFUSED ::1:8001
+    Call log:
+    [2m  - → POST http://localhost:8001/api/agents[22m
+    [2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+    [2m    - accept: */*[22m
+    [2m    - accept-encoding: gzip,deflate,br[22m
+    [2m    - X-Test-Worker: 4[22m
+    [2m    - content-type: application/json[22m
+    [2m    - content-length: 188[22m
+
+        at apiRequestContext.post: connect ECONNREFUSED ::1:8001
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_complete_workflow.spec.ts:25:46
+
+    Error: ENOENT: no such file or directory, open 'apiRequestContext.post: connect ECONNREFUSED :'
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+Database reset attempt 3 failed: apiRequestContext.post: connect ECONNREFUSED ::1:8000
+Call log:
+[2m  - → POST http://localhost:8000/api/admin/reset-database[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 0[22m
+
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:71:43[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:7 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@11'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts'[39m,
+      line: [33m71[39m,
+      column: [33m43[39m,
+      function: [32m'resetDatabaseViaRequest'[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.post(http://localhost:8000/api/admin/reset-database)'[39m,
+    apiName: [32m'apiRequestContext.post'[39m,
+    params: {
+      url: [32m'http://localhost:8000/api/admin/reset-database'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'POST'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@11'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1754913538470[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 0\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 0\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'    at resetDatabaseViaRequest (/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts:71:43)\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:25:7'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2K⚠️  Database reset failed: Error: Failed to reset database via request after 3 attempts
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:86:9[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:7
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:304:9
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:277:11
+    at TimeoutManager.withRunnable [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:67:14[90m)[39m
+    at TestInfoImpl._runWithTimeout [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:275:7[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:302:7
+    at WorkerMain._runTest [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:277:5[90m)[39m
+    at WorkerMain.runTestGroup [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:193:11[90m)[39m
+    at process.<anonymous> [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/common/process.js:70:22[90m)[39m
+
+[1A[2K📊 Step 1: Verifying empty state...
+
+[1A[2K[8/6] (retries) [chromium] › tests/comprehensive_debug.spec.ts:16:7 › Comprehensive Debug › Complete system debug and diagnosis
+[1A[2K[chromium] › tests/comprehensive_debug.spec.ts:16:7 › Comprehensive Debug › Complete system debug and diagnosis
+🔍 Starting comprehensive debug test...
+
+[1A[2K📊 Worker ID: 5
+
+[1A[2K📊 NODE_ENV: test
+
+[1A[2K🚀 Starting isolated backend server...
+
+[1A[2K[backend-server] Starting backend for worker 5 on port 8005
+
+[1A[2K[9/6] (retries) [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test (retry #1)
+[1A[2K[backend-server] Backend ready for worker 5 at http://localhost:8005
+
+[1A[2K📊 Backend URL: http://localhost:8005
+
+[1A[2K🔍 Test 1: Basic connectivity
+
+[1A[2K[chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+🔍 Starting complete agent creation test...
+
+[1A[2K📊 Worker ID: 6
+
+[1A[2K📊 Step 0: Resetting database...
+
+[1A[2K[chromium] › tests/comprehensive_debug.spec.ts:16:7 › Comprehensive Debug › Complete system debug and diagnosis
+📊 Basic connectivity status: [33m200[39m
+
+[1A[2K✅ Backend is accessible
+
+[1A[2K🔍 Test 2: Header transmission
+
+[1A[2K📊 Header transmission status: [33m200[39m
+
+[1A[2K✅ Headers can be sent
+
+[1A[2K🔍 Test 3: Agent GET endpoint
+
+[1A[2K📊 Agent GET status: [33m500[39m
+
+[1A[2K❌ Agent GET failed: Internal Server Error
+
+[1A[2K🔍 Test 4: Testing different database operations
+
+[1A[2K📊 Testing user endpoint...
+
+[1A[2K📊 User endpoint error: apiRequestContext.get: read ECONNRESET
+Call log:
+[2m  - → GET http://localhost:8005/api/users/me[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 5[22m
+
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/comprehensive_debug.spec.ts:90:47 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@12'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/comprehensive_debug.spec.ts'[39m,
+      line: [33m90[39m,
+      column: [33m47[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.get(http://localhost:8005/api/users/me)'[39m,
+    apiName: [32m'apiRequestContext.get'[39m,
+    params: {
+      url: [32m'http://localhost:8005/api/users/me'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'GET'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@12'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1754913540113[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.get: read ECONNRESET\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → GET http://localhost:8005/api/users/me\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 5\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.get: read ECONNRESET\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → GET http://localhost:8005/api/users/me\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 5\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/comprehensive_debug.spec.ts:90:47'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2K🔍 Test 5: Workflow creation test
+
+[1A[2K[chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+Database reset attempt 1 failed: apiRequestContext.post: connect ECONNREFUSED ::1:8000
+Call log:
+[2m  - → POST http://localhost:8000/api/admin/reset-database[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 6[22m
+
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:71:43[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:36 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@9'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts'[39m,
+      line: [33m71[39m,
+      column: [33m43[39m,
+      function: [32m'resetDatabaseViaRequest'[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.post(http://localhost:8000/api/admin/reset-database)'[39m,
+    apiName: [32m'apiRequestContext.post'[39m,
+    params: {
+      url: [32m'http://localhost:8000/api/admin/reset-database'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'POST'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@9'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1754913540129[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 6\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 6\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'    at resetDatabaseViaRequest (/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts:71:43)\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:25:36'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2K[chromium] › tests/comprehensive_debug.spec.ts:16:7 › Comprehensive Debug › Complete system debug and diagnosis
+📊 Workflow creation status: [33m404[39m
+
+[1A[2K❌ Workflow creation failed: {"detail":"Not Found"}
+
+[1A[2K🔍 Test 6: Minimal agent creation
+
+[1A[2K📊 Minimal agent creation status: [33m500[39m
+
+[1A[2K❌ Minimal agent creation failed: Internal Server Error
+
+[1A[2K🔍 Test 7: Database introspection
+
+[1A[2K📊 System health error: apiRequestContext.get: read ECONNRESET
+Call log:
+[2m  - → GET http://localhost:8005/api/system/health[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 5[22m
+
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/comprehensive_debug.spec.ts:166:48 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@15'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/comprehensive_debug.spec.ts'[39m,
+      line: [33m166[39m,
+      column: [33m48[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.get(http://localhost:8005/api/system/health)'[39m,
+    apiName: [32m'apiRequestContext.get'[39m,
+    params: {
+      url: [32m'http://localhost:8005/api/system/health'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'GET'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@15'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1754913540436[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.get: read ECONNRESET\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → GET http://localhost:8005/api/system/health\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 5\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.get: read ECONNRESET\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → GET http://localhost:8005/api/system/health\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 5\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/comprehensive_debug.spec.ts:166:48'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2K✅ Comprehensive debug test complete
+
+[1A[2K[backend-server] Stopping backend for worker 5
+
+[1A[2K[chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+Database reset attempt 2 failed: apiRequestContext.post: connect ECONNREFUSED ::1:8000
+Call log:
+[2m  - → POST http://localhost:8000/api/admin/reset-database[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 6[22m
+
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:71:43[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:7 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@10'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts'[39m,
+      line: [33m71[39m,
+      column: [33m43[39m,
+      function: [32m'resetDatabaseViaRequest'[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.post(http://localhost:8000/api/admin/reset-database)'[39m,
+    apiName: [32m'apiRequestContext.post'[39m,
+    params: {
+      url: [32m'http://localhost:8000/api/admin/reset-database'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'POST'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@10'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1754913541443[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 6\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 6\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'    at resetDatabaseViaRequest (/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts:71:43)\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:25:7'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2KDatabase reset attempt 3 failed: apiRequestContext.post: connect ECONNREFUSED ::1:8000
+Call log:
+[2m  - → POST http://localhost:8000/api/admin/reset-database[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 6[22m
+
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:71:43[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:7 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@11'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts'[39m,
+      line: [33m71[39m,
+      column: [33m43[39m,
+      function: [32m'resetDatabaseViaRequest'[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.post(http://localhost:8000/api/admin/reset-database)'[39m,
+    apiName: [32m'apiRequestContext.post'[39m,
+    params: {
+      url: [32m'http://localhost:8000/api/admin/reset-database'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'POST'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@11'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1754913542759[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 6\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:8000/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 6\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at apiRequestContext.post: connect ECONNREFUSED ::1:8000\n'[39m +
+        [32m'    at resetDatabaseViaRequest (/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts:71:43)\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:25:7'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2K⚠️  Database reset failed: Error: Failed to reset database via request after 3 attempts
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:86:9[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:7
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:304:9
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:277:11
+    at TimeoutManager.withRunnable [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:67:14[90m)[39m
+    at TestInfoImpl._runWithTimeout [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:275:7[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:302:7
+    at WorkerMain._runTest [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:277:5[90m)[39m
+    at WorkerMain.runTestGroup [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:193:11[90m)[39m
+    at process.<anonymous> [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/common/process.js:70:22[90m)[39m
+
+[1A[2K📊 Step 1: Verifying empty state...
+
+[1A[2K  3) [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test 
+
+    Error: apiRequestContext.get: connect ECONNREFUSED ::1:8001
+    Call log:
+    [2m  - → GET http://localhost:8001/api/agents[22m
+    [2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+    [2m    - accept: */*[22m
+    [2m    - accept-encoding: gzip,deflate,br[22m
+    [2m    - X-Test-Worker: 0[22m
+
+        at apiRequestContext.get: connect ECONNREFUSED ::1:8001
+        at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:36:46
+
+    Error: ENOENT: no such file or directory, open 'apiRequestContext.get: connect ECONNREFUSED :'
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: apiRequestContext.get: connect ECONNREFUSED ::1:8001
+    Call log:
+    [2m  - → GET http://localhost:8001/api/agents[22m
+    [2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+    [2m    - accept: */*[22m
+    [2m    - accept-encoding: gzip,deflate,br[22m
+    [2m    - X-Test-Worker: 6[22m
+
+        at apiRequestContext.get: connect ECONNREFUSED ::1:8001
+        at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:36:46
+
+    Error: ENOENT: no such file or directory, open 'apiRequestContext.get: connect ECONNREFUSED :'
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+🧹 Starting test environment cleanup...
+✅ Test database cleanup completed
+✅ Test environment cleanup completed
+[1A[2K  3 failed
+    [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test 
+    [chromium] › tests/canvas_api_contract.spec.ts:42:7 › Canvas API Contract Tests › Wrong canvas-data endpoint returns 404 
+    [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution 
+  3 passed (11.9s)

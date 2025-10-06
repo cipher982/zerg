@@ -1,0 +1,19 @@
+🚀 Setting up test environment...
+✅ Pre-test cleanup completed
+✅ Test environment setup completed
+SyntaxError: The requested module '@playwright/test' does not provide an export named 'Page'
+
+SyntaxError: The requested module '@playwright/test' does not provide an export named 'Page'
+
+SyntaxError: The requested module '@playwright/test' does not provide an export named 'Page'
+
+SyntaxError: The requested module '@playwright/test' does not provide an export named 'Page'
+
+Error: No tests found.
+Make sure that arguments are regular expressions matching test files.
+You may need to escape symbols like "$" or "*" and quote the arguments.
+
+🧹 Starting test environment cleanup...
+✅ Test database cleanup completed
+✅ Test environment cleanup completed
+[1A[2K

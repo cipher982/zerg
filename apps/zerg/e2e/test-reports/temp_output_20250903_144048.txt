@@ -1,0 +1,213 @@
+[1A[2K[2m[WebServer] [22m[build-only] 🔧 building frontend (debug)…
+
+[1A[2K[2m[WebServer] [22m[build-only] 🏗  wasm-pack build …
+
+[1A[2K[2m[WebServer] [22m[INFO]: 🎯  Checking for the Wasm target...
+
+[1A[2K[2m[WebServer] [22m[INFO]: 🌀  Compiling to Wasm...
+
+[1A[2K[2m[WebServer] [22mwarning: agent-platform-frontend@0.1.0: WebSocket types generated successfully
+
+[1A[2K[2m[WebServer] [22mwarning: unused variable: `document`
+[2m[WebServer] [22m   --> src/ui/setup.rs:184:34
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m184 | fn restore_persisted_shelf_state(document: &Document) -> bool {
+[2m[WebServer] [22m    |                                  ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_document`
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: `#[warn(unused_variables)]` on by default
+[2m[WebServer] [22m
+
+[1A[2K[2m[WebServer] [22mwarning: `agent-platform-frontend` (lib) generated 1 warning
+
+[1A[2K[2m[WebServer] [22m    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+
+[1A[2K[2m[WebServer] [22m[INFO]: ⬇️  Installing wasm-bindgen...
+
+[1A[2K[2m[WebServer] [22m[INFO]: Optional fields missing from Cargo.toml: 'description', 'repository', and 'license'. These are not necessary, but recommended
+
+[1A[2K[2m[WebServer] [22m[INFO]: ✨   Done in 0.31s
+[2m[WebServer] [22m[INFO]: 📦   Your wasm pkg is ready to publish at /Users/davidrose/git/zerg/frontend/pkg.
+
+[1A[2K[2m[WebServer] [22m[build-only] 📦 copying WASM artifacts to www...
+
+[1A[2K[2m[WebServer] [22m[build-only] ✍️  writing bootstrap.js …
+
+[1A[2K[2m[WebServer] [22m[build-only] 🧩 generating index.html from template …
+
+[1A[2K[2m[WebServer] [22m[build-only] ✍️  writing config.js …
+
+[1A[2K[2m[WebServer] [22m[build-only] ✅ build complete (output in frontend/www/)
+
+🚀 Setting up test environment...
+✅ Pre-test cleanup completed
+✅ Test environment setup completed
+
+Running 6 tests using 2 workers
+
+[1A[2K[1/6] [chromium] › tests/canvas_api_contract.spec.ts:10:7 › Canvas UI Tests › Canvas tab loads successfully without errors
+[1A[2K[2/6] [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+[1A[2K[chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+🔍 Starting complete agent creation test...
+
+[1A[2K📊 Worker ID: 0
+
+[1A[2K📊 Step 0: Resetting database...
+
+[1A[2K[2m[WebServer] [22mWARNING - Resetting database - dropping all tables
+
+[1A[2K✅ Database reset successful
+
+[1A[2K📊 Step 1: Verifying empty state...
+
+[1A[2K[2m[WebServer] [22mERROR - Database session rolled back due to error: (1001, None)
+
+[1A[2K[3/6] [chromium] › tests/canvas_api_contract.spec.ts:36:7 › Canvas UI Tests › Canvas persists state when switching tabs
+[1A[2K📊 Initial agent count: [33m0[39m
+
+[1A[2K📊 Step 2: Creating agent via API...
+
+[1A[2K📊 Agent creation status: [33m201[39m
+
+[1A[2K📊 Created agent ID: [33m1[39m
+
+[1A[2K📊 Created agent name: Test Agent Worker 0
+
+[1A[2K📊 Step 3: Verifying agent appears in list...
+
+[1A[2K📊 Updated agent count: [33m1[39m
+
+[1A[2K✅ Agent found in list with correct data
+
+[1A[2K📊 Step 5: Testing UI integration...
+
+[1A[2K[2m[WebServer] [22mERROR - Database session rolled back due to error: (1001, None)
+
+[1A[2K[4/6] [chromium] › tests/canvas_api_contract.spec.ts:58:7 › Canvas UI Tests › Canvas workspace is interactive
+[1A[2K[2m[WebServer] [22mERROR - Database session rolled back due to error: (1001, None)
+
+[1A[2K[5/6] [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution
+[1A[2K[chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution
+🚀 Starting complete canvas workflow test...
+
+[1A[2K📊 Worker ID: 1
+
+[1A[2K📊 Step 1: Creating test agent...
+
+[1A[2K✅ Test agent created with ID: [33m1[39m
+
+[1A[2K📊 Step 2: Navigating to application...
+
+[1A[2K[chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+📊 Agent visible in UI: [33mtrue[39m
+
+[1A[2K✅ Agent successfully appears in UI
+
+[1A[2K📊 Step 6: Creating second agent for isolation test...
+
+[1A[2K📊 Second agent created with ID: [33m2[39m
+
+[1A[2K📊 Step 7: Verifying agent isolation...
+
+[1A[2K📊 Final agent count: [33m2[39m
+
+[1A[2K📊 Worker-specific agent count: [33m2[39m
+
+[1A[2K✅ Complete agent creation and isolation test passed!
+
+[1A[2K[2m[WebServer] [22mERROR - Database session rolled back due to error: (1001, None)
+
+[1A[2K[6/6] [chromium] › tests/comprehensive_debug.spec.ts:15:7 › Comprehensive Debug › Complete system debug and diagnosis
+[1A[2K[chromium] › tests/comprehensive_debug.spec.ts:15:7 › Comprehensive Debug › Complete system debug and diagnosis
+🔍 Starting comprehensive debug test...
+
+[1A[2K📊 Worker ID: 0
+
+[1A[2K📊 NODE_ENV: test
+
+[1A[2K📊 Backend URL: http://localhost:47300
+
+[1A[2K🔍 Test 1: Basic connectivity
+
+[1A[2K✅ Backend is accessible
+
+[1A[2K🔍 Test 2: Header transmission
+
+[1A[2K✅ Headers can be sent
+
+[1A[2K🔍 Test 3: Agent GET endpoint
+
+[1A[2K📊 Agent GET count: [33m2[39m
+
+[1A[2K✅ Agent GET endpoint working
+
+[1A[2K🔍 Test 4: Testing different database operations
+
+[1A[2K📊 Testing user endpoint...
+
+[1A[2K📊 User data available: [33mtrue[39m
+
+[1A[2K🔍 Test 5: Workflow creation test
+
+[1A[2K📊 Workflow created ID: [33m1[39m
+
+[1A[2K✅ Workflow creation working
+
+[1A[2K🔍 Test 6: Minimal agent creation
+
+[1A[2K📊 Minimal agent created ID: [33m3[39m
+
+[1A[2K✅ Agent creation working with mock model
+
+[1A[2K🔍 Test 7: System health
+
+[1A[2K📊 System health: {"status":"ok","db":{"status":"ok"},"ws":{"available":true,"active_connections":1,"topics":3}}
+
+[1A[2K✅ Comprehensive debug test complete
+
+[1A[2K[chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution
+📊 Step 3: Verifying agent in dashboard...
+
+[1A[2K📊 Agent visible in dashboard: [33mtrue[39m
+
+[1A[2K📊 Step 4: Navigating to canvas...
+
+[1A[2K📊 Canvas visible: [33mtrue[39m
+
+[1A[2K✅ Canvas loaded successfully
+
+[1A[2K📊 Step 5: Checking agent shelf...
+
+[1A[2K📊 Agent shelf visible: [33mtrue[39m
+
+[1A[2K📊 Agent visible in shelf: [33mtrue[39m
+
+[1A[2K✅ Agent found in shelf - ready for drag and drop
+
+[1A[2K📊 Step 7: Checking tool palette...
+
+[1A[2K📊 Tool palette visible: [33mtrue[39m
+
+[1A[2K📊 HTTP tool visible: [33mtrue[39m
+
+[1A[2K📊 URL tool visible: [33mfalse[39m
+
+[1A[2K✅ Tools found in palette - ready for workflow creation
+
+[1A[2K📊 Step 8: Attempting drag and drop workflow...
+
+[1A[2K📊 Agent drag operation attempted
+
+[1A[2K📊 Agent node on canvas: [33mfalse[39m
+
+[1A[2K✅ Complete canvas workflow test finished
+
+[1A[2K📊 Summary: Basic navigation and UI structure validated
+
+[1A[2K📊 Next: UI implementation needed for full drag-and-drop workflow
+
+[1A[2K[2m[WebServer] [22mERROR - Database session rolled back due to error: (1001, None)
+
+🧹 Starting test environment cleanup...
+✅ Test database cleanup completed
+✅ Test environment cleanup completed
+[1A[2K  6 passed (13.4s)
