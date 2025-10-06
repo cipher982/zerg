@@ -1,0 +1,25 @@
+ReferenceError: module is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and '/Users/davidrose/git/zerg/e2e/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+
+   at ../test-setup.js:58
+
+  56 | }
+  57 |
+> 58 | module.exports = globalSetup;
+     | ^
+  59 |
+    at /Users/davidrose/git/zerg/e2e/test-setup.js:58:1
+
+ReferenceError: module is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and '/Users/davidrose/git/zerg/e2e/package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.
+
+   at ../test-teardown.js:55
+
+  53 | }
+  54 |
+> 55 | module.exports = globalTeardown;
+     | ^
+  56 |
+    at /Users/davidrose/git/zerg/e2e/test-teardown.js:55:1
+
+[1A[2K

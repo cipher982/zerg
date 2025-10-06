@@ -1,0 +1,544 @@
+🚀 Setting up test environment...
+✅ Pre-test cleanup completed
+✅ Test environment setup completed
+
+Running 6 tests using 2 workers
+
+[1A[2K[1/6] [chromium] › tests/canvas_api_contract.spec.ts:10:7 › Canvas UI Tests › Canvas tab loads successfully without errors
+[1A[2K[2/6] [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+[1A[2K[chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+🔍 Starting complete agent creation test...
+
+[1A[2K📊 Worker ID: 0
+
+[1A[2K📊 Step 0: Resetting database...
+
+[1A[2KDatabase reset attempt 1: HTTP 422
+
+[1A[2KDatabase reset attempt 2: HTTP 422
+
+[1A[2KDatabase reset attempt 3: HTTP 422
+
+[1A[2K⚠️  Database reset failed: Error: Failed to reset database via request after 3 attempts
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:111:9[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:7
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:304:9
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:277:11
+    at TimeoutManager.withRunnable [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:67:14[90m)[39m
+    at TestInfoImpl._runWithTimeout [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:275:7[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:302:7
+    at WorkerMain._runTest [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:277:5[90m)[39m
+    at WorkerMain.runTestGroup [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:193:11[90m)[39m
+    at process.<anonymous> [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/common/process.js:70:22[90m)[39m
+
+[1A[2K📊 Step 1: Verifying empty state...
+
+[1A[2K📊 Initial agent count: [33m0[39m
+
+[1A[2K📊 Step 2: Creating agent via API...
+
+[1A[2K📊 Agent creation status: [33m201[39m
+
+[1A[2K📊 Created agent ID: [33m1[39m
+
+[1A[2K📊 Created agent name: Test Agent Worker 0
+
+[1A[2K📊 Step 3: Verifying agent appears in list...
+
+[1A[2K📊 Updated agent count: [33m1[39m
+
+[1A[2K✅ Agent found in list with correct data
+
+[1A[2K📊 Step 5: Testing UI integration...
+
+[1A[2K[3/6] [chromium] › tests/canvas_api_contract.spec.ts:10:7 › Canvas UI Tests › Canvas tab loads successfully without errors (retry #1)
+[1A[2K[4/6] [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test (retry #1)
+[1A[2K🔍 Starting complete agent creation test...
+
+[1A[2K📊 Worker ID: 3
+
+[1A[2K📊 Step 0: Resetting database...
+
+[1A[2KDatabase reset attempt 1: HTTP 422
+
+[1A[2KDatabase reset attempt 2: HTTP 422
+
+[1A[2KDatabase reset attempt 3: HTTP 422
+
+[1A[2K⚠️  Database reset failed: Error: Failed to reset database via request after 3 attempts
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:111:9[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:7
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:304:9
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:277:11
+    at TimeoutManager.withRunnable [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:67:14[90m)[39m
+    at TestInfoImpl._runWithTimeout [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:275:7[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:302:7
+    at WorkerMain._runTest [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:277:5[90m)[39m
+    at WorkerMain.runTestGroup [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:193:11[90m)[39m
+    at process.<anonymous> [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/common/process.js:70:22[90m)[39m
+
+[1A[2K📊 Step 1: Verifying empty state...
+
+[1A[2K📊 Initial agent count: [33m0[39m
+
+[1A[2K📊 Step 2: Creating agent via API...
+
+[1A[2K📊 Agent creation status: [33m201[39m
+
+[1A[2K📊 Created agent ID: [33m1[39m
+
+[1A[2K📊 Created agent name: Test Agent Worker 3
+
+[1A[2K📊 Step 3: Verifying agent appears in list...
+
+[1A[2K📊 Updated agent count: [33m1[39m
+
+[1A[2K✅ Agent found in list with correct data
+
+[1A[2K📊 Step 5: Testing UI integration...
+
+[1A[2K  1) [chromium] › tests/canvas_api_contract.spec.ts:10:7 › Canvas UI Tests › Canvas tab loads successfully without errors 
+
+    Error: [31mTimed out 15000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-dashboard-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 15000ms[22m
+    [2m  - waiting for getByTestId('global-dashboard-tab')[22m
+
+
+      14 |     
+      15 |     // Wait for app header/tabs to render
+    > 16 |     await expect(page.getByTestId('global-dashboard-tab')).toBeVisible({ timeout: 15000 });
+         |                                                            ^
+      17 |     // User clicks on Canvas tab
+      18 |     const canvasTab = page.getByTestId('global-canvas-tab');
+      19 |     await expect(canvasTab).toBeVisible({ timeout: 15000 });
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:16:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: [31mTimed out 15000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-dashboard-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 15000ms[22m
+    [2m  - waiting for getByTestId('global-dashboard-tab')[22m
+
+
+      14 |     
+      15 |     // Wait for app header/tabs to render
+    > 16 |     await expect(page.getByTestId('global-dashboard-tab')).toBeVisible({ timeout: 15000 });
+         |                                                            ^
+      17 |     // User clicks on Canvas tab
+      18 |     const canvasTab = page.getByTestId('global-canvas-tab');
+      19 |     await expect(canvasTab).toBeVisible({ timeout: 15000 });
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:16:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[5/6] [chromium] › tests/canvas_api_contract.spec.ts:36:7 › Canvas UI Tests › Canvas persists state when switching tabs
+[1A[2K  2) [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test 
+
+    Error: [31mTimed out 15000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-dashboard-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 15000ms[22m
+    [2m  - waiting for getByTestId('global-dashboard-tab')[22m
+
+
+      83 |     
+      84 |     // Navigate to dashboard
+    > 85 |     await expect(page.getByTestId('global-dashboard-tab')).toBeVisible({ timeout: 15000 });
+         |                                                            ^
+      86 |     await page.getByTestId('global-dashboard-tab').click();
+      87 |     await page.waitForTimeout(2000);
+      88 |     
+        at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:85:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: [31mTimed out 15000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-dashboard-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 15000ms[22m
+    [2m  - waiting for getByTestId('global-dashboard-tab')[22m
+
+
+      83 |     
+      84 |     // Navigate to dashboard
+    > 85 |     await expect(page.getByTestId('global-dashboard-tab')).toBeVisible({ timeout: 15000 });
+         |                                                            ^
+      86 |     await page.getByTestId('global-dashboard-tab').click();
+      87 |     await page.waitForTimeout(2000);
+      88 |     
+        at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:85:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[6/6] [chromium] › tests/canvas_api_contract.spec.ts:58:7 › Canvas UI Tests › Canvas workspace is interactive
+[1A[2K[7/6] (retries) [chromium] › tests/canvas_api_contract.spec.ts:36:7 › Canvas UI Tests › Canvas persists state when switching tabs (retry #1)
+[1A[2K[8/6] (retries) [chromium] › tests/canvas_api_contract.spec.ts:58:7 › Canvas UI Tests › Canvas workspace is interactive (retry #1)
+[1A[2K  3) [chromium] › tests/canvas_api_contract.spec.ts:36:7 › Canvas UI Tests › Canvas persists state when switching tabs 
+
+    Error: [31mTimed out 15000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-canvas-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 15000ms[22m
+    [2m  - waiting for getByTestId('global-canvas-tab')[22m
+
+
+      38 |     await page.goto('/');
+      39 |     await page.waitForFunction(() => (window as any).__APP_READY__ === true, { timeout: 15000 });
+    > 40 |     await expect(page.getByTestId('global-canvas-tab')).toBeVisible({ timeout: 15000 });
+         |                                                         ^
+      41 |     await page.getByTestId('global-canvas-tab').click();
+      42 |     
+      43 |     // Wait for canvas to load
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:40:57
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: [31mTimed out 15000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-canvas-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 15000ms[22m
+    [2m  - waiting for getByTestId('global-canvas-tab')[22m
+
+
+      38 |     await page.goto('/');
+      39 |     await page.waitForFunction(() => (window as any).__APP_READY__ === true, { timeout: 15000 });
+    > 40 |     await expect(page.getByTestId('global-canvas-tab')).toBeVisible({ timeout: 15000 });
+         |                                                         ^
+      41 |     await page.getByTestId('global-canvas-tab').click();
+      42 |     
+      43 |     // Wait for canvas to load
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:40:57
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[9/6] (retries) [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution
+[1A[2K[chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution
+🚀 Starting complete canvas workflow test...
+
+[1A[2K📊 Worker ID: 8
+
+[1A[2K📊 Step 1: Creating test agent...
+
+[1A[2K✅ Test agent created with ID: [33m1[39m
+
+[1A[2K📊 Step 2: Navigating to application...
+
+[1A[2K📊 Step 3: Verifying agent in dashboard...
+
+[1A[2K  4) [chromium] › tests/canvas_api_contract.spec.ts:58:7 › Canvas UI Tests › Canvas workspace is interactive 
+
+    Error: [31mTimed out 15000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-canvas-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 15000ms[22m
+    [2m  - waiting for getByTestId('global-canvas-tab')[22m
+
+
+      60 |     await page.goto('/');
+      61 |     await page.waitForFunction(() => (window as any).__APP_READY__ === true, { timeout: 15000 });
+    > 62 |     await expect(page.getByTestId('global-canvas-tab')).toBeVisible({ timeout: 15000 });
+         |                                                         ^
+      63 |     await page.getByTestId('global-canvas-tab').click();
+      64 |     
+      65 |     // Wait for canvas to load
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:62:57
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: [31mTimed out 15000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-canvas-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 15000ms[22m
+    [2m  - waiting for getByTestId('global-canvas-tab')[22m
+
+
+      60 |     await page.goto('/');
+      61 |     await page.waitForFunction(() => (window as any).__APP_READY__ === true, { timeout: 15000 });
+    > 62 |     await expect(page.getByTestId('global-canvas-tab')).toBeVisible({ timeout: 15000 });
+         |                                                         ^
+      63 |     await page.getByTestId('global-canvas-tab').click();
+      64 |     
+      65 |     // Wait for canvas to load
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:62:57
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[10/6] (retries) [chromium] › tests/comprehensive_debug.spec.ts:15:7 › Comprehensive Debug › Complete system debug and diagnosis
+[1A[2K[chromium] › tests/comprehensive_debug.spec.ts:15:7 › Comprehensive Debug › Complete system debug and diagnosis
+🔍 Starting comprehensive debug test...
+
+[1A[2K📊 Worker ID: 9
+
+[1A[2K📊 NODE_ENV: test
+
+[1A[2K📊 Backend URL: http://127.0.0.1:47300
+
+[1A[2K🔍 Test 1: Basic connectivity
+
+[1A[2K✅ Backend is accessible
+
+[1A[2K🔍 Test 2: Header transmission
+
+[1A[2K✅ Headers can be sent
+
+[1A[2K🔍 Test 3: Agent GET endpoint
+
+[1A[2K📊 Agent GET count: [33m0[39m
+
+[1A[2K✅ Agent GET endpoint working
+
+[1A[2K🔍 Test 4: Testing different database operations
+
+[1A[2K📊 Testing user endpoint...
+
+[1A[2K📊 User data available: [33mtrue[39m
+
+[1A[2K🔍 Test 5: Workflow creation test
+
+[1A[2K📊 Workflow created ID: [33m1[39m
+
+[1A[2K✅ Workflow creation working
+
+[1A[2K🔍 Test 6: Minimal agent creation
+
+[1A[2K📊 Minimal agent created ID: [33m1[39m
+
+[1A[2K✅ Agent creation working with mock model
+
+[1A[2K🔍 Test 7: System health
+
+[1A[2K📊 System health: {"status":"ok","db":{"status":"ok"},"ws":{"available":true,"active_connections":0,"topics":0}}
+
+[1A[2K✅ Comprehensive debug test complete
+
+[1A[2K[11/6] (retries) [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution (retry #1)
+[1A[2K[chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution
+🚀 Starting complete canvas workflow test...
+
+[1A[2K📊 Worker ID: 10
+
+[1A[2K📊 Step 1: Creating test agent...
+
+[1A[2K✅ Test agent created with ID: [33m1[39m
+
+[1A[2K📊 Step 2: Navigating to application...
+
+[1A[2K📊 Step 3: Verifying agent in dashboard...
+
+[1A[2K  5) [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution 
+
+    Error: [31mTimed out 15000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-dashboard-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 15000ms[22m
+    [2m  - waiting for getByTestId('global-dashboard-tab')[22m
+
+
+      44 |     // Step 3: Verify agent appears in dashboard
+      45 |     console.log('📊 Step 3: Verifying agent in dashboard...');
+    > 46 |     await expect(page.getByTestId('global-dashboard-tab')).toBeVisible({ timeout: 15000 });
+         |                                                            ^
+      47 |     await page.getByTestId('global-dashboard-tab').click();
+      48 |     await page.waitForTimeout(1000);
+      49 |     
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_complete_workflow.spec.ts:46:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: [31mTimed out 15000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-dashboard-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 15000ms[22m
+    [2m  - waiting for getByTestId('global-dashboard-tab')[22m
+
+
+      44 |     // Step 3: Verify agent appears in dashboard
+      45 |     console.log('📊 Step 3: Verifying agent in dashboard...');
+    > 46 |     await expect(page.getByTestId('global-dashboard-tab')).toBeVisible({ timeout: 15000 });
+         |                                                            ^
+      47 |     await page.getByTestId('global-dashboard-tab').click();
+      48 |     await page.waitForTimeout(1000);
+      49 |     
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_complete_workflow.spec.ts:46:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+🧹 Starting test environment cleanup...
+✅ Test database cleanup completed
+✅ Test environment cleanup completed
+[1A[2K  5 failed
+    [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test 
+    [chromium] › tests/canvas_api_contract.spec.ts:10:7 › Canvas UI Tests › Canvas tab loads successfully without errors 
+    [chromium] › tests/canvas_api_contract.spec.ts:36:7 › Canvas UI Tests › Canvas persists state when switching tabs 
+    [chromium] › tests/canvas_api_contract.spec.ts:58:7 › Canvas UI Tests › Canvas workspace is interactive 
+    [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution 
+  1 passed (1.7m)

@@ -1,0 +1,29 @@
+🚀 Setting up test environment...
+ReferenceError: require is not defined
+
+   at ../test-setup.js:14
+
+  12 |   
+  13 |   // Clean up any leftover database files from previous runs
+> 14 |   const { spawn } = require('child_process');
+     |                     ^
+  15 |   const path = require('path');
+  16 |   
+  17 |   try {
+    at globalSetup (/Users/davidrose/git/zerg/e2e/test-setup.js:14:21)
+
+🧹 Starting test environment cleanup...
+ReferenceError: require is not defined
+
+   at ../test-teardown.js:9
+
+   7 |   console.log('🧹 Starting test environment cleanup...');
+   8 |   
+>  9 |   const { spawn } = require('child_process');
+     |                     ^
+  10 |   const path = require('path');
+  11 |   
+  12 |   try {
+    at globalTeardown (/Users/davidrose/git/zerg/e2e/test-teardown.js:9:21)
+
+[1A[2K

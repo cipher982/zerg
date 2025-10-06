@@ -1,0 +1,367 @@
+[2m[WebServer] [22m[build-only] 🔧 building frontend (debug)…
+[2m[WebServer] [22m[build-only] 🏗  wasm-pack build …
+[2m[WebServer] [22m[INFO]: 🎯  Checking for the Wasm target...
+[2m[WebServer] [22m[INFO]: 🌀  Compiling to Wasm...
+[2m[WebServer] [22mwarning: agent-platform-frontend@0.1.0: WebSocket types generated successfully
+[2m[WebServer] [22m   Compiling agent-platform-frontend v0.1.0 (/Users/davidrose/git/zerg/frontend)
+[2m[WebServer] [22mwarning: unused import: `super::*`
+[2m[WebServer] [22m  --> src/generated/tool_definitions.rs:83:9
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m83 |     use super::*;
+[2m[WebServer] [22m   |         ^^^^^^^^
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: `#[warn(unused_imports)]` on by default
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m  --> src/generated/ws_messages.rs:12:7
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m12 | #[cfg(feature = "schema_validation")]
+[2m[WebServer] [22m   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m   = note: `#[warn(unexpected_cfgs)]` on by default
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m  --> src/generated/ws_messages.rs:16:12
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m16 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m  --> src/generated/ws_messages.rs:62:12
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m62 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m  --> src/generated/ws_messages.rs:68:12
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m68 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = [2m[WebServer] [22mnote: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m  --> src/generated/ws_messages.rs:74:12
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m74 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m  --> src/generated/ws_messages.rs:80:12
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m80 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m  --> src/generated/ws_messages.rs:86:12
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m86 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m  --> src/generated/ws_messages.rs:92:12
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m92 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m  --> src/generated/ws_messages.rs:98:12
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m98 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:105:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m105 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:112:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m112 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:119:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m119 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:127:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m127 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:134:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m134 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:144:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m144 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:150:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m150 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:161:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m161 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:167:12
+[2m[WebServer] [22m    |[2m[WebServer] [22m
+[2m[WebServer] [22m167 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:174:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m174 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:186:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m186 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:200:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m200 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:209:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m209 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:219:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m219 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:228:12
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m228 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:237:12[2m[WebServer] [22m
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m237 | #[cfg_attr(feature = "schema_validation", derive(JsonSchema))]
+[2m[WebServer] [22m    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:319:7
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m319 | #[cfg(feature = "schema_validation")]
+[2m[WebServer] [22m    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `compile_time_validation`
+[2m[WebServer] [22m   --> src/generated/ws_messages.rs:325:7
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m325 | #[cfg(feature = "compile_time_validation")]
+[2m[WebServer] [22m    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `compile_time_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unused import: `std::collections::HashMap`
+[2m[WebServer] [22m --> src/generated/ws_messages.rs:9:5
+[2m[WebServer] [22m  |
+[2m[WebServer] [22m9 | use std::collections::HashMap;
+[2m[WebServer] [22m  [2m[WebServer] [22m|     ^^^^^^^^^^^^^^^^^^^^^^^^^
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `schema_validation`
+[2m[WebServer] [22m  --> src/generated/ws_handlers.rs:11:7
+[2m[WebServer] [22m   [2m[WebServer] [22m|
+[2m[WebServer] [22m11 | #[cfg(feature = "schema_validation")]
+[2m[WebServer] [22m   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `schema_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `compile_time_validation`
+[2m[WebServer] [22m   --> src/generated/ws_handlers.rs:311:7
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m311 | #[cfg(feature = "compile_time_validation")][2m[WebServer] [22m
+[2m[WebServer] [22m    |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `compile_time_validation` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unused import: `serde_json::Value`
+[2m[WebServer] [22m --> src/generated/ws_handlers.rs:7:5
+[2m[WebServer] [22m  |
+[2m[WebServer] [22m7 | use serde_json::Value;
+[2m[WebServer] [22m  |     ^^^^^^^^^^^^^^^^^
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `metrics`
+[2m[WebServer] [22m  --> src/generated/ws_handlers.rs:39:11
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m39 |     #[cfg(feature = "metrics")][2m[WebServer] [22m
+[2m[WebServer] [22m   |           ^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `metrics` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `metrics`
+[2m[WebServer] [22m   --> src/generated/ws_handlers.rs:180:11
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m180 |[2m[WebServer] [22m     #[cfg(feature = "metrics")]
+[2m[WebServer] [22m    |           ^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m    |
+[2m[WebServer] [22m    = note: no expected values for `feature`
+[2m[WebServer] [22m    = help: consider adding `metrics` as a feature in `Cargo.toml`
+[2m[WebServer] [22m    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `metrics`[2m[WebServer] [22m
+[2m[WebServer] [22m  --> src/generated/ws_handlers.rs:47:19
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m47 |             #[cfg(feature = "metrics")]
+[2m[WebServer] [22m   |                   ^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `metrics` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `metrics`
+[2m[WebServer] [22m  --> src/generated/ws_handlers.rs:56:15
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m56 |         #[cfg(feature = "metrics")]
+[2m[WebServer] [22m   |               ^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `metrics` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
+[2m[WebServer] [22mwarning: unexpected `cfg` condition value: `metrics`
+[2m[WebServer] [22m  --> src/generated/ws_handlers.rs:73:31
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m73 |                         #[cfg(feature = "metrics")]
+[2m[WebServer] [22m   |                               ^^^^^^^^^^^^^^^^^^^ help: remove the condition
+[2m[WebServer] [22m   |
+[2m[WebServer] [22m   = note: no expected values for `feature`
+[2m[WebServer] [22m   = help: consider adding `metrics` as a feature in `Cargo.toml`
+[2m[WebServer] [22m   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[2m[WebServer] [22m
