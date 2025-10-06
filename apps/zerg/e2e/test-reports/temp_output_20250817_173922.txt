@@ -1,0 +1,771 @@
+[1A[2K[2m[WebServer] [22m[build-only] 🔧 building frontend (debug)…
+
+[1A[2K[2m[WebServer] [22m[build-only] 🏗  wasm-pack build …
+
+[1A[2K[2m[WebServer] [22m[INFO]: 🎯  Checking for the Wasm target...
+
+[1A[2K[2m[WebServer] [22m[INFO]: 🌀  Compiling to Wasm...
+
+[1A[2K[2m[WebServer] [22mwarning: agent-platform-frontend@0.1.0: WebSocket types generated successfully
+
+[1A[2K[2m[WebServer] [22m    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+
+[1A[2K[2m[WebServer] [22m[INFO]: ⬇️  Installing wasm-bindgen...
+
+[1A[2K[2m[WebServer] [22m[INFO]: Optional fields missing from Cargo.toml: 'description', 'repository', and 'license'. These are not necessary, but recommended
+
+[1A[2K[2m[WebServer] [22m[INFO]: ✨   Done in 0.29s
+[2m[WebServer] [22m[INFO]: 📦   Your wasm pkg is ready to publish at /Users/davidrose/git/zerg/frontend/pkg.
+
+[1A[2K[2m[WebServer] [22m[build-only] 📦 copying WASM artifacts to www...
+
+[1A[2K[2m[WebServer] [22m[build-only] ✍️  writing bootstrap.js …
+
+[1A[2K[2m[WebServer] [22m[build-only] 🔐 updating CSP for backend port 47300 …
+
+[1A[2K[2m[WebServer] [22m[build-only] ✍️  writing config.js …
+
+[1A[2K[2m[WebServer] [22m[build-only] ✅ build complete (output in frontend/www/)
+
+🚀 Setting up test environment...
+✅ Pre-test cleanup completed
+✅ Test environment setup completed
+
+Running 6 tests using 2 workers
+
+[1A[2K[1/6] [chromium] › tests/canvas_api_contract.spec.ts:10:7 › Canvas UI Tests › Canvas tab loads successfully without errors
+[1A[2K[2/6] [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+[1A[2K[chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test
+🔍 Starting complete agent creation test...
+
+[1A[2K📊 Worker ID: 0
+
+[1A[2K📊 Step 0: Resetting database...
+
+[1A[2K[2m[WebServer] [22mWARNING:zerg.routers.admin:Resetting database - dropping all tables
+
+[1A[2K✅ Database reset successful
+
+[1A[2K📊 Step 1: Verifying empty state...
+
+[1A[2K📊 Initial agent count: [33m0[39m
+
+[1A[2K📊 Step 2: Creating agent via API...
+
+[1A[2K📊 Agent creation status: [33m201[39m
+
+[1A[2K📊 Created agent ID: [33m1[39m
+
+[1A[2K📊 Created agent name: Test Agent Worker 0
+
+[1A[2K📊 Step 3: Verifying agent appears in list...
+
+[1A[2K📊 Updated agent count: [33m1[39m
+
+[1A[2K✅ Agent found in list with correct data
+
+[1A[2K📊 Step 5: Testing UI integration...
+
+[1A[2K[3/6] [chromium] › tests/canvas_api_contract.spec.ts:10:7 › Canvas UI Tests › Canvas tab loads successfully without errors (retry #1)
+[1A[2K  1) [chromium] › tests/canvas_api_contract.spec.ts:10:7 › Canvas UI Tests › Canvas tab loads successfully without errors 
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-canvas-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('global-canvas-tab')[22m
+
+
+      14 |     // User clicks on Canvas tab
+      15 |     const canvasTab = page.getByTestId('global-canvas-tab');
+    > 16 |     await expect(canvasTab).toBeVisible();
+         |                             ^
+      17 |     await canvasTab.click();
+      18 |     
+      19 |     // Canvas should load without errors
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:16:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: [31mTimed out 5000ms waiting for [39m[2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m()[22m
+
+    Locator: getByTestId('global-canvas-tab')
+    Expected: visible
+    Received: <element(s) not found>
+    Call log:
+    [2m  - expect.toBeVisible with timeout 5000ms[22m
+    [2m  - waiting for getByTestId('global-canvas-tab')[22m
+
+
+      14 |     // User clicks on Canvas tab
+      15 |     const canvasTab = page.getByTestId('global-canvas-tab');
+    > 16 |     await expect(canvasTab).toBeVisible();
+         |                             ^
+      17 |     await canvasTab.click();
+      18 |     
+      19 |     // Canvas should load without errors
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:16:29
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-6b466-successfully-without-errors-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[4/6] [chromium] › tests/canvas_api_contract.spec.ts:33:7 › Canvas UI Tests › Canvas persists state when switching tabs
+[1A[2K[5/6] [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test (retry #1)
+[1A[2K🔍 Starting complete agent creation test...
+
+[1A[2K📊 Worker ID: 4
+
+[1A[2K📊 Step 0: Resetting database...
+
+[1A[2KDatabase reset attempt 1 failed: apiRequestContext.post: connect ECONNREFUSED ::1:47304
+Call log:
+[2m  - → POST http://localhost:47304/api/admin/reset-database[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 4[22m
+
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:97:43[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:36 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@12'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts'[39m,
+      line: [33m97[39m,
+      column: [33m43[39m,
+      function: [32m'resetDatabaseViaRequest'[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.post(http://localhost:47304/api/admin/reset-database)'[39m,
+    apiName: [32m'apiRequestContext.post'[39m,
+    params: {
+      url: [32m'http://localhost:47304/api/admin/reset-database'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'POST'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@12'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1755419979364[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:47304\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:47304/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 4\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:47304\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:47304/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 4\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at apiRequestContext.post: connect ECONNREFUSED ::1:47304\n'[39m +
+        [32m'    at resetDatabaseViaRequest (/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts:97:43)\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:25:36'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2KDatabase reset attempt 2 failed: apiRequestContext.post: connect ECONNREFUSED ::1:47304
+Call log:
+[2m  - → POST http://localhost:47304/api/admin/reset-database[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 4[22m
+
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:97:43[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:7 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@13'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts'[39m,
+      line: [33m97[39m,
+      column: [33m43[39m,
+      function: [32m'resetDatabaseViaRequest'[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.post(http://localhost:47304/api/admin/reset-database)'[39m,
+    apiName: [32m'apiRequestContext.post'[39m,
+    params: {
+      url: [32m'http://localhost:47304/api/admin/reset-database'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'POST'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@13'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1755419980673[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:47304\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:47304/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 4\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:47304\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:47304/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 4\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at apiRequestContext.post: connect ECONNREFUSED ::1:47304\n'[39m +
+        [32m'    at resetDatabaseViaRequest (/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts:97:43)\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:25:7'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2KDatabase reset attempt 3 failed: apiRequestContext.post: connect ECONNREFUSED ::1:47304
+Call log:
+[2m  - → POST http://localhost:47304/api/admin/reset-database[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 4[22m
+
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:97:43[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:7 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@14'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts'[39m,
+      line: [33m97[39m,
+      column: [33m43[39m,
+      function: [32m'resetDatabaseViaRequest'[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.post(http://localhost:47304/api/admin/reset-database)'[39m,
+    apiName: [32m'apiRequestContext.post'[39m,
+    params: {
+      url: [32m'http://localhost:47304/api/admin/reset-database'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'POST'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@14'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1755419981977[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:47304\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:47304/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 4\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.post: connect ECONNREFUSED ::1:47304\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → POST http://localhost:47304/api/admin/reset-database\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 4\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at apiRequestContext.post: connect ECONNREFUSED ::1:47304\n'[39m +
+        [32m'    at resetDatabaseViaRequest (/Users/davidrose/git/zerg/e2e/tests/helpers/database-helpers.ts:97:43)\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:25:7'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2K⚠️  Database reset failed: Error: Failed to reset database via request after 3 attempts
+    at resetDatabaseViaRequest [90m(/Users/davidrose/git/zerg/e2e/[39mtests/helpers/database-helpers.ts:112:9[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/agent_creation_full.spec.ts:25:7
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:304:9
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:277:11
+    at TimeoutManager.withRunnable [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/timeoutManager.js:67:14[90m)[39m
+    at TestInfoImpl._runWithTimeout [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/testInfo.js:275:7[90m)[39m
+    at [90m/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:302:7
+    at WorkerMain._runTest [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:277:5[90m)[39m
+    at WorkerMain.runTestGroup [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/worker/workerMain.js:193:11[90m)[39m
+    at process.<anonymous> [90m(/Users/davidrose/git/zerg/e2e/[39mnode_modules/[4mplaywright[24m/lib/common/process.js:70:22[90m)[39m
+
+[1A[2K📊 Step 1: Verifying empty state...
+
+[1A[2K  2) [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test 
+
+    TimeoutError: locator.click: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for getByTestId('global-dashboard-tab')[22m
+
+
+      82 |     
+      83 |     // Navigate to dashboard
+    > 84 |     await page.getByTestId('global-dashboard-tab').click();
+         |                                                    ^
+      85 |     await page.waitForTimeout(2000);
+      86 |     
+      87 |     // Look for the created agent in the UI
+        at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:84:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: apiRequestContext.get: connect ECONNREFUSED ::1:47304
+    Call log:
+    [2m  - → GET http://localhost:47304/api/agents[22m
+    [2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+    [2m    - accept: */*[22m
+    [2m    - accept-encoding: gzip,deflate,br[22m
+    [2m    - X-Test-Worker: 4[22m
+
+        at apiRequestContext.get: connect ECONNREFUSED ::1:47304
+        at /Users/davidrose/git/zerg/e2e/tests/agent_creation_full.spec.ts:36:41
+
+    Error: ENOENT: no such file or directory, open 'apiRequestContext.get: connect ECONNREFUSED :'
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/agent_creation_full-Agent--c7b1d-creation-and-isolation-test-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[6/6] [chromium] › tests/canvas_api_contract.spec.ts:53:7 › Canvas UI Tests › Canvas workspace is interactive
+[1A[2K[7/6] (retries) [chromium] › tests/canvas_api_contract.spec.ts:33:7 › Canvas UI Tests › Canvas persists state when switching tabs (retry #1)
+[1A[2K[8/6] (retries) [chromium] › tests/canvas_api_contract.spec.ts:53:7 › Canvas UI Tests › Canvas workspace is interactive (retry #1)
+[1A[2K  3) [chromium] › tests/canvas_api_contract.spec.ts:33:7 › Canvas UI Tests › Canvas persists state when switching tabs 
+
+    TimeoutError: locator.click: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for getByTestId('global-canvas-tab')[22m
+
+
+      34 |     // Navigate to canvas
+      35 |     await page.goto('/');
+    > 36 |     await page.getByTestId('global-canvas-tab').click();
+         |                                                 ^
+      37 |     
+      38 |     // Wait for canvas to load
+      39 |     const canvasContainer = page.locator('#canvas-container, [data-testid="canvas-container"], .canvas-wrapper');
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:36:49
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.click: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for getByTestId('global-canvas-tab')[22m
+
+
+      34 |     // Navigate to canvas
+      35 |     await page.goto('/');
+    > 36 |     await page.getByTestId('global-canvas-tab').click();
+         |                                                 ^
+      37 |     
+      38 |     // Wait for canvas to load
+      39 |     const canvasContainer = page.locator('#canvas-container, [data-testid="canvas-container"], .canvas-wrapper');
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:36:49
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-ce510-s-state-when-switching-tabs-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[9/6] (retries) [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution
+[1A[2K[chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution
+🚀 Starting complete canvas workflow test...
+
+[1A[2K📊 Worker ID: 8
+
+[1A[2K📊 Step 1: Creating test agent...
+
+[1A[2K[10/6] (retries) [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution (retry #1)
+[1A[2K🚀 Starting complete canvas workflow test...
+
+[1A[2K📊 Worker ID: 9
+
+[1A[2K📊 Step 1: Creating test agent...
+
+[1A[2K  4) [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution 
+
+    ReferenceError: backendUrl is not defined
+
+      23 |     // Step 1: Create Agent via API first to ensure it exists
+      24 |     console.log('📊 Step 1: Creating test agent...');
+    > 25 |     const agentResponse = await page.request.post(backendUrl + '/api/agents', {
+         |                                                   ^
+      26 |       data: {
+      27 |         name: `Canvas Test Agent ${workerId}`,
+      28 |         system_instructions: 'You are a test agent for canvas workflow testing',
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_complete_workflow.spec.ts:25:51
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    ReferenceError: backendUrl is not defined
+
+      23 |     // Step 1: Create Agent via API first to ensure it exists
+      24 |     console.log('📊 Step 1: Creating test agent...');
+    > 25 |     const agentResponse = await page.request.post(backendUrl + '/api/agents', {
+         |                                                   ^
+      26 |       data: {
+      27 |         name: `Canvas Test Agent ${workerId}`,
+      28 |         system_instructions: 'You are a test agent for canvas workflow testing',
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_complete_workflow.spec.ts:25:51
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_complete_workflow-C-c6777-th-agent-and-tool-execution-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[11/6] (retries) [chromium] › tests/comprehensive_debug.spec.ts:16:7 › Comprehensive Debug › Complete system debug and diagnosis
+[1A[2K[chromium] › tests/comprehensive_debug.spec.ts:16:7 › Comprehensive Debug › Complete system debug and diagnosis
+🔍 Starting comprehensive debug test...
+
+[1A[2K📊 Worker ID: 10
+
+[1A[2K📊 NODE_ENV: test
+
+[1A[2K🚀 Starting isolated backend server...
+
+[1A[2K[backend-server] Starting backend for worker 10 on port 8011
+
+[1A[2K[backend-server] Backend ready for worker 10 at http://localhost:8011
+
+[1A[2K📊 Backend URL: http://localhost:8011
+
+[1A[2K🔍 Test 1: Basic connectivity
+
+[1A[2K📊 Basic connectivity status: [33m200[39m
+
+[1A[2K✅ Backend is accessible
+
+[1A[2K🔍 Test 2: Header transmission
+
+[1A[2K📊 Header transmission status: [33m200[39m
+
+[1A[2K✅ Headers can be sent
+
+[1A[2K🔍 Test 3: Agent GET endpoint
+
+[1A[2K📊 Agent GET status: [33m200[39m
+
+[1A[2K📊 Agent GET count: [33m0[39m
+
+[1A[2K✅ Agent GET endpoint working
+
+[1A[2K🔍 Test 4: Testing different database operations
+
+[1A[2K📊 Testing user endpoint...
+
+[1A[2K📊 User endpoint status: [33m200[39m
+
+[1A[2K📊 User data available: [33mtrue[39m
+
+[1A[2K🔍 Test 5: Workflow creation test
+
+[1A[2K📊 Workflow creation status: [33m404[39m
+
+[1A[2K❌ Workflow creation failed: {"detail":"Not Found"}
+
+[1A[2K🔍 Test 6: Minimal agent creation
+
+[1A[2K📊 Minimal agent creation status: [33m500[39m
+
+[1A[2K❌ Minimal agent creation failed: Internal Server Error
+
+[1A[2K🔍 Test 7: Database introspection
+
+[1A[2K📊 System health error: apiRequestContext.get: read ECONNRESET
+Call log:
+[2m  - → GET http://localhost:8011/api/system/health[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,deflate,br[22m
+[2m    - X-Test-Worker: 10[22m
+
+    at [90m/Users/davidrose/git/zerg/e2e/[39mtests/comprehensive_debug.spec.ts:166:48 {
+  name: [32m'Error'[39m,
+  [[32mSymbol(step)[39m]: {
+    stepId: [32m'pw:api@15'[39m,
+    location: {
+      file: [32m'/Users/davidrose/git/zerg/e2e/tests/comprehensive_debug.spec.ts'[39m,
+      line: [33m166[39m,
+      column: [33m48[39m
+    },
+    category: [32m'pw:api'[39m,
+    title: [32m'apiRequestContext.get(http://localhost:8011/api/system/health)'[39m,
+    apiName: [32m'apiRequestContext.get'[39m,
+    params: {
+      url: [32m'http://localhost:8011/api/system/health'[39m,
+      params: [90mundefined[39m,
+      encodedParams: [90mundefined[39m,
+      method: [32m'GET'[39m,
+      headers: [90mundefined[39m,
+      postData: [90mundefined[39m,
+      jsonData: [90mundefined[39m,
+      formData: [90mundefined[39m,
+      multipartData: [90mundefined[39m,
+      timeout: [90mundefined[39m,
+      failOnStatusCode: [90mundefined[39m,
+      ignoreHTTPSErrors: [90mundefined[39m,
+      maxRedirects: [90mundefined[39m,
+      maxRetries: [90mundefined[39m,
+      __testHookLookup: [90mundefined[39m
+    },
+    boxedStack: [90mundefined[39m,
+    steps: [],
+    attachmentIndices: [],
+    info: TestStepInfoImpl {
+      annotations: [],
+      _testInfo: [36m[TestInfoImpl][39m,
+      _stepId: [32m'pw:api@15'[39m
+    },
+    complete: [36m[Function: complete][39m,
+    endWallTime: [33m1755420003498[39m,
+    error: {
+      message: [32m'Error: apiRequestContext.get: read ECONNRESET\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → GET http://localhost:8011/api/system/health\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 10\x1B[22m\n'[39m,
+      stack: [32m'Error: apiRequestContext.get: read ECONNRESET\n'[39m +
+        [32m'Call log:\n'[39m +
+        [32m'\x1B[2m  - → GET http://localhost:8011/api/system/health\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.7103.25 Safari/537.36\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept: */*\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - accept-encoding: gzip,deflate,br\x1B[22m\n'[39m +
+        [32m'\x1B[2m    - X-Test-Worker: 10\x1B[22m\n'[39m +
+        [32m'\n'[39m +
+        [32m'    at /Users/davidrose/git/zerg/e2e/tests/comprehensive_debug.spec.ts:166:48'[39m,
+      cause: [90mundefined[39m
+    }
+  }
+}
+
+[1A[2K✅ Comprehensive debug test complete
+
+[1A[2K[backend-server] Stopping backend for worker 10
+
+[1A[2K  5) [chromium] › tests/canvas_api_contract.spec.ts:53:7 › Canvas UI Tests › Canvas workspace is interactive 
+
+    TimeoutError: locator.click: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for getByTestId('global-canvas-tab')[22m
+
+
+      54 |     // Navigate to canvas
+      55 |     await page.goto('/');
+    > 56 |     await page.getByTestId('global-canvas-tab').click();
+         |                                                 ^
+      57 |     
+      58 |     // Wait for canvas to load
+      59 |     const canvasContainer = page.locator('#canvas-container, [data-testid="canvas-container"], .canvas-wrapper');
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:56:49
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    TimeoutError: locator.click: Timeout 10000ms exceeded.
+    Call log:
+    [2m  - waiting for getByTestId('global-canvas-tab')[22m
+
+
+      54 |     // Navigate to canvas
+      55 |     await page.goto('/');
+    > 56 |     await page.getByTestId('global-canvas-tab').click();
+         |                                                 ^
+      57 |     
+      58 |     // Wait for canvas to load
+      59 |     const canvasContainer = page.locator('#canvas-container, [data-testid="canvas-container"], .canvas-wrapper');
+        at /Users/davidrose/git/zerg/e2e/tests/canvas_api_contract.spec.ts:56:49
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium-retry1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium-retry1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium-retry1/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/canvas_api_contract-Canvas-545c8-as-workspace-is-interactive-chromium-retry1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+🧹 Starting test environment cleanup...
+✅ Test database cleanup completed
+✅ Test environment cleanup completed
+[1A[2K  5 failed
+    [chromium] › tests/agent_creation_full.spec.ts:15:7 › Agent Creation Full Workflow › Complete agent creation and isolation test 
+    [chromium] › tests/canvas_api_contract.spec.ts:10:7 › Canvas UI Tests › Canvas tab loads successfully without errors 
+    [chromium] › tests/canvas_api_contract.spec.ts:33:7 › Canvas UI Tests › Canvas persists state when switching tabs 
+    [chromium] › tests/canvas_api_contract.spec.ts:53:7 › Canvas UI Tests › Canvas workspace is interactive 
+    [chromium] › tests/canvas_complete_workflow.spec.ts:17:7 › Complete Canvas Workflow › End-to-end canvas workflow with agent and tool execution 
+  1 passed (42.9s)
