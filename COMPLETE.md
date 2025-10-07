@@ -506,7 +506,8 @@ make stop
 
 3. **Check SSE stream**
    ```bash
-   curl -N "http://localhost:47300/api/jarvis/events?token=$TOKEN"
+   # After authenticating with /api/jarvis/auth and storing cookies.txt
+   curl -N "http://localhost:47300/api/jarvis/events" -b cookies.txt
    ```
 
 ### Voice Commands
