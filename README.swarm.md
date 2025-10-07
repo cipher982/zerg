@@ -11,17 +11,30 @@ Unified agent orchestration platform combining **Jarvis** (voice/text interface)
 ## Quick Start
 
 ```bash
-# Install dependencies
+# 1. Install dependencies
 npm install
 cd apps/jarvis && npm install && cd ../..
 cd apps/zerg/backend && uv sync && cd ../../..
 
-# Copy and configure environment
+# 2. Configure environment
 cp .env.example.swarm .env
-# Edit .env with your API keys and secrets
+# Edit .env with:
+#   - OPENAI_API_KEY (both Jarvis and Zerg)
+#   - JARVIS_DEVICE_SECRET (32+ char random string)
+#   - DATABASE_URL (SQLite or PostgreSQL)
+#   - JWT_SECRET (secure random string)
 
-# Start full swarm (Jarvis + Zerg)
+# 3. Run database migrations
+cd apps/zerg/backend && uv run alembic upgrade head && cd ../../..
+
+# 4. Seed baseline agents
+make seed-jarvis-agents
+
+# 5. Start full swarm (Jarvis + Zerg)
 make swarm-dev
+
+# 6. Test integration (in another terminal)
+./scripts/test-jarvis-integration.sh
 ```
 
 Access:
