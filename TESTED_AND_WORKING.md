@@ -172,7 +172,7 @@ uv run python scripts/seed_jarvis_agents.py
 - ✅ GET /api/jarvis/agents - List 4 agents
 - ✅ GET /api/jarvis/runs - History with summaries
 - ✅ POST /api/jarvis/dispatch - Trigger execution
-- ✅ GET /api/jarvis/events - SSE streaming (with ?token=xyz)
+- ✅ GET /api/jarvis/events - SSE streaming (HttpOnly session cookie)
 
 ### Summary Extraction
 - ✅ Extracts first assistant message from thread
