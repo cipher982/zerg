@@ -76,7 +76,7 @@ e3da637 feat(jarvis): Phase 1 - Implement Jarvis control plane API endpoints
 - POST `/api/jarvis/auth` - Device authentication
 - GET `/api/jarvis/agents` - Agent listing
 - GET `/api/jarvis/runs` - Run history
-- JWT token management
+- Session cookie management
 
 ### Phase 2: Dispatch & SSE ✅
 - POST `/api/jarvis/dispatch` - Trigger agent execution
@@ -87,7 +87,7 @@ e3da637 feat(jarvis): Phase 1 - Implement Jarvis control plane API endpoints
 ### Phase 3: SDK & Components ✅
 - TypeScript API client with auth, dispatch, SSE
 - Task Inbox component with real-time updates
-- LocalStorage token caching
+- Session metadata caching
 - Auto-reconnection logic
 
 ### Phase 4: Baseline Agents ✅
@@ -350,11 +350,10 @@ make test
 
 ## 🐛 Known Issues (None Critical)
 
-### 1. SSE EventSource Headers
-- **Issue**: EventSource can't send Authorization header
-- **Current**: Works in development (cookies/implicit auth)
-- **Fix**: Add query param support: `/api/jarvis/events?token=xyz`
-- **Or**: Switch to WebSocket for production
+### 1. SSE Session Handling
+- **Status**: Resolved
+- **Current**: `/api/jarvis/auth` sets the HttpOnly session cookie used by all Jarvis endpoints
+- **Notes**: Native EventSource works without query parameters; development builds (`AUTH_DISABLED=1`) still honor the standard dev auth fallback
 
 ### 2. Summary Auto-Population
 - **Issue**: AgentRun.summary not automatically filled
@@ -424,10 +423,17 @@ curl -X POST http://localhost:47300/api/jarvis/auth \
 # First, seed agents
 make seed-jarvis-agents
 
-# Then dispatch
+# Authenticate once (stores cookie)
+curl -X POST http://localhost:47300/api/jarvis/auth \
+  -H "Content-Type: application/json" \
+  -d '{"device_secret":"<your secret>"}' \
+  -c cookies.txt -b cookies.txt
+
+# Then dispatch using the stored session
 curl -X POST http://localhost:47300/api/jarvis/dispatch \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"agent_id":1}'
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":1}' \
+  -b cookies.txt
 
 # Should return run_id and thread_id
 ```
@@ -436,7 +442,7 @@ curl -X POST http://localhost:47300/api/jarvis/dispatch \
 ```bash
 # Open SSE connection
 curl -N http://localhost:47300/api/jarvis/events \
-  -H "Authorization: Bearer $TOKEN"
+  -b cookies.txt
 
 # Should immediately see "connected" event
 # Then heartbeats every 30 seconds
@@ -445,7 +451,7 @@ curl -N http://localhost:47300/api/jarvis/events \
 ### 4. Run History
 ```bash
 curl http://localhost:47300/api/jarvis/runs \
-  -H "Authorization: Bearer $TOKEN"
+  -b cookies.txt
 
 # Should return array of recent runs with summaries
 ```
@@ -633,14 +639,21 @@ make zerg-dev
 
 3. **Monitor via SSE**
 ```bash
+# Authenticate once and store cookie jar
+curl -s -X POST http://localhost:47300/api/jarvis/auth \
+  -H "Content-Type: application/json" \
+  -d '{"device_secret":"<secret>"}' \
+  -c cookies.txt -b cookies.txt
+
 # Open SSE stream
 curl -N http://localhost:47300/api/jarvis/events \
-  -H "Authorization: Bearer $TOKEN"
+  -b cookies.txt
 
 # Dispatch in another terminal
 curl -X POST http://localhost:47300/api/jarvis/dispatch \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"agent_id":1}'
+  -H "Content-Type: application/json" \
+  -d '{"agent_id":1}' \
+  -b cookies.txt
 
 # Watch events in first terminal
 ```
@@ -758,9 +771,10 @@ make seed-jarvis-agents
 ```
 
 ### 4. SSE in Production
-The current SSE implementation works in development. For production with strict CORS:
-- Add `?token=xyz` query param support
-- Or switch to WebSocket with Authorization header
+The SSE implementation now uses HttpOnly session cookies:
+- Ensure front-end requests include credentials (`credentials: 'include'`)
+- Configure CORS to allow cookie-based requests from Jarvis origins
+- Non-browser clients must capture the cookie via `/api/jarvis/auth`
 
 ---
 
