@@ -219,33 +219,35 @@ User Voice/Text
 
 | Method | Endpoint | Purpose | Auth |
 |--------|----------|---------|------|
-| POST | `/api/jarvis/auth` | Get JWT token | Device Secret |
-| GET | `/api/jarvis/agents` | List agents | JWT |
-| GET | `/api/jarvis/runs` | Run history | JWT |
-| POST | `/api/jarvis/dispatch` | Execute agent | JWT |
-| GET | `/api/jarvis/events` | SSE stream | JWT |
+| POST | `/api/jarvis/auth` | Establish session | Device Secret |
+| GET | `/api/jarvis/agents` | List agents | Session cookie |
+| GET | `/api/jarvis/runs` | Run history | Session cookie |
+| POST | `/api/jarvis/dispatch` | Execute agent | Session cookie |
+| GET | `/api/jarvis/events` | SSE stream | Session cookie |
 
 ### Example Usage
 
 ```bash
-# 1. Authenticate
-TOKEN=$(curl -s -X POST http://localhost:47300/api/jarvis/auth \
+# 1. Authenticate (stores HttpOnly session cookie)
+COOKIE_JAR=cookies.txt
+curl -s -X POST http://localhost:47300/api/jarvis/auth \
   -H "Content-Type: application/json" \
-  -d '{"device_secret":"your-secret"}' | jq -r .access_token)
+  -d '{"device_secret":"your-secret"}' \
+  -c "$COOKIE_JAR" -b "$COOKIE_JAR"
 
 # 2. List agents
 curl http://localhost:47300/api/jarvis/agents \
-  -H "Authorization: Bearer $TOKEN"
+  -b "$COOKIE_JAR"
 
 # 3. Dispatch agent
 curl -X POST http://localhost:47300/api/jarvis/dispatch \
-  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"agent_id":1}'
+  -d '{"agent_id":1}' \
+  -b "$COOKIE_JAR"
 
 # 4. Stream events
 curl -N http://localhost:47300/api/jarvis/events \
-  -H "Authorization: Bearer $TOKEN"
+  -b "$COOKIE_JAR"
 ```
 
 ---
@@ -426,9 +428,9 @@ curl -X POST http://localhost:47300/api/jarvis/auth \
 # Check event bus is active
 grep "event_bus.subscribe" apps/zerg/backend/zerg/routers/jarvis.py
 
-# Test with curl
+# Test with curl (after authenticating and saving cookies.txt)
 curl -N http://localhost:47300/api/jarvis/events \
-  -H "Authorization: Bearer <token>"
+  -b cookies.txt
 
 # Should see "connected" event immediately
 ```
@@ -705,9 +707,8 @@ onRunUpdate: (run) => {
 ## 🐛 Known Issues & Limitations
 
 ### 1. SSE Authentication
-**Issue**: EventSource doesn't support custom headers
-**Workaround**: Current implementation relies on cookies or query params
-**Future**: Switch to WebSocket with proper Authorization header
+**Status**: EventSource uses the HttpOnly session cookie issued by `/api/jarvis/auth`
+**Note**: Ensure browser and non-browser clients persist the cookie; dev mode (`AUTH_DISABLED=1`) still honors the standard fallback
 
 ### 2. Token Refresh
 **Issue**: No automatic refresh before expiry
