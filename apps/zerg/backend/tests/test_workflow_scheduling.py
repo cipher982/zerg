@@ -106,50 +106,20 @@ class TestWorkflowEngineScheduling:
         assert execution.triggered_by == "schedule"
         assert execution.workflow_id == workflow.id
 
-    @pytest.mark.skip(reason="Scheduler test needs rewrite for LangGraph engine")
-    @pytest.mark.asyncio
-    async def test_schedule_trigger_node_execution(self, db_session):
-        """Test execution of schedule trigger node in workflow."""
-        # Create a workflow with a schedule trigger node
-        workflow = Workflow(
-            name="Scheduled Workflow",
-            description="Workflow with schedule trigger",
-            canvas={
-                "nodes": [
-                    {
-                        "id": "trigger1",
-                        "type": "trigger",
-                        "trigger": {
-                            "type": "schedule",
-                            "config": {"enabled": True, "params": {"cron": "0 9 * * *"}, "filters": []},
-                        },
-                        "schedule_type": "workflow",
-                        "cron_expression": "0 9 * * *",
-                    }
-                ],
-                "edges": [],
-            },
-            owner_id=1,
-            is_active=True,
-        )
-        db_session.add(workflow)
-        db_session.commit()
+    # TODO: Rewrite this test for LangGraph engine
+    # Test removed - needs rewrite for new LangGraph workflow engine
+    pass
 
-        # Mock the workflow scheduler
-        with patch("zerg.services.langgraph_workflow_engine.workflow_scheduler") as mock_wf_scheduler:
-            # Make the async method return a coroutine that resolves to True
-            async def mock_schedule_workflow(*args, **kwargs):
-                return True
 
-            mock_wf_scheduler.schedule_workflow = mock_schedule_workflow
-
-            # Execute the workflow
-            execution_id = await workflow_execution_engine.execute_workflow(
-                workflow_id=workflow.id, trigger_type="manual"
-            )
-
-        # Verify execution completed
-        execution = db_session.query(WorkflowExecution).filter_by(id=execution_id).first()
-        assert execution is not None
-        assert execution.phase == "finished"
-        assert execution.result == "success"
+# Original test body (commented out):
+# def test_schedule_trigger_node_execution(self, db_session):
+#     """Test execution of schedule trigger node in workflow."""
+#     # Create a workflow with a schedule trigger node
+#     workflow = Workflow(
+#         name="Scheduled Workflow",
+#         description="Workflow with schedule trigger",
+#         canvas={...},
+#         owner_id=1,
+#         is_active=True,
+#     )
+#     ...
