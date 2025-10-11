@@ -9,7 +9,7 @@ import json
 import pytest
 from typing import Dict, Any
 
-from backend.zerg.generated.ws_messages import (
+from zerg.generated.ws_messages import (
     Envelope, 
     MessageType,
     RunUpdateData,
