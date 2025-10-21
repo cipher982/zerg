@@ -24,6 +24,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import "../styles/canvas-react.css";
 import toast from "react-hot-toast";
+import { WebGLGhostRenderer, createGhostSkinCanvas } from "../lib/ghost/WebGLGhostRenderer";
 import {
   fetchAgents,
   fetchCurrentWorkflow,
@@ -202,7 +203,9 @@ function CanvasPageContent() {
     null
   );
   type DragGhostMode = "basic" | "flip" | "pointer";
-  const [dragGhostMode, setDragGhostMode] = useState<DragGhostMode>("basic");
+  // Add WebGL mode keyword without breaking existing selector options later
+  type ExtendedDragGhostMode = DragGhostMode | "webgl";
+  const [dragGhostMode, setDragGhostMode] = useState<ExtendedDragGhostMode>("basic");
 
   // Overlay ghost used by FLIP and Pointer modes (screen-space, fixed-position)
   type OverlayGhostPhase = "lift" | "drag" | "drop";
@@ -219,6 +222,7 @@ function CanvasPageContent() {
   }
   const [overlayGhost, setOverlayGhost] = useState<OverlayGhost | null>(null);
   const overlayGhostRef = useRef<HTMLDivElement | null>(null);
+  const webglGhostRef = useRef<WebGLGhostRenderer | null>(null);
   const transparentDragImage = React.useMemo(() => {
     const img = new Image();
     img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
@@ -440,6 +444,26 @@ function CanvasPageContent() {
           });
           setDragPreviewData(null);
           setDragPreviewPosition(null);
+        } else if (dragGhostMode === 'webgl') {
+          const renderer = webglGhostRef.current;
+          if (renderer) {
+            const skin = createGhostSkinCanvas({
+              kind: 'agent',
+              label: agent.name,
+              icon: '🤖',
+              width: rect.width || 160,
+              height: rect.height || 48,
+            });
+            renderer.prepareGhostTextureFromCanvas(skin);
+            const startX = rect.left;
+            const startY = rect.top;
+            const pxX = (clientX || 0) - pointerRatioX * (rect.width || 160);
+            const pxY = (clientY || 0) - pointerRatioY * (rect.height || 48);
+            renderer.setState({ x: pxX || startX, y: pxY || startY, opacity: 1, scale: 1 });
+            renderer.start();
+          }
+          setDragPreviewData(null);
+          setDragPreviewPosition(null);
         } else {
           setDragPreviewData({
             kind: "agent",
@@ -475,6 +499,22 @@ function CanvasPageContent() {
             position: { x: 0, y: 0 },
             phase: "lift",
           });
+          setDragPreviewData(null);
+          setDragPreviewPosition(null);
+        } else if (dragGhostMode === 'webgl') {
+          const renderer = webglGhostRef.current;
+          if (renderer) {
+            const skin = createGhostSkinCanvas({
+              kind: 'agent',
+              label: agent.name,
+              icon: '🤖',
+              width: 160,
+              height: 48,
+            });
+            renderer.prepareGhostTextureFromCanvas(skin);
+            renderer.setState({ x: 0, y: 0, opacity: 1, scale: 1 });
+            renderer.start();
+          }
           setDragPreviewData(null);
           setDragPreviewPosition(null);
         } else {
@@ -524,6 +564,26 @@ function CanvasPageContent() {
           });
           setDragPreviewData(null);
           setDragPreviewPosition(null);
+        } else if (dragGhostMode === 'webgl') {
+          const renderer = webglGhostRef.current;
+          if (renderer) {
+            const skin = createGhostSkinCanvas({
+              kind: 'tool',
+              label: tool.name,
+              icon: resolveToolIcon(tool.type),
+              width: rect.width || 160,
+              height: rect.height || 48,
+            });
+            renderer.prepareGhostTextureFromCanvas(skin);
+            const startX = rect.left;
+            const startY = rect.top;
+            const pxX = (clientX || 0) - pointerRatioX * (rect.width || 160);
+            const pxY = (clientY || 0) - pointerRatioY * (rect.height || 48);
+            renderer.setState({ x: pxX || startX, y: pxY || startY, opacity: 1, scale: 1 });
+            renderer.start();
+          }
+          setDragPreviewData(null);
+          setDragPreviewPosition(null);
         } else {
           setDragPreviewData({
             kind: "tool",
@@ -561,6 +621,22 @@ function CanvasPageContent() {
           });
           setDragPreviewData(null);
           setDragPreviewPosition(null);
+        } else if (dragGhostMode === 'webgl') {
+          const renderer = webglGhostRef.current;
+          if (renderer) {
+            const skin = createGhostSkinCanvas({
+              kind: 'tool',
+              label: tool.name,
+              icon: resolveToolIcon(tool.type),
+              width: 160,
+              height: 48,
+            });
+            renderer.prepareGhostTextureFromCanvas(skin);
+            renderer.setState({ x: 0, y: 0, opacity: 1, scale: 1 });
+            renderer.start();
+          }
+          setDragPreviewData(null);
+          setDragPreviewPosition(null);
         } else {
           setDragPreviewData({
             kind: "tool",
@@ -578,8 +654,26 @@ function CanvasPageContent() {
     [dragGhostMode, reactFlowInstance, resolveToolIcon, setIsDragActive, transparentDragImage, zoom]
   );
 
-  // Native dragover preview updater (Basic mode)
+  // Native dragover preview updater (Basic/WebGL modes)
   useEffect(() => {
+    if (dragGhostMode === 'webgl') {
+      // WebGL follows pointer in screen space directly
+      const renderer = webglGhostRef.current;
+      if (!renderer) return;
+      const handleDragOver = (event: DragEvent) => {
+        event.preventDefault();
+        if (event.clientX === 0 && event.clientY === 0) return;
+        if (!dragPreviewData) return; // we reuse dragPreviewData structure for pointer ratios and baseSize
+        const baseWidth = dragPreviewData.baseSize.width || 1;
+        const baseHeight = dragPreviewData.baseSize.height || 1;
+        const pxX = (event.clientX || 0) - baseWidth * dragPreviewData.pointerRatio.x;
+        const pxY = (event.clientY || 0) - baseHeight * dragPreviewData.pointerRatio.y;
+        renderer.setState({ x: pxX, y: pxY, opacity: 1 });
+      };
+      document.addEventListener('dragover', handleDragOver);
+      return () => document.removeEventListener('dragover', handleDragOver);
+    }
+
     if (!dragPreviewData || dragGhostMode !== "basic") {
       return;
     }
@@ -977,6 +1071,27 @@ function CanvasPageContent() {
         setNodes((nds: FlowNode[]) => [...nds, newNode]);
       }
       resetDragPreview();
+      // WebGL: animate ghost to final on-canvas position then dispose
+      if (dragGhostMode === 'webgl') {
+        const renderer = webglGhostRef.current;
+        const stage = document.querySelector('.canvas-stage') as HTMLElement | null;
+        const rfRoot = stage?.querySelector('.react-flow') as HTMLElement | null;
+        if (renderer && stage && rfRoot) {
+          const containerRect = rfRoot.getBoundingClientRect();
+          const pan = useStore.getState().transform; // safe static read
+          const panX = pan?.[0] ?? 0;
+          const panY = pan?.[1] ?? 0;
+          const z = pan?.[2] ?? zoom;
+          const targetScreenX = containerRect.left + panX + (position.x * z);
+          const targetScreenY = containerRect.top + panY + (position.y * z);
+          const targetScale = z; // visually match scale at drop
+          renderer.animateDropTo(targetScreenX, targetScreenY, targetScale, 200).then(() => {
+            renderer.stop();
+            renderer.dispose();
+            webglGhostRef.current = null;
+          });
+        }
+      }
       // FLIP: animate overlay ghost to final on-canvas position before removal
       setOverlayGhost((prev) => {
         if (!prev || prev.mode !== 'flip') return prev;
@@ -1224,6 +1339,29 @@ function CanvasPageContent() {
     window.addEventListener('pointercancel', handleUp, { passive: true });
   }, [dragGhostMode, reactFlowInstance, resolveToolIcon, setNodes, zoom]);
 
+  // WebGL overlay lifecycle
+  useEffect(() => {
+    if (dragGhostMode !== 'webgl') {
+      // dispose if exists
+      if (webglGhostRef.current) {
+        webglGhostRef.current.dispose();
+        webglGhostRef.current = null;
+      }
+      return;
+    }
+    if (!webglGhostRef.current) {
+      try {
+        webglGhostRef.current = new WebGLGhostRenderer(document.body);
+      } catch (e) {
+        console.warn('WebGL ghost unavailable, falling back to basic:', e);
+        setDragGhostMode('basic');
+      }
+    }
+    return () => {
+      // do not dispose here; dispose when mode changes away from webgl
+    };
+  }, [dragGhostMode]);
+
   return (
     <>
       <div
@@ -1406,12 +1544,13 @@ function CanvasPageContent() {
                   aria-label="Drag ghost mode"
                   className="canvas-toggle-select"
                   value={dragGhostMode}
-                  onChange={(e) => setDragGhostMode(e.target.value as DragGhostMode)}
+                  onChange={(e) => setDragGhostMode(e.target.value as ExtendedDragGhostMode)}
                   title={`Drag ghost: ${dragGhostMode}`}
                 >
                   <option value="basic">Ghost: Basic</option>
                   <option value="flip">Ghost: FLIP</option>
                   <option value="pointer">Ghost: Pointer</option>
+                  <option value="webgl">Ghost: WebGL</option>
                 </select>
               </div>
             </div>
