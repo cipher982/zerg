@@ -200,6 +200,26 @@
   box-sizing: border-box;
 }
 
+/* Screen-space overlay ghost (FLIP and Pointer modes) */
+.drag-ghost-overlay {
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,0.45));
+  will-change: transform, opacity;
+}
+.drag-ghost--lift .drag-preview-node {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+.drag-ghost--drag .drag-preview-node {
+  transform: scale(1);
+  opacity: 1;
+}
+.drag-ghost--drop .drag-preview-node {
+  animation: dragGhostDrop 180ms ease forwards;
+}
+@keyframes dragGhostDrop {
+  to { transform: scale(0.98); opacity: 0; }
+}
+
 /* React Flow Controls styling */
 .react-flow__controls {
   background: var(--dark-card, #2a2a3a);
@@ -352,6 +372,16 @@
   border-color: rgba(59, 130, 246, 0.8);
   color: #e0f2fe;
   box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+}
+
+.canvas-toggle-select {
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(30, 41, 59, 0.6);
+  color: rgba(226, 232, 240, 0.95);
+  padding: 0 8px;
+  font-size: 13px;
 }
 
 .run-button {
