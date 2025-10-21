@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useShelf } from "../lib/useShelfState";
@@ -180,6 +180,7 @@ function CanvasPageContent() {
   const { isShelfOpen, closeShelf } = useShelf();
   const reactFlowInstance = useReactFlow();
   const zoom = useStore((state) => state.transform[2]);
+  const viewport = useStore((state) => state.transform);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const lastSavedHashRef = useRef<string>("");
@@ -200,6 +201,24 @@ function CanvasPageContent() {
   const [dragPreviewPosition, setDragPreviewPosition] = useState<{ x: number; y: number } | null>(
     null
   );
+  type DragGhostMode = "basic" | "flip" | "pointer";
+  const [dragGhostMode, setDragGhostMode] = useState<DragGhostMode>("basic");
+
+  // Overlay ghost used by FLIP and Pointer modes (screen-space, fixed-position)
+  type OverlayGhostPhase = "lift" | "drag" | "drop";
+  interface OverlayGhost {
+    mode: Exclude<DragGhostMode, "basic">;
+    kind: DragPreviewKind;
+    label: string;
+    icon: string;
+    baseSize: { width: number; height: number };
+    pointerRatio: { x: number; y: number };
+    // top-left in screen coordinates
+    position: { x: number; y: number };
+    phase: OverlayGhostPhase;
+  }
+  const [overlayGhost, setOverlayGhost] = useState<OverlayGhost | null>(null);
+  const overlayGhostRef = useRef<HTMLDivElement | null>(null);
   const transparentDragImage = React.useMemo(() => {
     const img = new Image();
     img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
@@ -407,41 +426,72 @@ function CanvasPageContent() {
         const pointerOffsetY = clientY - rect.top;
         const pointerRatioX = rect.width ? clamp(pointerOffsetX / rect.width, 0, 1) : 0;
         const pointerRatioY = rect.height ? clamp(pointerOffsetY / rect.height, 0, 1) : 0;
-        setDragPreviewData({
-          kind: "agent",
-          label: agent.name,
-          icon: "🤖",
-          baseSize: { width: rect.width || 160, height: rect.height || 48 },
-          pointerRatio: { x: pointerRatioX, y: pointerRatioY },
-          agentId: agent.id,
-        });
-        if (clientX !== 0 || clientY !== 0) {
-          const baseWidth = rect.width || 160;
-          const baseHeight = rect.height || 48;
-          const offsetX = baseWidth * zoom * pointerRatioX;
-          const offsetY = baseHeight * zoom * pointerRatioY;
-          const initialPosition = reactFlowInstance.screenToFlowPosition({
-            x: clientX - offsetX,
-            y: clientY - offsetY,
+
+        if (dragGhostMode === "flip") {
+          setOverlayGhost({
+            mode: "flip",
+            kind: "agent",
+            label: agent.name,
+            icon: "🤖",
+            baseSize: { width: rect.width || 160, height: rect.height || 48 },
+            pointerRatio: { x: pointerRatioX, y: pointerRatioY },
+            position: { x: rect.left, y: rect.top },
+            phase: "lift",
           });
-          setDragPreviewPosition(initialPosition);
-        } else {
+          setDragPreviewData(null);
           setDragPreviewPosition(null);
+        } else {
+          setDragPreviewData({
+            kind: "agent",
+            label: agent.name,
+            icon: "🤖",
+            baseSize: { width: rect.width || 160, height: rect.height || 48 },
+            pointerRatio: { x: pointerRatioX, y: pointerRatioY },
+            agentId: agent.id,
+          });
+          if (clientX !== 0 || clientY !== 0) {
+            const baseWidth = rect.width || 160;
+            const baseHeight = rect.height || 48;
+            const offsetX = baseWidth * zoom * pointerRatioX;
+            const offsetY = baseHeight * zoom * pointerRatioY;
+            const initialPosition = reactFlowInstance.screenToFlowPosition({
+              x: clientX - offsetX,
+              y: clientY - offsetY,
+            });
+            setDragPreviewPosition(initialPosition);
+          } else {
+            setDragPreviewPosition(null);
+          }
         }
       } else {
-        setDragPreviewData({
-          kind: "agent",
-          label: agent.name,
-          icon: "🤖",
-          baseSize: { width: 160, height: 48 },
-          pointerRatio: { x: 0, y: 0 },
-          agentId: agent.id,
-        });
-        setDragPreviewPosition(null);
+        if (dragGhostMode === "flip") {
+          setOverlayGhost({
+            mode: "flip",
+            kind: "agent",
+            label: agent.name,
+            icon: "🤖",
+            baseSize: { width: 160, height: 48 },
+            pointerRatio: { x: 0, y: 0 },
+            position: { x: 0, y: 0 },
+            phase: "lift",
+          });
+          setDragPreviewData(null);
+          setDragPreviewPosition(null);
+        } else {
+          setDragPreviewData({
+            kind: "agent",
+            label: agent.name,
+            icon: "🤖",
+            baseSize: { width: 160, height: 48 },
+            pointerRatio: { x: 0, y: 0 },
+            agentId: agent.id,
+          });
+          setDragPreviewPosition(null);
+        }
       }
       setIsDragActive(true);
     },
-    [reactFlowInstance, setIsDragActive, transparentDragImage, zoom]
+    [dragGhostMode, reactFlowInstance, setIsDragActive, transparentDragImage, zoom]
   );
 
   const beginToolDrag = useCallback(
@@ -461,45 +511,76 @@ function CanvasPageContent() {
         const pointerOffsetY = clientY - rect.top;
         const pointerRatioX = rect.width ? clamp(pointerOffsetX / rect.width, 0, 1) : 0;
         const pointerRatioY = rect.height ? clamp(pointerOffsetY / rect.height, 0, 1) : 0;
-        setDragPreviewData({
-          kind: "tool",
-          label: tool.name,
-          icon: resolveToolIcon(tool.type),
-          baseSize: { width: rect.width || 160, height: rect.height || 48 },
-          pointerRatio: { x: pointerRatioX, y: pointerRatioY },
-          toolType: tool.type,
-        });
-        if (clientX !== 0 || clientY !== 0) {
-          const baseWidth = rect.width || 160;
-          const baseHeight = rect.height || 48;
-          const offsetX = baseWidth * zoom * pointerRatioX;
-          const offsetY = baseHeight * zoom * pointerRatioY;
-          const initialPosition = reactFlowInstance.screenToFlowPosition({
-            x: clientX - offsetX,
-            y: clientY - offsetY,
+        if (dragGhostMode === "flip") {
+          setOverlayGhost({
+            mode: "flip",
+            kind: "tool",
+            label: tool.name,
+            icon: resolveToolIcon(tool.type),
+            baseSize: { width: rect.width || 160, height: rect.height || 48 },
+            pointerRatio: { x: pointerRatioX, y: pointerRatioY },
+            position: { x: rect.left, y: rect.top },
+            phase: "lift",
           });
-          setDragPreviewPosition(initialPosition);
-        } else {
+          setDragPreviewData(null);
           setDragPreviewPosition(null);
+        } else {
+          setDragPreviewData({
+            kind: "tool",
+            label: tool.name,
+            icon: resolveToolIcon(tool.type),
+            baseSize: { width: rect.width || 160, height: rect.height || 48 },
+            pointerRatio: { x: pointerRatioX, y: pointerRatioY },
+            toolType: tool.type,
+          });
+          if (clientX !== 0 || clientY !== 0) {
+            const baseWidth = rect.width || 160;
+            const baseHeight = rect.height || 48;
+            const offsetX = baseWidth * zoom * pointerRatioX;
+            const offsetY = baseHeight * zoom * pointerRatioY;
+            const initialPosition = reactFlowInstance.screenToFlowPosition({
+              x: clientX - offsetX,
+              y: clientY - offsetY,
+            });
+            setDragPreviewPosition(initialPosition);
+          } else {
+            setDragPreviewPosition(null);
+          }
         }
       } else {
-        setDragPreviewData({
-          kind: "tool",
-          label: tool.name,
-          icon: resolveToolIcon(tool.type),
-          baseSize: { width: 160, height: 48 },
-          pointerRatio: { x: 0, y: 0 },
-          toolType: tool.type,
-        });
-        setDragPreviewPosition(null);
+        if (dragGhostMode === "flip") {
+          setOverlayGhost({
+            mode: "flip",
+            kind: "tool",
+            label: tool.name,
+            icon: resolveToolIcon(tool.type),
+            baseSize: { width: 160, height: 48 },
+            pointerRatio: { x: 0, y: 0 },
+            position: { x: 0, y: 0 },
+            phase: "lift",
+          });
+          setDragPreviewData(null);
+          setDragPreviewPosition(null);
+        } else {
+          setDragPreviewData({
+            kind: "tool",
+            label: tool.name,
+            icon: resolveToolIcon(tool.type),
+            baseSize: { width: 160, height: 48 },
+            pointerRatio: { x: 0, y: 0 },
+            toolType: tool.type,
+          });
+          setDragPreviewPosition(null);
+        }
       }
       setIsDragActive(true);
     },
-    [reactFlowInstance, resolveToolIcon, setIsDragActive, transparentDragImage, zoom]
+    [dragGhostMode, reactFlowInstance, resolveToolIcon, setIsDragActive, transparentDragImage, zoom]
   );
 
+  // Native dragover preview updater (Basic mode)
   useEffect(() => {
-    if (!dragPreviewData) {
+    if (!dragPreviewData || dragGhostMode !== "basic") {
       return;
     }
 
@@ -535,7 +616,57 @@ function CanvasPageContent() {
       document.removeEventListener("dragend", handleDragEnd);
       document.removeEventListener("drop", handleDragEnd);
     };
-  }, [dragPreviewData, reactFlowInstance, resetDragPreview, zoom]);
+  }, [dragGhostMode, dragPreviewData, reactFlowInstance, resetDragPreview, zoom]);
+
+  // FLIP mode: screen-space overlay follows native drag pointer
+  useEffect(() => {
+    if (!overlayGhost || overlayGhost.mode !== "flip") return;
+
+    const handleDragOver = (event: DragEvent) => {
+      event.preventDefault();
+      const { baseSize, pointerRatio } = overlayGhost;
+      const offsetX = (baseSize.width || 1) * pointerRatio.x;
+      const offsetY = (baseSize.height || 1) * pointerRatio.y;
+      const x = (event.clientX || 0) - offsetX;
+      const y = (event.clientY || 0) - offsetY;
+      setOverlayGhost((prev) => (prev ? { ...prev, position: { x, y }, phase: prev.phase === "lift" ? "drag" : prev.phase } : prev));
+    };
+
+    const handleEnd = () => {
+      // For FLIP, let onDrop drive the drop animation; only clear on dragend
+      setOverlayGhost(null);
+    };
+
+    document.addEventListener("dragover", handleDragOver);
+    document.addEventListener("dragend", handleEnd);
+    return () => {
+      document.removeEventListener("dragover", handleDragOver);
+      document.removeEventListener("dragend", handleEnd);
+    };
+  }, [overlayGhost]);
+
+  // FLIP lift animation on first render
+  useLayoutEffect(() => {
+    if (!overlayGhost || overlayGhost.mode !== "flip" || overlayGhost.phase !== "lift") return;
+    const el = overlayGhostRef.current;
+    if (!el) return;
+    // Animate a subtle lift/scale on start
+    try {
+      const animation = el.animate(
+        [
+          { transform: `translate(${overlayGhost.position.x}px, ${overlayGhost.position.y}px) scale(0.96)`, opacity: 0.75 },
+          { transform: `translate(${overlayGhost.position.x}px, ${overlayGhost.position.y}px) scale(1)`, opacity: 1 },
+        ],
+        { duration: 160, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)", fill: "forwards" }
+      );
+      animation.onfinish = () => {
+        setOverlayGhost((prev) => (prev ? { ...prev, phase: "drag" } : prev));
+      };
+    } catch (_e) {
+      // no-op
+      setOverlayGhost((prev) => (prev ? { ...prev, phase: "drag" } : prev));
+    }
+  }, [overlayGhost]);
 
   // Fetch agents for the shelf
   const { data: agents = [] } = useQuery<AgentSummary[]>({
@@ -846,9 +977,42 @@ function CanvasPageContent() {
         setNodes((nds: FlowNode[]) => [...nds, newNode]);
       }
       resetDragPreview();
+      // FLIP: animate overlay ghost to final on-canvas position before removal
+      setOverlayGhost((prev) => {
+        if (!prev || prev.mode !== 'flip') return prev;
+        try {
+          const stage = document.querySelector('.canvas-stage') as HTMLElement | null;
+          const rfRoot = stage?.querySelector('.react-flow') as HTMLElement | null;
+          if (!stage || !rfRoot || !overlayGhostRef.current) return { ...prev, phase: 'drop' };
+          // compute target screen position for the new node top-left using viewport transform
+          const containerRect = rfRoot.getBoundingClientRect();
+          const panX = viewport?.[0] ?? 0;
+          const panY = viewport?.[1] ?? 0;
+          const z = viewport?.[2] ?? zoom;
+          const targetScreenX = containerRect.left + panX + (position.x * z);
+          const targetScreenY = containerRect.top + panY + (position.y * z);
+          const el = overlayGhostRef.current;
+          el.animate([
+            { transform: `translate(${prev.position.x}px, ${prev.position.y}px) scale(1)`, opacity: 1 },
+            { transform: `translate(${targetScreenX}px, ${targetScreenY}px) scale(${z})`, opacity: 0.9 },
+          ], { duration: 180, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)', fill: 'forwards' })
+            .onfinish = () => setOverlayGhost(null);
+          return { ...prev, phase: 'drop', position: { x: targetScreenX, y: targetScreenY } };
+        } catch (_e) {
+          return { ...prev, phase: 'drop' };
+        }
+      });
     },
-    [dragPreviewData, reactFlowInstance, resolveToolIcon, resetDragPreview, setNodes, zoom]
+    [dragPreviewData, reactFlowInstance, resolveToolIcon, resetDragPreview, setNodes, viewport, zoom]
   );
+
+  // Cleanup overlay ghost after drop phase (pointer mode)
+  useEffect(() => {
+    if (!overlayGhost || overlayGhost.phase !== 'drop') return;
+    if (overlayGhost.mode !== 'pointer') return;
+    const t = setTimeout(() => setOverlayGhost(null), 200);
+    return () => clearTimeout(t);
+  }, [overlayGhost]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -882,6 +1046,183 @@ function CanvasPageContent() {
       document.removeEventListener('drop', handleDrop);
     };
   }, []);
+
+  // Pointer-based DnD (mobile-friendly)
+  const pointerDragDataRef = useRef<{
+    kind: DragPreviewKind;
+    label: string;
+    icon: string;
+    baseSize: { width: number; height: number };
+    pointerRatio: { x: number; y: number };
+    agentId?: number;
+    toolType?: string;
+    pointerId?: number;
+  } | null>(null);
+
+  const beginAgentPointerDrag = useCallback((event: React.PointerEvent, agent: DraggableAgent) => {
+    if (dragGhostMode !== "pointer") return;
+    if (!(event.currentTarget instanceof HTMLElement)) return;
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pointerOffsetX = (event.clientX ?? 0) - rect.left;
+    const pointerOffsetY = (event.clientY ?? 0) - rect.top;
+    const pointerRatioX = rect.width ? clamp(pointerOffsetX / rect.width, 0, 1) : 0;
+    const pointerRatioY = rect.height ? clamp(pointerOffsetY / rect.height, 0, 1) : 0;
+    pointerDragDataRef.current = {
+      kind: "agent",
+      label: agent.name,
+      icon: "🤖",
+      baseSize: { width: rect.width || 160, height: rect.height || 48 },
+      pointerRatio: { x: pointerRatioX, y: pointerRatioY },
+      agentId: agent.id,
+      pointerId: event.pointerId,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const x = (event.clientX ?? 0) - (rect.width || 160) * pointerRatioX;
+    const y = (event.clientY ?? 0) - (rect.height || 48) * pointerRatioY;
+    setOverlayGhost({
+      mode: "pointer",
+      kind: "agent",
+      label: agent.name,
+      icon: "🤖",
+      baseSize: { width: rect.width || 160, height: rect.height || 48 },
+      pointerRatio: { x: pointerRatioX, y: pointerRatioY },
+      position: { x, y },
+      phase: "drag",
+    });
+
+    const handleMove = (e: PointerEvent) => {
+      if (!pointerDragDataRef.current) return;
+      if (e.pointerId !== pointerDragDataRef.current.pointerId) return;
+      const bx = pointerDragDataRef.current.baseSize.width * pointerDragDataRef.current.pointerRatio.x;
+      const by = pointerDragDataRef.current.baseSize.height * pointerDragDataRef.current.pointerRatio.y;
+      setOverlayGhost((prev) => (prev ? { ...prev, position: { x: (e.clientX || 0) - bx, y: (e.clientY || 0) - by } } : prev));
+    };
+    const handleUp = (e: PointerEvent) => {
+      if (!pointerDragDataRef.current) return;
+      if (e.pointerId !== pointerDragDataRef.current.pointerId) return;
+      // Determine drop within canvas-stage
+      const stage = document.querySelector('.canvas-stage') as HTMLElement | null;
+      const withinCanvas = stage ? (() => {
+        const r = stage.getBoundingClientRect();
+        return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      })() : true;
+      if (withinCanvas) {
+        const data = pointerDragDataRef.current;
+        const pointerAdjustment = {
+          x: data.baseSize.width * zoom * data.pointerRatio.x,
+          y: data.baseSize.height * zoom * data.pointerRatio.y,
+        };
+        const position = reactFlowInstance.screenToFlowPosition({
+          x: (e.clientX || 0) - pointerAdjustment.x,
+          y: (e.clientY || 0) - pointerAdjustment.y,
+        });
+        if (data.kind === "agent" && data.agentId && data.label) {
+          const newNode: FlowNode = {
+            id: `agent-${Date.now()}`,
+            type: 'agent',
+            position,
+            data: { label: data.label, agentId: data.agentId },
+          } as FlowNode;
+          setNodes((nds: FlowNode[]) => [...nds, newNode]);
+        } else if (data.kind === "tool" && data.toolType && data.label) {
+          const newNode: FlowNode = {
+            id: `tool-${Date.now()}`,
+            type: 'tool',
+            position,
+            data: { label: data.label, toolType: data.toolType },
+          } as FlowNode;
+          setNodes((nds: FlowNode[]) => [...nds, newNode]);
+        }
+      }
+      setOverlayGhost((prev) => (prev ? { ...prev, phase: "drop" } : prev));
+      pointerDragDataRef.current = null;
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', handleUp);
+    };
+    window.addEventListener('pointermove', handleMove, { passive: true });
+    window.addEventListener('pointerup', handleUp, { passive: true });
+    window.addEventListener('pointercancel', handleUp, { passive: true });
+  }, [dragGhostMode, reactFlowInstance, setNodes, zoom]);
+
+  const beginToolPointerDrag = useCallback((event: React.PointerEvent, tool: DraggableTool) => {
+    if (dragGhostMode !== "pointer") return;
+    if (!(event.currentTarget instanceof HTMLElement)) return;
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pointerOffsetX = (event.clientX ?? 0) - rect.left;
+    const pointerOffsetY = (event.clientY ?? 0) - rect.top;
+    const pointerRatioX = rect.width ? clamp(pointerOffsetX / rect.width, 0, 1) : 0;
+    const pointerRatioY = rect.height ? clamp(pointerOffsetY / rect.height, 0, 1) : 0;
+    pointerDragDataRef.current = {
+      kind: "tool",
+      label: tool.name,
+      icon: resolveToolIcon(tool.type),
+      baseSize: { width: rect.width || 160, height: rect.height || 48 },
+      pointerRatio: { x: pointerRatioX, y: pointerRatioY },
+      toolType: tool.type,
+      pointerId: event.pointerId,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const x = (event.clientX ?? 0) - (rect.width || 160) * pointerRatioX;
+    const y = (event.clientY ?? 0) - (rect.height || 48) * pointerRatioY;
+    setOverlayGhost({
+      mode: "pointer",
+      kind: "tool",
+      label: tool.name,
+      icon: resolveToolIcon(tool.type),
+      baseSize: { width: rect.width || 160, height: rect.height || 48 },
+      pointerRatio: { x: pointerRatioX, y: pointerRatioY },
+      position: { x, y },
+      phase: "drag",
+    });
+
+    const handleMove = (e: PointerEvent) => {
+      if (!pointerDragDataRef.current) return;
+      if (e.pointerId !== pointerDragDataRef.current.pointerId) return;
+      const bx = pointerDragDataRef.current.baseSize.width * pointerDragDataRef.current.pointerRatio.x;
+      const by = pointerDragDataRef.current.baseSize.height * pointerDragDataRef.current.pointerRatio.y;
+      setOverlayGhost((prev) => (prev ? { ...prev, position: { x: (e.clientX || 0) - bx, y: (e.clientY || 0) - by } } : prev));
+    };
+    const handleUp = (e: PointerEvent) => {
+      if (!pointerDragDataRef.current) return;
+      if (e.pointerId !== pointerDragDataRef.current.pointerId) return;
+      const stage = document.querySelector('.canvas-stage') as HTMLElement | null;
+      const withinCanvas = stage ? (() => {
+        const r = stage.getBoundingClientRect();
+        return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      })() : true;
+      if (withinCanvas) {
+        const data = pointerDragDataRef.current;
+        const pointerAdjustment = {
+          x: data.baseSize.width * zoom * data.pointerRatio.x,
+          y: data.baseSize.height * zoom * data.pointerRatio.y,
+        };
+        const position = reactFlowInstance.screenToFlowPosition({
+          x: (e.clientX || 0) - pointerAdjustment.x,
+          y: (e.clientY || 0) - pointerAdjustment.y,
+        });
+        const newNode: FlowNode = {
+          id: `tool-${Date.now()}`,
+          type: 'tool',
+          position,
+          data: { label: tool.name, toolType: tool.type },
+        } as FlowNode;
+        setNodes((nds: FlowNode[]) => [...nds, newNode]);
+      }
+      setOverlayGhost((prev) => (prev ? { ...prev, phase: "drop" } : prev));
+      pointerDragDataRef.current = null;
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', handleUp);
+    };
+    window.addEventListener('pointermove', handleMove, { passive: true });
+    window.addEventListener('pointerup', handleUp, { passive: true });
+    window.addEventListener('pointercancel', handleUp, { passive: true });
+  }, [dragGhostMode, reactFlowInstance, resolveToolIcon, setNodes, zoom]);
 
   return (
     <>
@@ -924,12 +1265,13 @@ function CanvasPageContent() {
                     key={agent.id}
                     className="agent-shelf-item agent-pill"
                     data-testid={`shelf-agent-${agent.id}`}
-                    draggable={true}
+                    draggable={dragGhostMode !== 'pointer'}
                     role="button"
                     tabIndex={0}
                     aria-grabbed="false"
                     aria-label={`Drag agent ${agent.name} onto the canvas`}
                     onDragStart={(event) => beginAgentDrag(event, { id: agent.id, name: agent.name })}
+                    onPointerDown={(event) => beginAgentPointerDrag(event, { id: agent.id, name: agent.name })}
                     onDragEnd={(event) => {
                       if (event.currentTarget instanceof HTMLElement) {
                         event.currentTarget.setAttribute('aria-grabbed', 'false');
@@ -972,12 +1314,13 @@ function CanvasPageContent() {
                     key={tool.type}
                     className="tool-palette-item"
                     data-testid={`tool-${tool.type}`}
-                    draggable={true}
+                    draggable={dragGhostMode !== 'pointer'}
                     role="button"
                     tabIndex={0}
                     aria-grabbed="false"
                     aria-label={`Drag tool ${tool.name} onto the canvas`}
                     onDragStart={(event) => beginToolDrag(event, tool)}
+                    onPointerDown={(event) => beginToolPointerDrag(event, tool)}
                     onDragEnd={(event) => {
                       if (event.currentTarget instanceof HTMLElement) {
                         event.currentTarget.setAttribute('aria-grabbed', 'false');
@@ -1059,6 +1402,17 @@ function CanvasPageContent() {
                 >
                   #️⃣
                 </button>
+                <select
+                  aria-label="Drag ghost mode"
+                  className="canvas-toggle-select"
+                  value={dragGhostMode}
+                  onChange={(e) => setDragGhostMode(e.target.value as DragGhostMode)}
+                  title={`Drag ghost: ${dragGhostMode}`}
+                >
+                  <option value="basic">Ghost: Basic</option>
+                  <option value="flip">Ghost: FLIP</option>
+                  <option value="pointer">Ghost: Pointer</option>
+                </select>
               </div>
             </div>
 
@@ -1087,7 +1441,7 @@ function CanvasPageContent() {
                 </div>
               )}
               {/* Canvas overlay for E2E test compatibility - only active during drag operations */}
-              {isDragActive && (
+              {isDragActive && dragGhostMode !== 'pointer' && (
                 <canvas
                   style={{
                     position: 'absolute',
@@ -1122,7 +1476,7 @@ function CanvasPageContent() {
                 onPaneClick={handlePaneClick}
                 onNodeContextMenu={handleNodeContextMenu}
               >
-                {dragPreviewData && dragPreviewPosition && (
+                {dragGhostMode === 'basic' && dragPreviewData && dragPreviewPosition && (
                   <ViewportPortal>
                     <div
                       className="canvas-drag-preview"
@@ -1231,6 +1585,40 @@ function CanvasPageContent() {
           <button type="button" role="menuitem" onClick={handleDeleteNode}>
             Delete node
           </button>
+        </div>
+      )}
+
+      {/* Screen-space overlay ghost for FLIP and Pointer modes */}
+      {overlayGhost && (
+        <div
+          ref={overlayGhostRef}
+          className={clsx(
+            'drag-ghost-overlay',
+            overlayGhost.kind === 'agent' ? 'drag-ghost--agent' : 'drag-ghost--tool',
+            overlayGhost.phase && `drag-ghost--${overlayGhost.phase}`,
+          )}
+          style={{
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            width: overlayGhost.baseSize.width,
+            height: overlayGhost.baseSize.height,
+            transform: `translate(${overlayGhost.position.x}px, ${overlayGhost.position.y}px)`,
+            pointerEvents: 'none',
+            zIndex: 205,
+          }}
+        >
+          {overlayGhost.kind === 'agent' ? (
+            <div className="agent-node drag-preview-node">
+              <div className="agent-icon">{overlayGhost.icon}</div>
+              <div className="agent-name">{overlayGhost.label}</div>
+            </div>
+          ) : (
+            <div className="tool-node drag-preview-node">
+              <div className="tool-icon">{overlayGhost.icon}</div>
+              <div className="tool-name">{overlayGhost.label}</div>
+            </div>
+          )}
         </div>
       )}
 
