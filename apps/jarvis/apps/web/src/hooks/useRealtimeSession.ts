@@ -37,7 +37,7 @@ export function useRealtimeSession(options: UseRealtimeSessionOptions = {}) {
   const initializedRef = useRef(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Initialize controllers on mount
+  // One-time controller initialization (separate from listener setup)
   useEffect(() => {
     if (initializedRef.current) return
     initializedRef.current = true
@@ -58,7 +58,10 @@ export function useRealtimeSession(options: UseRealtimeSessionOptions = {}) {
       console.error('[useRealtimeSession] App controller init failed:', error)
       options.onError?.(error)
     })
+  }, [options])
 
+  // Subscribe to controller events - separate effect so cleanup/re-setup works with StrictMode
+  useEffect(() => {
     // Subscribe to voice controller events
     const handleVoiceEvent = (event: VoiceEvent) => {
       switch (event.type) {
